@@ -1,4 +1,4 @@
-# HarvestMoonDecomp — descompilación de Harvest Moon (SNES)
+# HarvestMoonSnesDecomp — descompilación de Harvest Moon (SNES)
 
 <!-- progress -->
 ![Descompilado: 2.49%](https://img.shields.io/badge/descompilado-2.49%25-2f855a)
@@ -18,7 +18,7 @@ y se apoya en el desensamblado de la comunidad
 [HM-Decomp](https://github.com/ElisaS-Codes/HM-Decomp) (ElisaS-Codes y DasK),
 de donde vienen los nombres de las rutinas y el mapa de memoria.
 
-| | HarvestMoonSNESRecomp | HarvestMoonDecomp (este) |
+| | HarvestMoonSNESRecomp | HarvestMoonSnesDecomp (este) |
 |---|---|---|
 | Para qué | Jugar: el port de PC con sus mejoras | Entender el juego: código legible |
 | Resultado | El juego (`.exe`) | Rutinas en `src/` + un ejecutable de prueba |
@@ -72,12 +72,12 @@ Con los tres proyectos uno al lado del otro:
 
 ```
 HarvestMoonSNESRecomp/   (git clone + bash tools/apply_patches.sh)
-HarvestMoonDecomp/
+HarvestMoonSnesDecomp/
 HM-Decomp/
 ```
 
 ```
-cd HarvestMoonDecomp
+cd HarvestMoonSnesDecomp
 tools/build.sh --rom /ruta/a/tu/rom.sfc            # HM_RECOMP=... si la recompilación está en otro lado
 HM_ROM=/ruta/a/tu/rom.sfc tools/check.sh 2000 10   # 10 semillas x 2000 llamadas al azar + partidas
 python3 tools/progress.py --decomp ../HM-Decomp --update-readme
