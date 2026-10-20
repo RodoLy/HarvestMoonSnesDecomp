@@ -79,7 +79,8 @@ granja) + las llamadas reales de una partida nueva y de 10 noches forzadas:
 `tools/progress.py` cuenta, en el desensamblado de HM-Decomp, las rutinas de
 código y sus instrucciones, y cuántas de ellas están registradas en
 `src/hm_decomp.c`. El porcentaje principal es por instrucciones. Con
-`--update-readme` lo escribe en el README.
+`--update-readme` lo escribe en los dos README (`README.md` en inglés y
+`README.es.md` en español).
 
 ## Cómo seguir
 
