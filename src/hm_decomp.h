@@ -140,3 +140,4 @@ void hm_LoadsDamageProbabilities(uint8_t *ram, HmRegs *r);
 void hm_ClimateFarmDamageCheck(uint8_t *ram, HmRegs *r);
 void hm_ClimateFarmDamagePrep(uint8_t *ram, HmRegs *r);
 void hm_MonthlyFarmTilesCheck(uint8_t *ram, HmRegs *r);
+void hm_NightlyFarmTilesCheck(uint8_t *ram, HmRegs *r);

@@ -270,3 +270,115 @@ void hm_MonthlyFarmTilesCheck(uint8_t *ram, HmRegs *r)
   r->a = r->x = r->y = 0x0400;
   r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * NightlyFarmTilesCheck ($82:A811, JSL, RTL). What happens to every tile
+ * overnight (runs after the date has advanced). Tiles come in pairs: an
+ * even code is dry, the next odd code is the same thing watered.
+ *   07 / 08 tilled soil, 1E / 1F seeds, 20..6F crop stages,
+ *   39 / 53 / 61 / 6F = fully grown tomato / corn / potato / turnip.
+ *
+ *  - Dry soil, seeds or crops get watered if it rains (+1).
+ *  - Watered soil, seeds and fully grown crops dry out unless it rains (-1).
+ *  - Watered crops grow one stage (+1, now dry), and if it rains they are
+ *    watered again (+1). In fall they only dry out (-1); in winter nothing.
+ *  - Grass (70..9F) grows one step every night except in winter; 79 is fully
+ *    grown and stays; 7C (cut grass) goes back to 73.
+ *  - Empty ground (01, 02): in spring and summer, every 4th day (day & 3 ==
+ *    0), 1 chance in 256 (GetRNG == 0) of a new weed/stone (03).
+ *  - Broken fence (06): 1 in 8 sets $0196 bit $0400 and $7F1F6E bit $0200
+ *    (seen by the morning code).
+ *  - On the first day of winter, MonthlyFarmTilesCheck runs afterwards.
+ * Nothing changes on 00, 03..05, 09..1C, 1D, 79 and A0 and up.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define TILE_WEED          0x03
+#define TILE_GRASS_CUT     0x7C
+#define TILE_GRASS_REGROW  0x73
+#define RET_NIGHTLY_TILE   0xA82A   /* JSR GetTileIndex at $82:A828 */
+#define RET_NIGHTLY_RNG    0xA937   /* JSL GetRNG at $82:A934 */
+#define RET_NIGHTLY_FENCE  0xA950   /* JSL RNGReturn0toA at $82:A94D */
+#define RET_NIGHTLY_MONTH  0xA99E   /* JSL MonthlyFarmTilesCheck at $82:A99B */
+
+static bool raining(const uint8_t *ram) { return hm_rd16(ram, WEATHER_FLAGS) & 0x0002; }
+
+static bool is_grown_watered(uint8_t t)
+{
+  return t == 0x39 || t == 0x53 || t == 0x61 || t == 0x6F;
+}
+
+void hm_NightlyFarmTilesCheck(uint8_t *ram, HmRegs *r)
+{
+  const uint8_t season = ram[HM_SEASON], day = ram[HM_DAY];
+  ram[HM_MAP_WIDTH_CODE] = 4;
+
+  FOR_EACH_FARM_TILE(x, y) {
+    uint16_t index = tile_begin(ram, r, x, y, RET_NIGHTLY_TILE);
+    uint8_t *tile = &ram[HM_FARM_MAP + index];
+    uint8_t t = *tile;
+    enum { NOTHING, RAIN_WATERS, DRIES_UNLESS_RAIN, GROWS } what = NOTHING;
+
+    if (t == 0) {
+      /* nothing */
+    } else if (t < TILE_WEED) {
+      if (season != 2 && season != 3 && (day & 3) == 0) {
+        push16(ram, r, index);                   /* PHX; JSL GetRNG; PLX */
+        hm_jsl(ram, r, RET_NIGHTLY_RNG, 0x83);
+        hm_GetRNG(ram, r);
+        hm_rtl(ram, r);
+        r->x = pull16(ram, r);
+        if ((uint8_t)r->a == 0) *tile = TILE_WEED;
+      }
+    } else if (t >= TILE_NOT_FIELD) {
+      /* not field */
+    } else if (t == TILE_BROKEN_FENCE) {
+      r->a = (uint16_t)((r->a & 0xFF00) | 8);    /* LDA #$08 (8-bit) */
+      hm_jsl(ram, r, RET_NIGHTLY_FENCE, 0x80);
+      hm_RNGReturn0toA(ram, r);
+      hm_rtl(ram, r);
+      if ((uint8_t)r->a == 0) {
+        hm_wr16(ram, WEATHER_FLAGS, hm_rd16(ram, WEATHER_FLAGS) | 0x0400);
+        hm_wr16(ram, 0x11F6E, hm_rd16(ram, 0x11F6E) | 0x0200);
+      }
+    } else if (t == TILE_TILLED_A || t == TILE_CROPS_FIRST) {
+      what = RAIN_WATERS;
+    } else if (t == TILE_TILLED_B || t == TILE_CROPS_FIRST + 1) {
+      what = DRIES_UNLESS_RAIN;
+    } else if (t < 0x20) {
+      /* 03..05, 09..1D: nothing */
+    } else if (is_grown_watered(t)) {
+      what = DRIES_UNLESS_RAIN;
+    } else if (t == TILE_GRASS_GROWN) {
+      /* fully grown grass stays */
+    } else if (t == TILE_GRASS_CUT) {
+      *tile = TILE_GRASS_REGROW;
+    } else if (t >= TILE_GRASS_FIRST) {
+      what = GROWS;
+    } else if ((t & 1) == 0) {
+      what = RAIN_WATERS;                        /* dry crop */
+    } else if (season == 2) {
+      (*tile)--;                                 /* fall: watered crop dries */
+    } else if (season != 3) {
+      (*tile)++;                                 /* watered crop grows... */
+      what = RAIN_WATERS;                        /* ...and rain waters it */
+    }
+
+    if (what == RAIN_WATERS && raining(ram)) what = GROWS;
+    if (what == GROWS && season != 3) (*tile)++;
+    if (what == DRIES_UNLESS_RAIN && !raining(ram)) (*tile)--;
+    tile_end(ram, r);
+  }
+
+  /* After the loop A = $0400, so the 8-bit loads below keep $04 on top. */
+  r->a = r->x = r->y = 0x0400;
+  r->a = (uint16_t)(0x0400 | season);
+  r->c = season >= 3;
+  if (season != 3)
+    return;
+  r->a = (uint16_t)(0x0400 | day);
+  r->c = day >= 1;
+  if (day != 1)
+    return;
+  hm_jsl(ram, r, RET_NIGHTLY_MONTH, 0x82);
+  hm_MonthlyFarmTilesCheck(ram, r);
+  hm_rtl(ram, r);
+}
