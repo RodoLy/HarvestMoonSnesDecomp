@@ -131,3 +131,4 @@ void hm_AddPlayerHappiness(uint8_t *ram, HmRegs *r);
 void hm_ChangeStamina(uint8_t *ram, HmRegs *r);       /* stamina.c */
 void hm_GetsCowPointer(uint8_t *ram, HmRegs *r);      /* animals.c */
 void hm_GetChickenPointer(uint8_t *ram, HmRegs *r);
+void hm_DivisionUnsigned(uint8_t *ram, HmRegs *r);    /* math.c */
