@@ -36,6 +36,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     0x838082, 0, 0, 0, 0xFFFF,
     /* small and large divisors: both paths, and divisor 0 */
     { W16(0x7E, 0, 0xFFFF), W16(0x80, 0, 600) } },
+  { "RNGReturn0toA", hm_RNGReturn0toA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/rng.c",
+    0x8089F9, 1, 1, 0, 0xFF,
+    { B8(HM_RNG_STATE, 0, 255), B8(HM_RNG_STATE + 1, 0, 255), B8(HM_RNG_STATE + 2, 0, 255) } },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
