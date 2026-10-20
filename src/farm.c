@@ -382,3 +382,27 @@ void hm_NightlyFarmTilesCheck(uint8_t *ram, HmRegs *r)
   hm_MonthlyFarmTilesCheck(ram, r);
   hm_rtl(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CalculateFarmDevelopment ($82:AA0C, JSL, RTL). Called by the ending's
+ * evaluation ($83:F57C): counts the farm tiles that are "worked" (fences,
+ * broken or not, and everything from 1D up: crops, seeds, grass) into the
+ * ranch development score $7F1F56. Ends with A = X = Y = $0400, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define HM_RANCH_DEVELOPMENT 0x11F56   /* $7F1F56, 16b */
+#define RET_DEVELOPMENT_TILE 0xAA2C    /* JSR GetTileIndex at $82:AA2A */
+
+void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r)
+{
+  ram[HM_MAP_WIDTH_CODE] = 4;
+  uint16_t score = 0;
+  FOR_EACH_FARM_TILE(x, y) {
+    uint8_t t = ram[HM_FARM_MAP + tile_begin(ram, r, x, y, RET_DEVELOPMENT_TILE)];
+    if (t < TILE_NOT_FIELD && (t == TILE_FENCE || t == TILE_BROKEN_FENCE || t >= TILE_GRASS_SOWN))
+      score++;
+    tile_end(ram, r);
+  }
+  hm_wr16(ram, HM_RANCH_DEVELOPMENT, score);
+  r->a = r->x = r->y = 0x0400;
+  r->c = 1;
+}
