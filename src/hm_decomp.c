@@ -73,10 +73,17 @@ __attribute__((constructor)) static void hm_decomp_init(void)
   }
 }
 
+/* While fuzzing, only the routine being fuzzed is compared: the calls it
+ * makes have their own fuzz entries, and checking thousands of nested calls
+ * (each one copies 128 KB) is too slow for the 4096-tile farm loops. */
+static int s_fuzzing, s_check_depth;
+
 void *hm_decomp_check_begin(const CpuState *cpu)
 {
+  if (s_fuzzing && s_check_depth > 0) return NULL;
+  s_check_depth++;
   Snapshot *s = malloc(sizeof *s);
-  if (!s) return NULL;
+  if (!s) { s_check_depth--; return NULL; }
   s->cpu = *cpu;
   memcpy(s->ram, cpu->ram, sizeof s->ram);
   return s;
@@ -86,15 +93,18 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
 {
   Snapshot *s = snapshot;
   int index = 0;
+  if (!s) return;                       /* nested call not checked (fuzzing) */
+  s_check_depth--;
   const HmDecompFn *f = find(name, &index);
-  if (!s || !f) { free(s); return; }
+  if (!f) { free(s); return; }
   Stats *st = &s_stats[index];
   st->calls++;
   /* A routine interrupted mid-way (the frame deadline yielded) or run in
    * decimal mode is not comparable; the rewrites assume binary mode. */
   if (!completed || s->cpu._flag_D) { st->skipped++; free(s); return; }
 
-  HmRegs in = { s->cpu.A, s->cpu.X, s->cpu.Y, s->cpu._flag_C, s->cpu._flag_N, s->cpu.DB, s->cpu.D };
+  HmRegs in = { s->cpu.A, s->cpu.X, s->cpu.Y, s->cpu._flag_C, s->cpu._flag_N, s->cpu.DB, s->cpu.D,
+                s->cpu.S, s->cpu.PB };
   HmRegs out = in;
   f->fn(s->ram, &out);
 
@@ -142,6 +152,11 @@ static void fuzz_at(unsigned frame)
     const char *e = getenv("HM_DECOMP_FUZZ");
     at = -1;
     if (e && *e) { at = atoi(e); const char *c = strchr(e, ':'); iters = c ? atoi(c + 1) : 1000; }
+    /* HM_DECOMP_FUZZ_SEED=<n>: other random inputs (a frame only fits a few
+     * thousand calls per routine, so run several seeds for more). */
+    const char *seed = getenv("HM_DECOMP_FUZZ_SEED");
+    if (seed && *seed) s_rng ^= (uint32_t)strtoul(seed, NULL, 0) * 0x9E3779B9u;
+    if (!s_rng) s_rng = 1;
   }
   if (at < 0 || (int)frame != at) return;
   at = -1;
@@ -153,12 +168,18 @@ static void fuzz_at(unsigned frame)
   int prev = g_hm_decomp_check;
   if (!s_stats) { s_stats = calloc((size_t)g_hm_decomp_count, sizeof *s_stats); atexit(report); }
   g_hm_decomp_check = 1;
+  s_fuzzing = 1;
   fprintf(stderr, "[decomp-fuzz] frame %u: %d calls per routine\n", frame, iters);
   for (int i = 0; i < g_hm_decomp_count; i++) {
     const HmDecompFn *f = &g_hm_decomp_fns[i];
-    for (int n = 0; n < iters; n++) {
+    int n_calls = (f->fuzz_max && f->fuzz_max < iters) ? f->fuzz_max : iters;
+    for (int n = 0; n < n_calls; n++) {
       g_cpu = saved_cpu;
       memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
+      /* Every call starts with a fresh frame budget: long routines (the
+       * 4096-tile farm loop) would otherwise hit the frame deadline, yield
+       * half-way and not be comparable. The machine is restored after. */
+      g_cpu.master_cycles = 0;
       for (int v = 0; v < HM_FUZZ_MAX_VARS && f->vars[v].size; v++) {
         uint16_t x = rnd_in(f->vars[v].lo, f->vars[v].hi);
         g_cpu.ram[f->vars[v].addr] = (uint8_t)x;
@@ -167,6 +188,11 @@ static void fuzz_at(unsigned frame)
       uint16_t a = rnd_in(f->a_lo, f->a_hi);
       g_cpu.A = f->entry_m ? (uint16_t)((rnd() & 0xFF00) | (a & 0xFF)) : a;
       g_cpu.X = (uint16_t)rnd(); g_cpu.Y = (uint16_t)rnd();
+      if (f->prep) {
+        HmRegs pr = { g_cpu.A, g_cpu.X, g_cpu.Y };
+        f->prep(g_cpu.ram, &pr, rnd);
+        g_cpu.A = pr.a; g_cpu.X = pr.x; g_cpu.Y = pr.y;
+      }
       g_cpu.emulation = 0;
       g_cpu.D = 0;
       g_cpu._flag_D = 0;
@@ -176,13 +202,25 @@ static void fuzz_at(unsigned frame)
       g_cpu.P = (uint8_t)((g_cpu.P & ~0x30) | (f->entry_m ? 0x20 : 0) | (f->entry_x ? 0x10 : 0));
       cpu_p_to_mirrors(&g_cpu);
       if (f->entry_x) { g_cpu.X &= 0xFF; g_cpu.Y &= 0xFF; }
-      cpu_push_jsl_return_frame(&g_cpu);
-      cpu_dispatch_pc_paired(&g_cpu, f->pc24, 3);
+      if (f->out_mask & HM_JSR) cpu_push_jsr_return_frame(&g_cpu);
+      else cpu_push_jsl_return_frame(&g_cpu);
+      uint8_t frame_size = (f->out_mask & HM_JSR) ? 2 : 3;
+      if (f->out_mask & HM_INTERP) {
+        /* No wrapper around it: check this call here. */
+        void *snap = hm_decomp_check_begin(&g_cpu);
+        /* No compiled body: run the original in the recompiler's
+         * interpreter, as the game itself does. */
+        RecompReturn rr = interp_tier_dispatch(&g_cpu, f->pc24);
+        hm_decomp_check_end(f->name, snap, &g_cpu, rr == RECOMP_RETURN_NORMAL);
+      } else {
+        cpu_dispatch_pc_paired(&g_cpu, f->pc24, frame_size);
+      }
     }
   }
   g_cpu = saved_cpu;
   memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
   g_hm_decomp_check = prev;
+  s_fuzzing = 0;
   fprintf(stderr, "[decomp-fuzz] done; machine restored\n");
 }
 

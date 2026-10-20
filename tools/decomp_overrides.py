@@ -74,7 +74,12 @@ RecompReturn {fn}(CpuState *cpu) {{
 def decomp_registry(path):
     if not path or not os.path.exists(path):
         return []
-    return re.findall(r'\{\s*"([A-Za-z_][A-Za-z0-9_]*)",\s*hm_', open(path, encoding="utf-8").read())
+    text = open(path, encoding="utf-8").read()
+    # Entries flagged HM_INTERP have no compiled body to wrap (the fuzzer
+    # checks them directly; see src/hm_decomp.h).
+    return [name for name, flags in
+            re.findall(r'\{\s*"([A-Za-z_][A-Za-z0-9_]*)",\s*hm_\w+,\s*([^,]*),', text)
+            if "HM_INTERP" not in flags]
 
 
 def wrap(gen_dir, routines):

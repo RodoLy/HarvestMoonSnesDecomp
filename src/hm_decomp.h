@@ -29,7 +29,39 @@ typedef struct HmRegs {
   uint8_t n;          /* negative flag (some routines branch on the caller's) */
   uint8_t db;         /* data bank */
   uint16_t d;         /* direct page */
+  uint16_t s;         /* stack pointer (bank $00) */
+  uint8_t pb;         /* program bank: $80-$87, or $00-$07 when the game runs
+                       * the same code from the slow mirror */
 } HmRegs;
+
+/* The stack lives in WRAM, so what a routine pushes stays there after it
+ * returns, and the checker compares it too. PHA/PHY/JSL write downwards. */
+static inline void hm_push8(uint8_t *ram, HmRegs *r, uint8_t v)
+{
+  ram[r->s & 0x1FFF] = v;
+  r->s = (uint16_t)(r->s - 1);
+}
+static inline uint8_t hm_pull8(uint8_t *ram, HmRegs *r)
+{
+  r->s = (uint16_t)(r->s + 1);
+  return ram[r->s & 0x1FFF];
+}
+/* JSL to a routine in `bank`: pushes the current bank (PB) and the address
+ * of the JSL's own last byte, then runs in the new bank. RTL pops the 3
+ * bytes and goes back to the caller's bank. */
+static inline void hm_jsl(uint8_t *ram, HmRegs *r, uint16_t return_pc, uint8_t bank)
+{
+  hm_push8(ram, r, r->pb);
+  hm_push8(ram, r, (uint8_t)(return_pc >> 8));
+  hm_push8(ram, r, (uint8_t)return_pc);
+  r->pb = bank;
+}
+static inline void hm_rtl(uint8_t *ram, HmRegs *r)
+{
+  hm_pull8(ram, r);
+  hm_pull8(ram, r);
+  r->pb = hm_pull8(ram, r);
+}
 
 /* Direct-page variables ($00-$FF relative to D, in bank $00 = low WRAM). */
 static inline uint8_t *hm_dp(uint8_t *ram, const HmRegs *r, unsigned off)
@@ -46,7 +78,13 @@ static inline uint16_t hm_dp_r16(uint8_t *ram, const HmRegs *r, unsigned off)
   return (uint16_t)(*hm_dp(ram, r, off) | *hm_dp(ram, r, off + 1) << 8);
 }
 
-enum { HM_OUT_A = 1, HM_OUT_X = 2, HM_OUT_Y = 4, HM_OUT_C = 8 };
+enum { HM_OUT_A = 1, HM_OUT_X = 2, HM_OUT_Y = 4, HM_OUT_C = 8,
+       /* The recompiler has no compiled body for this routine (it runs in
+        * its interpreter), so there is no wrapper to check live calls: the
+        * fuzzer checks it by calling the original directly. */
+       HM_INTERP = 16,
+       /* Called with JSR / returns with RTS (2-byte frame), not JSL / RTL. */
+       HM_JSR = 32 };
 
 /* Fuzzing: which inputs to randomize when testing a routine on its own
  * (HM_DECOMP_FUZZ). Ranges are inclusive; size 1 or 2 bytes. */
@@ -63,6 +101,10 @@ typedef struct HmDecompFn {
   uint8_t entry_m, entry_x;
   uint16_t a_lo, a_hi;
   HmFuzzVar vars[HM_FUZZ_MAX_VARS];
+  /* Optional: at most this many fuzz calls (0 = all) for slow routines, and
+   * a function that prepares more inputs (e.g. a random farm). */
+  uint16_t fuzz_max;
+  void (*prep)(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
 } HmDecompFn;
 
 /* Registry, defined in hm_decomp.c. */
