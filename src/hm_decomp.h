@@ -133,3 +133,4 @@ void hm_GetsCowPointer(uint8_t *ram, HmRegs *r);      /* animals.c */
 void hm_GetChickenPointer(uint8_t *ram, HmRegs *r);
 void hm_DivisionUnsigned(uint8_t *ram, HmRegs *r);    /* math.c */
 void hm_RNGReturn0toA(uint8_t *ram, HmRegs *r);       /* rng.c */
+void hm_SetWeatherFlags(uint8_t *ram, HmRegs *r);     /* weather.c */
