@@ -34,6 +34,13 @@ static void prep_random_farm_and_weather(uint8_t *ram, HmRegs *r, uint32_t (*rnd
   hm_wr16(ram, 0x00196, flags[rnd() % 10]);
 }
 
+static void prep_random_farm_and_date(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_random_farm_and_weather(ram, r, rnd);
+  ram[0x11F19] = (uint8_t)(rnd() % 4);                       /* season */
+  ram[0x11F1B] = (uint8_t)((rnd() & 3) ? 1 + rnd() % 30 : 1); /* day; often 1 */
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -82,6 +89,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     { B8(HM_RNG_STATE, 0, 255), B8(HM_RNG_STATE + 1, 0, 255), W16(0x0092E, 0, 0xFFFF),
       W16(0x11F29, 0, 3) },
     40, prep_random_farm_and_weather },
+  { "MonthlyFarmTilesCheck", hm_MonthlyFarmTilesCheck, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/farm.c", 0x82A6A2, 1, 0, 0, 0xFF, { { 0 } }, 40, prep_random_farm_and_date },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

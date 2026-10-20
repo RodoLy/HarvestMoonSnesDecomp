@@ -139,3 +139,4 @@ void hm_GetTileIndex(uint8_t *ram, HmRegs *r);        /* farm.c */
 void hm_LoadsDamageProbabilities(uint8_t *ram, HmRegs *r);
 void hm_ClimateFarmDamageCheck(uint8_t *ram, HmRegs *r);
 void hm_ClimateFarmDamagePrep(uint8_t *ram, HmRegs *r);
+void hm_MonthlyFarmTilesCheck(uint8_t *ram, HmRegs *r);

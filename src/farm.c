@@ -241,3 +241,32 @@ void hm_ClimateFarmDamagePrep(uint8_t *ram, HmRegs *r)
     return;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * MonthlyFarmTilesCheck ($82:A6A2, JSL, RTL). Winter arrives: every crop
+ * (1D..6F, grass seeds included) dies back to dry tilled soil (07) and all
+ * grass (70..9F) becomes winter grass (7A). Does nothing outside winter
+ * (then A = the season in its low byte, C = season >= 3).
+ * ───────────────────────────────────────────────────────────────────────── */
+#define TILE_WINTER_GRASS  0x7A
+#define RET_MONTHLY_TILE   0xA6C3   /* JSR GetTileIndex at $82:A6C1 */
+
+void hm_MonthlyFarmTilesCheck(uint8_t *ram, HmRegs *r)
+{
+  uint8_t season = ram[HM_SEASON];
+  r->a = (uint16_t)((r->a & 0xFF00) | season);
+  r->c = season >= 3;
+  if (season != 3)
+    return;
+  ram[HM_MAP_WIDTH_CODE] = 4;
+  FOR_EACH_FARM_TILE(x, y) {
+    uint8_t *tile = &ram[HM_FARM_MAP + tile_begin(ram, r, x, y, RET_MONTHLY_TILE)];
+    if (*tile != 0 && *tile < TILE_NOT_FIELD) {
+      if (*tile >= TILE_GRASS_FIRST) *tile = TILE_WINTER_GRASS;
+      else if (*tile >= TILE_GRASS_SOWN) *tile = TILE_TILLED_A;
+    }
+    tile_end(ram, r);
+  }
+  r->a = r->x = r->y = 0x0400;
+  r->c = 1;
+}
