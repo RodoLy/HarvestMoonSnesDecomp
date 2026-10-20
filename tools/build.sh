@@ -47,6 +47,9 @@ for p in "$RECOMP"/recomp/profiles/*.json "$RECOMP"/recomp/profiles/*.jsonl; do
 done
 rm -f "$B/gen/.snesrecomp-cache.json"
 "$PYTHON" "$CLI" generate "${GEN_ARGS[@]}" | grep -E "analysis:|v2_emit: [0-9]+ roots|postprocess|apply_overrides|error" || true
+# The generated files `#include "funcs.h"`; next to them it is found first,
+# before any (possibly stale) copy in the recompilation's src/.
+cp "$B/funcs.h" "$B/gen/funcs.h"
 
 echo "== 2/3 Names and check wrappers =="
 "$PYTHON" "$ROOT/tools/decomp_overrides.py" --gen-dir "$B/gen" \
