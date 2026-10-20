@@ -47,6 +47,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/weather.c", 0x828CF9, 0, 0, 0, 0xFFFF,
     { B8(HM_SEASON, 0, 3), B8(HM_DAY, 1, 30), B8(HM_YEAR, 0, 2),
       W16(0x11F64, 0, 3), W16(0x11F6C, 0x0FFF, 0x1000), B8(HM_RNG_STATE, 0, 255) } },
+  { "GetTileIndex", hm_GetTileIndex, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/farm.c",
+    0x82B13C, 0, 0, 0, 0xFFFF, { B8(0x00181, 0, 5) } },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
