@@ -26,6 +26,14 @@ static void prep_random_farm(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   static const uint16_t chances[] = { 0, 1, 4, 8, 0x10, 0x20, 0x40, 0x60, 0xFF, 0x0100, 0x1234 };
   r->a = chances[rnd() % 11]; r->x = chances[rnd() % 11]; r->y = chances[rnd() % 11];
 }
+static void prep_random_farm_and_weather(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_random_farm(ram, r, rnd);
+  static const uint16_t flags[] = { 0x0000, 0x0002, 0x0004, 0x0008, 0x0010, 0x0100, 0x0200,
+                                    0x0102, 0x0300, 0x001A };
+  hm_wr16(ram, 0x00196, flags[rnd() % 10]);
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -69,6 +77,11 @@ const HmDecompFn g_hm_decomp_fns[] = {
     { B8(HM_RNG_STATE, 0, 255), B8(HM_RNG_STATE + 1, 0, 255), W16(0x0092E, 0, 0xFFFF),
       W16(0x11F29, 0, 3) },
     40, prep_random_farm },
+  { "ClimateFarmDamagePrep", hm_ClimateFarmDamagePrep, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/farm.c", 0x828209, 0, 0, 0, 0xFFFF,
+    { B8(HM_RNG_STATE, 0, 255), B8(HM_RNG_STATE + 1, 0, 255), W16(0x0092E, 0, 0xFFFF),
+      W16(0x11F29, 0, 3) },
+    40, prep_random_farm_and_weather },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

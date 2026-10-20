@@ -190,3 +190,41 @@ void hm_ClimateFarmDamageCheck(uint8_t *ram, HmRegs *r)
   r->a = r->x = r->y = 0x0400;
   r->c = 1;                                      /* CPY #$0400 matched */
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * ClimateFarmDamagePrep ($82:8209, JSL, RTL). Chooses the damage row from
+ * today's weather flags ($0196), first match wins:
+ *   rain -> row 0, snow -> row 1, hurricane -> row 2,
+ *   first-year summer storm (0100) -> no damage,
+ *   first-year winter storm (0200) -> row 3.
+ * Then LoadsDamageProbabilities + ClimateFarmDamageCheck.
+ * With no damage, A = the last flag test (0 or $0100) and X, Y, C are
+ * untouched.
+ * ───────────────────────────────────────────────────────────────────────── */
+static const struct { uint16_t flag; int8_t row; uint16_t ret_jsr, ret_jsl; } kDamageByWeather[] = {
+  { 0x0002, 0, 0x823B, 0x823F },   /* rain */
+  { 0x0008, 1, 0x8249, 0x824D },   /* snow */
+  { 0x0010, 2, 0x8257, 0x825B },   /* hurricane */
+  { 0x0100, -1, 0, 0 },            /* summer storm: nothing */
+  { 0x0200, 3, 0x8267, 0x826B },   /* winter storm */
+};
+
+void hm_ClimateFarmDamagePrep(uint8_t *ram, HmRegs *r)
+{
+  uint16_t flags = hm_rd16(ram, WEATHER_FLAGS);
+  for (unsigned i = 0; i < sizeof kDamageByWeather / sizeof kDamageByWeather[0]; i++) {
+    r->a = flags & kDamageByWeather[i].flag;
+    if (!r->a)
+      continue;
+    if (kDamageByWeather[i].row < 0)
+      return;
+    r->a = (uint16_t)kDamageByWeather[i].row;
+    jsr(ram, r, kDamageByWeather[i].ret_jsr);
+    hm_LoadsDamageProbabilities(ram, r);
+    rts(ram, r);
+    hm_jsl(ram, r, kDamageByWeather[i].ret_jsl, 0x82);
+    hm_ClimateFarmDamageCheck(ram, r);
+    hm_rtl(ram, r);
+    return;
+  }
+}
