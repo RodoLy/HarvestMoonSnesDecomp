@@ -1,0 +1,129 @@
+turbo on
+wait 700
+press start 2
+wait 347
+press up 2
+wait 27
+press a 2
+wait 317
+press a 2
+wait 597
+press a 2
+wait 57
+press a 2
+wait 57
+press a 2
+wait 327
+press a 2
+wait 47
+press a 2
+wait 47
+press a 2
+wait 47
+press a 2
+wait 97
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press down 2
+wait 27
+press a 2
+wait 57
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 97
+press down 150
+wait 49
+press down 150
+wait 49
+press left 100
+wait 49
+press down 200
+wait 49
+press left 200
+wait 99
+quit

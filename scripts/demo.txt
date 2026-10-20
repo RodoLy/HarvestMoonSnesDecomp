@@ -1,0 +1,7 @@
+turbo on
+wait 700
+press start 2
+wait 347
+press a 2
+wait 2547
+quit
