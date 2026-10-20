@@ -102,3 +102,91 @@ void hm_LoadsDamageProbabilities(uint8_t *ram, HmRegs *r)
   r->x = pull16(ram, r);
   r->a = pull16(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * ClimateFarmDamageCheck ($82:A713, JSL, RTL). A, X, Y = the three chances
+ * (fences, grass, crops; see above). Visits all 64 x 64 tiles; for each one
+ * of the right kind rolls RNGReturn0toA(chance) and on a 0:
+ *   fence             -> broken fence
+ *   grass (sown or growing) -> plain soil, and one less planted grass
+ *                        ($7F1F29, not below 0; sown grass doesn't count)
+ *   tilled soil, crops -> plain soil
+ * A chance of 0 means "never" and skips the roll.
+ *
+ * Quirk: fully grown grass is meant to lower the grown-grass counter $092E,
+ * but the test compares 16 bits whose high byte is the high byte of the
+ * tile index. It only matches in the first 256 tiles (the top 4 rows).
+ *
+ * Ends with A = X = Y = $0400 and C = 1. Every tile leaves its pushes on the
+ * stack (PHY, PHX, the JSR, and PHX + JSL when it rolls).
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_GET_TILE_INDEX  0xA732   /* JSR GetTileIndex at $82:A730 */
+#define RET_ROLL_FENCE      0xA76B   /* JSL RNGReturn0toA at $82:A768 */
+#define RET_ROLL_GRASS      0xA78E
+#define RET_ROLL_SOWN_GRASS 0xA7C2
+#define RET_ROLL_CROPS      0xA7DE
+
+/* PHX; JSL RNGReturn0toA; PLX. True when it rolled 0. */
+static bool roll_zero(uint8_t *ram, HmRegs *r, uint16_t chance, uint16_t ret)
+{
+  uint16_t index = r->x;
+  r->a = chance;
+  push16(ram, r, index);
+  hm_jsl(ram, r, ret, 0x80);
+  hm_RNGReturn0toA(ram, r);
+  hm_rtl(ram, r);
+  r->x = pull16(ram, r);
+  return (uint8_t)r->a == 0;
+}
+
+void hm_ClimateFarmDamageCheck(uint8_t *ram, HmRegs *r)
+{
+  uint16_t fence_chance = r->a, grass_chance = r->x, crop_chance = r->y;
+  hm_dp_w16(ram, r, 0x86, fence_chance);
+  hm_dp_w16(ram, r, 0x88, grass_chance);
+  hm_dp_w16(ram, r, 0x8A, crop_chance);
+  ram[HM_MAP_WIDTH_CODE] = 4;                    /* 64 tiles wide */
+
+  for (uint16_t y = 0; y != 0x400; y = (uint16_t)(y + 16)) {
+    for (uint16_t x = 0; x != 0x400; x = (uint16_t)(x + 16)) {
+      push16(ram, r, y);
+      push16(ram, r, x);
+      hm_dp_w16(ram, r, 0x82, x);
+      hm_dp_w16(ram, r, 0x84, y);
+      r->x = x; r->y = y;
+      jsr(ram, r, RET_GET_TILE_INDEX);
+      hm_GetTileIndex(ram, r);
+      rts(ram, r);
+      uint16_t index = r->x;
+      uint8_t *tile = &ram[HM_FARM_MAP + index];
+      uint8_t t = *tile;
+      /* What the 16-bit compare sees: the tile with the index's high byte. */
+      uint16_t a16 = (uint16_t)((index & 0xFF00) | t);
+
+      if (t >= TILE_NOT_FIELD) {
+        /* not part of the field */
+      } else if (t == TILE_FENCE) {
+        if (fence_chance && roll_zero(ram, r, fence_chance, RET_ROLL_FENCE))
+          *tile = TILE_BROKEN_FENCE;
+      } else if (t == TILE_GRASS_SOWN) {
+        if (grass_chance && roll_zero(ram, r, grass_chance, RET_ROLL_SOWN_GRASS))
+          *tile = TILE_SOIL;
+      } else if (t >= TILE_GRASS_FIRST) {
+        if (a16 == TILE_GRASS_GROWN)
+          hm_wr16(ram, HM_GROWN_GRASS_N, (uint16_t)(hm_rd16(ram, HM_GROWN_GRASS_N) - 1));
+        if (grass_chance && roll_zero(ram, r, grass_chance, RET_ROLL_GRASS)) {
+          *tile = TILE_SOIL;
+          uint16_t planted = hm_rd16(ram, HM_PLANTED_GRASS);
+          if (planted) hm_wr16(ram, HM_PLANTED_GRASS, (uint16_t)(planted - 1));
+        }
+      } else if (t == TILE_TILLED_A || t == TILE_TILLED_B || t >= TILE_CROPS_FIRST) {
+        if (crop_chance && roll_zero(ram, r, crop_chance, RET_ROLL_CROPS))
+          *tile = TILE_SOIL;
+      }
+      pull16(ram, r);                            /* PLX; PLY */
+      pull16(ram, r);
+    }
+  }
+  r->a = r->x = r->y = 0x0400;
+  r->c = 1;                                      /* CPY #$0400 matched */
+}

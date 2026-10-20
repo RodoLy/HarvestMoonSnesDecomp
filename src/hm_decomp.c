@@ -14,6 +14,18 @@
 #define W16(a, lo, hi) { a, 2, lo, hi }
 #define B8(a, lo, hi)  { a, 1, lo, hi }
 
+/* Fuzz input makers for the farm routines (farm.c). */
+static void prep_random_farm(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  /* A field with every kind of tile: mostly field codes, some "not field". */
+  static const uint8_t kinds[] = { 0x00, 0x02, 0x05, 0x06, 0x07, 0x08, 0x1D, 0x1E, 0x30,
+                                   0x6F, 0x70, 0x75, 0x79, 0x9F, 0xA0, 0xFF };
+  for (int i = 0; i < 64 * 64; i++)
+    ram[0x0A4E6 + i] = (rnd() & 3) ? kinds[rnd() % sizeof kinds] : (uint8_t)rnd();
+  /* Chances: usually the game's, sometimes 0, 1, 255 or odd 16-bit ones. */
+  static const uint16_t chances[] = { 0, 1, 4, 8, 0x10, 0x20, 0x40, 0x60, 0xFF, 0x0100, 0x1234 };
+  r->a = chances[rnd() % 11]; r->x = chances[rnd() % 11]; r->y = chances[rnd() % 11];
+}
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -52,6 +64,11 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "LoadsDamageProbabilities", hm_LoadsDamageProbabilities,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/farm.c",
     0x828270, 0, 0, 0, 4, { { 0 } } },
+  { "ClimateFarmDamageCheck", hm_ClimateFarmDamageCheck, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/farm.c", 0x82A713, 0, 0, 0, 0xFFFF,
+    { B8(HM_RNG_STATE, 0, 255), B8(HM_RNG_STATE + 1, 0, 255), W16(0x0092E, 0, 0xFFFF),
+      W16(0x11F29, 0, 3) },
+    40, prep_random_farm },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
