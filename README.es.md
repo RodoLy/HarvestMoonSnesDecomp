@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 2.49%](https://img.shields.io/badge/descompilado-2.49%25-2f855a)
+![Descompilado: 3.36%](https://img.shields.io/badge/descompilado-3.36%25-2f855a)
 
-**2.49%** del código del juego descompilado y verificado: 755 de 30359 instrucciones, 15 de 372 rutinas (4.0%).
+**3.36%** del código del juego descompilado y verificado: 1019 de 30359 instrucciones, 18 de 372 rutinas (4.8%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
@@ -40,7 +40,7 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Números aleatorios | GetRNG, RNGReturn0toA ("dado de n caras") | `src/rng.c` |
 | Aritmética | DivisionUnsigned | `src/math.c` |
 | Clima | SetWeatherFlags, WeatherTomorrow | `src/weather.c` |
-| Granja | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep | `src/farm.c` |
+| Granja | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment | `src/farm.c` |
 | Existencias | AddWood, AddGrass, AddPlayerHappiness | `src/stock.c` |
 | Jugador | ChangeStamina | `src/stamina.c` |
 | Animales | GetsCowPointer, GetChickenPointer | `src/animals.c` |
@@ -56,6 +56,11 @@ comentarios de cada archivo):
 - De noche, la lluvia rompe cercas (1/96), el huracán además arranca pasto
   (1/16) y cultivos (1/4), y el año nuevo borra pasto (1/64) y cultivos
   (1/32).
+- Un cultivo crece una etapa por noche solo si estaba regado; la lluvia
+  riega todo. En otoño los cultivos regados solo se secan, y el primer día
+  de invierno todos mueren y vuelven a tierra arada.
+- El "desarrollo del rancho" de la evaluación final es simplemente cuántas
+  casillas de la granja tienen cercas, cultivos o pasto.
 
 ## Carpetas
 

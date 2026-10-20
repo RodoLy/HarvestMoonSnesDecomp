@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 2.49%](https://img.shields.io/badge/decompiled-2.49%25-2f855a)
+![Decompiled: 3.36%](https://img.shields.io/badge/decompiled-3.36%25-2f855a)
 
-**2.49%** of the game's code decompiled and verified: 755 of 30359 instructions, 15 of 372 routines (4.0%).
+**3.36%** of the game's code decompiled and verified: 1019 of 30359 instructions, 18 of 372 routines (4.8%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -40,7 +40,7 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Random numbers | GetRNG, RNGReturn0toA ("roll an n-sided die") | `src/rng.c` |
 | Arithmetic | DivisionUnsigned | `src/math.c` |
 | Weather | SetWeatherFlags, WeatherTomorrow | `src/weather.c` |
-| Farm | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep | `src/farm.c` |
+| Farm | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment | `src/farm.c` |
 | Stock | AddWood, AddGrass, AddPlayerHappiness | `src/stock.c` |
 | Player | ChangeStamina | `src/stamina.c` |
 | Animals | GetsCowPointer, GetChickenPointer | `src/animals.c` |
@@ -55,6 +55,11 @@ A few things found along the way (details in each file's comments):
 - At night, rain breaks fences (1/96), a hurricane also rips out grass
   (1/16) and crops (1/4), and the new year wipes grass (1/64) and crops
   (1/32).
+- Crops grow one stage per night only if they were watered; rain waters
+  everything. In fall watered crops just dry out, and on the first day of
+  winter every crop dies back to tilled soil.
+- The ending's "ranch development" score is simply the number of farm tiles
+  with fences, crops or grass.
 
 ## Layout
 

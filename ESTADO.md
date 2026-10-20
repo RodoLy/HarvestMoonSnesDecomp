@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **15 rutinas reescritas y verificadas** (0 diferencias):
+- **18 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -32,6 +32,9 @@ en el README (`tools/progress.py`).
 | LoadsDamageProbabilities | $82:8270 | src/farm.c |
 | ClimateFarmDamageCheck | $82:A713 | src/farm.c |
 | ClimateFarmDamagePrep | $82:8209 | src/farm.c |
+| MonthlyFarmTilesCheck | $82:A6A2 | src/farm.c |
+| NightlyFarmTilesCheck | $82:A811 | src/farm.c |
+| CalculateFarmDevelopment | $82:AA0C | src/farm.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -84,11 +87,32 @@ casillas. 0 diferencias.
   con la prueba al azar (que pone el reloj del cuadro en 0 y no comprueba
   las llamadas anidadas, que tienen su propia prueba).
 
+## Crecimiento de los cultivos (hecho el 20-oct-2026)
+
+Verificado con 10 semillas × 40 granjas enteras al azar (con fechas,
+lluvia y el primer día de invierno). 0 diferencias.
+
+- Las casillas van en pares: código par = seco, el impar siguiente = regado.
+  07/08 tierra arada, 1E/1F semillas, 20-6F etapas de cultivo; 39, 53, 61 y
+  6F son tomate, maíz, papa y nabo maduros (regados).
+- De noche (NightlyFarmTilesCheck): la lluvia riega lo seco (+1); lo regado
+  sin lluvia se seca (-1); un cultivo regado crece una etapa (+1) y, si
+  llueve, queda regado otra vez (+1). En otoño los regados solo se secan; en
+  invierno nada crece. El pasto (70-9F) crece cada noche salvo en invierno;
+  7C (pasto cortado) vuelve a 73.
+- Tierra vacía (01/02), primavera y verano, cada 4 días: 1/256 de que salga
+  hierba o piedra (03). Cerca rota: 1/8 de poner $0196 bit $0400.
+- Primer día de invierno (MonthlyFarmTilesCheck): cultivos → 07, pasto → 7A.
+- CalculateFarmDevelopment (evaluación final) cuenta las casillas con cercas,
+  cultivos o pasto en $7F1F56.
+- `farm.c` tiene un recorrido de casillas común: `tile_begin` / `tile_end` y
+  `FOR_EACH_FARM_TILE`.
+
 ## Lo siguiente
 
-El crecimiento nocturno de los cultivos: `NightlyFarmTilesCheck` ($82:A811).
-Antes, sus hojas. Después `CowFeedingandStatus` ($83:BC5A) para los
-animales.
+Los animales: `CowFeedingandStatus` ($83:BC5A), empezando por sus hojas.
+Otras rutinas de granja pendientes: `Sub_82A9A0` (no tiene cuerpo compilado)
+y `CheckToolSuccess` ($82:AA71).
 
 Otras hojas candidatas (no llaman a nada): LoadsDamageProbabilities,
 SetTimeofDayPalette, CalculateTileinFront, SUB_809EBC (cámara al cambiar de
