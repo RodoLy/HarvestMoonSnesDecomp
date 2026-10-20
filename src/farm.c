@@ -73,3 +73,32 @@ void hm_GetTileIndex(uint8_t *ram, HmRegs *r)
   r->c = index > 0xFFFF;
   r->a = r->x = (uint16_t)index;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * LoadsDamageProbabilities ($82:8270, JSR, RTS). A = weather row; returns
+ * "1 chance in n" for each kind of damage, 0 = never:
+ *   A = fences, X = grass, Y = crops / tilled soil.
+ * (Each row has a fourth byte, always 0, that nothing reads.) The values go
+ * through the stack (PHA, PHA, PLX, PLA), so they stay below S.
+ * C = bit 14 of the row (the two ASLs); 0 for every row the game uses.
+ * ───────────────────────────────────────────────────────────────────────── */
+static const uint8_t kDamageChance[5][4] = {   /* $82:8298 */
+  /* fence grass crops */
+  { 0x60, 0x00, 0x00, 0 },   /* 0 rain: fences 1 in 96 */
+  { 0x40, 0x00, 0x00, 0 },   /* 1 snow: fences 1 in 64 */
+  { 0x08, 0x10, 0x04, 0 },   /* 2 hurricane: 1/8, 1/16, 1/4 */
+  { 0x08, 0x00, 0x04, 0 },   /* 3 first-year winter storm */
+  { 0x00, 0x40, 0x20, 0 },   /* 4 new year: grass 1/64, crops 1/32 */
+};
+
+void hm_LoadsDamageProbabilities(uint8_t *ram, HmRegs *r)
+{
+  unsigned row = r->a;                           /* the game passes 0..4 */
+  r->c = (row >> 14) & 1;
+  const uint8_t *chance = kDamageChance[row % 5];
+  push16(ram, r, chance[0]);
+  push16(ram, r, chance[1]);
+  r->y = chance[2];
+  r->x = pull16(ram, r);
+  r->a = pull16(ram, r);
+}

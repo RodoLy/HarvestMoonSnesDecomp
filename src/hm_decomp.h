@@ -136,3 +136,4 @@ void hm_RNGReturn0toA(uint8_t *ram, HmRegs *r);       /* rng.c */
 void hm_SetWeatherFlags(uint8_t *ram, HmRegs *r);     /* weather.c */
 void hm_WeatherTomorrow(uint8_t *ram, HmRegs *r);
 void hm_GetTileIndex(uint8_t *ram, HmRegs *r);        /* farm.c */
+void hm_LoadsDamageProbabilities(uint8_t *ram, HmRegs *r);
