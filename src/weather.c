@@ -103,3 +103,173 @@ void hm_SetWeatherFlags(uint8_t *ram, HmRegs *r)
     break;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * WeatherTomorrow ($82:8CF9, JSL, RTL). Runs at night with TODAY's date.
+ *
+ * 1. Festival eves: tomorrow is the festival.
+ *      Spring 22 -> flower festival      Fall 11   -> harvest festival
+ *      Fall 19   -> egg festival         Winter 9  -> thanksgiving
+ *      Winter 23 -> star night           Winter 30 -> new year
+ * 2. First year only, once each:
+ *      Winter: guaranteed storm on day 8 (decided on the 7th), before that
+ *              1 chance in 8 every night.          (code 4, flag 64 bit 1)
+ *      Summer: guaranteed storm on day 30 (decided on the 29th), before
+ *              that 1 chance in 30 every night.    (code 5, flag 64 bit 0)
+ * 3. Summer hurricane (any year, not decided on day 30): 1 in 30, or
+ *    1 in 60 if the player has the turtle shell.
+ * 4. Rain: 1 in 6 in spring, 1 in 10 in summer and fall, never in winter.
+ * 5. Snow (only winter): 1 in 3.
+ * 6. Otherwise sunny.
+ * "1 in n" is RNGReturn0toA(n) == 0, which is slightly more likely than
+ * 1/n (see rng.c).
+ *
+ * Quirks: the first-year winter storm is checked on any winter night that
+ * is not a festival eve, but the guaranteed one only on day 7; on the 29th
+ * of summer the summer storm skips the dice. A season above 3 (never
+ * happens) would read past the chance tables; the rewrite assumes 0..3.
+ * ───────────────────────────────────────────────────────────────────────── */
+static const uint8_t kHurricaneChance[4] = { 0, 30, 0, 0 };   /* $82:8EB2 */
+static const uint8_t kRainChance[4]      = { 6, 10, 10, 0 };  /* $82:8EB6 */
+static const uint8_t kSnowChance[4]      = { 0, 0, 0, 3 };    /* $82:8EBA */
+static const uint8_t kThunderChance[4]   = { 0, 30, 0, 0 };   /* $82:8EBE */
+static const uint8_t kSnowstormChance[4] = { 0, 0, 0, 8 };    /* $82:8EC2 */
+
+/* Where each JSL RNGReturn0toA returns to (its frame stays on the stack). */
+#define RET_SNOWSTORM  0x8DCD
+#define RET_THUNDER    0x8E11
+#define RET_HURRICANE  0x8E58
+#define RET_RAIN       0x8E7B
+#define RET_SNOW       0x8E9E
+
+/* JSL RNGReturn0toA with `faces` in A; true when it rolled 0. */
+static bool roll_zero(uint8_t *ram, HmRegs *r, uint8_t faces, uint16_t ret)
+{
+  r->a = faces;
+  hm_jsl(ram, r, ret, 0x80);                     /* JSL.L $80:89F9 */
+  hm_RNGReturn0toA(ram, r);
+  hm_rtl(ram, r);
+  return r->a == 0;
+}
+
+/* "1 chance in table[season]": LDA #0; XBA; LDA season; TAX; LDA table,X */
+static bool one_in(uint8_t *ram, HmRegs *r, const uint8_t *table, uint16_t ret)
+{
+  uint8_t season = ram[HM_SEASON];
+  r->x = season;
+  r->a = table[season];
+  if (table[season] == 0)
+    return false;
+  return roll_zero(ram, r, table[season], ret);
+}
+
+static void set_weather(uint8_t *ram, HmRegs *r, uint8_t code, uint16_t a)
+{
+  ram[HM_WEATHER_TOMORROW] = code;
+  r->a = a;
+}
+
+/* Festival eves keep A's high byte from the caller (8-bit LDA #code). */
+static void set_festival(uint8_t *ram, HmRegs *r, uint8_t code)
+{
+  set_weather(ram, r, code, (uint16_t)((r->a & 0xFF00) | code));
+  r->c = 1;                                      /* CMP #day matched */
+}
+
+static void normal_day(uint8_t *ram, HmRegs *r)
+{
+  if (one_in(ram, r, kRainChance, RET_RAIN))
+    set_weather(ram, r, HM_WEATHER_RAIN, HM_WEATHER_RAIN);
+  else if (one_in(ram, r, kSnowChance, RET_SNOW))
+    set_weather(ram, r, HM_WEATHER_SNOW, HM_WEATHER_SNOW);
+  else
+    set_weather(ram, r, HM_WEATHER_SUNNY, HM_WEATHER_SUNNY);
+}
+
+static void summer_night(uint8_t *ram, HmRegs *r)
+{
+  uint8_t day = ram[HM_DAY];
+  r->c = 0;                                      /* CMP #3 with season 1 */
+
+  /* First-year summer storm. */
+  if (ram[HM_YEAR] == 0 && !(hm_rd16(ram, STORY_FLAGS_64) & 0x0001)) {
+    r->c = day >= 29;
+    if (day == 29) {
+      set_weather(ram, r, HM_WEATHER_THUNDER, HM_WEATHER_THUNDER);
+      return;
+    }
+    if (one_in(ram, r, kThunderChance, RET_THUNDER)) {
+      set_weather(ram, r, HM_WEATHER_THUNDER, HM_WEATHER_THUNDER);
+      return;
+    }
+  }
+
+  /* Hurricane: not decided on the last day of summer. */
+  r->c = day >= 30;
+  if (day == 30) {
+    normal_day(ram, r);
+    return;
+  }
+  uint8_t season = ram[HM_SEASON];
+  r->x = season;
+  r->a = kHurricaneChance[season];
+  if (kHurricaneChance[season] != 0) {
+    uint16_t faces = kHurricaneChance[season];
+    if (hm_rd16(ram, ITEM_FLAGS_6C) & HAS_TURTLE_SHELL)
+      faces = (uint16_t)(faces << 1);            /* the shell halves the chance */
+    r->y = faces;
+    if (roll_zero(ram, r, (uint8_t)faces, RET_HURRICANE)) {
+      set_weather(ram, r, HM_WEATHER_HURRICANE, HM_WEATHER_HURRICANE);
+      return;
+    }
+  }
+  normal_day(ram, r);
+}
+
+static void winter_night(uint8_t *ram, HmRegs *r)
+{
+  uint8_t day = ram[HM_DAY];
+  if (day == 9)  { set_festival(ram, r, WEATHER_THANKSGIVING); return; }
+  if (day == 23) { set_festival(ram, r, WEATHER_STAR_NIGHT); return; }
+  if (day == 30) { set_festival(ram, r, WEATHER_NEW_YEAR); return; }
+  r->c = day >= 30;
+
+  /* First-year winter storm. */
+  if (ram[HM_YEAR] == 0 && !(hm_rd16(ram, STORY_FLAGS_64) & 0x0002)) {
+    r->c = day >= 7;
+    if (day == 7) {
+      set_weather(ram, r, HM_WEATHER_FAIR_STORY, HM_WEATHER_FAIR_STORY);
+      return;
+    }
+    if (one_in(ram, r, kSnowstormChance, RET_SNOWSTORM)) {
+      set_weather(ram, r, HM_WEATHER_FAIR_STORY, HM_WEATHER_FAIR_STORY);
+      return;
+    }
+  }
+  normal_day(ram, r);
+}
+
+void hm_WeatherTomorrow(uint8_t *ram, HmRegs *r)
+{
+  uint8_t season = ram[HM_SEASON], day = ram[HM_DAY];
+
+  switch (season) {
+  case SPRING:
+    r->c = day >= 22;
+    if (day == 22) set_festival(ram, r, WEATHER_FLOWER_FESTIVAL);
+    else normal_day(ram, r);
+    return;
+  case FALL:
+    if (day == 11) { set_festival(ram, r, WEATHER_HARVEST_FESTIVAL); return; }
+    r->c = day >= 19;
+    if (day == 19) { set_festival(ram, r, WEATHER_EGG_FESTIVAL); return; }
+    normal_day(ram, r);
+    return;
+  case WINTER:
+    winter_night(ram, r);
+    return;
+  default:
+    summer_night(ram, r);
+    return;
+  }
+}
