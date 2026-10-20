@@ -1,0 +1,171 @@
+turbo on
+wait 700
+press start 2
+wait 347
+press up 2
+wait 27
+press a 2
+wait 317
+press a 2
+wait 597
+press a 2
+wait 57
+press a 2
+wait 57
+press a 2
+wait 327
+press a 2
+wait 47
+press a 2
+wait 47
+press a 2
+wait 47
+press a 2
+wait 97
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press down 2
+wait 27
+press a 2
+wait 57
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 97
+press down 150
+wait 49
+press down 150
+wait 49
+press left 100
+wait 49
+press down 200
+wait 49
+press left 200
+wait 99
+# --- nights.txt: force NightReset on chosen dates (live weather checks) ---
+# poke 11F19 = season, 11F1B = day (today; WeatherTomorrow decides tomorrow)
+poke 11F19 00
+poke 11F1B 16
+poke 0973 02
+wait 600
+poke 11F19 00
+poke 11F1B 05
+poke 0973 02
+wait 600
+poke 11F19 01
+poke 11F1B 1D
+poke 0973 02
+wait 600
+poke 11F19 01
+poke 11F1B 0A
+poke 0973 02
+wait 600
+poke 11F19 02
+poke 11F1B 0B
+poke 0973 02
+wait 600
+poke 11F19 02
+poke 11F1B 13
+poke 0973 02
+wait 600
+poke 11F19 03
+poke 11F1B 07
+poke 0973 02
+wait 600
+poke 11F19 03
+poke 11F1B 09
+poke 0973 02
+wait 600
+poke 11F19 03
+poke 11F1B 0F
+poke 0973 02
+wait 600
+poke 11F19 03
+poke 11F1B 1E
+poke 0973 02
+wait 600
+quit
