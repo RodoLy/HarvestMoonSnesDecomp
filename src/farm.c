@@ -74,6 +74,30 @@ void hm_GetTileIndex(uint8_t *ram, HmRegs *r)
   r->a = r->x = (uint16_t)index;
 }
 
+/* The loop every farm routine shares: for y, x in pixels (0..$3F0 step 16),
+ * PHY; PHX; $82 = x; $84 = y; JSR GetTileIndex. tile_begin returns the tile
+ * index (also left in X); tile_end is the PLX; PLY at the bottom. */
+static uint16_t tile_begin(uint8_t *ram, HmRegs *r, uint16_t x, uint16_t y, uint16_t ret_jsr)
+{
+  push16(ram, r, y);
+  push16(ram, r, x);
+  hm_dp_w16(ram, r, 0x82, x);
+  hm_dp_w16(ram, r, 0x84, y);
+  r->x = x; r->y = y;
+  jsr(ram, r, ret_jsr);
+  hm_GetTileIndex(ram, r);
+  rts(ram, r);
+  return r->x;
+}
+static void tile_end(uint8_t *ram, HmRegs *r)
+{
+  r->x = pull16(ram, r);
+  r->y = pull16(ram, r);
+}
+#define FOR_EACH_FARM_TILE(x, y) \
+  for (uint16_t y = 0; y != 0x400; y = (uint16_t)(y + 16)) \
+    for (uint16_t x = 0; x != 0x400; x = (uint16_t)(x + 16))
+
 /* ─────────────────────────────────────────────────────────────────────────
  * LoadsDamageProbabilities ($82:8270, JSR, RTS). A = weather row; returns
  * "1 chance in n" for each kind of damage, 0 = never:
@@ -147,17 +171,8 @@ void hm_ClimateFarmDamageCheck(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, 0x8A, crop_chance);
   ram[HM_MAP_WIDTH_CODE] = 4;                    /* 64 tiles wide */
 
-  for (uint16_t y = 0; y != 0x400; y = (uint16_t)(y + 16)) {
-    for (uint16_t x = 0; x != 0x400; x = (uint16_t)(x + 16)) {
-      push16(ram, r, y);
-      push16(ram, r, x);
-      hm_dp_w16(ram, r, 0x82, x);
-      hm_dp_w16(ram, r, 0x84, y);
-      r->x = x; r->y = y;
-      jsr(ram, r, RET_GET_TILE_INDEX);
-      hm_GetTileIndex(ram, r);
-      rts(ram, r);
-      uint16_t index = r->x;
+  FOR_EACH_FARM_TILE(x, y) {
+      uint16_t index = tile_begin(ram, r, x, y, RET_GET_TILE_INDEX);
       uint8_t *tile = &ram[HM_FARM_MAP + index];
       uint8_t t = *tile;
       /* What the 16-bit compare sees: the tile with the index's high byte. */
@@ -183,9 +198,7 @@ void hm_ClimateFarmDamageCheck(uint8_t *ram, HmRegs *r)
         if (crop_chance && roll_zero(ram, r, crop_chance, RET_ROLL_CROPS))
           *tile = TILE_SOIL;
       }
-      pull16(ram, r);                            /* PLX; PLY */
-      pull16(ram, r);
-    }
+      tile_end(ram, r);
   }
   r->a = r->x = r->y = 0x0400;
   r->c = 1;                                      /* CPY #$0400 matched */
