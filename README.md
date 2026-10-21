@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 14.41%](https://img.shields.io/badge/decompiled-14.41%25-2f855a)
+![Decompiled: 17.35%](https://img.shields.io/badge/decompiled-17.35%25-2f855a)
 
-**14.41%** of the game's code decompiled and verified: 6509 of 45176 instructions, 82 of 514 routines (16.0%).
+**17.35%** of the game's code decompiled and verified: 7837 of 45176 instructions, 107 of 514 routines (20.8%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -47,6 +47,7 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Calendar | LoadsDateNames | `src/calendar.c` |
 | Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: chickens, cows, dog and horse on the map you enter) | `src/animals.c` |
 | Ending | RanchMasteryCalculator (the final ranch score) | `src/ending.c` |
+| Event script commands | 25 of the 90: the chicken's and the dog's every frame (Event_UNKChickenRelated, Event_UNKDogRelated), jumps and tests (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), clock (TimeRunning / Stopped, SetHour), player (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) and flags | `src/eventcmds.c` |
 | Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (start an event script) | `src/events.c` |
 | Map edits | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | Video DMA | AddProgrammedDMA (queue a copy to VRAM / CGRAM for the next NMI) | `src/dma.c` |
@@ -103,6 +104,9 @@ A few things found along the way (details in each file's comments):
   happiness. **Bugs:** hearts and shipped crops are cut with `AND #$1FF`
   instead of capped (512 turnips shipped count as 0), and only the low 16
   bits of the money count (655,360 G count as 0).
+- The dog's mood changes every 2 seconds between five states, with a
+  random roll picking what it does; each hug counts ($7F1F52). A hen
+  that is not picked up starts a new script every $200 frames.
 - There are at most 10 "map objects" (the effects tools leave, like cut
   grass). If all 10 are in use when an 11th is needed, the game freezes:
   `BRA` to itself at $81:A528.
@@ -110,7 +114,7 @@ A few things found along the way (details in each file's comments):
 ## Layout
 
 - `src/` — the rewritten routines and the checker (`hm_decomp.c/.h`).
-- `data/decomp_names.tsv` — names of 497 routines (from HM-Decomp).
+- `data/decomp_names.tsv` — names of 499 routines (from HM-Decomp).
 - `tools/build.sh` — generates, renames and builds the test executable.
 - `tools/check.sh` — runs the checks (random inputs, a new game, nights).
 - `tools/progress.py` — computes the percentage above.

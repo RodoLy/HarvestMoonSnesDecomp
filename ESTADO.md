@@ -8,12 +8,12 @@ en el README (`tools/progress.py`).
 
 - **Proyecto separado** del juego. Se compila con `tools/build.sh` (usa la
   recompilación como base, sin modificarla) y se prueba con `tools/check.sh`.
-- **Nombres**: 497 rutinas renombradas con los nombres de HM-Decomp
+- **Nombres**: 499 rutinas renombradas con los nombres de HM-Decomp
   (`data/decomp_names.tsv`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **82 rutinas reescritas y verificadas** (0 diferencias):
+- **107 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -70,6 +70,7 @@ en el README (`tools/progress.py`).
 | RanchMasteryCalculator | $83:F26D | src/ending.c |
 | AddNewChicken, AddNewCow | $83:C807, $83:C8DC | src/animals.c |
 | PlaceAnimalsOnMap (CODE_83C296) | $83:C296 | src/animals.c |
+| 25 comandos de evento (Event_*) | $84:89BB-$84:AF06 | src/eventcmds.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -322,8 +323,30 @@ sistema de texto).
 - Pendiente: la regadera y el aspersor necesitan grabar las lecturas del
   chip de sonido (UNK_Audio17 lee $2140) para poder compararse.
 
+## Comandos de los guiones de evento (hecho el 21-oct-2026)
+
+- Tabla `EventInstructionPointers` ($84:9419): 90 comandos, uno por byte
+  de guion. $C9-$CB = posición en el guion (cada comando la avanza con
+  CLC; ADC, y eso deja en A y C); $CC-$CE = el slot. Los argumentos van
+  después del byte del comando.
+- Hechos 25: la gallina y el perro de cada cuadro, y 23 chicos (saltos,
+  pruebas, reloj, jugador, slots, banderas $7F1F7A).
+- Perro: ánimo en $7F1F58 (bits 1, 2, 4, 8, $10), cambia cada $78
+  cuadros con el byte al azar $DE; $7F1F60 bit $10 lo llama.
+- Gallina: levantarla con A (objeto $26 pollito, $25 gallina); venta
+  ($7F1F5A bit 3, precio $32); contador $093B+2n hasta $200.
+- Verificados también en vivo: los guiones reales de la partida y de las
+  noches ejecutan muchos de estos comandos (miles de saltos).
+- Prueba al azar: el guion se arma en $7F:F000 con bytes al azar; para
+  los Jumpif con dirección, el banco se fuerza a $7E/$7F, y 1 de cada 4
+  veces se fuerza la igualdad para que la rama del salto se pruebe.
+- HM-Decomp anota Event_TimeStopped en ;808A0D; es $84:8A0D (nombre
+  manual). `progress.py` ahora guarda el texto de las etiquetas con
+  dirección para poder encontrarlas en `LOCAL`.
+
 ## Lo siguiente
 
+Más comandos de evento (`python3 tools/candidates.py | grep Event_`);
 SUB_829260 (el despachador) cuando estén la regadera y el aspersor; el
 sistema de texto (StartTextBox) para ShippingScene y UpdateTime; el resto
 de los eventos de animales (`Event_UNKCowRelated`, $84:9AD4).

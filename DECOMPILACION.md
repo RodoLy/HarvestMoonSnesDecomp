@@ -103,7 +103,12 @@ Para las direcciones de retorno de los JSR/JSL está `tools/calls.py`
 Para elegir qué sigue: `python3 tools/candidates.py` (rutinas cuyo
 código llamado ya está hecho y que no tocan hardware, de mayor a menor).
 
-Resultado actual: 82 rutinas, 10 semillas × 2.000 llamadas al azar cada una
+Si una rama depende de una igualdad (1 en 256 al azar), la preparación
+fuerza la igualdad una parte de las veces; y para confirmar que una rama
+se prueba, se rompe esa rama a propósito y se mira que el comprobador
+avise.
+
+Resultado actual: 107 rutinas, 10 semillas × 2.000 llamadas al azar cada una
 (`HM_DECOMP_FUZZ_SEED`; 40 granjas enteras por semilla para las de la
 granja) + las llamadas reales de una partida nueva y de 10 noches forzadas:
 **0 diferencias**.
