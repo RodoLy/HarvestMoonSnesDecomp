@@ -131,6 +131,28 @@ static void prep_money(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x72, (uint16_t)c); ram[0x74] = (uint8_t)(c >> 16);
 }
 
+static void prep_tile_in_front(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  r->x = (uint16_t)(rnd() & 0x3FF);                       /* a position on the map */
+  r->y = (uint16_t)(rnd() & 0x3FF);
+  static const uint8_t widths[] = { 1, 2, 4, 4 };
+  ram[0x00181] = widths[rnd() % 4];
+  for (int i = 0; i < 4096; i++) ram[0x009B6 + i] = (uint8_t)rnd();   /* tile types */
+  if (rnd() & 1) {                                        /* property table: somewhere in ROM */
+    hm_wr16(ram, 0x0D, (uint16_t)(0x8000 | (rnd() & 0x7C00)));
+    ram[0x0F] = (uint8_t)(0xA0 + rnd() % 0x20);
+  }
+  /* facing: 0-3 in the game; larger values still read the flag table
+   * inside the ROM (past $82:FFFF it would read hardware registers). */
+  hm_wr16(ram, 0xDA, (uint16_t)((rnd() & 7) ? rnd() % 4 : rnd() % 0x2A00));
+  hm_wr16(ram, 0x11F5C, (uint16_t)((rnd() & 3) ? 0 : 0x0008));
+  static const uint8_t tools[] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+                                   0x0C, 0x0D, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x1A };
+  ram[0x00921] = tools[rnd() % sizeof tools];
+  static const uint8_t maps[] = { 0, 1, 2, 3, 4, 0x0F, 0x10, 0x13, 0x14, 0x3C, 0x3D, 0x50 };
+  ram[0x00022] = maps[rnd() % sizeof maps];
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -222,6 +244,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "HaveLunch", hm_HaveLunch, 0, "src/stamina.c", 0x8280AA, 1, 0, 0, 0xFF,
     { B8(0x11F1C, 11, 13), W16(HM_GAME_STATE, 0, 0xFFFF), W16(HM_PLAYER_ACTION, 0x0E, 0x19),
       B8(HM_MAX_STAMINA, 0, 255), B8(HM_CURRENT_STAMINA, 0, 255), B8(HM_RNG_STATE, 0, 255) } },
+  { "GetTileContent", hm_GetTileContent, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/tools.c",
+    0x82B124, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tile_in_front },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
