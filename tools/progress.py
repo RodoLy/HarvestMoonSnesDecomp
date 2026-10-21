@@ -36,6 +36,37 @@ INSN = re.compile(r"^\s*(?:[-+]\s+)?(?:\.[A-Za-z0-9_]+:\s*)?"
 DATA = {"DB", "DW", "DL", "DD"}
 
 
+# Routines HM-Decomp only has as a local label inside another routine (see
+# tools/import_decomp_names.py). They count as routines of their own, from
+# the label to the first RTL/RTS, and their instructions are taken out of
+# the parent so nothing is counted twice.
+LOCAL = {
+    0x84A5D4: ("Event_UNKCowRelated", ".AddCowHappiness", "AddCowHappiness"),
+}
+
+
+def split_locals(decomp_dir, found):
+    by_name = {name: pc for pc, (name, _) in found.items()}
+    for pc, (parent, label, name) in LOCAL.items():
+        for path in glob.glob(os.path.join(decomp_dir, "src", "code_banks", "*.asm")):
+            lines = open(path, encoding="utf-8", errors="replace").read().split("\n")
+            starts = [i for i, l in enumerate(lines) if l.strip() == label + ":"]
+            if not starts:
+                continue
+            n = 0
+            for l in lines[starts[0] + 1:]:
+                code = l.split(";", 1)[0]
+                if INSN.match(code):
+                    n += 1
+                    if re.search(r"\bRT[LS]\b", code):
+                        break
+            ppc = by_name[parent]
+            found[ppc] = (parent, found[ppc][1] - n)
+            found[pc] = (name, n)
+            break
+    return found
+
+
 def routines(decomp_dir):
     found = {}
     for path in sorted(glob.glob(os.path.join(decomp_dir, "src", "code_banks", "*.asm"))):
@@ -55,7 +86,8 @@ def routines(decomp_dir):
             i = INSN.match(code)
             if i and (i.group(1) or "").upper() not in DATA:
                 found[current][1] += 1
-    return {pc: (name, n) for pc, (name, n) in found.items() if n > 0}
+    found = {pc: (name, n) for pc, (name, n) in found.items() if n > 0}
+    return split_locals(decomp_dir, found)
 
 
 def registered(path):

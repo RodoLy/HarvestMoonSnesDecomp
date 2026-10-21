@@ -416,6 +416,7 @@
 049857	Event_UNKChickenRelated_lo
 849AD4	Event_UNKCowRelated
 049AD4	Event_UNKCowRelated_lo
+84A5D4	AddCowHappiness
 84A94C	Event_UNKPickupMole
 04A94C	Event_UNKPickupMole_lo
 84AA5D	Event_UNKFishing

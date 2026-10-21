@@ -11,6 +11,8 @@
 #include "hm_ram.h"   /* from the recompilation project */
 #include "mod_runtime.h"
 
+void interp_bridge_set_master_deadline(uint64_t master_clock);  /* snes/interp_bridge.h */
+
 #define W16(a, lo, hi) { a, 2, lo, hi }
 #define B8(a, lo, hi)  { a, 1, lo, hi }
 
@@ -189,9 +191,18 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   }
   if (bad) {
     st->bad++;
-    if (st->bad <= 5)
+    if (st->bad <= 5) {
       fprintf(stderr, "[decomp-check] MISMATCH %s: %s (in A=%04X X=%04X Y=%04X C=%u DB=%02X)\n",
               name, why, in.a, in.x, in.y, in.c, in.db);
+      /* HM_DECOMP_DIFF_ALL=1: list every differing byte (rewrite / rom). */
+      static int all = -1;
+      if (all < 0) { const char *e = getenv("HM_DECOMP_DIFF_ALL"); all = e && *e && *e != '0'; }
+      for (size_t i = 0, n = 0; all && i < sizeof s->ram && n < 24; i++)
+        if (s->ram[i] != cpu->ram[i]) {
+          fprintf(stderr, "[decomp-check]     %05zX: %02X / rom %02X\n", i, s->ram[i], cpu->ram[i]);
+          n++;
+        }
+    }
   } else {
     st->ok++;
   }
@@ -223,8 +234,10 @@ static void fuzz_at(unsigned frame)
     if (seed && *seed) s_rng ^= (uint32_t)strtoul(seed, NULL, 0) * 0x9E3779B9u;
     if (!s_rng) s_rng = 1;
   }
-  if (at < 0 || (int)frame != at) return;
-  at = -1;
+  /* One routine per frame, starting at frame `at`: the frame watchdog
+   * (5 s of real time per frame) then applies to each routine on its own. */
+  if (at < 0 || (int)frame < at || (int)frame >= at + g_hm_decomp_count) return;
+  int only = (int)frame - at;
 
   static CpuState saved_cpu;
   static uint8_t saved_ram[0x20000];
@@ -234,10 +247,23 @@ static void fuzz_at(unsigned frame)
   if (!s_stats) { s_stats = calloc((size_t)g_hm_decomp_count, sizeof *s_stats); atexit(report); }
   g_hm_decomp_check = 1;
   s_fuzzing = 1;
-  fprintf(stderr, "[decomp-fuzz] frame %u: %d calls per routine\n", frame, iters);
-  for (int i = 0; i < g_hm_decomp_count; i++) {
+  /* Long interpreted routines (CowFeedingandStatus) would otherwise pause at
+   * the frame's deadline half-way, as they do in the game, and not be
+   * comparable. The frame driver sets the deadline again every frame. */
+  interp_bridge_set_master_deadline(0);
+  if (only == 0)
+    fprintf(stderr, "[decomp-fuzz] frames %u-%u: %d calls per routine\n", frame,
+            frame + g_hm_decomp_count - 1, iters);
+  for (int i = only; i == only; i++) {
     const HmDecompFn *f = &g_hm_decomp_fns[i];
     int n_calls = (f->fuzz_max && f->fuzz_max < iters) ? f->fuzz_max : iters;
+    /* HM_DECOMP_FUZZ_ONLY=<name>: fuzz just that routine (debugging). */
+    const char *only_name = getenv("HM_DECOMP_FUZZ_ONLY");
+    if (only_name && *only_name && strcmp(only_name, f->name)) n_calls = 0;
+    /* HM_DECOMP_FUZZ_CALL=<n>: run only call n of it (same inputs as in the
+     * full run), e.g. to trace it. */
+    const char *one_call = getenv("HM_DECOMP_FUZZ_CALL");
+    int pick = one_call && *one_call ? atoi(one_call) : -1;
     for (int n = 0; n < n_calls; n++) {
       g_cpu = saved_cpu;
       memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
@@ -264,12 +290,19 @@ static void fuzz_at(unsigned frame)
       g_cpu._flag_C = rnd() & 1;
       g_cpu._flag_N = rnd() & 1;
       cpu_mirrors_to_p(&g_cpu);
-      g_cpu.P = (uint8_t)((g_cpu.P & ~0x30) | (f->entry_m ? 0x20 : 0) | (f->entry_x ? 0x10 : 0));
+      /* I set (IRQs masked): the interpreter otherwise hands control back to
+       * the scheduler half-way through a long routine when an IRQ is pending,
+       * as the real CPU would to run the handler. No rewritten routine
+       * touches I. */
+      g_cpu.P = (uint8_t)((g_cpu.P & ~0x30) | 0x04 | (f->entry_m ? 0x20 : 0) | (f->entry_x ? 0x10 : 0));
       cpu_p_to_mirrors(&g_cpu);
       if (f->entry_x) { g_cpu.X &= 0xFF; g_cpu.Y &= 0xFF; }
+      if (!(f->out_mask & HM_JSR)) g_cpu.PB = (uint8_t)(f->pc24 >> 16);  /* JSL enters its bank */
       if (f->out_mask & HM_JSR) cpu_push_jsr_return_frame(&g_cpu);
       else cpu_push_jsl_return_frame(&g_cpu);
       uint8_t frame_size = (f->out_mask & HM_JSR) ? 2 : 3;
+      if (pick >= 0 && n != pick) continue;
+      unsigned bad_before = s_stats[i].bad;
       if (f->out_mask & HM_INTERP) {
         /* No wrapper around it: check this call here. */
         void *snap = hm_decomp_check_begin(&g_cpu);
@@ -280,13 +313,16 @@ static void fuzz_at(unsigned frame)
       } else {
         cpu_dispatch_pc_paired(&g_cpu, f->pc24, frame_size);
       }
+      if (s_stats[i].bad != bad_before && s_stats[i].bad <= 5)
+        fprintf(stderr, "[decomp-fuzz]   (that was %s call %d)\n", f->name, n);
     }
   }
   g_cpu = saved_cpu;
   memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
   g_hm_decomp_check = prev;
   s_fuzzing = 0;
-  fprintf(stderr, "[decomp-fuzz] done; machine restored\n");
+  if (only == g_hm_decomp_count - 1)
+    fprintf(stderr, "[decomp-fuzz] done; machine restored\n");
 }
 
 /* Hooked in through the mod runtime, so the game project needs no code for

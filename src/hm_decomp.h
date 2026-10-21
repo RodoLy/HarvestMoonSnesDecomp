@@ -18,6 +18,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* The CPU state a routine sees and returns. Rewrites read the inputs they
@@ -76,6 +77,56 @@ static inline void hm_dp_w16(uint8_t *ram, const HmRegs *r, unsigned off, uint16
 static inline uint16_t hm_dp_r16(uint8_t *ram, const HmRegs *r, unsigned off)
 {
   return (uint16_t)(*hm_dp(ram, r, off) | *hm_dp(ram, r, off + 1) << 8);
+}
+
+/* ── The whole address space, for long pointers ([$72],Y and friends) ──────
+ * The ROM never changes, so rewrites may read it directly: g_rom is the
+ * cartridge image the runtime loaded (LoROM: bank & $3F selects a 32 KB
+ * chunk, addresses $8000-$FFFF). WRAM is `ram`: banks $7E/$7F, and the
+ * first 8 KB mirrored in banks $00-$3F / $80-$BF. Hardware registers are
+ * not modelled (reads give 0, writes are dropped): routines that use them
+ * through a long pointer can't be checked this way. */
+extern const uint8_t *g_rom;
+
+static inline uint8_t *hm_bus_ram(uint8_t *ram, uint32_t addr)
+{
+  uint8_t bank = (uint8_t)(addr >> 16);
+  uint16_t a = (uint16_t)addr;
+  if (bank == 0x7E) return &ram[a];
+  if (bank == 0x7F) return &ram[0x10000 + a];
+  if ((bank & 0x7F) < 0x40 && a < 0x2000) return &ram[a];
+  return NULL;
+}
+static inline uint8_t hm_bus_rd8(uint8_t *ram, uint32_t addr)
+{
+  uint8_t *p = hm_bus_ram(ram, addr);
+  if (p) return *p;
+  uint8_t bank = (uint8_t)(addr >> 16);
+  uint16_t a = (uint16_t)addr;
+  if (a >= 0x8000 && (bank & 0x7F) < 0x7E)
+    return g_rom[(uint32_t)(bank & 0x3F) << 15 | (a & 0x7FFF)];
+  return 0;
+}
+static inline uint16_t hm_bus_rd16(uint8_t *ram, uint32_t addr)
+{
+  return (uint16_t)(hm_bus_rd8(ram, addr) | hm_bus_rd8(ram, (addr + 1) & 0xFFFFFF) << 8);
+}
+static inline void hm_bus_wr8(uint8_t *ram, uint32_t addr, uint8_t v)
+{
+  uint8_t *p = hm_bus_ram(ram, addr);
+  if (p) *p = v;
+}
+static inline void hm_bus_wr16(uint8_t *ram, uint32_t addr, uint16_t v)
+{
+  hm_bus_wr8(ram, addr, (uint8_t)v);
+  hm_bus_wr8(ram, (addr + 1) & 0xFFFFFF, (uint8_t)(v >> 8));
+}
+/* A 24-bit pointer stored in the direct page ($72-$74, $CC-$CE...), plus Y:
+ * the address `[dp],Y` uses. */
+static inline uint32_t hm_dp_long(uint8_t *ram, const HmRegs *r, unsigned off, uint16_t y)
+{
+  uint32_t p = hm_dp_r16(ram, r, off) | (uint32_t)*hm_dp(ram, r, off + 2) << 16;
+  return (p + y) & 0xFFFFFF;
 }
 
 enum { HM_OUT_A = 1, HM_OUT_X = 2, HM_OUT_Y = 4, HM_OUT_C = 8,

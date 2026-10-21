@@ -3,9 +3,10 @@
 #
 #   tools/check.sh [iterations] [seeds]
 #
-# 1. Fuzz: at frame 1500 of the attract demo, every rewritten routine is
-#    called <iterations> times (default 2000) with random inputs; each call
-#    is compared with the original byte for byte, then the machine is restored.
+# 1. Fuzz: from frame 1500 of the attract demo, one rewritten routine per
+#    frame is called <iterations> times (default 2000) with random inputs;
+#    each call is compared with the original byte for byte, then the machine
+#    is restored.
 #    Repeated with <seeds> different random seeds (default 3).
 # 2. Live: a new game is played by script with every real call checked.
 # 3. Nights: the same new game, then ten nights forced (poke 0973 02) on

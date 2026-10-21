@@ -30,6 +30,13 @@ LABEL = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):\s*;\s*([0-9A-Fa-f]{6})\b", re.M)
 BODY = re.compile(r'cpu_trace_func_entry\(cpu, 0x([0-9a-fA-F]{6}), "[A-Za-z_0-9]*_M([01])X([01])"\)')
 
 
+# Routines HM-Decomp only has as a local label inside another routine (so
+# LABEL does not see them) but that the recompiler compiles on their own.
+MANUAL = {
+    0x84A5D4: "AddCowHappiness",   # .AddCowHappiness in Event_UNKCowRelated
+}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--decomp", required=True)
@@ -46,6 +53,9 @@ def main():
             if any(name.startswith(p) for p in a.skip_prefix.split(",") if p):
                 continue
             labels.setdefault(pc, name)
+
+    for pc, name in MANUAL.items():
+        labels.setdefault(pc, name)
 
     variants = {}          # pc24 -> sorted list of (m, x)
     for path in glob.glob(os.path.join(a.gen, "bank*_v2.c")):
