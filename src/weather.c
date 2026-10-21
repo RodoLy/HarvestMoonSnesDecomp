@@ -273,3 +273,32 @@ void hm_WeatherTomorrow(uint8_t *ram, HmRegs *r)
     return;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_8281C0 ($82:81C0, JSL, RTL): the TV weather report. $0990 = what the
+ * forecast shows (the TV code at $81:D9xx picks the text with it and the
+ * season): table $82:81FD maps tomorrow's code (0-3 as they are, the two
+ * scripted storms as 0, festivals 6..0B as 5..0A), then a hurricane day
+ * shows 0B and the winter storm 4 (from today's flags $0196).
+ * The table is read as the game does, even past its 12 entries.
+ * Leftovers: X = tomorrow's code; A = 0, or the value just stored;
+ * C untouched.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define TV_FORECAST      0x00990
+#define TV_FORECAST_MAP  0x8281FD
+
+void hm_SUB_8281C0(uint8_t *ram, HmRegs *r)
+{
+  r->x = ram[HM_WEATHER_TOMORROW];
+  ram[TV_FORECAST] = hm_bus_rd8(ram, TV_FORECAST_MAP + r->x);
+  uint16_t flags = hm_rd16(ram, WEATHER_FLAGS);
+  if (flags & 0x0010) {
+    ram[TV_FORECAST] = 0x0B;
+    r->a = 0x000B;
+  } else if (flags & 0x0200) {
+    ram[TV_FORECAST] = 0x04;
+    r->a = 0x0204;
+  } else {
+    r->a = 0;
+  }
+}
