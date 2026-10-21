@@ -120,6 +120,17 @@ static void prep_family(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x11F6E, (uint16_t)((rnd() & 0x001C) | (rnd() & 0xFFE3)));
   hm_wr16(ram, 0x11F64, (uint16_t)rnd());
 }
+static void prep_money(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  static const uint32_t money[] = { 0, 1, 500, 999998, 999999, 1000000, 0x7FFFFF, 0x0F423E };
+  static const uint32_t change[] = { 1, 10, 0xFFFFFF, 0xFFFFF6, 0xF0BDC1, 999999, 0x800000, 0x0F423F };
+  uint32_t m = (rnd() & 1) ? money[rnd() % 8] : rnd() % 1000000;
+  uint32_t c = (rnd() & 1) ? change[rnd() % 8] : rnd() & 0xFFFFFF;
+  hm_wr24(ram, 0x11F04, m);
+  hm_wr16(ram, 0x72, (uint16_t)c); ram[0x74] = (uint8_t)(c >> 16);
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -204,6 +215,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     { W16(0x11F6C, 0, 0xFFFF), W16(0x11F33, 0, 1100) }, 0, prep_family },
   { "LoadsDateNames", hm_LoadsDateNames, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/calendar.c",
     0x8289D6, 1, 0, 0, 0xFF, { B8(HM_SEASON, 0, 3), B8(HM_WEEKDAY, 0, 6), B8(HM_DAY, 0, 31) } },
+  { "AddMoney", hm_AddMoney, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/stock.c",
+    0x83B1C9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_money },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
