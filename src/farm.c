@@ -406,3 +406,35 @@ void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r)
   r->a = r->x = r->y = 0x0400;
   r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Sub_82A9A0 ($82:A9A0, JSL, RTL; no compiled body: it runs in the
+ * recompiler's interpreter). A cow grazing on the farm eats grass: the
+ * first grass tile at stage 76..79 (scanning row by row) becomes 7A, and
+ * $092E = 1. With no such tile $092E = 0 (the cow goes hungry).
+ * Leftovers when found: A = 1, X/Y = that tile's pixel position, C = 1;
+ * otherwise A = X = Y = $0400, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_GRAZE_TILE  0xA9BC   /* JSR GetTileIndex at $82:A9BA */
+
+void hm_Sub_82A9A0(uint8_t *ram, HmRegs *r)
+{
+  ram[HM_MAP_WIDTH_CODE] = 4;
+  hm_wr16(ram, HM_GROWN_GRASS_N, 0);
+  FOR_EACH_FARM_TILE(x, y) {
+    uint8_t *tile = &ram[HM_FARM_MAP + tile_begin(ram, r, x, y, RET_GRAZE_TILE)];
+    bool found = *tile >= 0x76 && *tile <= TILE_GRASS_GROWN;
+    if (found) {
+      *tile = TILE_WINTER_GRASS;
+      hm_wr16(ram, HM_GROWN_GRASS_N, 1);
+    }
+    tile_end(ram, r);
+    if (found) {
+      r->a = 1;
+      r->c = 1;
+      return;
+    }
+  }
+  r->a = r->x = r->y = 0x0400;
+  r->c = 1;
+}
