@@ -194,3 +194,4 @@ void hm_MonthlyFarmTilesCheck(uint8_t *ram, HmRegs *r);
 void hm_NightlyFarmTilesCheck(uint8_t *ram, HmRegs *r);
 void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r);
 void hm_SetCCPoiner(uint8_t *ram, HmRegs *r);         /* events.c */
+void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r);

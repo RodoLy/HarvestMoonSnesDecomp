@@ -40,3 +40,21 @@ void hm_SetCCPoiner(uint8_t *ram, HmRegs *r)
   *hm_dp(ram, r, 0xCE) = 0x7E;
   r->a = (uint16_t)((address & 0xFF00) | 0x7E);  /* SEP #$20; LDA #$7E */
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * ResetsCurrentCCStructureLong ($84:88D4, JSR, RTS — despite the name).
+ * Marks the slot at $CC as in use and clears its state: bytes +01, +03..06,
+ * +0C, +0F and words +10, +12, +14, +1A, +1C. Ends with A = 0, Y = $14.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r)
+{
+  static const uint8_t bytes[] = { 0x01, 0x0F, 0x03, 0x04, 0x05, 0x06, 0x0C };
+  static const uint8_t words[] = { 0x10, 0x1A, 0x1C, 0x12, 0x14 };
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x00), 1);
+  for (unsigned i = 0; i < sizeof bytes; i++)
+    hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, bytes[i]), 0);
+  for (unsigned i = 0; i < sizeof words; i++)
+    hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, words[i]), 0);
+  r->a = 0;
+  r->y = 0x14;
+}
