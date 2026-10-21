@@ -333,7 +333,7 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
 }
 
 /* ── Fuzzing (HM_DECOMP_FUZZ=<frame>:<iterations>) ─────────────────── */
-static uint32_t s_rng = 0x12345678u;
+static uint32_t s_rng = 0x12345678u, s_seed;
 static uint32_t rnd(void) { s_rng ^= s_rng << 13; s_rng ^= s_rng >> 17; s_rng ^= s_rng << 5; return s_rng; }
 static uint16_t rnd_in(uint16_t lo, uint16_t hi)
 {
@@ -356,6 +356,7 @@ static void fuzz_at(unsigned frame)
     const char *seed = getenv("HM_DECOMP_FUZZ_SEED");
     if (seed && *seed) s_rng ^= (uint32_t)strtoul(seed, NULL, 0) * 0x9E3779B9u;
     if (!s_rng) s_rng = 1;
+    s_seed = s_rng;
   }
   /* One routine per frame, starting at frame `at`: the frame watchdog
    * (5 s of real time per frame) then applies to each routine on its own. */
@@ -380,6 +381,11 @@ static void fuzz_at(unsigned frame)
   for (int i = only; i == only; i++) {
     const HmDecompFn *f = &g_hm_decomp_fns[i];
     int n_calls = (f->fuzz_max && f->fuzz_max < iters) ? f->fuzz_max : iters;
+    /* Each routine gets its own stream of random inputs (from the seed and
+     * its place in the list), so a call can be replayed on its own with
+     * HM_DECOMP_FUZZ_ONLY / HM_DECOMP_FUZZ_CALL. */
+    s_rng = s_seed ^ (0x9E3779B9u * (uint32_t)(i + 1));
+    if (!s_rng) s_rng = 1;
     /* HM_DECOMP_FUZZ_ONLY=<name>: fuzz just that routine (debugging). */
     const char *only_name = getenv("HM_DECOMP_FUZZ_ONLY");
     if (only_name && *only_name && strcmp(only_name, f->name)) n_calls = 0;
