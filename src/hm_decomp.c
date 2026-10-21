@@ -12,6 +12,26 @@
 #include "mod_runtime.h"
 
 void interp_bridge_set_master_deadline(uint64_t master_clock);  /* snes/interp_bridge.h */
+/* The emulated DMA unit (snes/dma.h): reading $43xx has no side effects. */
+typedef struct Dma Dma;
+extern Dma *g_dma;
+uint8_t dma_read(Dma *dma, uint16_t adr);
+void dma_write(Dma *dma, uint16_t adr, uint8_t val);
+
+uint8_t *g_hm_dma_regs;
+enum { DMA_REGS = 0x80 };
+static void dma_regs_save(uint8_t *out)
+{
+  for (int i = 0; i < DMA_REGS; i++) out[i] = g_dma ? dma_read(g_dma, (uint16_t)(0x4300 + i)) : 0;
+}
+static void dma_regs_restore(const uint8_t *in)
+{
+  /* only the registers that exist: $43x0-$43xA and $43xB/$43xF */
+  for (int i = 0; i < DMA_REGS; i++) {
+    int r = i & 0xF;
+    if (g_dma && (r <= 0xB || r == 0xF)) dma_write(g_dma, (uint16_t)(0x4300 + i), in[i]);
+  }
+}
 
 #define W16(a, lo, hi) { a, 2, lo, hi }
 #define B8(a, lo, hi)  { a, 1, lo, hi }
@@ -330,6 +350,7 @@ int g_hm_decomp_check;
 typedef struct Snapshot {
   CpuState cpu;
   uint8_t ram[0x20000];
+  uint8_t dma[0x80];       /* $4300-$437F before the call */
 } Snapshot;
 
 typedef struct Stats { unsigned calls, ok, bad, skipped; } Stats;
@@ -376,6 +397,7 @@ void *hm_decomp_check_begin(const CpuState *cpu)
   if (!s) { s_check_depth--; return NULL; }
   s->cpu = *cpu;
   memcpy(s->ram, cpu->ram, sizeof s->ram);
+  dma_regs_save(s->dma);
   return s;
 }
 
@@ -396,7 +418,11 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   HmRegs in = { s->cpu.A, s->cpu.X, s->cpu.Y, s->cpu._flag_C, s->cpu._flag_N, s->cpu.DB, s->cpu.D,
                 s->cpu.S, s->cpu.PB };
   HmRegs out = in;
+  uint8_t dma_after[0x80];
+  dma_regs_save(dma_after);
+  g_hm_dma_regs = s->dma;
   f->fn(s->ram, &out);
+  g_hm_dma_regs = NULL;
 
   int bad = 0;
   char why[256] = "";
@@ -404,6 +430,16 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   if (!bad && (f->out_mask & HM_OUT_X) && out.x != cpu->X) { bad = 1; snprintf(why, sizeof why, "X %04X != rom %04X", out.x, cpu->X); }
   if (!bad && (f->out_mask & HM_OUT_Y) && out.y != cpu->Y) { bad = 1; snprintf(why, sizeof why, "Y %04X != rom %04X", out.y, cpu->Y); }
   if (!bad && (f->out_mask & HM_OUT_C) && out.c != cpu->_flag_C) { bad = 1; snprintf(why, sizeof why, "C %u != rom %u", out.c, cpu->_flag_C); }
+  if (!bad) {
+    for (int i = 0; i < 0x80; i++) {
+      int reg = i & 0xF;                 /* $43xC-$43xE don't exist (read 0) */
+      if ((reg <= 0xB || reg == 0xF) && s->dma[i] != dma_after[i]) {
+        bad = 1;
+        snprintf(why, sizeof why, "DMA $43%02X = %02X, rom wrote %02X", i, s->dma[i], dma_after[i]);
+        break;
+      }
+    }
+  }
   if (!bad) {
     for (size_t i = 0; i < sizeof s->ram; i++)
       if (s->ram[i] != cpu->ram[i]) {
@@ -464,9 +500,10 @@ static void fuzz_at(unsigned frame)
   int only = (int)frame - at;
 
   static CpuState saved_cpu;
-  static uint8_t saved_ram[0x20000];
+  static uint8_t saved_ram[0x20000], saved_dma[0x80];
   saved_cpu = g_cpu;
   memcpy(saved_ram, g_cpu.ram, sizeof saved_ram);
+  dma_regs_save(saved_dma);
   int prev = g_hm_decomp_check;
   if (!s_stats) { s_stats = calloc((size_t)g_hm_decomp_count, sizeof *s_stats); atexit(report); }
   g_hm_decomp_check = 1;
@@ -496,6 +533,7 @@ static void fuzz_at(unsigned frame)
     for (int n = 0; n < n_calls; n++) {
       g_cpu = saved_cpu;
       memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
+      dma_regs_restore(saved_dma);
       /* Every call starts with a fresh frame budget: long routines (the
        * 4096-tile farm loop) would otherwise hit the frame deadline, yield
        * half-way and not be comparable. The machine is restored after. */
@@ -548,6 +586,7 @@ static void fuzz_at(unsigned frame)
   }
   g_cpu = saved_cpu;
   memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
+  dma_regs_restore(saved_dma);
   g_hm_decomp_check = prev;
   s_fuzzing = 0;
   if (only == g_hm_decomp_count - 1)

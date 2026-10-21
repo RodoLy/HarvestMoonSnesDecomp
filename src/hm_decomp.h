@@ -84,9 +84,14 @@ static inline uint16_t hm_dp_r16(uint8_t *ram, const HmRegs *r, unsigned off)
  * cartridge image the runtime loaded (LoROM: bank & $3F selects a 32 KB
  * chunk, addresses $8000-$FFFF). WRAM is `ram`: banks $7E/$7F, and the
  * first 8 KB mirrored in banks $00-$3F / $80-$BF. Hardware registers are
- * not modelled (reads give 0, writes are dropped): routines that use them
- * through a long pointer can't be checked this way. */
+ * not modelled (reads give 0, writes are dropped), except the DMA
+ * registers $4300-$437F (g_hm_dma_regs below). */
 extern const uint8_t *g_rom;
+
+/* The DMA registers $4300-$437F, while the checker runs a rewrite: a copy
+ * of them taken before the call (the checker compares it with the real
+ * ones afterwards). NULL otherwise. */
+extern uint8_t *g_hm_dma_regs;
 
 static inline uint8_t *hm_bus_ram(uint8_t *ram, uint32_t addr)
 {
@@ -95,6 +100,8 @@ static inline uint8_t *hm_bus_ram(uint8_t *ram, uint32_t addr)
   if (bank == 0x7E) return &ram[a];
   if (bank == 0x7F) return &ram[0x10000 + a];
   if ((bank & 0x7F) < 0x40 && a < 0x2000) return &ram[a];
+  if ((bank & 0x7F) < 0x40 && a >= 0x4300 && a < 0x4380 && g_hm_dma_regs)
+    return &g_hm_dma_regs[a - 0x4300];
   return NULL;
 }
 static inline uint8_t hm_bus_rd8(uint8_t *ram, uint32_t addr)
