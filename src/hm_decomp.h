@@ -211,6 +211,7 @@ void hm_PreCheckToolSuccess(uint8_t *ram, HmRegs *r);
 void hm_PreCheckToolSuccessLine(uint8_t *ram, HmRegs *r);
 void hm_PreCheckToolSuccessSquare(uint8_t *ram, HmRegs *r);
 void hm_SUB_81A801(uint8_t *ram, HmRegs *r);          /* mapedit.c */
+void hm_SUB_81A83A(uint8_t *ram, HmRegs *r);
 void hm_SetCCPoiner(uint8_t *ram, HmRegs *r);         /* events.c */
 void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r);
 void hm_SUB_8480F8(uint8_t *ram, HmRegs *r);

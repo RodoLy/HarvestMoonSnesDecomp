@@ -173,6 +173,20 @@ static void prep_player_tool_near(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void)
   hm_wr16(ram, 0xD8, (uint16_t)(64 + rnd() % 0x380));
 }
 
+static void prep_map_change(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  r->x = (uint16_t)(rnd() & 0x3FF);                       /* a position on the map */
+  r->y = (uint16_t)(rnd() & 0x3FF);
+  static const uint8_t widths[] = { 1, 2, 4, 4, 3 };
+  ram[0x00181] = widths[rnd() % 5];
+  /* a tile change from the table with a real size (entry 0 is 0 x 0) */
+  for (int tries = 0; tries < 64; tries++) {
+    uint16_t n = (uint16_t)(1 + rnd() % 48);
+    uint32_t at = 0x81B363u + 6u * n;
+    uint8_t rows = hm_bus_rd8(ram, at + 2), cols = hm_bus_rd8(ram, at + 3);
+    if (rows && cols && rows <= 8 && cols <= 8) { r->a = n; break; }
+  }
+}
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -293,6 +307,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
    * the original gets open-bus values. The game uses small entries. */
   { "SUB_81A801", hm_SUB_81A801, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/mapedit.c",
     0x81A801, 0, 0, 0, 0x0CC0, { { 0 } } },
+  { "SUB_81A83A", hm_SUB_81A83A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/mapedit.c",
+    0x81A83A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_change },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

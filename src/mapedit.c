@@ -52,3 +52,88 @@ void hm_SUB_81A801(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, 0x84, r->a);
   r->x = (uint16_t)(x + 4);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_81A83A ($81:A83A, JSL, RTL). A = tile change, X/Y = position in
+ * pixels. Copies its graphics (rows x columns of 16x16 tiles, each 2x2
+ * tilemap entries) from $A6:A096 into the BG1 tilemap at $7E:2000. The
+ * tilemap is 32 entries wide per screen and the map is $0181 screens wide
+ * (1, 2 or 4); crossing to the next 32-entry screen skips $40 bytes.
+ * Leftovers: $72-$7A pointers, $86 start, $88 row stride, $8E/$90 the
+ * screen-crossing counters; A = the final $7E, X = $80, Y = rows, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_83A_CHANGES 0xA88A   /* JSL SUB_81A801 at $81:A887 */
+
+void hm_SUB_81A83A(uint8_t *ram, HmRegs *r)
+{
+  uint16_t change = r->a;
+  push16(ram, r, change);                                /* PHA */
+  hm_dp_w16(ram, r, 0x7E, (uint16_t)((r->x >> 4) << 2));
+  uint16_t row = (uint16_t)((r->y >> 4) << 7), stride = 0x40;
+  hm_dp_w16(ram, r, 0x80, row);
+  hm_dp_w16(ram, r, 0x88, stride);
+  uint8_t width = hm_bus_rd8(ram, ((uint32_t)r->db << 16) + HM_MAP_WIDTH);
+  if (width != 1) {
+    row = (uint16_t)(row << 1); stride = (uint16_t)(stride << 1);
+    hm_dp_w16(ram, r, 0x80, row); hm_dp_w16(ram, r, 0x88, stride);
+    if (width != 2) {
+      row = (uint16_t)(row << 1); stride = (uint16_t)(stride << 1);
+      hm_dp_w16(ram, r, 0x80, row); hm_dp_w16(ram, r, 0x88, stride);
+    }
+  }
+  hm_dp_w16(ram, r, 0x86, (uint16_t)(hm_dp_r16(ram, r, 0x7E) + row));
+  r->a = pull16(ram, r);                                 /* PLA */
+  hm_jsl(ram, r, RET_83A_CHANGES, 0x81);
+  hm_SUB_81A801(ram, r);
+  hm_rtl(ram, r);
+
+  uint16_t cols4 = (uint16_t)(hm_dp_r16(ram, r, 0x80) << 2);
+  hm_dp_w16(ram, r, 0x80, cols4);
+  uint16_t src = (uint16_t)(0xA096 + hm_dp_r16(ram, r, 0x7E));
+  hm_dp_w16(ram, r, 0x72, src); hm_dp_w16(ram, r, 0x78, src);
+  *hm_dp(ram, r, 0x74) = 0xA6; *hm_dp(ram, r, 0x7A) = 0xA6;
+  hm_dp_w16(ram, r, 0x75, (uint16_t)(0x2000 + hm_dp_r16(ram, r, 0x86)));
+  *hm_dp(ram, r, 0x77) = 0x7E;
+  hm_dp_w16(ram, r, 0x8E, 0);
+  hm_dp_w16(ram, r, 0x90, 0);
+
+  uint16_t rows = hm_dp_r16(ram, r, 0x82);
+  uint16_t y = 0;
+  do {
+    push16(ram, r, y);                                   /* PHY */
+    for (uint16_t pass = 0; pass != 2; pass++) {         /* the two halves */
+      push16(ram, r, pass);                              /* PHA */
+      uint16_t sy = 0, dx = 0;
+      hm_dp_w16(ram, r, 0x90, 0);
+      do {
+        uint16_t v = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, sy));
+        push16(ram, r, sy);                              /* PHY; TXY */
+        hm_bus_wr16(ram, hm_dp_long(ram, r, 0x75, dx), v);
+        sy = (uint16_t)(pull16(ram, r) + 2);             /* PLY; INY; INY */
+        dx = (uint16_t)(dx + 2);
+        pull16(ram, r); push16(ram, r, pass);            /* PLA; PHA */
+        uint16_t crossed = (uint16_t)(hm_dp_r16(ram, r, 0x90) + 2);
+        hm_dp_w16(ram, r, 0x90, crossed);
+        if ((uint16_t)(hm_dp_r16(ram, r, 0x7E) + crossed) & 0x0040) {
+          hm_dp_w16(ram, r, 0x8E, 0x40);                 /* next screen */
+          hm_dp_w16(ram, r, 0x90, (uint16_t)(crossed + 0x40));
+          sy = (uint16_t)(sy + 0x40);
+        }
+      } while (dx != hm_dp_r16(ram, r, 0x80));
+      hm_dp_w16(ram, r, 0x72, (uint16_t)(hm_dp_r16(ram, r, 0x72) + 0x40));
+      hm_dp_w16(ram, r, 0x75, (uint16_t)(hm_dp_r16(ram, r, 0x75) + hm_dp_r16(ram, r, 0x88)));
+      pull16(ram, r);                                    /* PLA */
+      r->x = dx;
+    }
+    uint32_t next = (uint32_t)hm_dp_r16(ram, r, 0x78) + hm_dp_r16(ram, r, 0x80);
+    next = (next & 0xFFFF) + hm_dp_r16(ram, r, 0x8E) + (next > 0xFFFF);
+    hm_dp_w16(ram, r, 0x78, (uint16_t)next);
+    hm_dp_w16(ram, r, 0x72, (uint16_t)next);
+    hm_dp_w16(ram, r, 0x8E, 0);
+    r->a = (uint16_t)(hm_dp_r16(ram, r, 0x7E) + hm_dp_r16(ram, r, 0x90));
+    hm_dp_w16(ram, r, 0x7E, r->a);
+    y = (uint16_t)(pull16(ram, r) + 1);                  /* PLY; INY */
+  } while (y != rows);
+  r->y = y;
+  r->c = 1;
+}
