@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 9.41%](https://img.shields.io/badge/decompiled-9.41%25-2f855a)
+![Decompiled: 9.80%](https://img.shields.io/badge/decompiled-9.80%25-2f855a)
 
-**9.41%** of the game's code decompiled and verified: 2858 of 30359 instructions, 36 of 373 routines (9.7%).
+**9.80%** of the game's code decompiled and verified: 2976 of 30359 instructions, 41 of 374 routines (11.0%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -47,7 +47,7 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Calendar | LoadsDateNames | `src/calendar.c` |
 | Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night) | `src/animals.c` |
 | Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (start an event script) | `src/events.c` |
-| Tools | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess | `src/tools.c` |
+| Tools | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square | `src/tools.c` |
 
 A few things found along the way (details in each file's comments):
 

@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **36 rutinas reescritas y verificadas** (0 diferencias):
+- **41 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -50,6 +50,9 @@ en el README (`tools/progress.py`).
 | GetTileContent | $82:B124 | src/tools.c |
 | UNK_CheckTileProperty | $82:AC61 | src/tools.c |
 | CheckToolSuccess | $82:AA71 | src/tools.c |
+| CalculateTileinFront | $81:D14E | src/tools.c |
+| TileAtOffsetFromPlayer (CODE_81D1A4) | $81:D1A4 | src/tools.c |
+| PreCheckToolSuccess / Line / Square | $82:92A0, 92BC, 92D6 | src/tools.c |
 | ResetsCurrentCCStructureShort | $84:8961 | src/events.c |
 | UNK_LoadCCDataLong | $84:8097 | src/events.c |
 | UNK_LoadCCDataShort | $84:803F | src/events.c |
@@ -181,6 +184,14 @@ después.
   Cuidado con leer tablas con índices grandes: si la dirección sale de la
   ROM ($83:40FA...) la original lee registros del hardware y no se puede
   comparar.
+
+- La casilla donde cae la herramienta: CalculateTileinFront (N casillas
+  hacia donde mira el jugador: 0 abajo, 1 arriba, 2 = +X, otro = -X) o
+  TileAtOffsetFromPlayer (un desplazamiento fijo; las herramientas de oro
+  usan la tabla de 9 casillas $82:92FA alrededor del jugador).
+- Siguiente en herramientas: los ToolUsed* necesitan CODE_81A688 (27 usos) y
+  CODE_81A500 (crea un objeto; ojo: si los 10 lugares están ocupados se
+  queda en un bucle infinito, `BRA` a sí mismo en $81:A528).
 
 ShippingScene queda para después: sigue de largo hacia StartTextBox (el
 sistema de texto).
