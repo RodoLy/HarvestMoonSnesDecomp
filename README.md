@@ -5,7 +5,7 @@
 <!-- progress -->
 ![Decompiled: 7.69%](https://img.shields.io/badge/decompiled-7.69%25-2f855a)
 
-**7.69%** of the game's code decompiled and verified: 3473 of 45176 instructions, 47 of 514 routines (9.1%).
+**7.69%** of the game's code decompiled and verified: 3473 of 45176 instructions, 47 of 513 routines (9.2%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 

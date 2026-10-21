@@ -49,6 +49,9 @@ LOCAL = {
     0x81A83A: ("SUB_81A83A", "SUB_81A83A"),
     0x81A688: ("CODE_81A688", "ChangeMapTile"),
     0x81A6C1: ("CODE_81A6C1", "QueueTileGraphicsDMA"),
+    0x81A500: ("CODE_81A500", "SpawnMapObject"),
+    0x858000: ("CODE_858000", "CreateGameObject"),
+    0x858C30: ("CODE_858C30", "LoadSpriteComponent"),
 }
 
 
@@ -90,14 +93,15 @@ def split_locals(routines, lines):
                           if c.strip() == label + ":" or c.strip().startswith(label + ":")), None)
             if start is None:
                 continue
-            owner = rows[start][0]
+            # each instruction is taken out of the block that owns its line
+            # (the routine may end in another top-level label: `return85: RTL`)
             n = 0
-            for _, code in rows[start:]:
+            for owner, code in rows[start:]:
                 if is_insn(code):
                     n += 1
+                    routines[owner][1] -= 1
                     if re.search(r"\bRT[LS]\b", code):
                         break
-            routines[owner][1] -= n
             routines[pc] = [name, n]
             break
     return routines
