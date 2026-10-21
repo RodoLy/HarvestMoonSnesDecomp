@@ -229,6 +229,14 @@ static void prep_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x72, (uint16_t)rnd()); ram[0x74] = (uint8_t)rnd();
 }
 
+/* QueueTileGraphicsDMA: never entry 0 (0 x 0), which ChangeMapTile filters
+ * out first: with 0 rows its loop would run 32768 times. */
+static void prep_tile_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_map_change(ram, r, rnd);
+  ram[0x28] = (uint8_t)rnd();                              /* channels queued */
+  hm_wr16(ram, 0xC7, (uint16_t)rnd());                     /* DMA budget */
+}
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -355,6 +363,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     0x82B060, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_map_block },
   { "AddProgrammedDMA", hm_AddProgrammedDMA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/dma.c",
     0x808A33, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_dma },
+  { "QueueTileGraphicsDMA", hm_QueueTileGraphicsDMA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/mapedit.c", 0x81A6C1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tile_dma },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

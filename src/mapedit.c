@@ -179,3 +179,78 @@ void hm_SUB_82B060(uint8_t *ram, HmRegs *r)
   r->y = row;
   r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * QueueTileGraphicsDMA ($81:A6C1, JSL, RTL; CODE_81A6C1 in HM-Decomp).
+ * A = tile change, X/Y = position. Queues the DMA transfers that copy the
+ * change's graphics ($A6:A096 + offset) into the VRAM tilemap: two per
+ * tile row (the two halves), $80 bytes each, VRAM address mode $80.
+ * The VRAM address: $6000 + 2 col + 64 row, where col / row wrap at 32
+ * (the 64x64 window is four 32x32 screens) and the right / bottom screens
+ * add $3E0 / $400. The first pair uses DMA channels 2 and 3, the next
+ * ones 0 and 1.
+ * Leftovers: $7E/$80/$82/$84 (SUB_81A801, then $80 = 4 cols, $82 = 2 rows),
+ * $72/$75 source pointers, $86 base, $92 = 0; A = the last source, X =
+ * rows*2, Y = 4 cols, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_6C1_CHANGES 0xA747   /* JSL SUB_81A801 at $81:A744 */
+#define RET_6C1_DMA_A   0xA788   /* JSL AddProgrammedDMA at $81:A785 */
+#define RET_6C1_DMA_B   0xA7B7   /* ... at $81:A7B4 */
+
+/* col or row: wrap at 32 */
+static uint16_t screen_part(uint16_t v) { return v >= 0x20 ? (uint16_t)(v - 0x20) : v; }
+static bool second_screen(uint16_t v) { return (v >= 0x10 && v < 0x20) || v >= 0x30; }
+
+static void queue_half(uint8_t *ram, HmRegs *r, uint8_t channel, uint16_t row_x, uint16_t ret)
+{
+  *hm_dp(ram, r, 0x27) = channel;
+  *hm_dp(ram, r, 0x29) = 0x18;                           /* VRAM */
+  r->y = hm_dp_r16(ram, r, 0x80);
+  r->x = (uint16_t)((row_x << 5) + hm_dp_r16(ram, r, 0x86));
+  r->a = 0x0080;
+  hm_jsl(ram, r, ret, 0x80);
+  hm_AddProgrammedDMA(ram, r);
+  hm_rtl(ram, r);
+}
+
+void hm_QueueTileGraphicsDMA(uint8_t *ram, HmRegs *r)
+{
+  push16(ram, r, r->a);                                  /* PHA */
+  uint16_t col = (uint16_t)(r->x >> 4), row = (uint16_t)(r->y >> 4);
+  hm_dp_w16(ram, r, 0x7E, col);
+  hm_dp_w16(ram, r, 0x80, row);
+  uint16_t vram = (uint16_t)(0x6000 + (screen_part(col) << 1));
+  if (second_screen(col)) vram = (uint16_t)(vram + 0x03E0);
+  vram = (uint16_t)(vram + (screen_part(row) << 6));
+  if (second_screen(row)) vram = (uint16_t)(vram + 0x0400);
+  hm_dp_w16(ram, r, 0x86, vram);
+  hm_dp_w16(ram, r, 0x72, 0xA096); hm_dp_w16(ram, r, 0x75, 0xA096);
+  *hm_dp(ram, r, 0x74) = 0xA6; *hm_dp(ram, r, 0x77) = 0xA6;
+
+  r->a = pull16(ram, r);                                 /* PLA */
+  hm_jsl(ram, r, RET_6C1_CHANGES, 0x81);
+  hm_SUB_81A801(ram, r);
+  hm_rtl(ram, r);
+
+  hm_dp_w16(ram, r, 0x80, (uint16_t)(hm_dp_r16(ram, r, 0x80) << 2));
+  hm_dp_w16(ram, r, 0x82, (uint16_t)(hm_dp_r16(ram, r, 0x82) << 1));
+  uint16_t src = (uint16_t)(hm_dp_r16(ram, r, 0x72) + hm_dp_r16(ram, r, 0x7E));
+  hm_dp_w16(ram, r, 0x72, src); hm_dp_w16(ram, r, 0x75, src);
+  *hm_dp(ram, r, 0x92) = 2;
+
+  uint16_t x = 0;
+  do {
+    push16(ram, r, x);                                   /* PHX */
+    queue_half(ram, r, *hm_dp(ram, r, 0x92), x, RET_6C1_DMA_A);
+    hm_dp_w16(ram, r, 0x72, (uint16_t)(hm_dp_r16(ram, r, 0x72) + 0x40));
+    x = (uint16_t)(pull16(ram, r) + 1);                  /* PLX; INX; PHX */
+    push16(ram, r, x);
+    queue_half(ram, r, (uint8_t)(*hm_dp(ram, r, 0x92) + 1), x, RET_6C1_DMA_B);
+    r->a = (uint16_t)(hm_dp_r16(ram, r, 0x75) + hm_dp_r16(ram, r, 0x80));
+    hm_dp_w16(ram, r, 0x75, r->a); hm_dp_w16(ram, r, 0x72, r->a);
+    *hm_dp(ram, r, 0x92) = 0;
+    x = (uint16_t)(pull16(ram, r) + 1);                  /* PLX; INX */
+  } while (x != hm_dp_r16(ram, r, 0x82));
+  r->x = x;
+  r->c = 1;
+}
