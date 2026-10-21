@@ -212,3 +212,206 @@ void hm_Event_UNKChickenRelated(uint8_t *ram, HmRegs *r)
   }
   count_frame(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Event_UNKDogRelated ($84:AF06, JSR, RTS). The dog's every frame (slot
+ * $16, one command byte):
+ *   - its position goes to $7F1F2C / $7F1F2E;
+ *   - a hug: the player presses A next to it, free as for picking up a
+ *     chicken (see above; also not while game state bit $10): the slot
+ *     stops (+00 = 0, +01 |= $40), game state bit $0800, +1 hug
+ *     ($7F1F52);
+ *   - otherwise every $78 frames ($0938 counts; 2 seconds) its mood
+ *     changes. $7F1F58 holds one mood bit (1, 2, 4, 8 or $10) and the
+ *     random byte $DE picks a script for slot $16 (UNK_LoadCCDataShort)
+ *     and maybe the next mood:
+ *       1:   < $40 script $3D, mood 2;  < $C0: by $DE again, < $33 $3E,
+ *            < $66 / < $99 $40, < $CC $47, else $48, mood $10
+ *       2:   < $2A $3C mood 1;  < $54 $41 mood 4;  < $7E $49;  < $A8 $44
+ *       4:   < $2A $3D mood 2;  < $54 $45 mood 8;  < $7E $43
+ *       8:   < $2A $41 mood 4;  < $54 $46
+ *       $10: < $40 $3C mood 1
+ *     (otherwise it keeps doing what it does);
+ *   - called ($7F1F60 bit $10): the counter restarts, the slot gets
+ *     flags $28 and script $3F, speed +08 = $20 and the direction +0F
+ *     towards the player along the longer axis (1 down, 2 up, 4 right,
+ *     8 left, from where the player stands); $7E / $80 = |dx| / |dy|,
+ *     $82 / $84 = 1 when dx / dy is negative.
+ * Each frame +10 counts one.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define DOG_SLOT     0x0016
+#define DOG_X        0x11F2C
+#define DOG_Y        0x11F2E
+#define DOG_MOOD     0x11F58
+#define DOG_HUGS     0x11F52
+#define DOG_TIMER    0x00938
+
+typedef struct Mood { uint16_t below; uint8_t script; uint16_t clear, set, ret; } Mood;
+#define ALWAYS 0x100   /* taken without a comparison (BRA) */
+
+static void dog_script(uint8_t *ram, HmRegs *r, uint8_t script, uint16_t ret)
+{
+  r->a = DOG_SLOT; r->x = 0; r->y = script;
+  hm_jsl(ram, r, ret, 0x84);
+  hm_UNK_LoadCCDataShort(ram, r);
+  hm_rtl(ram, r);
+}
+static void set_mood(uint8_t *ram, HmRegs *r, uint16_t clear, uint16_t set)
+{
+  r->a = (uint16_t)((hm_rd16(ram, DOG_MOOD) & ~clear) | set);
+  hm_wr16(ram, DOG_MOOD, r->a);
+}
+/* the first entry whose `below` the random byte is under (C from each
+ * CMP); none: nothing happens */
+static void choose(uint8_t *ram, HmRegs *r, uint8_t de, const Mood *m, int n)
+{
+  lda8(r, de);
+  for (int i = 0; i < n; i++) {
+    if (m[i].below != ALWAYS) {
+      r->c = de >= m[i].below;
+      if (de >= m[i].below) continue;
+    }
+    dog_script(ram, r, m[i].script, m[i].ret);
+    if (m[i].clear | m[i].set) set_mood(ram, r, m[i].clear, m[i].set);
+    return;
+  }
+}
+
+static void dog_mood(uint8_t *ram, HmRegs *r)
+{
+  static const Mood MOOD_2[] = {
+    { 0x2A, 0x3C, 0x02, 0x01, 0xB125 }, { 0x54, 0x41, 0x02, 0x04, 0xB147 },
+    { 0x7E, 0x49, 0, 0, 0xB169 },       { 0xA8, 0x44, 0, 0, 0xB17B } };
+  static const Mood MOOD_4[] = {
+    { 0x2A, 0x3D, 0x04, 0x02, 0xB1A2 }, { 0x54, 0x45, 0x04, 0x08, 0xB1C4 },
+    { 0x7E, 0x43, 0, 0, 0xB1E6 } };
+  static const Mood MOOD_8[] = {
+    { 0x2A, 0x41, 0x08, 0x04, 0xB209 }, { 0x54, 0x46, 0, 0, 0xB22A } };
+  static const Mood MOOD_10[] = { { 0x40, 0x3C, 0x10, 0x01, 0xB248 } };
+  static const Mood MOOD_1_PLAY[] = {
+    { 0x33, 0x3E, 0x01, 0x10, 0xB0B7 }, { 0x66, 0x40, 0x01, 0x10, 0xB0C8 },
+    { 0x99, 0x40, 0x01, 0x10, 0xB0D9 }, { 0xCC, 0x47, 0x01, 0x10, 0xB0EA },
+    { ALWAYS, 0x48, 0x01, 0x10, 0xB0FB } };
+
+  uint8_t de = *hm_dp(ram, r, 0xDE);
+  uint16_t mood = hm_rd16(ram, DOG_MOOD);
+  if ((r->a = mood & 0x0001)) {
+    lda8(r, de);
+    r->c = de >= 0x40;
+    if (de < 0x40) {
+      dog_script(ram, r, 0x3D, 0xB06A);
+      set_mood(ram, r, 0x01, 0x02);
+      return;
+    }
+    r->c = de >= 0x80;
+    if (de >= 0x80) {
+      r->c = de >= 0xC0;
+      if (de >= 0xC0) return;
+    }
+    choose(ram, r, de, MOOD_1_PLAY, 5);
+  } else if ((r->a = mood & 0x0002)) {
+    choose(ram, r, de, MOOD_2, 4);
+  } else if ((r->a = mood & 0x0004)) {
+    choose(ram, r, de, MOOD_4, 3);
+  } else if ((r->a = mood & 0x0008)) {
+    choose(ram, r, de, MOOD_8, 2);
+  } else if ((r->a = mood & 0x0010)) {
+    choose(ram, r, de, MOOD_10, 1);
+  }
+}
+
+/* the free-hands test of the dog: the chicken's, in a slightly different
+ * order and also blocked by game state bit $10 */
+static bool player_free_to_hug(uint8_t *ram, HmRegs *r)
+{
+  static const uint16_t BUSY_ACTIONS[] = { 0x000A, 0x000C, 0x000D, 0x001B };
+  if (lda8(r, slot8(ram, r, 0x0C)) == 0) { r->c = 1; return false; }
+  for (unsigned i = 0; i < 4; i++) {
+    uint16_t action = r->a = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
+    r->c = action >= BUSY_ACTIONS[i];
+    if (action == BUSY_ACTIONS[i]) return false;
+  }
+  uint16_t state = hm_dp_r16(ram, r, 0xD2);
+  if ((r->a = state & 0x0004)) return false;
+  if ((r->a = hm_rd16(ram, FLAGS_60) & 0x0006)) return false;
+  r->a = hm_rd16(ram, HM_JOY_NEW);
+  if (!(r->a & JOY_A)) return false;
+  if (lda8(r, ram[HM_ITEM_HELD])) return false;
+  if ((r->a = state & 0x0800)) return false;
+  if ((r->a = state & 0x0010)) return false;
+  uint16_t action = r->a = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
+  r->c = action >= 0x0017;
+  if (action == 0x0017) return false;
+  r->a = action;
+  r->c = action >= 0x0004;
+  return action != 0x0004;
+}
+
+/* |a - b| into dp `out`; dp `negative` = 1 if a < b */
+static uint16_t distance(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t b, unsigned out,
+                         unsigned negative)
+{
+  r->c = a >= b;
+  uint16_t d = (uint16_t)(a - b);
+  hm_dp_w16(ram, r, out, d);
+  r->a = d;
+  if (d & 0x8000) {
+    d = (uint16_t)(-d);
+    hm_dp_w16(ram, r, out, d);
+    r->a = 1;
+    hm_dp_w16(ram, r, negative, 1);
+  }
+  return d;
+}
+
+static void dog_called(uint8_t *ram, HmRegs *r)
+{
+  ram[DOG_TIMER] = 0;
+  slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) | 0x28));
+  r->a = slot8(ram, r, 0x3F);                              /* XBA; LDA #0; XBA */
+  r->x = 0; r->y = 0x003F;
+  hm_jsl(ram, r, 0xB2AD, 0x84);
+  hm_UNK_LoadCCDataShort(ram, r);
+  hm_rtl(ram, r);
+  hm_dp_w16(ram, r, 0x82, 0);
+  hm_dp_w16(ram, r, 0x84, 0);
+  uint16_t dx = distance(ram, r, slot16(ram, r, 0x1A), hm_dp_r16(ram, r, 0xD6), 0x7E, 0x82);
+  uint16_t dy = distance(ram, r, slot16(ram, r, 0x1C), hm_dp_r16(ram, r, 0xD8), 0x80, 0x84);
+  slot_w8(ram, r, 0x08, lda8(r, 0x20));
+  r->a = dy;
+  r->c = dy >= dx;
+  uint8_t direction;
+  if (dy >= dx) direction = (r->a = hm_dp_r16(ram, r, 0x84)) ? 0x01 : 0x02;
+  else          direction = (r->a = hm_dp_r16(ram, r, 0x82)) ? 0x04 : 0x08;
+  slot_w8(ram, r, 0x0F, lda8(r, direction));
+}
+
+void hm_Event_UNKDogRelated(uint8_t *ram, HmRegs *r)
+{
+  uint16_t pc = hm_dp_r16(ram, r, 0xC9);
+  r->c = pc == 0xFFFF;
+  r->a = (uint16_t)(pc + 1);
+  hm_dp_w16(ram, r, 0xC9, r->a);
+  r->a = slot16(ram, r, 0x1A); hm_wr16(ram, DOG_X, r->a);
+  r->a = slot16(ram, r, 0x1C); hm_wr16(ram, DOG_Y, r->a);
+
+  if (player_free_to_hug(ram, r)) {
+    slot_w8(ram, r, 0x00, lda8(r, 0));
+    slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) | 0x40));
+    r->a = hm_dp_r16(ram, r, 0xD2) | 0x0800;
+    hm_dp_w16(ram, r, 0xD2, r->a);
+    r->a = (uint16_t)(hm_rd16(ram, DOG_HUGS) + 1);
+    hm_wr16(ram, DOG_HUGS, r->a);
+  } else {
+    uint8_t t = lda8(r, ram[DOG_TIMER]);
+    r->c = t >= 0x78;
+    if (t != 0x78) {
+      ram[DOG_TIMER] = lda8(r, (uint8_t)(t + 1));
+    } else {
+      ram[DOG_TIMER] = 0;
+      dog_mood(ram, r);
+    }
+  }
+  if ((r->a = hm_rd16(ram, FLAGS_60) & 0x0010)) dog_called(ram, r);
+  count_frame(ram, r);
+}

@@ -521,6 +521,28 @@ static void prep_chicken_slot(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0xDE] = (uint8_t)rnd();
 }
 
+/* eventcmds.c: the dog's slot ($16) running its script */
+static void prep_dog_slot(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  uint16_t at = (uint16_t)(0xB586 + 64 * 0x16);
+  hm_wr16(ram, 0xCC, at); ram[0xCE] = 0x7E;
+  for (unsigned i = 0; i < 64; i++) ram[at + i] = (uint8_t)rnd();
+  ram[at + 0x3F] = 0x16;
+  if (rnd() % 2) ram[at + 0x0C] = 0;
+  static const uint16_t moods[] = { 1, 2, 4, 8, 0x10, 0, 3, 0x12 };
+  hm_wr16(ram, 0x11F58, moods[rnd() % 8]);
+  ram[0x00938] = (uint8_t)((rnd() % 2) ? 0x78 : rnd() % 0x79);
+  ram[0xDE] = (uint8_t)rnd();
+  static const uint16_t actions[] = { 0, 0, 1, 2, 4, 0x0A, 0x0C, 0x0D, 0x17, 0x1B };
+  hm_wr16(ram, 0xD4, actions[rnd() % (sizeof actions / sizeof actions[0])]);
+  hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 2) ? 0 : rnd()));
+  hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 2) ? (rnd() & 0x10) : rnd()));
+  hm_wr16(ram, 0x00128, (uint16_t)((rnd() % 2) ? 0x0080 : rnd()));
+  ram[0x0091D] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+  hm_wr16(ram, 0xD6, (uint16_t)rnd()); hm_wr16(ram, 0xD8, (uint16_t)rnd());
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -726,6 +748,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "Event_UNKChickenRelated", hm_Event_UNKChickenRelated,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849857, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_chicken_slot },
+  { "Event_UNKDogRelated", hm_Event_UNKDogRelated,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84AF06, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_dog_slot },
 
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
