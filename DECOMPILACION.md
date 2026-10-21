@@ -84,11 +84,15 @@ BRK de CowFeedingandStatus, un bug del juego), la reescritura hace lo que
 el código claramente quería, lo documenta, y la prueba al azar no genera esa
 combinación.
 
-Algunas rutinas no tienen dirección en HM-Decomp (SUB_81A801, SUB_81A83A);
-`progress.py` las cuenta igual (por eso el total de instrucciones creció un
-poco).
+Algunas rutinas tocan los registros de DMA del SNES ($4300-$437F), que no
+son WRAM: el comprobador también los guarda antes, los restaura para la
+reescritura y los compara después (`g_hm_dma_regs`). La reescritura los
+escribe y lee con `hm_bus_wr8` / `hm_bus_rd8`, igual que la memoria.
 
-Resultado actual: 44 rutinas, 10 semillas × 2.000 llamadas al azar cada una
+Para estar seguros de que el comprobador sirve, a veces se rompe la
+reescritura a propósito (un número cambiado) y se mira que avise: avisa.
+
+Resultado actual: 47 rutinas, 10 semillas × 2.000 llamadas al azar cada una
 (`HM_DECOMP_FUZZ_SEED`; 40 granjas enteras por semilla para las de la
 granja) + las llamadas reales de una partida nueva y de 10 noches forzadas:
 **0 diferencias**.
@@ -97,7 +101,11 @@ granja) + las llamadas reales de una partida nueva y de 10 noches forzadas:
 
 `tools/progress.py` cuenta, en el desensamblado de HM-Decomp, las rutinas de
 código y sus instrucciones, y cuántas de ellas están registradas en
-`src/hm_decomp.c`. El porcentaje principal es por instrucciones. Con
+`src/hm_decomp.c`. El porcentaje principal es por instrucciones. Cuenta
+también los bloques que en HM-Decomp no tienen dirección (`CODE_81A500:`
+sin `;81A500`) y las líneas con etiqueta delante (`.loop: LDA ...`); las
+rutinas que HM-Decomp tiene metidas dentro de otro bloque (lista `LOCAL`)
+se cuentan aparte, restándolas del bloque que las contiene. Con
 `--update-readme` lo escribe en los dos README (`README.md` en inglés y
 `README.es.md` en español).
 

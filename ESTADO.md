@@ -1,4 +1,4 @@
-# Estado de la descompilación (al 19-oct-2026)
+# Estado de la descompilación (al 21-oct-2026)
 
 Memoria del proyecto para retomarlo sin perder nada. El clima y el daño
 del clima a la granja ya están reescritos y verificados. Porcentaje actual
@@ -8,12 +8,12 @@ en el README (`tools/progress.py`).
 
 - **Proyecto separado** del juego. Se compila con `tools/build.sh` (usa la
   recompilación como base, sin modificarla) y se prueba con `tools/check.sh`.
-- **Nombres**: 478 rutinas renombradas con los nombres de HM-Decomp
+- **Nombres**: 486 rutinas renombradas con los nombres de HM-Decomp
   (`data/decomp_names.tsv`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **44 rutinas reescritas y verificadas** (0 diferencias):
+- **47 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -58,6 +58,9 @@ en el README (`tools/progress.py`).
 | ResetsCurrentCCStructureShort | $84:8961 | src/events.c |
 | UNK_LoadCCDataLong | $84:8097 | src/events.c |
 | UNK_LoadCCDataShort | $84:803F | src/events.c |
+| AddProgrammedDMA | $80:8A33 | src/dma.c |
+| QueueTileGraphicsDMA (CODE_81A6C1) | $81:A6C1 | src/mapedit.c |
+| ChangeMapTile (CODE_81A688) | $81:A688 | src/mapedit.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -194,21 +197,48 @@ después.
 - Cambiar una casilla del mapa (mapedit.c): la tabla $81:B363 (6 bytes por
   cambio: gráfico en $A6:A096, filas, columnas, tipo de casilla) dice qué
   poner; SUB_81A83A copia el gráfico al mapa BG1 en $7E:2000 y SUB_82B060
-  escribe el tipo en $09B6. CODE_81A688 además encola DMA hacia la VRAM
-  con AddProgrammedDMA, que escribe *y lee* los registros de DMA ($43x0):
-  para verificarla hay que agregar esos registros al comprobador.
-- Siguiente en herramientas: los ToolUsed* necesitan CODE_81A688 (27 usos) y
-  CODE_81A500 (crea un objeto; ojo: si los 10 lugares están ocupados se
-  queda en un bucle infinito, `BRA` a sí mismo en $81:A528).
+  escribe el tipo en $09B6. ChangeMapTile (CODE_81A688) hace todo eso y
+  además encola la copia del gráfico a la VRAM con QueueTileGraphicsDMA
+  (CODE_81A6C1) → AddProgrammedDMA.
+- Siguiente en herramientas: los ToolUsed* (ya tienen ChangeMapTile, que
+  usan 27 veces) necesitan CODE_81A500 (crea un objeto; ojo: si los 10
+  lugares están ocupados se queda en un bucle infinito, `BRA` a sí mismo en
+  $81:A528).
+
+## DMA de video (hecho el 21-oct-2026)
+
+- La cola de "DMA programado" ($80:8A33 AddProgrammedDMA): el juego prepara
+  durante el cuadro copias a la VRAM / CGRAM y el NMI las arranca todas
+  juntas. Página directa: $27 próximo canal, $28 canales a arrancar (un bit
+  cada uno), $29 registro destino ($18 = datos de VRAM), $2A+canal modo de
+  dirección de VRAM, $32+2·canal dirección destino, $72-$74 origen, $C7
+  bytes que quedan este cuadro (se descuenta leyendo de vuelta el registro
+  de tamaño).
+- El comprobador ahora guarda, restaura y compara también los registros de
+  DMA $4300-$437F (`g_hm_dma_regs`; `hm_bus_rd8/wr8` los alcanzan).
+- QueueTileGraphicsDMA: la dirección VRAM del mapa BG1 es $6000 + 2·columna
+  + 64·fila, cada pantalla de 32×32; la segunda pantalla horizontal suma
+  $3E0 (= $400 − 32) y la vertical $400. Encola dos medias filas por fila
+  de 16 px, por los canales 2/3 y luego 0/1.
+- Con 0 filas (cambio 0) su bucle daría 32768 vueltas; ChangeMapTile lo
+  evita saliendo antes si A = 0.
+
+## El porcentaje se corrigió (21-oct-2026)
+
+`progress.py` no contaba las etiquetas sin dirección de HM-Decomp
+(`CODE_81A500:` sin comentario `;81A500`) ni las líneas `ETIQUETA: INSTR`.
+Eran 13.814 instrucciones fuera de la cuenta: el total pasó de 30.543 a
+**45.176** y el porcentaje bajó (10,49% → 7,29% con lo mismo hecho). Ahora
+con estas tres rutinas: 7,69%.
 
 ShippingScene queda para después: sigue de largo hacia StartTextBox (el
 sistema de texto).
 
 ## Lo siguiente
 
-El resto de los eventos de animales (`Event_UNKCowRelated`, $84:9AD4) o
-seguir con la noche: `WifePregnanacyandChilds` y `FindMostLovedName`.
-Otra rutina de granja pendiente: `CheckToolSuccess` ($82:AA71).
+CODE_81A500 (crear un objeto, usa CODE_858000) y luego los ToolUsed*; el
+sistema de texto (StartTextBox) para ShippingScene y UpdateTime; el resto
+de los eventos de animales (`Event_UNKCowRelated`, $84:9AD4).
 
 Otras hojas candidatas (no llaman a nada): LoadsDamageProbabilities,
 SetTimeofDayPalette, CalculateTileinFront, SUB_809EBC (cámara al cambiar de

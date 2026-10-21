@@ -3,16 +3,16 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 7.29%](https://img.shields.io/badge/descompilado-7.29%25-2f855a)
+![Descompilado: 7.69%](https://img.shields.io/badge/descompilado-7.69%25-2f855a)
 
-**7.29%** del código del juego descompilado y verificado: 3293 de 45176 instrucciones, 45 de 514 rutinas (8.8%).
+**7.69%** del código del juego descompilado y verificado: 3473 de 45176 instrucciones, 47 de 514 rutinas (9.1%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
 El juego reescrito, rutina por rutina, como C que una persona puede leer.
 Cada rutina reescrita se **comprueba contra la original byte por byte**: la
-memoria completa (128 KB de WRAM, pila incluida) y los registros tienen que
-quedar idénticos.
+memoria completa (128 KB de WRAM, pila incluida), los registros del CPU y
+los registros de DMA tienen que quedar idénticos.
 
 Es un proyecto hermano del port jugable
 [HarvestMoonSNESRecomp](https://github.com/RodriLoy/HarvestMoonSNESRecomp)
@@ -47,7 +47,8 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Calendario | LoadsDateNames | `src/calendar.c` |
 | Animales | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (la noche de los animales) | `src/animals.c` |
 | Eventos | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (arrancar un guion de evento) | `src/events.c` |
-| Edición del mapa | SUB_81A801, SUB_81A83A, SUB_82B060 (cambiar casillas del mapa actual) | `src/mapedit.c` |
+| Edición del mapa | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060 (cambiar casillas del mapa actual) | `src/mapedit.c` |
+| DMA de video | AddProgrammedDMA (encolar una copia a VRAM / CGRAM para el próximo NMI) | `src/dma.c` |
 | Herramientas | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square | `src/tools.c` |
 
 Algunas cosas que se descubrieron por el camino (detalles en los
@@ -88,7 +89,7 @@ comentarios de cada archivo):
 ## Carpetas
 
 - `src/` — las rutinas reescritas y el comprobador (`hm_decomp.c/.h`).
-- `data/decomp_names.tsv` — nombres de 478 rutinas (de HM-Decomp).
+- `data/decomp_names.tsv` — nombres de 486 rutinas (de HM-Decomp).
 - `tools/build.sh` — genera, renombra y compila el ejecutable de prueba.
 - `tools/check.sh` — corre las pruebas (al azar, partida nueva y noches).
 - `tools/progress.py` — calcula el porcentaje de arriba.

@@ -3,16 +3,16 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 7.29%](https://img.shields.io/badge/decompiled-7.29%25-2f855a)
+![Decompiled: 7.69%](https://img.shields.io/badge/decompiled-7.69%25-2f855a)
 
-**7.29%** of the game's code decompiled and verified: 3293 of 45176 instructions, 45 of 514 routines (8.8%).
+**7.69%** of the game's code decompiled and verified: 3473 of 45176 instructions, 47 of 514 routines (9.1%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
 The game rewritten, routine by routine, as C a person can read. Every
 rewritten routine is **checked against the original byte for byte**: the
-whole memory (128 KB of WRAM, stack included) and the registers must come
-out identical.
+whole memory (128 KB of WRAM, stack included), the CPU registers and the
+DMA registers must come out identical.
 
 It is a sister project of the playable port
 [HarvestMoonSNESRecomp](https://github.com/RodriLoy/HarvestMoonSNESRecomp)
@@ -47,7 +47,8 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Calendar | LoadsDateNames | `src/calendar.c` |
 | Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night) | `src/animals.c` |
 | Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (start an event script) | `src/events.c` |
-| Map edits | SUB_81A801, SUB_81A83A, SUB_82B060 (change tiles of the current map) | `src/mapedit.c` |
+| Map edits | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060 (change tiles of the current map) | `src/mapedit.c` |
+| Video DMA | AddProgrammedDMA (queue a copy to VRAM / CGRAM for the next NMI) | `src/dma.c` |
 | Tools | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square | `src/tools.c` |
 
 A few things found along the way (details in each file's comments):
@@ -84,7 +85,7 @@ A few things found along the way (details in each file's comments):
 ## Layout
 
 - `src/` — the rewritten routines and the checker (`hm_decomp.c/.h`).
-- `data/decomp_names.tsv` — names of 478 routines (from HM-Decomp).
+- `data/decomp_names.tsv` — names of 486 routines (from HM-Decomp).
 - `tools/build.sh` — generates, renames and builds the test executable.
 - `tools/check.sh` — runs the checks (random inputs, a new game, nights).
 - `tools/progress.py` — computes the percentage above.
