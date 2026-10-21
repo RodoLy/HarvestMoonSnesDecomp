@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 7.94%](https://img.shields.io/badge/decompiled-7.94%25-2f855a)
+![Decompiled: 9.41%](https://img.shields.io/badge/decompiled-9.41%25-2f855a)
 
-**7.94%** of the game's code decompiled and verified: 2409 of 30359 instructions, 30 of 373 routines (8.0%).
+**9.41%** of the game's code decompiled and verified: 2858 of 30359 instructions, 36 of 373 routines (9.7%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -46,7 +46,8 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | People | FindMostLovedName, WifePregnanacyandChilds | `src/people.c` |
 | Calendar | LoadsDateNames | `src/calendar.c` |
 | Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night) | `src/animals.c` |
-| Events | SetCCPoiner, ResetsCurrentCCStructureLong, SUB_8480F8 (start an event script) | `src/events.c` |
+| Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (start an event script) | `src/events.c` |
+| Tools | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess | `src/tools.c` |
 
 A few things found along the way (details in each file's comments):
 
@@ -69,6 +70,9 @@ A few things found along the way (details in each file's comments):
 - Children: the first needs 450 hearts with the wife, the second 650 and
   the first child 90 days old; both need the house at level 2. A child is
   born 60 days after it is conceived.
+- Whether a tool works is a bit in the tile's property table (sickle 01,
+  hoe 02, hammer 04, axe 08, water 10, seeds 20), and only from the sides
+  and in the seasons the tile allows. Any item not on that list "works".
 - The date suffix is "st/nd/rd" only for days 1-3, so the game writes
   "21th", "22th" and "23th".
 - **A bug in the original game:** in CowFeedingandStatus, after a 1-in-16

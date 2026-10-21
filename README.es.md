@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 7.94%](https://img.shields.io/badge/descompilado-7.94%25-2f855a)
+![Descompilado: 9.41%](https://img.shields.io/badge/descompilado-9.41%25-2f855a)
 
-**7.94%** del código del juego descompilado y verificado: 2409 de 30359 instrucciones, 30 de 373 rutinas (8.0%).
+**9.41%** del código del juego descompilado y verificado: 2858 de 30359 instrucciones, 36 de 373 rutinas (9.7%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
@@ -46,7 +46,8 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Personas | FindMostLovedName, WifePregnanacyandChilds | `src/people.c` |
 | Calendario | LoadsDateNames | `src/calendar.c` |
 | Animales | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (la noche de los animales) | `src/animals.c` |
-| Eventos | SetCCPoiner, ResetsCurrentCCStructureLong, SUB_8480F8 (arrancar un guion de evento) | `src/events.c` |
+| Eventos | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (arrancar un guion de evento) | `src/events.c` |
+| Herramientas | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess | `src/tools.c` |
 
 Algunas cosas que se descubrieron por el camino (detalles en los
 comentarios de cada archivo):
@@ -71,6 +72,10 @@ comentarios de cada archivo):
 - Hijos: el primero pide 450 corazones de la esposa; el segundo, 650 y que
   el primero tenga 90 días; los dos, la casa en nivel 2. Un hijo nace 60
   días después de concebido.
+- Si una herramienta funciona lo dice un bit de la tabla de propiedades de
+  la casilla (hoz 01, azada 02, martillo 04, hacha 08, agua 10, semillas
+  20), y solo desde los lados y en las estaciones que la casilla permite.
+  Cualquier objeto que no esté en esa lista "funciona".
 - El sufijo del día es "st/nd/rd" solo para los días 1-3, así que el juego
   escribe "21th", "22th" y "23th".
 - **Un bug del juego original:** en CowFeedingandStatus, después de tirar el

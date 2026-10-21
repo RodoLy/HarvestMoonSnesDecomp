@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **30 rutinas reescritas y verificadas** (0 diferencias):
+- **36 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -47,6 +47,12 @@ en el README (`tools/progress.py`).
 | AddMoney | $83:B1C9 | src/stock.c |
 | SUB_8281C0 (pronóstico de la tele) | $82:81C0 | src/weather.c |
 | HaveLunch | $82:80AA | src/stamina.c |
+| GetTileContent | $82:B124 | src/tools.c |
+| UNK_CheckTileProperty | $82:AC61 | src/tools.c |
+| CheckToolSuccess | $82:AA71 | src/tools.c |
+| ResetsCurrentCCStructureShort | $84:8961 | src/events.c |
+| UNK_LoadCCDataLong | $84:8097 | src/events.c |
+| UNK_LoadCCDataShort | $84:803F | src/events.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -159,6 +165,25 @@ después.
   están cruzadas (Ann / Nina).
 - HaveLunch y ChangeStamina solo comparan la WRAM (sus registros de salida
   no están modelados).
+
+## Herramientas (hecho el 21-oct-2026)
+
+- Cada mapa tiene una tabla de propiedades de casilla en `[$0D]` (puntero
+  largo en la página directa): 4 bytes por tipo de casilla. +1..+2 = qué
+  hace la casilla (los bits bajos: qué herramientas funcionan), +2 bit 7 =
+  "sin valor por omisión", +3 = desde qué lados (01-08) y en qué estaciones
+  (10-80) aplica.
+- La regadera se rellena en casillas F0/F9-FD (granja y mapas $3D+) o
+  F0/F4 (montaña $10-$13); en los mapas 04-0F y 14-3C no se riega.
+- La pintura solo funciona en la granja, en C3 o E2-E4.
+- Prueba al azar: cada rutina tiene ahora su propia semilla, así que
+  `HM_DECOMP_FUZZ_ONLY` + `HM_DECOMP_FUZZ_CALL` reproducen la llamada exacta.
+  Cuidado con leer tablas con índices grandes: si la dirección sale de la
+  ROM ($83:40FA...) la original lee registros del hardware y no se puede
+  comparar.
+
+ShippingScene queda para después: sigue de largo hacia StartTextBox (el
+sistema de texto).
 
 ## Lo siguiente
 

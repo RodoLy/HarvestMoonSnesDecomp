@@ -37,7 +37,8 @@ Cada rutina reescrita vive en `src/<sistema>.c`:
 | NightlyFarmTilesCheck / MonthlyFarmTilesCheck | farm.c | Riego, crecimiento y la llegada del invierno |
 | CalculateFarmDevelopment | farm.c | El "desarrollo del rancho" de la evaluación final |
 | AddCowHappiness / CowFeedingandStatus | animals.c | La noche de vacas y gallinas |
-| SetCCPoiner / ResetsCurrentCCStructureLong / SUB_8480F8 | events.c | El sistema de eventos |
+| SetCCPoiner / ResetsCurrentCCStructure* / SUB_8480F8 / UNK_LoadCCData* | events.c | El sistema de eventos |
+| GetTileContent / UNK_CheckTileProperty / CheckToolSuccess | tools.c | ¿Funciona la herramienta en esta casilla? |
 | FindMostLovedName / WifePregnanacyandChilds | people.c | La chica favorita, la esposa y los hijos |
 | LoadsDateNames | calendar.c | Los textos de la fecha |
 | AddMoney / HaveLunch / SUB_8281C0 | stock.c, stamina.c, weather.c | Dinero, almuerzo y el pronóstico de la tele |
@@ -81,7 +82,7 @@ BRK de CowFeedingandStatus, un bug del juego), la reescritura hace lo que
 el código claramente quería, lo documenta, y la prueba al azar no genera esa
 combinación.
 
-Resultado actual: 30 rutinas, 10 semillas × 2.000 llamadas al azar cada una
+Resultado actual: 36 rutinas, 10 semillas × 2.000 llamadas al azar cada una
 (`HM_DECOMP_FUZZ_SEED`; 40 granjas enteras por semilla para las de la
 granja) + las llamadas reales de una partida nueva y de 10 noches forzadas:
 **0 diferencias**.
