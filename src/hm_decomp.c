@@ -855,7 +855,9 @@ static void fuzz_at(unsigned frame)
       g_cpu.P = (uint8_t)((g_cpu.P & ~0x30) | 0x04 | (f->entry_m ? 0x20 : 0) | (f->entry_x ? 0x10 : 0));
       cpu_p_to_mirrors(&g_cpu);
       if (f->entry_x) { g_cpu.X &= 0xFF; g_cpu.Y &= 0xFF; }
-      if (!(f->out_mask & HM_JSR)) g_cpu.PB = (uint8_t)(f->pc24 >> 16);  /* JSL enters its bank */
+      /* JSL enters the routine's bank; a JSR runs in its caller's bank,
+       * which is the routine's own bank too */
+      g_cpu.PB = (uint8_t)(f->pc24 >> 16);
       if (f->out_mask & HM_JSR) cpu_push_jsr_return_frame(&g_cpu);
       else cpu_push_jsl_return_frame(&g_cpu);
       uint8_t frame_size = (f->out_mask & HM_JSR) ? 2 : 3;
