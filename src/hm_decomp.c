@@ -187,6 +187,17 @@ static void prep_map_change(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
     if (rows && cols && rows <= 8 && cols <= 8) { r->a = n; break; }
   }
 }
+static void prep_map_block(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  r->x = (uint16_t)(rnd() & 0x3FF);
+  r->y = (uint16_t)(rnd() & 0x3FF);
+  static const uint8_t widths[] = { 1, 2, 4, 4 };
+  ram[0x00181] = widths[rnd() % 4];
+  hm_wr16(ram, 0x86, (uint16_t)(1 + rnd() % 4));         /* columns */
+  hm_wr16(ram, 0x88, (uint16_t)(1 + rnd() % 4));         /* rows */
+  ram[0x8F] = 0; ram[0x91] = 0;
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -309,6 +320,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     0x81A801, 0, 0, 0, 0x0CC0, { { 0 } } },
   { "SUB_81A83A", hm_SUB_81A83A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/mapedit.c",
     0x81A83A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_change },
+  { "SUB_82B060", hm_SUB_82B060, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/mapedit.c",
+    0x82B060, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_map_block },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

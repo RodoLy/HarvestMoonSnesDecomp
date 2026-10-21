@@ -137,3 +137,45 @@ void hm_SUB_81A83A(uint8_t *ram, HmRegs *r)
   r->y = y;
   r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_82B060 ($82:B060, JSL, RTL). A (8-bit) = a tile type; writes it into
+ * the map's tile types ($09B6) for a block of $86 columns x $88 rows of
+ * tiles whose top-left corner is X, Y (pixels). The per-tile offsets are
+ * kept 8-bit in $8E/$90 but read back as 16-bit words, so the bytes $8F
+ * and $91 left by whoever ran before count too (they are 0 in practice).
+ * Leftovers: $99 = type, $82/$84 = X/Y; A = (index high byte : type),
+ * X = $86, Y = $88, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_B060_INDEX 0xB090   /* JSR GetTileIndex at $82:B08E */
+
+void hm_SUB_82B060(uint8_t *ram, HmRegs *r)
+{
+  uint8_t type = (uint8_t)r->a;
+  *hm_dp(ram, r, 0x99) = type;
+  hm_dp_w16(ram, r, 0x82, r->x);
+  hm_dp_w16(ram, r, 0x84, r->y);
+  uint16_t row = 0;
+  do {
+    push16(ram, r, row);                                 /* PHY */
+    *hm_dp(ram, r, 0x8E) = (uint8_t)(row << 4);
+    uint16_t col = 0;
+    do {
+      push16(ram, r, col);                               /* PHX */
+      *hm_dp(ram, r, 0x90) = (uint8_t)(col << 4);
+      r->x = (uint16_t)(hm_dp_r16(ram, r, 0x82) + hm_dp_r16(ram, r, 0x8E));
+      r->y = (uint16_t)(hm_dp_r16(ram, r, 0x84) + hm_dp_r16(ram, r, 0x90));
+      hm_push8(ram, r, (uint8_t)(RET_B060_INDEX >> 8));
+      hm_push8(ram, r, (uint8_t)RET_B060_INDEX);
+      hm_GetTileIndex(ram, r);
+      hm_pull8(ram, r); hm_pull8(ram, r);
+      r->a = (uint16_t)((r->a & 0xFF00) | type);
+      hm_bus_wr8(ram, (((uint32_t)r->db << 16) + HM_MAP_TILES + r->x) & 0xFFFFFF, type);
+      col = (uint16_t)(pull16(ram, r) + 1);              /* PLX; INX */
+    } while (col != hm_dp_r16(ram, r, 0x86));
+    row = (uint16_t)(pull16(ram, r) + 1);                /* PLY; INY */
+  } while (row != hm_dp_r16(ram, r, 0x88));
+  r->x = hm_dp_r16(ram, r, 0x86);
+  r->y = row;
+  r->c = 1;
+}
