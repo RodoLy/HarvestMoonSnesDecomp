@@ -35,6 +35,8 @@ BODY = re.compile(r'cpu_trace_func_entry\(cpu, 0x([0-9a-fA-F]{6}), "[A-Za-z_0-9]
 MANUAL = {
     0x84A5D4: "AddCowHappiness",   # .AddCowHappiness in Event_UNKCowRelated
     0x81D1A4: "TileAtOffsetFromPlayer",  # CODE_81D1A4, after CalculateTileinFront
+    0x81A801: "SUB_81A801",        # labels with no address comment
+    0x81A83A: "SUB_81A83A",
 }
 
 

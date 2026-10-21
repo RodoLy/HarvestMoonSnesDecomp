@@ -43,6 +43,9 @@ DATA = {"DB", "DW", "DL", "DD"}
 LOCAL = {
     0x84A5D4: ("Event_UNKCowRelated", ".AddCowHappiness", "AddCowHappiness"),
     0x81D1A4: ("CalculateTileinFront", "CODE_81D1A4", "TileAtOffsetFromPlayer"),
+    # top-level labels without an address comment: no parent to split from
+    0x81A801: (None, "SUB_81A801", "SUB_81A801"),
+    0x81A83A: (None, "SUB_81A83A", "SUB_81A83A"),
 }
 
 
@@ -65,8 +68,9 @@ def split_locals(decomp_dir, found):
                     n += 1
                     if re.search(r"\bRT[LS]\b", code):
                         break
-            ppc = by_name[parent]
-            found[ppc] = (parent, found[ppc][1] - n)
+            if parent is not None:
+                ppc = by_name[parent]
+                found[ppc] = (parent, found[ppc][1] - n)
             found[pc] = (name, n)
             break
     return found

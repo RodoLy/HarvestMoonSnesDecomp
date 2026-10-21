@@ -289,6 +289,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "PreCheckToolSuccessSquare", hm_PreCheckToolSuccessSquare,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/tools.c", 0x8292D6, 1, 0, 0, 8,
     { B8(HM_SEASON, 0, 3) }, 0, prep_player_tool_near },
+  /* A up to $CC0: past that the table read leaves the ROM ($82:71D7...) and
+   * the original gets open-bus values. The game uses small entries. */
+  { "SUB_81A801", hm_SUB_81A801, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/mapedit.c",
+    0x81A801, 0, 0, 0, 0x0CC0, { { 0 } } },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
