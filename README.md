@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 7.69%](https://img.shields.io/badge/decompiled-7.69%25-2f855a)
+![Decompiled: 8.26%](https://img.shields.io/badge/decompiled-8.26%25-2f855a)
 
-**7.69%** of the game's code decompiled and verified: 3473 of 45176 instructions, 47 of 513 routines (9.2%).
+**8.26%** of the game's code decompiled and verified: 3731 of 45176 instructions, 51 of 513 routines (9.9%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -49,6 +49,7 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (start an event script) | `src/events.c` |
 | Map edits | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060 (change tiles of the current map) | `src/mapedit.c` |
 | Video DMA | AddProgrammedDMA (queue a copy to VRAM / CGRAM for the next NMI) | `src/dma.c` |
+| Objects | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites and the objects the tools leave on the map) | `src/objects.c` |
 | Tools | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square | `src/tools.c` |
 
 A few things found along the way (details in each file's comments):
@@ -81,11 +82,14 @@ A few things found along the way (details in each file's comments):
   roll for a cow left outside, the X register stays 8-bit; if a broken-fence
   night flag ($0196 bit $0400) is also set, `LDY.W #$0002` at $83:BDE1 is
   decoded as a 2-byte instruction and the leftover `00` executes as `BRK`.
+- There are at most 10 "map objects" (the effects tools leave, like cut
+  grass). If all 10 are in use when an 11th is needed, the game freezes:
+  `BRA` to itself at $81:A528.
 
 ## Layout
 
 - `src/` — the rewritten routines and the checker (`hm_decomp.c/.h`).
-- `data/decomp_names.tsv` — names of 486 routines (from HM-Decomp).
+- `data/decomp_names.tsv` — names of 493 routines (from HM-Decomp).
 - `tools/build.sh` — generates, renames and builds the test executable.
 - `tools/check.sh` — runs the checks (random inputs, a new game, nights).
 - `tools/progress.py` — computes the percentage above.

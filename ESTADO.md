@@ -8,12 +8,12 @@ en el README (`tools/progress.py`).
 
 - **Proyecto separado** del juego. Se compila con `tools/build.sh` (usa la
   recompilación como base, sin modificarla) y se prueba con `tools/check.sh`.
-- **Nombres**: 486 rutinas renombradas con los nombres de HM-Decomp
+- **Nombres**: 493 rutinas renombradas con los nombres de HM-Decomp
   (`data/decomp_names.tsv`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **47 rutinas reescritas y verificadas** (0 diferencias):
+- **51 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -61,6 +61,10 @@ en el README (`tools/progress.py`).
 | AddProgrammedDMA | $80:8A33 | src/dma.c |
 | QueueTileGraphicsDMA (CODE_81A6C1) | $81:A6C1 | src/mapedit.c |
 | ChangeMapTile (CODE_81A688) | $81:A688 | src/mapedit.c |
+| SpawnMapObject (CODE_81A500) | $81:A500 | src/objects.c |
+| CreateGameObject (CODE_858000) | $85:8000 | src/objects.c |
+| LoadGameObjectComponents (CODE_858AE5) | $85:8AE5 | src/objects.c |
+| LoadSpriteComponent (CODE_858C30) | $85:8C30 | src/objects.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -234,9 +238,32 @@ con estas tres rutinas: 7,69%.
 ShippingScene queda para después: sigue de largo hacia StartTextBox (el
 sistema de texto).
 
+## Objetos con sprite (hecho el 21-oct-2026)
+
+- **Objetos del juego** ("gobj"): 40 registros de $24 bytes en $019C
+  (en uso = $7777, sprite, volteo, X, Y, pieza por pieza el lugar de su
+  gráfico). $DC cuenta cuántos se repartieron (solo crece, hasta 40).
+  CreateGameObject toma uno libre y carga sus piezas.
+- **Sprites**: 0-$261 se describen en el banco $86 (tabla $86:8080) y
+  $262-$44F en el $87 ($87:8080). Cada sprite es una lista de piezas (como
+  mucho 12), 5 bytes cada una.
+- **Gráficos de las piezas**: $7F:0F00 + pieza = en qué lugar de la VRAM
+  está ($FF = no cargada); $7E:A320 + 4·lugar = cuántas piezas lo usan. Las
+  no cargadas van a una cola circular de 64 en $7E:A220 ($BD escribe, $BB
+  lee el cargador del NMI). Si la cola está llena, LoadSpriteComponent
+  espera a que el NMI la vacíe (`CMP $BB; BEQ` a sí mismo).
+- **Objetos del mapa**: 10 registros de 16 bytes en $7E:B4E6 (los efectos
+  de las herramientas; BAAAA los mueve cada cuadro). SpawnMapObject toma
+  uno libre; **con los 10 ocupados el juego se cuelga** ($81:A528). Si no
+  hay objeto del juego libre, guarda el número del último creado ($A5 no
+  cambia).
+- En la partida real estas rutinas salen "omitidas": quien las llama corre
+  en el intérprete de la recompilación y el cuerpo compilado le devuelve la
+  llamada al instante. Las verifica la prueba al azar.
+
 ## Lo siguiente
 
-CODE_81A500 (crear un objeto, usa CODE_858000) y luego los ToolUsed*; el
+Los ToolUsed* (ya tienen ChangeMapTile y SpawnMapObject); el
 sistema de texto (StartTextBox) para ShippingScene y UpdateTime; el resto
 de los eventos de animales (`Event_UNKCowRelated`, $84:9AD4).
 

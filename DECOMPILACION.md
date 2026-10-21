@@ -92,7 +92,12 @@ escribe y lee con `hm_bus_wr8` / `hm_bus_rd8`, igual que la memoria.
 Para estar seguros de que el comprobador sirve, a veces se rompe la
 reescritura a propósito (un número cambiado) y se mira que avise: avisa.
 
-Resultado actual: 47 rutinas, 10 semillas × 2.000 llamadas al azar cada una
+Algunas rutinas (las de sprites del banco $85) no se pueden comparar en la
+partida real: quien las llama corre en el intérprete de la recompilación,
+así que el envoltorio nunca ve la llamada completa y la cuenta como
+"omitida". Para esas, la prueba al azar es la verificación.
+
+Resultado actual: 51 rutinas, 10 semillas × 2.000 llamadas al azar cada una
 (`HM_DECOMP_FUZZ_SEED`; 40 granjas enteras por semilla para las de la
 granja) + las llamadas reales de una partida nueva y de 10 noches forzadas:
 **0 diferencias**.

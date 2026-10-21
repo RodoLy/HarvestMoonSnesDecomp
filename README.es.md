@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 7.69%](https://img.shields.io/badge/descompilado-7.69%25-2f855a)
+![Descompilado: 8.26%](https://img.shields.io/badge/descompilado-8.26%25-2f855a)
 
-**7.69%** del código del juego descompilado y verificado: 3473 de 45176 instrucciones, 47 de 513 rutinas (9.2%).
+**8.26%** del código del juego descompilado y verificado: 3731 de 45176 instrucciones, 51 de 513 rutinas (9.9%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
@@ -49,6 +49,7 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Eventos | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (arrancar un guion de evento) | `src/events.c` |
 | Edición del mapa | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060 (cambiar casillas del mapa actual) | `src/mapedit.c` |
 | DMA de video | AddProgrammedDMA (encolar una copia a VRAM / CGRAM para el próximo NMI) | `src/dma.c` |
+| Objetos | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites y los objetos que dejan las herramientas en el mapa) | `src/objects.c` |
 | Herramientas | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square | `src/tools.c` |
 
 Algunas cosas que se descubrieron por el camino (detalles en los
@@ -85,11 +86,14 @@ comentarios de cada archivo):
   bits; si además está la bandera de cerca rota ($0196 bit $0400),
   `LDY.W #$0002` en $83:BDE1 se lee como instrucción de 2 bytes y el `00`
   sobrante se ejecuta como `BRK`.
+- Hay como mucho 10 "objetos del mapa" (los efectos que dejan las
+  herramientas, como la hierba cortada). Si los 10 están en uso cuando hace
+  falta un 11.º, el juego se congela: `BRA` a sí mismo en $81:A528.
 
 ## Carpetas
 
 - `src/` — las rutinas reescritas y el comprobador (`hm_decomp.c/.h`).
-- `data/decomp_names.tsv` — nombres de 486 rutinas (de HM-Decomp).
+- `data/decomp_names.tsv` — nombres de 493 rutinas (de HM-Decomp).
 - `tools/build.sh` — genera, renombra y compila el ejecutable de prueba.
 - `tools/check.sh` — corre las pruebas (al azar, partida nueva y noches).
 - `tools/progress.py` — calcula el porcentaje de arriba.
