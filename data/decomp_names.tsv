@@ -483,5 +483,7 @@
 0583E0	PrepareOAMData_lo
 858647	PresetsWRAMCopyofOAM
 058647	PresetsWRAMCopyofOAM_lo
+858C30	LoadSpriteComponent
+058C30	LoadSpriteComponent_lo
 858ED7	ClearSpriteDataTables
 058ED7	ClearSpriteDataTables_lo

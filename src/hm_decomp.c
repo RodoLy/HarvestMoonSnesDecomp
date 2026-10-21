@@ -243,6 +243,31 @@ static void prep_map_change_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if ((rnd() & 7) == 0) r->a = 0;                          /* "no change" */
 }
 
+/* objects.c: the graphics state of a sprite's pieces (slot loaded or $FF,
+ * users of each slot) and the loader's queue, never full: at least 12
+ * places free (a sprite has 12 pieces at most). */
+static void prep_piece(uint8_t *ram, uint16_t piece, uint32_t (*rnd)(void))
+{
+  uint8_t slot = (rnd() % 3 == 0) ? 0xFF : (uint8_t)(rnd() & 0x3F);
+  ram[0x10F00 + piece] = slot;                             /* $7F:0F00 */
+  if (slot != 0xFF) hm_wr16(ram, 0xA320 + 4u * slot, (uint16_t)(rnd() % 50));
+}
+static void prep_queue(uint8_t *ram, unsigned max_used, uint32_t (*rnd)(void))
+{
+  uint16_t at = (uint16_t)((rnd() & 0x3F) << 2);
+  uint16_t used = (uint16_t)(rnd() % (max_used + 1));
+  hm_wr16(ram, 0xBD, at);
+  hm_wr16(ram, 0xBB, (uint16_t)((at - 4 * used) & 0xFC));
+}
+static void prep_sprite_piece(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  uint16_t piece = (uint16_t)(rnd() % 0xA00);
+  hm_wr16(ram, 0xB3, piece);
+  hm_wr16(ram, 0xB5, (uint16_t)rnd());
+  prep_piece(ram, piece, rnd);
+  prep_queue(ram, 62, rnd);
+}
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -373,6 +398,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/mapedit.c", 0x81A6C1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tile_dma },
   { "ChangeMapTile", hm_ChangeMapTile, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/mapedit.c", 0x81A688, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_change_dma },
+  { "LoadSpriteComponent", hm_LoadSpriteComponent, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/objects.c", 0x858C30, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_sprite_piece },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
@@ -442,8 +469,11 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   if (!f) { free(s); return; }
   Stats *st = &s_stats[index];
   st->calls++;
-  /* A routine interrupted mid-way (the frame deadline yielded) or run in
-   * decimal mode is not comparable; the rewrites assume binary mode. */
+  /* A routine interrupted mid-way (the frame deadline yielded), handed to
+   * the interpreter (its caller runs there: the compiled body returns at
+   * once and the interpreter runs it, e.g. the sprite routines of bank $85)
+   * or run in decimal mode is not comparable here; the rewrites assume
+   * binary mode. The fuzzer still checks them. */
   if (!completed || s->cpu._flag_D) { st->skipped++; free(s); return; }
 
   HmRegs in = { s->cpu.A, s->cpu.X, s->cpu.Y, s->cpu._flag_C, s->cpu._flag_N, s->cpu.DB, s->cpu.D,
