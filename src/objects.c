@@ -151,3 +151,70 @@ void hm_LoadGameObjectComponents(uint8_t *ram, HmRegs *r)
   r->y = y;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * CreateGameObject ($85:8000, JSL, RTL; CODE_858000 in HM-Decomp). Takes a
+ * free game object (one more of the 40 if not all are handed out yet, then
+ * the first free one) and fills it from $A1 (sprite), $9F, $A3, $9B/$9D;
+ * looks up the sprite's entry and loads its pieces.
+ * $A7 = 0 and $A5 / $A9 = the object; or $A7 = $FFFF if none is free.
+ * Leftovers: $75 the sprite's entry, $77 / $7A its bank. Created: as
+ * LoadGameObjectComponents, then A = 0. No room: A = $FFFF, X = $24 n,
+ * Y = n (n = $DC), C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_8000_PIECES 0x80B0   /* JSR LoadGameObjectComponents at $85:80AE */
+
+void hm_CreateGameObject(uint8_t *ram, HmRegs *r)
+{
+  uint16_t sprite = hm_dp_r16(ram, r, 0xA1);
+  uint8_t bank = sprite >= FIRST_SPRITE_87 ? 0x87 : 0x86;
+  *hm_dp(ram, r, 0x77) = bank;
+  *hm_dp(ram, r, 0x7A) = bank;
+
+  uint16_t handed_out = hm_dp_r16(ram, r, 0xDC);
+  if (handed_out != GOBJ_MAX) {
+    handed_out++;
+    hm_dp_w16(ram, r, 0xDC, handed_out);
+  }
+  uint16_t x = 0, y = 0;
+  while (hm_bus_rd16(ram, abs_x(r, GOBJ, x)) != 0) {
+    x = (uint16_t)(x + GOBJ_SIZE);
+    y++;
+    if (y == hm_dp_r16(ram, r, 0xDC)) {                  /* none free */
+      r->c = 1;                                          /* CPY: equal */
+      r->a = 0xFFFF;
+      hm_dp_w16(ram, r, 0xA7, 0xFFFF);
+      r->x = x; r->y = y;
+      return;
+    }
+  }
+
+  hm_dp_w16(ram, r, 0xA5, y);
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x00, x), GOBJ_IN_USE);
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x02, x), sprite);
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x04, x), hm_dp_r16(ram, r, 0x9F));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x06, x), hm_dp_r16(ram, r, 0xA3));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x08, x), hm_dp_r16(ram, r, 0x9B));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x0A, x), hm_dp_r16(ram, r, 0x9D));
+  hm_dp_w16(ram, r, 0xA9, x);
+
+  uint16_t number = hm_bus_rd16(ram, abs_x(r, GOBJ + 0x02, x));
+  uint32_t table = SPRITES_86;
+  if (hm_dp_r16(ram, r, 0xA1) >= FIRST_SPRITE_87) {
+    number = (uint16_t)(number - FIRST_SPRITE_87);
+    table = SPRITES_87;
+  }
+  uint16_t entry = hm_bus_rd16(ram, (table + (uint16_t)(number << 1)) & 0xFFFFFF);
+  hm_dp_w16(ram, r, 0x75, entry);
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x0C, x), entry);
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x0E, x), (uint16_t)(entry + 3));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x10, x), hm_bus_rd16(ram, hm_dp_long(ram, r, 0x75, 0)));
+  hm_bus_wr8(ram, abs_x(r, GOBJ + 0x12, x), hm_bus_rd8(ram, hm_dp_long(ram, r, 0x75, 2)));
+
+  r->x = x; r->y = 2;
+  push16(ram, r, RET_8000_PIECES);                       /* JSR */
+  hm_LoadGameObjectComponents(ram, r);
+  pull16(ram, r);                                        /* RTS */
+  r->a = 0;
+  hm_dp_w16(ram, r, 0xA7, 0);
+}
+

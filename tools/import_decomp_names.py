@@ -39,6 +39,7 @@ MANUAL = {
     0x81A83A: "SUB_81A83A",
     0x81A688: "ChangeMapTile",     # CODE_81A688
     0x81A6C1: "QueueTileGraphicsDMA",  # CODE_81A6C1
+    0x858000: "CreateGameObject",  # CODE_858000
     0x858AE5: "LoadGameObjectComponents",  # CODE_858AE5
     0x858C30: "LoadSpriteComponent",       # CODE_858C30
 }

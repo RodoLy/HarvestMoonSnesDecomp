@@ -293,6 +293,19 @@ static void prep_gobj_pieces(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x7A] = (uint8_t)(list >> 16);
   prep_sprite(ram, sprite, rnd);
 }
+static void prep_create_gobj(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  uint16_t sprite = (uint16_t)(rnd() % 0x450);
+  hm_wr16(ram, 0xA1, sprite);
+  hm_wr16(ram, 0x9B, (uint16_t)rnd()); hm_wr16(ram, 0x9D, (uint16_t)rnd());
+  hm_wr16(ram, 0x9F, (uint16_t)rnd()); hm_wr16(ram, 0xA3, (uint16_t)rnd());
+  hm_wr16(ram, 0xDC, (uint16_t)(rnd() % 41));
+  int full = rnd() % 4 == 0;                               /* no room at all */
+  for (unsigned i = 0; i < 40; i++)
+    hm_wr16(ram, 0x019C + 0x24 * i, (full || rnd() % 2) ? (uint16_t)(rnd() | 1) : 0);
+  prep_sprite(ram, sprite, rnd);
+}
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -428,6 +441,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "LoadGameObjectComponents", hm_LoadGameObjectComponents,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/objects.c", 0x858AE5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_gobj_pieces },
+  { "CreateGameObject", hm_CreateGameObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/objects.c", 0x858000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_create_gobj },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
