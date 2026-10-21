@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 12.10%](https://img.shields.io/badge/descompilado-12.10%25-2f855a)
+![Descompilado: 14.41%](https://img.shields.io/badge/descompilado-14.41%25-2f855a)
 
-**12.10%** del código del juego descompilado y verificado: 5465 de 45176 instrucciones, 78 de 514 rutinas (15.2%).
+**14.41%** del código del juego descompilado y verificado: 6509 de 45176 instrucciones, 82 de 514 rutinas (16.0%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
@@ -45,7 +45,8 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Jugador | ChangeStamina, HaveLunch | `src/stamina.c` |
 | Personas | FindMostLovedName, WifePregnanacyandChilds | `src/people.c` |
 | Calendario | LoadsDateNames | `src/calendar.c` |
-| Animales | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (la noche de los animales) | `src/animals.c` |
+| Animales | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (la noche de los animales), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: gallinas, vacas, perro y caballo en el mapa al que entras) | `src/animals.c` |
+| Final | RanchMasteryCalculator (el puntaje final del rancho) | `src/ending.c` |
 | Eventos | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (arrancar un guion de evento) | `src/events.c` |
 | Edición del mapa | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | DMA de video | AddProgrammedDMA (encolar una copia a VRAM / CGRAM para el próximo NMI) | `src/dma.c` |
@@ -102,6 +103,13 @@ comentarios de cada archivo):
   y nabo en primavera, pasto en primavera y verano); fuera de estación la
   casilla queda como un brote muerto.
 - Pintar la casa: cuatro partes de la pared, +10 de felicidad cada una.
+- El puntaje del rancho del final (0-999) suma dinero (máximo 78),
+  animales (3 cada uno), energía máxima, corazones de las chicas,
+  cultivos enviados, felicidad, la casa, los hijos, el reloj, el
+  caparazón de tortuga, el desarrollo de la granja y la felicidad de cada
+  vaca. **Errores:** corazones y envíos se recortan con `AND #$1FF` en vez
+  de tener un tope (enviar 512 nabos cuenta 0), y del dinero solo cuentan
+  los 16 bits bajos (655.360 G cuentan 0).
 - Hay como mucho 10 "objetos del mapa" (los efectos que dejan las
   herramientas, como la hierba cortada). Si los 10 están en uso cuando hace
   falta un 11.º, el juego se congela: `BRA` a sí mismo en $81:A528.
@@ -109,7 +117,7 @@ comentarios de cada archivo):
 ## Carpetas
 
 - `src/` — las rutinas reescritas y el comprobador (`hm_decomp.c/.h`).
-- `data/decomp_names.tsv` — nombres de 495 rutinas (de HM-Decomp).
+- `data/decomp_names.tsv` — nombres de 497 rutinas (de HM-Decomp).
 - `tools/build.sh` — genera, renombra y compila el ejecutable de prueba.
 - `tools/check.sh` — corre las pruebas (al azar, partida nueva y noches).
 - `tools/progress.py` — calcula el porcentaje de arriba.

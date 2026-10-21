@@ -8,12 +8,12 @@ en el README (`tools/progress.py`).
 
 - **Proyecto separado** del juego. Se compila con `tools/build.sh` (usa la
   recompilación como base, sin modificarla) y se prueba con `tools/check.sh`.
-- **Nombres**: 495 rutinas renombradas con los nombres de HM-Decomp
+- **Nombres**: 497 rutinas renombradas con los nombres de HM-Decomp
   (`data/decomp_names.tsv`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **78 rutinas reescritas y verificadas** (0 diferencias):
+- **82 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -67,6 +67,9 @@ en el README (`tools/progress.py`).
 | LoadSpriteComponent (CODE_858C30) | $85:8C30 | src/objects.c |
 | StartMapAnimation (CODE_81A5E1) | $81:A5E1 | src/mapedit.c |
 | 26 ToolUsed* (todas menos regadera y aspersor) | $82:931E-$82:A570 | src/toolused.c |
+| RanchMasteryCalculator | $83:F26D | src/ending.c |
+| AddNewChicken, AddNewCow | $83:C807, $83:C8DC | src/animals.c |
+| PlaceAnimalsOnMap (CODE_83C296) | $83:C296 | src/animals.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -295,6 +298,29 @@ sistema de texto).
   llamada). Las verifica la prueba al azar.
 - Faltan la regadera y el aspersor: UNK_Audio19 → UNK_Audio15 espera al
   chip de sonido (puertos $2140-$2143), que el comprobador no modela.
+
+## Animales en el mapa y el final (hecho el 21-oct-2026)
+
+- PlaceAnimalsOnMap: al entrar a un mapa arranca el guion de cada
+  gallina (evento $24+n), vaca ($18+n), perro ($16) y caballo ($17) que
+  esté ahí. "Está ahí" agrupa mapas: 00-03, 04-07, 08-0F con 0C-0F,
+  10-13, 14-17 con 15-17, 31+; el resto solo el mismo mapa. El caballo no
+  tiene el grupo 14-17. Con lluvia ($0196 bit 1) las vacas que no están en
+  el establo usan otros guiones ($17 / $2F / 9). Verificada también en
+  vivo (al entrar a mapas en la partida y las noches).
+- AddNewChicken / AddNewCow: buscan el primer registro libre; no cambian
+  los contadores $7F1F0A/0B. Gallina: 1 comprada, 2 nacida (+1 =
+  estación + 4), otro valor = estado $43. Vaca nacida: estado 3, felicidad
+  de $7F1F2B, +70 de felicidad al jugador.
+- RanchMasteryCalculator ($83:F26D, se llega con JMP; sin cuerpo
+  compilado: `HM_INTERP | HM_JSR`). Errores del original documentados en
+  src/ending.c (AND #$1FF en corazones y envíos; dinero de 16 bits).
+- El fuzz ahora pone PB en el banco de la rutina también para las JSR
+  (hacía falta para las que corren por el intérprete).
+- `tools/candidates.py`: lista las rutinas que faltan, su tamaño, qué
+  llaman que aún no está hecho y si tocan hardware.
+- Pendiente: la regadera y el aspersor necesitan grabar las lecturas del
+  chip de sonido (UNK_Audio17 lee $2140) para poder compararse.
 
 ## Lo siguiente
 

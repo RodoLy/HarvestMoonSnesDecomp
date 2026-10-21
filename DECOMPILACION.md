@@ -100,7 +100,10 @@ así que el envoltorio nunca ve la llamada completa y la cuenta como
 Para las direcciones de retorno de los JSR/JSL está `tools/calls.py`
 (desensambla la rutina desde la ROM siguiendo REP/SEP).
 
-Resultado actual: 78 rutinas, 10 semillas × 2.000 llamadas al azar cada una
+Para elegir qué sigue: `python3 tools/candidates.py` (rutinas cuyo
+código llamado ya está hecho y que no tocan hardware, de mayor a menor).
+
+Resultado actual: 82 rutinas, 10 semillas × 2.000 llamadas al azar cada una
 (`HM_DECOMP_FUZZ_SEED`; 40 granjas enteras por semilla para las de la
 granja) + las llamadas reales de una partida nueva y de 10 noches forzadas:
 **0 diferencias**.

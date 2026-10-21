@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 12.10%](https://img.shields.io/badge/decompiled-12.10%25-2f855a)
+![Decompiled: 14.41%](https://img.shields.io/badge/decompiled-14.41%25-2f855a)
 
-**12.10%** of the game's code decompiled and verified: 5465 of 45176 instructions, 78 of 514 routines (15.2%).
+**14.41%** of the game's code decompiled and verified: 6509 of 45176 instructions, 82 of 514 routines (16.0%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -45,7 +45,8 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Player | ChangeStamina, HaveLunch | `src/stamina.c` |
 | People | FindMostLovedName, WifePregnanacyandChilds | `src/people.c` |
 | Calendar | LoadsDateNames | `src/calendar.c` |
-| Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night) | `src/animals.c` |
+| Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: chickens, cows, dog and horse on the map you enter) | `src/animals.c` |
+| Ending | RanchMasteryCalculator (the final ranch score) | `src/ending.c` |
 | Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (start an event script) | `src/events.c` |
 | Map edits | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | Video DMA | AddProgrammedDMA (queue a copy to VRAM / CGRAM for the next NMI) | `src/dma.c` |
@@ -96,6 +97,12 @@ A few things found along the way (details in each file's comments):
   turnip in spring, grass in spring and summer); out of season the tile
   just becomes a dead sprout.
 - Painting the house: four parts of the wall, +10 happiness each.
+- The ending's ranch score (0-999) adds up money (at most 78), animals
+  (3 each), max stamina, the girls' hearts, crops shipped, happiness, the
+  house, children, clock, turtle shell, farm development and each cow's
+  happiness. **Bugs:** hearts and shipped crops are cut with `AND #$1FF`
+  instead of capped (512 turnips shipped count as 0), and only the low 16
+  bits of the money count (655,360 G count as 0).
 - There are at most 10 "map objects" (the effects tools leave, like cut
   grass). If all 10 are in use when an 11th is needed, the game freezes:
   `BRA` to itself at $81:A528.
@@ -103,7 +110,7 @@ A few things found along the way (details in each file's comments):
 ## Layout
 
 - `src/` — the rewritten routines and the checker (`hm_decomp.c/.h`).
-- `data/decomp_names.tsv` — names of 495 routines (from HM-Decomp).
+- `data/decomp_names.tsv` — names of 497 routines (from HM-Decomp).
 - `tools/build.sh` — generates, renames and builds the test executable.
 - `tools/check.sh` — runs the checks (random inputs, a new game, nights).
 - `tools/progress.py` — computes the percentage above.
