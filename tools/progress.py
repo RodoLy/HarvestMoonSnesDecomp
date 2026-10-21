@@ -42,6 +42,7 @@ DATA = {"DB", "DW", "DL", "DD"}
 # the parent so nothing is counted twice.
 LOCAL = {
     0x84A5D4: ("Event_UNKCowRelated", ".AddCowHappiness", "AddCowHappiness"),
+    0x81D1A4: ("CalculateTileinFront", "CODE_81D1A4", "TileAtOffsetFromPlayer"),
 }
 
 
@@ -50,10 +51,14 @@ def split_locals(decomp_dir, found):
     for pc, (parent, label, name) in LOCAL.items():
         for path in glob.glob(os.path.join(decomp_dir, "src", "code_banks", "*.asm")):
             lines = open(path, encoding="utf-8", errors="replace").read().split("\n")
-            starts = [i for i, l in enumerate(lines) if l.strip() == label + ":"]
+            starts = [i for i, l in enumerate(lines)
+                      if l.strip() == label + ":" or l.strip().startswith(label + ": ")]
             if not starts:
                 continue
             n = 0
+            first = lines[starts[0]].split(":", 1)[1]    # code on the label's own line
+            if INSN.match(first.split(";", 1)[0]):
+                n += 1
             for l in lines[starts[0] + 1:]:
                 code = l.split(";", 1)[0]
                 if INSN.match(code):

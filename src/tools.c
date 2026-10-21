@@ -179,3 +179,70 @@ void hm_CheckToolSuccess(uint8_t *ram, HmRegs *r)
     return;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * The tile a tool acts on.
+ *
+ * CalculateTileinFront ($81:D14E, JSL, RTL). A = how many tiles ahead,
+ * X / Y = extra pixels sideways / ahead. $0985/$0987 = the player's
+ * position ($D6/$D8) moved by 16 A + the extra in the direction the player
+ * faces ($DA: 0 down = +Y, 1 up = -Y, 2 = +X, anything else = -X).
+ * Leftovers: $7E = 16 A, $80 = X, $82 = Y; A = the coordinate written
+ * last, C from its add / subtract (carry chained through both terms).
+ *
+ * TileAtOffsetFromPlayer ($81:D1A4, JSL, RTL; CODE_81D1A4 in HM-Decomp).
+ * X, Y = an offset in tiles; $0985/$0987 = player position + 16 X / 16 Y,
+ * whatever the direction. Leftovers: $7E = 16 X, $80 = 16 Y, A = the new Y,
+ * C from its add.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define HM_PLAYER_X       0xD6   /* direct page, 16b, pixels */
+#define HM_TILE_IN_FRONT_X 0x00985 /* 16b: where the tool lands */
+#define HM_TILE_IN_FRONT_Y 0x00987
+#define HM_PLAYER_Y       0xD8
+
+/* CLC; ADC b; ADC c — or SEC; SBC b; SBC c — with the carry chained. */
+static uint16_t add2(uint16_t a, uint16_t b, uint16_t c, uint8_t *carry)
+{
+  uint32_t s = (uint32_t)a + b;
+  s = (s & 0xFFFF) + c + (s > 0xFFFF);
+  *carry = s > 0xFFFF;
+  return (uint16_t)s;
+}
+static uint16_t sub2(uint16_t a, uint16_t b, uint16_t c, uint8_t *carry)
+{
+  uint32_t d = (uint32_t)a - b;                   /* borrow = bit 16 */
+  uint8_t borrow = (d >> 16) & 1;
+  d = (d & 0xFFFF) - c - borrow;
+  *carry = !((d >> 16) & 1);
+  return (uint16_t)d;
+}
+
+void hm_CalculateTileinFront(uint8_t *ram, HmRegs *r)
+{
+  uint16_t ahead = (uint16_t)(r->a << 4);
+  hm_dp_w16(ram, r, 0x7E, ahead);
+  hm_dp_w16(ram, r, 0x80, r->x);
+  hm_dp_w16(ram, r, 0x82, r->y);
+  uint16_t px = hm_dp_r16(ram, r, HM_PLAYER_X), py = hm_dp_r16(ram, r, HM_PLAYER_Y);
+  hm_wr16(ram, HM_TILE_IN_FRONT_X, px);
+  hm_wr16(ram, HM_TILE_IN_FRONT_Y, py);
+  switch (hm_dp_r16(ram, r, HM_PLAYER_DIRECTION)) {
+  case 0:  r->a = add2(py, ahead, r->y, &r->c); hm_wr16(ram, HM_TILE_IN_FRONT_Y, r->a); break;
+  case 1:  r->a = sub2(py, ahead, r->y, &r->c); hm_wr16(ram, HM_TILE_IN_FRONT_Y, r->a); break;
+  case 2:  r->a = add2(px, ahead, r->x, &r->c); hm_wr16(ram, HM_TILE_IN_FRONT_X, r->a); break;
+  default: r->a = sub2(px, ahead, r->x, &r->c); hm_wr16(ram, HM_TILE_IN_FRONT_X, r->a); break;
+  }
+}
+
+void hm_TileAtOffsetFromPlayer(uint8_t *ram, HmRegs *r)
+{
+  uint16_t dx = (uint16_t)(r->x << 4), dy = (uint16_t)(r->y << 4);
+  hm_dp_w16(ram, r, 0x7E, dx);
+  hm_dp_w16(ram, r, 0x80, dy);
+  uint32_t x = (uint32_t)hm_dp_r16(ram, r, HM_PLAYER_X) + dx;
+  hm_wr16(ram, HM_TILE_IN_FRONT_X, (uint16_t)x);
+  uint32_t y = (uint32_t)hm_dp_r16(ram, r, HM_PLAYER_Y) + dy;
+  hm_wr16(ram, HM_TILE_IN_FRONT_Y, (uint16_t)y);
+  r->a = (uint16_t)y;
+  r->c = y > 0xFFFF;
+}

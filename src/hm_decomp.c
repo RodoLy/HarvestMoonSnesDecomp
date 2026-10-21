@@ -153,6 +153,16 @@ static void prep_tile_in_front(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x00022] = maps[rnd() % sizeof maps];
 }
 
+static void prep_player_tool(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  uint16_t a = r->a;
+  prep_tile_in_front(ram, r, rnd);
+  r->a = a;
+  hm_wr16(ram, 0xD6, (uint16_t)((rnd() & 3) ? 16 + rnd() % 0x3C0 : rnd()));  /* player X */
+  hm_wr16(ram, 0xD8, (uint16_t)((rnd() & 3) ? 16 + rnd() % 0x3C0 : rnd()));  /* player Y */
+  hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 6));                                  /* facing */
+  if (rnd() & 1) { r->x = (uint16_t)(rnd() % 32); r->y = (uint16_t)(rnd() % 32); }
+}
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -257,6 +267,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/events.c", 0x848097, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_start },
   { "UNK_LoadCCDataShort", hm_UNK_LoadCCDataShort, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/events.c", 0x84803F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_start },
+  { "CalculateTileinFront", hm_CalculateTileinFront, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/tools.c", 0x81D14E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_tool },
+  { "TileAtOffsetFromPlayer", hm_TileAtOffsetFromPlayer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/tools.c", 0x81D1A4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_tool },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

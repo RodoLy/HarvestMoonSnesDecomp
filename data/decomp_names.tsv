@@ -121,6 +121,7 @@
 81D061	ChangeStamina
 81D14E	CalculateTileinFront
 01D14E	CalculateTileinFront_lo
+81D1A4	TileAtOffsetFromPlayer
 81D643	Unused01
 01D643	Unused01_lo
 81D644	GetFenceFromStack
