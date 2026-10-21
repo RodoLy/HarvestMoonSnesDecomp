@@ -456,6 +456,18 @@ static void prep_ranch_score(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   }
 }
 
+/* animals.c: AddNewChicken / AddNewCow: records in use or free (sometimes
+ * all in use) and where the animal comes from */
+static void prep_new_animal(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  int full = rnd() % 5 == 0;
+  for (unsigned i = 0; i < 13; i++) ram[0x0C286 + 8 * i] = (uint8_t)(full ? (rnd() | 1) : rnd());
+  for (unsigned i = 0; i < 12; i++) ram[0x0C1C6 + 16 * i] = (uint8_t)(full ? (rnd() | 1) : rnd());
+  ram[0x11F19] = (uint8_t)(rnd() % 4);
+  ram[0x11F2B] = (uint8_t)rnd();
+  r->a = (uint16_t)((rnd() % 4) ? rnd() % 4 : rnd());
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -652,6 +664,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "RanchMasteryCalculator", hm_RanchMasteryCalculator,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_JSR,
     "src/ending.c", 0x83F26D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ranch_score },
+  { "AddNewChicken", hm_AddNewChicken, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/animals.c", 0x83C807, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_new_animal },
+  { "AddNewCow", hm_AddNewCow, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/animals.c", 0x83C8DC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_new_animal },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

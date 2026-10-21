@@ -203,6 +203,8 @@ void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r);
 void hm_Sub_82A9A0(uint8_t *ram, HmRegs *r);
 void hm_AddCowHappiness(uint8_t *ram, HmRegs *r);     /* animals.c */
 void hm_CowFeedingandStatus(uint8_t *ram, HmRegs *r);
+void hm_AddNewChicken(uint8_t *ram, HmRegs *r);
+void hm_AddNewCow(uint8_t *ram, HmRegs *r);
 void hm_FindMostLovedName(uint8_t *ram, HmRegs *r);   /* people.c */
 void hm_WifePregnanacyandChilds(uint8_t *ram, HmRegs *r);
 void hm_LoadsDateNames(uint8_t *ram, HmRegs *r);      /* calendar.c */

@@ -458,3 +458,131 @@ void hm_CowFeedingandStatus(uint8_t *ram, HmRegs *r)
     r->a = (uint16_t)(0x0100 | v);
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * New animals. Both look for the first free record (bit 0 of its status
+ * clear), clear it and fill it in; A = 0 if there was room, 1 if not (13
+ * chickens / 12 cows). Neither touches the animal counts $7F1F0A/0B: the
+ * callers do.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define CHICKEN_SPAWN 0x83CA10   /* ROM: dw x, y per chicken slot (bought) */
+#define COW_SPAWN     0x83CA44   /* ROM: dw x, y per cow slot (in the barn) */
+
+/* the search: X = first free slot (or `slots` if none), $72 = its record */
+static uint16_t free_slot(uint8_t *ram, HmRegs *r, uint16_t slots, uint16_t ret,
+                          void (*pointer)(uint8_t *, HmRegs *))
+{
+  uint16_t x = 0;
+  do {
+    hm_push8(ram, r, (uint8_t)(x >> 8)); hm_push8(ram, r, (uint8_t)x);   /* PHX */
+    r->a = r->x = x;                                                     /* TXA */
+    hm_jsl(ram, r, ret, 0x83);
+    pointer(ram, r);
+    hm_rtl(ram, r);
+    hm_pull8(ram, r); hm_pull8(ram, r);                                  /* PLX */
+    r->y = 0;
+    uint8_t in_use = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, 0)) & 1;
+    r->a = (uint16_t)((r->a & 0xFF00) | in_use);
+    if (!in_use) break;
+    x++;
+  } while (x != slots);
+  r->x = x;
+  r->c = x >= slots;                                                     /* CPX */
+  return x;
+}
+static void put8(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t v)
+{
+  r->y = at;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0x72, at), v);
+}
+static void put16(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t v)
+{
+  r->y = at;
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x72, at), v);
+}
+/* its place from a table of (x, y) words: TXA; ASL; ASL; TAX ... */
+static void spawn_from_table(uint8_t *ram, HmRegs *r, uint32_t table,
+                             uint16_t at_x, uint16_t at_y)
+{
+  uint16_t slot = r->x;
+  uint16_t x = (uint16_t)(slot << 2);
+  r->c = (slot >> 14) & 1;                               /* the second ASL */
+  put16(ram, r, at_x, hm_bus_rd16(ram, (table + x) & 0xFFFFFF));
+  x = (uint16_t)(x + 2);
+  r->a = hm_bus_rd16(ram, (table + x) & 0xFFFFFF);
+  put16(ram, r, at_y, r->a);
+  r->x = x;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * AddNewChicken ($83:C807, JSL, RTL). A = where it comes from:
+ *   1 bought: status $09, at its slot's place in the coop ($83:CA10);
+ *   2 hatched: status $09, +1 = season + 4, at (238, 318);
+ *   anything else: status $43, at (E8, B8).
+ * +1 is first set to $28 (the coop map), +2 to 0.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_AddNewChicken(uint8_t *ram, HmRegs *r)
+{
+  uint16_t source = r->a;
+  hm_dp_w16(ram, r, 0x7E, source);
+  uint16_t slot = free_slot(ram, r, 13, 0xC815, hm_GetChickenPointer);
+  if (slot == 13) { r->a = 1; return; }
+
+  for (uint16_t y = 0; y < 8; y++) put8(ram, r, y, 0);
+  r->y = 8; r->c = 1;                                    /* CPY #8 */
+  put8(ram, r, 1, 0x28);
+  put8(ram, r, 2, 0x00);
+  r->a = 0;
+  r->c = source >= 1;                                    /* CMP #1 */
+  if (source == 1) {
+    put8(ram, r, 0, 0x09);
+    spawn_from_table(ram, r, CHICKEN_SPAWN, 4, 6);
+  } else if (r->c = source >= 2, source == 2) {          /* CMP #2 */
+    put8(ram, r, 0, 0x09);
+    uint8_t s = ram[HM_SEASON];
+    r->c = (unsigned)s + 4 > 0xFF;                       /* CLC; ADC #4 */
+    put8(ram, r, 1, (uint8_t)(s + 4));
+    put16(ram, r, 4, 0x0238);
+    put16(ram, r, 6, 0x0318);
+  } else {
+    put8(ram, r, 0, 0x43);
+    put16(ram, r, 4, 0x00E8);
+    put16(ram, r, 6, 0x00B8);
+  }
+  r->a = 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * AddNewCow ($83:C8DC, JSL, RTL). A = 0 bought, anything else born. The
+ * record: status $05 (a young cow), +2 = $27 (the barn), pregnancy,
+ * happiness and +5 = 0, and its slot's place in the barn ($83:CA44). A
+ * calf born on the farm is a baby (status $03), starts with the happiness
+ * the birth left in $7F1F2B, and gives the player +70 happiness.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_AddNewCow(uint8_t *ram, HmRegs *r)
+{
+  uint16_t source = r->a;
+  hm_dp_w16(ram, r, 0x7E, source);
+  uint16_t slot = free_slot(ram, r, 12, 0xC8EA, hm_GetsCowPointer);
+  if (slot == 12) { r->a = 1; return; }
+
+  for (uint16_t y = 0; y < 16; y++) put8(ram, r, y, 0);
+  r->c = 1;                                              /* CPY #$10 */
+  put8(ram, r, 2, 0x27);
+  put8(ram, r, 3, 0);
+  put8(ram, r, 4, 0);
+  put8(ram, r, 5, 0);
+  put8(ram, r, 1, 0);
+  put8(ram, r, 0, 0x05);
+  r->a = 0x0005;
+  if (source != 0) {                                     /* born */
+    put8(ram, r, 0, 0x03);
+    put8(ram, r, 4, ram[0x11F2B]);
+    r->a = 70;
+    hm_jsl(ram, r, 0xC96C, 0x83);
+    hm_AddPlayerHappiness(ram, r);
+    hm_rtl(ram, r);
+  }
+  spawn_from_table(ram, r, COW_SPAWN, 8, 0x0A);
+  r->a = 0;
+}
