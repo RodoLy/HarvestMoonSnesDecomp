@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **18 rutinas reescritas y verificadas** (0 diferencias):
+- **24 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -35,6 +35,12 @@ en el README (`tools/progress.py`).
 | MonthlyFarmTilesCheck | $82:A6A2 | src/farm.c |
 | NightlyFarmTilesCheck | $82:A811 | src/farm.c |
 | CalculateFarmDevelopment | $82:AA0C | src/farm.c |
+| Sub_82A9A0 (pastar) | $82:A9A0 | src/farm.c |
+| AddCowHappiness | $84:A5D4 | src/animals.c |
+| CowFeedingandStatus | $83:BC5A | src/animals.c |
+| SetCCPoiner | $84:887C | src/events.c |
+| ResetsCurrentCCStructureLong | $84:88D4 | src/events.c |
+| SUB_8480F8 | $84:80F8 | src/events.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -108,11 +114,34 @@ lluvia y el primer día de invierno). 0 diferencias.
 - `farm.c` tiene un recorrido de casillas común: `tile_begin` / `tile_end` y
   `FOR_EACH_FARM_TILE`.
 
+## Los animales y los eventos (hecho el 20-oct-2026)
+
+Verificado con 10 semillas (200 noches al azar de CowFeedingandStatus por
+semilla, con 12 vacas, 13 gallinas y todas las banderas al azar) y llamadas
+reales de SetCCPoiner / ResetsCurrentCCStructureLong. 0 diferencias.
+
+- Registro de vaca (16 bytes en $7E:C1C6): +0 estado (01 existe, 02 recién
+  nacida, 04 cría, 08 adulta, 10 de mal humor, 20 enferma, 40 preñada, 80
+  acaba de parir), +1 banderas del día (80 = poción milagrosa), +2 mapa ($27
+  establo), +3 contador, +4 felicidad, +5 días fuera.
+- Registro de gallina (8 bytes en $7E:C286): +0 estado (01, 02 huevo, 04
+  pollito, 08 gallina, 10 con hambre), +1 mapa ($28 gallinero), +2 contador.
+- Eventos: "CC structs" de 64 bytes desde $7E:B586; los guiones están en la
+  ROM ($B3:8000: tabla de grupos de 24 bits).
+- **Bug del juego** en $83:BDE1 (BRK): ver `cow_after_meal` en animals.c.
+- Infraestructura nueva: lectura de ROM y punteros largos (`hm_bus_rd8`,
+  `hm_dp_long`), nombres manuales para etiquetas locales
+  (`import_decomp_names.py` MANUAL, `progress.py` LOCAL), una rutina por
+  cuadro en la prueba al azar (el vigilante de 5 s es por cuadro),
+  `HM_DECOMP_DIFF_ALL`, `HM_DECOMP_FUZZ_ONLY`, `HM_DECOMP_FUZZ_CALL`.
+  Para trazar el original: `SNESRECOMP_INTERP_PCTRACE=1` (así se encontró
+  el BRK).
+
 ## Lo siguiente
 
-Los animales: `CowFeedingandStatus` ($83:BC5A), empezando por sus hojas.
-Otras rutinas de granja pendientes: `Sub_82A9A0` (no tiene cuerpo compilado)
-y `CheckToolSuccess` ($82:AA71).
+El resto de los eventos de animales (`Event_UNKCowRelated`, $84:9AD4) o
+seguir con la noche: `WifePregnanacyandChilds` y `FindMostLovedName`.
+Otra rutina de granja pendiente: `CheckToolSuccess` ($82:AA71).
 
 Otras hojas candidatas (no llaman a nada): LoadsDamageProbabilities,
 SetTimeofDayPalette, CalculateTileinFront, SUB_809EBC (cámara al cambiar de

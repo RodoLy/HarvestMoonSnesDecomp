@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 3.36%](https://img.shields.io/badge/decompiled-3.36%25-2f855a)
+![Decompiled: 6.22%](https://img.shields.io/badge/decompiled-6.22%25-2f855a)
 
-**3.36%** of the game's code decompiled and verified: 1019 of 30359 instructions, 18 of 372 routines (4.8%).
+**6.22%** of the game's code decompiled and verified: 1888 of 30359 instructions, 24 of 373 routines (6.4%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -40,10 +40,11 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Random numbers | GetRNG, RNGReturn0toA ("roll an n-sided die") | `src/rng.c` |
 | Arithmetic | DivisionUnsigned | `src/math.c` |
 | Weather | SetWeatherFlags, WeatherTomorrow | `src/weather.c` |
-| Farm | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment | `src/farm.c` |
+| Farm | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment, Sub_82A9A0 (grazing) | `src/farm.c` |
 | Stock | AddWood, AddGrass, AddPlayerHappiness | `src/stock.c` |
 | Player | ChangeStamina | `src/stamina.c` |
-| Animals | GetsCowPointer, GetChickenPointer | `src/animals.c` |
+| Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night) | `src/animals.c` |
+| Events | SetCCPoiner, ResetsCurrentCCStructureLong, SUB_8480F8 (start an event script) | `src/events.c` |
 
 A few things found along the way (details in each file's comments):
 
@@ -60,6 +61,13 @@ A few things found along the way (details in each file's comments):
   winter every crop dies back to tilled soil.
 - The ending's "ranch development" score is simply the number of farm tiles
   with fences, crops or grass.
+- A hungry cow may fall sick (1/4); a cow sick to the end dies unless
+  tomorrow is a festival. Pregnancy counts down with a global counter, and
+  the calf's starting happiness (20 / 50 / 100) depends on the mother's.
+- **A bug in the original game:** in CowFeedingandStatus, after a 1-in-16
+  roll for a cow left outside, the X register stays 8-bit; if a broken-fence
+  night flag ($0196 bit $0400) is also set, `LDY.W #$0002` at $83:BDE1 is
+  decoded as a 2-byte instruction and the leftover `00` executes as `BRK`.
 
 ## Layout
 
