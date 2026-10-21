@@ -49,6 +49,14 @@ static void prep_cc_pointer(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0xCC, (uint16_t)(0xB586 + 64 * (rnd() % 0x31)));
   ram[0xCE] = 0x7E;
 }
+static void prep_event_start(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)ram;
+  r->a = (uint16_t)(rnd() % 0x31);   /* CC slot */
+  r->x = (uint16_t)(rnd() % 12);     /* script group */
+  r->y = (uint16_t)(rnd() % 0x60);   /* script number */
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -110,6 +118,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "ResetsCurrentCCStructureLong", hm_ResetsCurrentCCStructureLong,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/events.c",
     0x8488D4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_cc_pointer },
+  { "SUB_8480F8", hm_SUB_8480F8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/events.c",
+    0x8480F8, 0, 0, 0, 0xFFFF, { W16(0x00985, 0, 0xFFFF), W16(0x00987, 0, 0xFFFF) },
+    0, prep_event_start },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
