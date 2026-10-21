@@ -105,3 +105,77 @@ void hm_UNK_CheckTileProperty(uint8_t *ram, HmRegs *r)
   r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x0D, r->y));
   if (!applies) r->x = 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CheckToolSuccess ($82:AA71, JSL, RTL). X, Y = the tile in front. Returns
+ * A = 1 if the tool in hand works there, 0 if not, 2 if the watering can
+ * gets refilled (water tiles F0/F9-FD on the farm, maps 0-3, and on maps
+ * $3D and up; F0/F4 on the mountain maps $10-$13; no watering at all on
+ * maps 04-0F and 14-3C).
+ * Paint only works on the farm (maps 0-3), on tile C3 or E2-E4.
+ * Quirk: any other item (or none) answers 1, "works".
+ * Tiles A0 and up, and 0, never take a tool. C = 1 except where the last
+ * comparison leaves it clear (see the code).
+ * ───────────────────────────────────────────────────────────────────────── */
+static bool property(uint8_t *ram, HmRegs *r, uint16_t ret)
+{
+  r->a = 1;
+  hm_jsl(ram, r, ret, 0x82);
+  hm_UNK_CheckTileProperty(ram, r);
+  hm_rtl(ram, r);
+  return true;
+}
+
+/* CPX #$A0; BCS fail; CPX #0; BEQ fail; AND #bit; BEQ fail */
+static void tool_works_if(uint8_t *ram, HmRegs *r, uint16_t ret, uint8_t bit)
+{
+  property(ram, r, ret);
+  bool ok = r->x < 0xA0 && r->x != 0 && ((uint8_t)r->a & bit);
+  r->c = 1;
+  r->a = ok;
+}
+
+void hm_CheckToolSuccess(uint8_t *ram, HmRegs *r)
+{
+  uint8_t tool = hm_bus_rd8(ram, ((uint32_t)r->db << 16) + HM_TOOL_SELECTED);
+  switch (tool) {
+  case 0x01: case 0x11: tool_works_if(ram, r, 0xAAED, 0x01); return;   /* sickle */
+  case 0x02: case 0x12: tool_works_if(ram, r, 0xAB12, 0x02); return;   /* hoe */
+  case 0x03: case 0x13: tool_works_if(ram, r, 0xAB37, 0x04); return;   /* hammer */
+  case 0x04: case 0x14: tool_works_if(ram, r, 0xAB5C, 0x08); return;   /* axe */
+  case 0x15:            tool_works_if(ram, r, 0xABF3, 0x10); return;   /* sprinkler */
+  case 0x0C: case 0x05: case 0x06: case 0x07: case 0x08:
+                        tool_works_if(ram, r, 0xAC18, 0x20); return;   /* seeds */
+  case 0x10: {                                                          /* watering can */
+    uint8_t map = ram[HM_MAP_ID];
+    if (map >= 0x04 && map < 0x10) { r->a = 0; r->c = 0; return; }
+    if (map >= 0x14 && map < 0x3D) { r->a = 0; r->c = 1; return; }
+    if (map >= 0x10 && map < 0x14) {                                    /* mountain */
+      property(ram, r, 0xAB95);
+      if (r->x == 0xF0 || r->x == 0xF4) { r->a = 2; r->c = 1; return; }
+      r->a = 0;
+      r->c = r->x >= 0xF4;
+      return;
+    }
+    property(ram, r, 0xABAA);
+    uint16_t t = r->x;
+    if (t == 0xF0 || (t >= 0xF9 && t <= 0xFD)) { r->a = 2; r->c = 1; return; }
+    r->c = 1;
+    r->a = t < 0xA0 && t != 0 && ((uint8_t)r->a & 0x10);
+    return;
+  }
+  case 0x0D: {                                                          /* paint */
+    if (ram[HM_MAP_ID] >= 4) { r->a = 0; r->c = 1; return; }
+    property(ram, r, 0xAC45);
+    uint16_t t = r->x;
+    if (t == 0xC3) { r->a = 1; r->c = 1; return; }
+    r->c = t >= 0xE5;                            /* from CPX #$E2 / #$E5 */
+    r->a = t >= 0xE2 && t < 0xE5;
+    return;
+  }
+  default:
+    r->a = 1;                                    /* quirk: "works" */
+    r->c = tool >= 0x0D;
+    return;
+  }
+}
