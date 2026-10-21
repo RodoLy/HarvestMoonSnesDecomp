@@ -40,6 +40,7 @@ Cada rutina reescrita vive en `src/<sistema>.c`:
 | SetCCPoiner / ResetsCurrentCCStructure* / SUB_8480F8 / UNK_LoadCCData* | events.c | El sistema de eventos |
 | GetTileContent / UNK_CheckTileProperty / CheckToolSuccess / PreCheckToolSuccess* | tools.c | ¿Funciona la herramienta en esta casilla? |
 | CalculateTileinFront / TileAtOffsetFromPlayer | tools.c | La casilla frente al jugador |
+| SUB_81A801 / SUB_81A83A / SUB_82B060 | mapedit.c | Cambiar casillas del mapa (en memoria) |
 | FindMostLovedName / WifePregnanacyandChilds | people.c | La chica favorita, la esposa y los hijos |
 | LoadsDateNames | calendar.c | Los textos de la fecha |
 | AddMoney / HaveLunch / SUB_8281C0 | stock.c, stamina.c, weather.c | Dinero, almuerzo y el pronóstico de la tele |
@@ -83,7 +84,11 @@ BRK de CowFeedingandStatus, un bug del juego), la reescritura hace lo que
 el código claramente quería, lo documenta, y la prueba al azar no genera esa
 combinación.
 
-Resultado actual: 41 rutinas, 10 semillas × 2.000 llamadas al azar cada una
+Algunas rutinas no tienen dirección en HM-Decomp (SUB_81A801, SUB_81A83A);
+`progress.py` las cuenta igual (por eso el total de instrucciones creció un
+poco).
+
+Resultado actual: 44 rutinas, 10 semillas × 2.000 llamadas al azar cada una
 (`HM_DECOMP_FUZZ_SEED`; 40 granjas enteras por semilla para las de la
 granja) + las llamadas reales de una partida nueva y de 10 noches forzadas:
 **0 diferencias**.

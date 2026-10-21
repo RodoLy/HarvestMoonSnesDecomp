@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **41 rutinas reescritas y verificadas** (0 diferencias):
+- **44 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -53,6 +53,8 @@ en el README (`tools/progress.py`).
 | CalculateTileinFront | $81:D14E | src/tools.c |
 | TileAtOffsetFromPlayer (CODE_81D1A4) | $81:D1A4 | src/tools.c |
 | PreCheckToolSuccess / Line / Square | $82:92A0, 92BC, 92D6 | src/tools.c |
+| SUB_81A801, SUB_81A83A | $81:A801, $81:A83A | src/mapedit.c |
+| SUB_82B060 | $82:B060 | src/mapedit.c |
 | ResetsCurrentCCStructureShort | $84:8961 | src/events.c |
 | UNK_LoadCCDataLong | $84:8097 | src/events.c |
 | UNK_LoadCCDataShort | $84:803F | src/events.c |
@@ -189,6 +191,12 @@ después.
   hacia donde mira el jugador: 0 abajo, 1 arriba, 2 = +X, otro = -X) o
   TileAtOffsetFromPlayer (un desplazamiento fijo; las herramientas de oro
   usan la tabla de 9 casillas $82:92FA alrededor del jugador).
+- Cambiar una casilla del mapa (mapedit.c): la tabla $81:B363 (6 bytes por
+  cambio: gráfico en $A6:A096, filas, columnas, tipo de casilla) dice qué
+  poner; SUB_81A83A copia el gráfico al mapa BG1 en $7E:2000 y SUB_82B060
+  escribe el tipo en $09B6. CODE_81A688 además encola DMA hacia la VRAM
+  con AddProgrammedDMA, que escribe *y lee* los registros de DMA ($43x0):
+  para verificarla hay que agregar esos registros al comprobador.
 - Siguiente en herramientas: los ToolUsed* necesitan CODE_81A688 (27 usos) y
   CODE_81A500 (crea un objeto; ojo: si los 10 lugares están ocupados se
   queda en un bucle infinito, `BRA` a sí mismo en $81:A528).
