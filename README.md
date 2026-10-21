@@ -120,6 +120,8 @@ A few things found along the way (details in each file's comments):
 - `tools/progress.py` — computes the percentage above.
 - `tools/import_decomp_names.py`, `tools/decomp_overrides.py` — helpers.
 - `scripts/` — scripted playthroughs used by the checks.
+- `GUIA.md` — **a guide to how the game works inside**, written for
+  someone new to it, with everything found so far (in Spanish).
 - `DECOMPILACION.md` — the method, explained. `ESTADO.md` — status and
   notes. (Both in Spanish.)
 

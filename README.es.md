@@ -127,6 +127,8 @@ comentarios de cada archivo):
 - `tools/progress.py` — calcula el porcentaje de arriba.
 - `tools/import_decomp_names.py`, `tools/decomp_overrides.py` — herramientas.
 - `scripts/` — recorridos automáticos usados por las pruebas.
+- `GUIA.md` — **una guía de cómo funciona el juego por dentro**, para
+  quien no sabe nada de esto, con todo lo descubierto hasta ahora.
 - `DECOMPILACION.md` — el método explicado. `ESTADO.md` — estado y notas.
 
 ## Uso
