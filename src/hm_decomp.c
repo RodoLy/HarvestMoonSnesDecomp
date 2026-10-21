@@ -202,6 +202,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "WifePregnanacyandChilds", hm_WifePregnanacyandChilds,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP, "src/people.c", 0x828790, 0, 0, 0, 0xFFFF,
     { W16(0x11F6C, 0, 0xFFFF), W16(0x11F33, 0, 1100) }, 0, prep_family },
+  { "LoadsDateNames", hm_LoadsDateNames, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/calendar.c",
+    0x8289D6, 1, 0, 0, 0xFF, { B8(HM_SEASON, 0, 3), B8(HM_WEEKDAY, 0, 6), B8(HM_DAY, 0, 31) } },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

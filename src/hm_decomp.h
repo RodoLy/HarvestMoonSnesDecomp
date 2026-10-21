@@ -198,6 +198,7 @@ void hm_AddCowHappiness(uint8_t *ram, HmRegs *r);     /* animals.c */
 void hm_CowFeedingandStatus(uint8_t *ram, HmRegs *r);
 void hm_FindMostLovedName(uint8_t *ram, HmRegs *r);   /* people.c */
 void hm_WifePregnanacyandChilds(uint8_t *ram, HmRegs *r);
+void hm_LoadsDateNames(uint8_t *ram, HmRegs *r);      /* calendar.c */
 void hm_SetCCPoiner(uint8_t *ram, HmRegs *r);         /* events.c */
 void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r);
 void hm_SUB_8480F8(uint8_t *ram, HmRegs *r);
