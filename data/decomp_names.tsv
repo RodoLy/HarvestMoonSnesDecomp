@@ -94,6 +94,7 @@
 00C36C	SUB_80C36C_lo
 81A4C7	UNK_PresetsMemory3
 01A4C7	UNK_PresetsMemory3_lo
+81A500	SpawnMapObject
 81A688	ChangeMapTile
 81A6C1	QueueTileGraphicsDMA
 81A801	SUB_81A801

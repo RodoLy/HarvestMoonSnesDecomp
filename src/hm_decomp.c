@@ -306,6 +306,22 @@ static void prep_create_gobj(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
     hm_wr16(ram, 0x019C + 0x24 * i, (full || rnd() % 2) ? (uint16_t)(rnd() | 1) : 0);
   prep_sprite(ram, sprite, rnd);
 }
+static void prep_spawn(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_create_gobj(ram, r, rnd);
+  int any_free = 0;
+  for (unsigned i = 0; i < 10; i++) {
+    ram[0xB4E6 + 16 * i] = (uint8_t)rnd();
+    any_free |= !(ram[0xB4E6 + 16 * i] & 1);
+  }
+  if (!any_free) ram[0xB4E6 + 16 * (rnd() % 10)] &= 0xFE;  /* 10 in use: hangs */
+  ram[0x0974] = (uint8_t)rnd(); ram[0x0975] = (uint8_t)rnd();
+  ram[0x0976] = (uint8_t)rnd(); ram[0x0984] = (uint8_t)rnd();
+  hm_wr16(ram, 0x097A, hm_rd16(ram, 0xA1));
+  hm_wr16(ram, 0x097E, (uint16_t)rnd());
+  hm_wr16(ram, 0x0980, (uint16_t)rnd()); hm_wr16(ram, 0x0982, (uint16_t)rnd());
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -443,6 +459,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/objects.c", 0x858AE5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_gobj_pieces },
   { "CreateGameObject", hm_CreateGameObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x858000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_create_gobj },
+  { "SpawnMapObject", hm_SpawnMapObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/objects.c", 0x81A500, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_spawn },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

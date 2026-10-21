@@ -218,3 +218,54 @@ void hm_CreateGameObject(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, 0xA7, 0);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * SpawnMapObject ($81:A500, JSL, RTL; CODE_81A500 in HM-Decomp). Takes the
+ * first free map object ($07-$09 = it) and fills it from $0974-$0976,
+ * $0984 (flags, routine, +2, +3) and $097A (sprite), $097E (flip),
+ * $0980/$0982 (X/Y), then creates its game object and keeps its number.
+ * Notes:
+ *   - With all 10 map objects in use the game hangs: `BRA` to itself at
+ *     $81:A528 (the rewrite just returns; the fuzz always leaves one free).
+ *   - If there is no free game object, +4 keeps whatever $A5 held (the
+ *     last object created), since CreateGameObject leaves $A5 alone.
+ * Leftovers: A = $A5, Y = 4, X and C from CreateGameObject.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_A500_CREATE 0xA580   /* JSL CreateGameObject at $81:A57D */
+
+void hm_SpawnMapObject(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0x07, (uint16_t)MAP_OBJECTS);
+  *hm_dp(ram, r, 0x09) = (uint8_t)(MAP_OBJECTS >> 16);
+  uint16_t n = 0;
+  while (hm_bus_rd8(ram, hm_dp_long(ram, r, 0x07, 0)) & 1) {
+    hm_dp_w16(ram, r, 0x07, (uint16_t)(hm_dp_r16(ram, r, 0x07) + MAP_OBJECT_SIZE));
+    if (++n == MAP_OBJECTS_MAX) return;                  /* the original hangs */
+  }
+
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0x07, 0), hm_bus_rd8(ram, abs_db(r, 0x0974)));
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0x07, 1), hm_bus_rd8(ram, abs_db(r, 0x0975)));
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0x07, 2), hm_bus_rd8(ram, abs_db(r, 0x0976)));
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0x07, 3), hm_bus_rd8(ram, abs_db(r, 0x0984)));
+  uint16_t sprite = hm_bus_rd16(ram, abs_db(r, 0x097A));
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x07, 0x6), sprite);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x07, 0x8), sprite);
+  hm_dp_w16(ram, r, 0xA1, sprite);
+  uint16_t flip = hm_bus_rd16(ram, abs_db(r, 0x097E));
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x07, 0xA), flip);
+  hm_dp_w16(ram, r, 0x9F, flip);
+  uint16_t px = hm_bus_rd16(ram, abs_db(r, 0x0980));
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x07, 0xC), px);
+  hm_dp_w16(ram, r, 0x9B, px);
+  uint16_t py = hm_bus_rd16(ram, abs_db(r, 0x0982));
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x07, 0xE), py);
+  hm_dp_w16(ram, r, 0x9D, py);
+  hm_dp_w16(ram, r, 0xA3, 0);
+
+  r->a = py; r->x = n; r->y = 0x0E;
+  hm_jsl(ram, r, RET_A500_CREATE, 0x85);
+  hm_CreateGameObject(ram, r);
+  hm_rtl(ram, r);
+  r->y = 4;
+  r->a = hm_dp_r16(ram, r, 0xA5);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x07, 4), r->a);
+}

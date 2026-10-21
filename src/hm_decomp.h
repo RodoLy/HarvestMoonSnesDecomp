@@ -226,6 +226,7 @@ void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r);    /* dma.c */
 void hm_LoadSpriteComponent(uint8_t *ram, HmRegs *r); /* objects.c */
 void hm_LoadGameObjectComponents(uint8_t *ram, HmRegs *r);
 void hm_CreateGameObject(uint8_t *ram, HmRegs *r);
+void hm_SpawnMapObject(uint8_t *ram, HmRegs *r);
 void hm_SetCCPoiner(uint8_t *ram, HmRegs *r);         /* events.c */
 void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r);
 void hm_SUB_8480F8(uint8_t *ram, HmRegs *r);
