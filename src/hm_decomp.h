@@ -228,6 +228,32 @@ void hm_LoadSpriteComponent(uint8_t *ram, HmRegs *r); /* objects.c */
 void hm_LoadGameObjectComponents(uint8_t *ram, HmRegs *r);
 void hm_CreateGameObject(uint8_t *ram, HmRegs *r);
 void hm_SpawnMapObject(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedNoAction(uint8_t *ram, HmRegs *r);  /* toolused.c */
+void hm_ToolUsedSickle(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedHoe(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedHammer(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedAxe(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedCornSeeds(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedTomatoSeeds(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedPotatoSeeds(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedTurnipSeeds(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedCowMedicine(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedMiraclePotion(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedBell(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedGrassSeeds(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedPaint(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedMilker(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedBrush(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedGoldSickle(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedGoldHoe(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedGoldHammer(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedGoldAxe(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedMagicBeans(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedGemSeed(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedBlueFeather(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedChickenFeed(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedCowFeed(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedUNK(uint8_t *ram, HmRegs *r);
 void hm_SetCCPoiner(uint8_t *ram, HmRegs *r);         /* events.c */
 void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r);
 void hm_SUB_8480F8(uint8_t *ram, HmRegs *r);

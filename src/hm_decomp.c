@@ -186,11 +186,13 @@ static void prep_player_tool(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 static void prep_player_tool_near(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_player_tool(ram, r, rnd);
-  /* the tile in front must stay on the map: player well inside it, and
-   * a small A (the 8-bit entries would leave a random high byte) */
+  /* the tile in front must stay on the map: player well inside it (the
+   * gold hoe reaches 6 tiles ahead; off the map the original would read
+   * hardware registers past the tile map), and a small A (the 8-bit
+   * entries would leave a random high byte) */
   r->a &= 0x00FF;
-  hm_wr16(ram, 0xD6, (uint16_t)(64 + rnd() % 0x380));
-  hm_wr16(ram, 0xD8, (uint16_t)(64 + rnd() % 0x380));
+  hm_wr16(ram, 0xD6, (uint16_t)(112 + rnd() % 0x320));
+  hm_wr16(ram, 0xD8, (uint16_t)(112 + rnd() % 0x320));
 }
 
 static void prep_map_change(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -322,6 +324,113 @@ static void prep_spawn(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x0980, (uint16_t)rnd()); hm_wr16(ram, 0x0982, (uint16_t)rnd());
 }
 
+/* toolused.c: a whole tool use. The player well inside the map, the item
+ * in hand, often the whole map made of one interesting tile (so the tile in
+ * front is it), random finds flags, counters, and room for an effect
+ * sprite (a free map object and space in the pieces queue: the original
+ * would hang otherwise). */
+static void prep_tool(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), uint8_t tool,
+                      const uint8_t *tiles, unsigned n_tiles)
+{
+  prep_player_tool_near(ram, r, rnd);
+  ram[0x00921] = tool;
+  static const uint8_t maps[] = { 0, 1, 2, 3, 0, 1, 2, 3, 0x04, 0x0C, 0x0F, 0x10, 0x13,
+                                  0x14, 0x29, 0x2A, 0x3D };
+  ram[0x00022] = maps[rnd() % sizeof maps];
+  if (rnd() % 4) {
+    uint8_t tile = (n_tiles && rnd() % 4) ? tiles[rnd() % n_tiles] : (uint8_t)rnd();
+    memset(&ram[0x009B6], tile, 4096);
+  }
+  if (rnd() % 4) {
+    /* a tile property table of our own in WRAM ($7F:F000; restored after
+     * the fuzz): most tools work on most tiles, from every side and in
+     * every season, so the interesting paths are reached */
+    for (unsigned i = 0; i < 256; i++) {
+      uint8_t *e = &ram[0x1F000 + 4 * i];
+      e[0] = (uint8_t)rnd();
+      e[1] = (rnd() % 4) ? 0xFF : (uint8_t)rnd();
+      e[2] = (uint8_t)((rnd() % 4) ? (rnd() & 0x7F) : rnd());
+      e[3] = (rnd() % 4) ? 0xFF : (uint8_t)rnd();
+    }
+    hm_wr16(ram, 0x0D, 0xF000);
+    ram[0x0F] = 0x7F;
+  }
+  ram[0x11F19] = (uint8_t)(rnd() % 4);                     /* season */
+  for (unsigned i = 0; i < 3; i++) ram[HM_RNG_STATE + i] = (uint8_t)rnd();  /* the dice */
+  /* the finds' flags: often all clear (nothing found yet today) */
+  static const uint32_t flags[] = { 0x11F5A, 0x11F5C, 0x11F64, 0x11F66, 0x11F6A, 0x00196 };
+  for (unsigned i = 0; i < 6; i++) hm_wr16(ram, flags[i], (uint16_t)((rnd() % 2) ? 0 : rnd()));
+  hm_wr16(ram, 0x11F60, (uint16_t)((rnd() & ~8u) | (rnd() % 4 == 0 ? 8 : 0)));
+  ram[0x0096D] = (uint8_t)(rnd() % 7);                     /* hits so far */
+  ram[0x0096B] = (uint8_t)(rnd() % 9);                     /* sowing step */
+  for (unsigned i = 0; i < 6; i++) ram[0x00926 + i] = (uint8_t)(rnd() % 3);  /* can, bags */
+  hm_wr16(ram, 0x0092E, (uint16_t)rnd());
+  ram[0x00917] = (uint8_t)(rnd() % 200); ram[0x00918] = (uint8_t)(rnd() % 200);  /* stamina */
+  ram[0x28] = (uint8_t)rnd();                              /* DMA queue */
+  hm_wr16(ram, 0xC7, (uint16_t)rnd());
+  HmRegs dummy = *r;
+  prep_spawn(ram, &dummy, rnd);                            /* game / map objects */
+  static const uint16_t fx[] = { 0xB7, 0xB8, 0xC1, 0xC8, 0xC9, 0xCB };
+  for (unsigned i = 0; i < 6; i++) prep_sprite(ram, fx[i], rnd);
+}
+#define TOOL_PREP(name, tool, ...)                                              \
+  static void prep_##name(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))       \
+  {                                                                             \
+    static const uint8_t tiles[] = { 0, __VA_ARGS__ };                          \
+    prep_tool(ram, r, rnd, tool, tiles + 1, sizeof tiles - 1);                  \
+  }
+TOOL_PREP(tool_none, 0x00)
+TOOL_PREP(sickle, 0x01, 0x03, 0x79, 0x35, 0x05)
+TOOL_PREP(hoe, 0x02, 0x01, 0x02)
+TOOL_PREP(hammer, 0x03, 0x06, 0x04, 0x10, 0x0F, 0x0E, 0x0D, 0xF8)
+TOOL_PREP(axe, 0x04, 0x09, 0x0A, 0x0B, 0x0C, 0x11, 0x12, 0x13, 0x14, 0xF4)
+TOOL_PREP(corn, 0x05, 0x01, 0x02)
+TOOL_PREP(tomato, 0x06, 0x01, 0x02)
+TOOL_PREP(potato, 0x07, 0x01, 0x02)
+TOOL_PREP(turnip, 0x08, 0x01, 0x02)
+TOOL_PREP(medicine, 0x09)
+TOOL_PREP(potion, 0x0A)
+TOOL_PREP(bell, 0x0B)
+TOOL_PREP(grass_seeds, 0x0C, 0x01, 0x02)
+TOOL_PREP(paint, 0x0D, 0xC3, 0xE2, 0xE3, 0xE4)
+TOOL_PREP(milker, 0x0E)
+TOOL_PREP(brush, 0x0F)
+TOOL_PREP(gold_sickle, 0x11, 0x03, 0x79, 0x35, 0x05)
+TOOL_PREP(gold_hoe_any_step, 0x12, 0x01, 0x02)
+static void prep_gold_hoe(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_gold_hoe_any_step(ram, r, rnd);
+  ram[0x0096B] = (uint8_t)(rnd() % 6);                     /* its line: 6 tiles */
+}
+TOOL_PREP(gold_hammer, 0x13, 0x06, 0x04, 0x10, 0x0F, 0x0E, 0x0D, 0xF8)
+TOOL_PREP(gold_axe, 0x14, 0x09, 0x0A, 0x0B, 0x0C, 0x11, 0x12, 0x13, 0x14, 0xF4)
+TOOL_PREP(feather, 0x18)
+TOOL_PREP(tool_unk, 0x1B)
+/* beans / gem seed: before 17:00 on their map (often) */
+static void prep_beans_gem(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), uint8_t tool,
+                           uint8_t map, uint8_t tile)
+{
+  static const uint8_t t[1] = { 0 };
+  prep_tool(ram, r, rnd, tool, t, 0);
+  if (rnd() % 4) memset(&ram[0x009B6], tile, 4096);
+  ram[0x11F1C] = (uint8_t)(rnd() % 24);                    /* hour */
+  if (rnd() % 2) ram[0x00022] = map;
+}
+static void prep_beans(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void)) { prep_beans_gem(ram, r, rnd, 0x16, 0x31, 0xF6); }
+static void prep_gem(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))   { prep_beans_gem(ram, r, rnd, 0x17, 0x34, 0xF6); }
+/* feed: often in the barn / coop, facing a trough (E2-EE) */
+static void prep_feed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), uint8_t tool, uint8_t map)
+{
+  static const uint8_t t[1] = { 0 };
+  prep_tool(ram, r, rnd, tool, t, 0);
+  if (rnd() % 4) memset(&ram[0x009B6], (uint8_t)(0xE0 + rnd() % 0x12), 4096);
+  if (rnd() % 4) ram[0x00022] = map;
+  ram[0x0092C] = (uint8_t)(rnd() % 3); ram[0x0092D] = (uint8_t)(rnd() % 3);
+  ram[0x00930] = (uint8_t)rnd(); ram[0x00931] = (uint8_t)rnd();
+  hm_wr16(ram, 0x00932, (uint16_t)rnd()); hm_wr16(ram, 0x00934, (uint16_t)rnd());
+}
+static void prep_chicken_feed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void)) { prep_feed(ram, r, rnd, 0x19, 0x28); }
+static void prep_cow_feed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))     { prep_feed(ram, r, rnd, 0x1A, 0x27); }
 static void prep_map_animation(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   (void)ram;
@@ -439,7 +548,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "PreCheckToolSuccess", hm_PreCheckToolSuccess, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/tools.c", 0x8292A0, 0, 0, 0, 0xFFFF, { B8(HM_SEASON, 0, 3) }, 0, prep_player_tool_near },
   { "PreCheckToolSuccessLine", hm_PreCheckToolSuccessLine,
-    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/tools.c", 0x8292BC, 1, 0, 0, 2,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/tools.c", 0x8292BC, 1, 0, 0, 5,
     { B8(HM_SEASON, 0, 3) }, 0, prep_player_tool_near },
   { "PreCheckToolSuccessSquare", hm_PreCheckToolSuccessSquare,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/tools.c", 0x8292D6, 1, 0, 0, 8,
@@ -467,6 +576,58 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/objects.c", 0x858000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_create_gobj },
   { "SpawnMapObject", hm_SpawnMapObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x81A500, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_spawn },
+  { "ToolUsedNoAction", hm_ToolUsedNoAction, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x82931E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_tool_none },
+  { "ToolUsedSickle", hm_ToolUsedSickle, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829328, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_sickle },
+  { "ToolUsedHoe", hm_ToolUsedHoe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829460, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_hoe },
+  { "ToolUsedHammer", hm_ToolUsedHammer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x8295C0, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_hammer },
+  { "ToolUsedAxe", hm_ToolUsedAxe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x8297BD, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_axe },
+  { "ToolUsedCornSeeds", hm_ToolUsedCornSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829999, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_corn },
+  { "ToolUsedTomatoSeeds", hm_ToolUsedTomatoSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x8299F8, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_tomato },
+  { "ToolUsedPotatoSeeds", hm_ToolUsedPotatoSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829A57, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_potato },
+  { "ToolUsedTurnipSeeds", hm_ToolUsedTurnipSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829AB4, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_turnip },
+  { "ToolUsedCowMedicine", hm_ToolUsedCowMedicine, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829B11, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_medicine },
+  { "ToolUsedMiraclePotion", hm_ToolUsedMiraclePotion, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829B31, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_potion },
+  { "ToolUsedBell", hm_ToolUsedBell, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829B51, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_bell },
+  { "ToolUsedGrassSeeds", hm_ToolUsedGrassSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829B61, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_grass_seeds },
+  { "ToolUsedPaint", hm_ToolUsedPaint, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829BCB, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_paint },
+  { "ToolUsedMilker", hm_ToolUsedMilker, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829CC0, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_milker },
+  { "ToolUsedBrush", hm_ToolUsedBrush, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829CC8, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_brush },
+  { "ToolUsedGoldSickle", hm_ToolUsedGoldSickle, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829D42, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_gold_sickle },
+  { "ToolUsedGoldHoe", hm_ToolUsedGoldHoe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x829E8E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_gold_hoe },
+  { "ToolUsedGoldHammer", hm_ToolUsedGoldHammer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x82A005, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_gold_hammer },
+  { "ToolUsedGoldAxe", hm_ToolUsedGoldAxe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x82A1BF, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_gold_axe },
+  { "ToolUsedMagicBeans", hm_ToolUsedMagicBeans, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x82A377, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_beans },
+  { "ToolUsedGemSeed", hm_ToolUsedGemSeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x82A3AA, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_gem },
+  { "ToolUsedBlueFeather", hm_ToolUsedBlueFeather, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x82A3FD, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_feather },
+  { "ToolUsedChickenFeed", hm_ToolUsedChickenFeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x82A414, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_chicken_feed },
+  { "ToolUsedCowFeed", hm_ToolUsedCowFeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x82A4C2, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_cow_feed },
+  { "ToolUsedUNK", hm_ToolUsedUNK, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolused.c", 0x82A570, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_tool_unk },
   { "StartMapAnimation", hm_StartMapAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/mapedit.c", 0x81A5E1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_animation },
 };
