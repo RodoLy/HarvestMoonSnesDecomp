@@ -543,6 +543,34 @@ static void prep_dog_slot(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0xD6, (uint16_t)rnd()); hm_wr16(ram, 0xD8, (uint16_t)rnd());
 }
 
+/* eventcmds.c: a script command with random arguments. The script is put
+ * in WRAM ($7F:F000-, restored after the fuzz); $CC points at a slot. */
+static void prep_event_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_cc_pointer(ram, r, rnd);
+  uint16_t at = (uint16_t)(0xF000 + (rnd() & 0x3FF));
+  hm_wr16(ram, 0xC9, at); ram[0xCB] = 0x7F;
+  for (unsigned i = 0; i < 8; i++) ram[0x10000 + at + i] = (uint8_t)rnd();
+  uint16_t slot = hm_rd16(ram, 0xCC);
+  for (unsigned i = 0; i < 64; i++) ram[slot + i] = (uint8_t)rnd();
+  static const uint32_t words[] = { 0x11F5C, 0x11F7A, 0x00196, 0x000D2 };
+  for (unsigned i = 0; i < 4; i++) hm_wr16(ram, words[i], (uint16_t)rnd());
+  for (unsigned i = 0; i < 3; i++) ram[HM_RNG_STATE + i] = (uint8_t)rnd();
+  if (rnd() % 4 == 0) ram[slot + 0x0D] = ram[0x10000 + at + 1];     /* "equals the roll" */
+}
+/* the Jumpif commands read the 24-bit address in their arguments: keep it
+ * in WRAM (elsewhere the original would read hardware registers) */
+static void prep_event_cmd_ptr(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_cmd(ram, r, rnd);
+  uint16_t at = hm_rd16(ram, 0xC9);
+  ram[0x10000 + at + 3] = (uint8_t)(0x7E + rnd() % 2);
+  if (rnd() % 4 == 0) {                                              /* "equals the value" */
+    uint32_t a = (uint32_t)(ram[0x10000 + at + 3] - 0x7E) << 16 | hm_rd16(ram, 0x10000u + at + 1);
+    ram[a] = ram[0x10000 + at + 4];
+  }
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -751,7 +779,52 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "Event_UNKDogRelated", hm_Event_UNKDogRelated,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84AF06, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_dog_slot },
-
+  { "Event_AudioRelated", hm_Event_AudioRelated, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x8489BB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_TimeRunning", hm_Event_TimeRunning, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x8489E3, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_TimeStopped", hm_Event_TimeStopped, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848A0D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_SetHour", hm_Event_SetHour, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848A39, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_Empty", hm_Event_Empty, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848A58, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_SetPlayerPosition", hm_Event_SetPlayerPosition, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848A65, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_SetTransitionDest", hm_Event_SetTransitionDest, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848A94, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_SetPlayerDirection", hm_Event_SetPlayerDirection, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848ABF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_UNKChangesGameState", hm_Event_UNKChangesGameState, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848AE7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_NewCCStructure", hm_Event_NewCCStructure, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848B08, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_UNKset7Aflag", hm_Event_UNKset7Aflag, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848BAC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_UNKCompareset7Aflag", hm_Event_UNKCompareset7Aflag, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848BDC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_UNKCCchanges2", hm_Event_UNKCCchanges2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848C22, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_UNKDisableCCstruct", hm_Event_UNKDisableCCstruct, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848CE2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_UNKChangesGameState2", hm_Event_UNKChangesGameState2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848CFD, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_JumptoInstruction", hm_Event_JumptoInstruction, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848D13, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_UNKSetsCC10", hm_Event_UNKSetsCC10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848D24, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_JumpifFlagSet", hm_Event_JumpifFlagSet, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848D44, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_JumpifEquals", hm_Event_JumpifEquals, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848DA5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_JumpifBetween", hm_Event_JumpifBetween, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848DFB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_GetRNG", hm_Event_GetRNG, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848E68, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_JumpIfEqualsRNG", hm_Event_JumpIfEqualsRNG, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848E90, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_UNKSetAnimation", hm_Event_UNKSetAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848EC9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

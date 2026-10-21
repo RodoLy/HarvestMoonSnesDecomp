@@ -45,6 +45,7 @@ MANUAL = {
     0x858C30: "LoadSpriteComponent",       # CODE_858C30
     0x81A5E1: "StartMapAnimation",  # CODE_81A5E1
     0x83C296: "PlaceAnimalsOnMap",  # CODE_83C296
+    0x848A0D: "Event_TimeStopped",  # HM-Decomp's address comment says 808A0D
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

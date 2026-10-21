@@ -55,6 +55,7 @@ LOCAL = {
     0x81A5E1: ("CODE_81A5E1", "StartMapAnimation"),
     0x83F26D: ("RanchMasteryCalculator", "RanchMasteryCalculator"),
     0x83C296: ("CODE_83C296", "PlaceAnimalsOnMap"),
+    0x848A0D: ("Event_TimeStopped", "Event_TimeStopped"),     # ";808A0D" in HM-Decomp
     0x829999: ("ToolUsedCornSeeds", "ToolUsedCornSeeds"),   # ";82A9999" in HM-Decomp
 }
 
@@ -77,7 +78,7 @@ def parse(decomp_dir):
             if m:
                 current = int(m.group(2), 16)
                 routines.setdefault(current, [m.group(1), 0])
-                code = ""
+                code = m.group(1) + ":"     # kept so LOCAL can find the label
             else:
                 t = ANY_TOP_LABEL.match(code)
                 if t:

@@ -415,3 +415,339 @@ void hm_Event_UNKDogRelated(uint8_t *ram, HmRegs *r)
   if ((r->a = hm_rd16(ram, FLAGS_60) & 0x0010)) dog_called(ram, r);
   count_frame(ram, r);
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * The small commands. $C9-$CB points at the command byte; arguments
+ * follow it. Each command moves $C9 on with CLC; ADC (A = the new $C9, C
+ * its carry), which is what most of them leave behind.
+ * ═════════════════════════════════════════════════════════════════════════ */
+#define EVENT_FLAG_BITS 0x8494D3   /* ROM: dw 1 << n, Events_Flags_Table */
+#define FLAGS_5C        0x11F5C
+#define FLAGS_7A        0x11F7A
+#define HM_TIME_RUNNING 0x00973    /* 0 stopped, 1 running, 2 skip the day */
+#define HM_HOUR         0x11F1C
+
+static void advance(uint8_t *ram, HmRegs *r, uint16_t n)
+{
+  uint16_t pc = hm_dp_r16(ram, r, 0xC9);
+  r->c = (uint32_t)pc + n > 0xFFFF;
+  r->a = (uint16_t)(pc + n);
+  hm_dp_w16(ram, r, 0xC9, r->a);
+}
+static void step_back(uint8_t *ram, HmRegs *r)            /* SEC; SBC #1 */
+{
+  uint16_t pc = hm_dp_r16(ram, r, 0xC9);
+  r->c = pc >= 1;
+  r->a = (uint16_t)(pc - 1);
+  hm_dp_w16(ram, r, 0xC9, r->a);
+}
+/* SEP #$20; LDA [$C9] */
+static uint8_t arg8(uint8_t *ram, HmRegs *r)
+{
+  return lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, 0xC9, 0)));
+}
+/* LDA #0; XBA; LDA [$C9]: the byte in a clean 16-bit A */
+static uint16_t arg8_word(uint8_t *ram, HmRegs *r)
+{
+  return r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xC9, 0));
+}
+/* REP #$20; LDA [$C9] */
+static uint16_t arg16(uint8_t *ram, HmRegs *r)
+{
+  return r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xC9, 0));
+}
+/* jump: $C9 = the word at [$C9] */
+static void jump(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0xC9, arg16(ram, r));
+}
+/* LDA #0; XBA; LDA [$C9]; ASL; TAX; LDA Events_Flags_Table,X */
+static uint16_t flag_bit_arg(uint8_t *ram, HmRegs *r)
+{
+  uint16_t n = arg8_word(ram, r);
+  r->c = (n >> 15) & 1;
+  r->x = (uint16_t)(n << 1);
+  return r->a = hm_bus_rd16(ram, EVENT_FLAG_BITS + r->x);
+}
+/* the 24-bit address argument of the Jumpif commands: $72-$74 */
+static void address_arg(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0x72, arg16(ram, r));
+  advance(ram, r, 2);
+  *hm_dp(ram, r, 0x74) = arg8(ram, r);
+  advance(ram, r, 1);
+}
+
+/* Event_AudioRelated ($84:89BB): $0110 = the argument (a sound request).
+ * Two bytes. */
+void hm_Event_AudioRelated(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  ram[0x00110] = arg8(ram, r);
+  advance(ram, r, 1);
+  advance(ram, r, 1);
+}
+
+/* Event_TimeRunning ($84:89E3) / Event_TimeStopped ($84:8A0D): the clock
+ * runs or stops ($0973), with $7F1F5C bit 0 = stopped and $0196 bit $20
+ * = running. */
+void hm_Event_TimeRunning(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  ram[HM_TIME_RUNNING] = lda8(r, 1);
+  r->a = hm_rd16(ram, FLAGS_5C) & 0xFFFE; hm_wr16(ram, FLAGS_5C, r->a);
+  r->a = hm_rd16(ram, 0x00196) | 0x0020;  hm_wr16(ram, 0x00196, r->a);
+}
+void hm_Event_TimeStopped(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  ram[HM_TIME_RUNNING] = lda8(r, 0);
+  r->a = hm_rd16(ram, FLAGS_5C) | 0x0001; hm_wr16(ram, FLAGS_5C, r->a);
+  r->a = hm_rd16(ram, 0x00196) & 0xFFDF;  hm_wr16(ram, 0x00196, r->a);
+}
+
+/* Event_SetHour ($84:8A39): the hour = the argument. */
+void hm_Event_SetHour(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  ram[HM_HOUR] = arg8(ram, r);
+  advance(ram, r, 1);
+}
+
+/* Event_Empty ($84:8A58): nothing; one byte. */
+void hm_Event_Empty(uint8_t *ram, HmRegs *r) { advance(ram, r, 1); }
+
+/* Event_SetPlayerPosition ($84:8A65): X, Y words; also the transition's
+ * destination ($017D / $017F). */
+void hm_Event_SetPlayerPosition(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  hm_wr16(ram, 0x0017D, arg16(ram, r)); hm_dp_w16(ram, r, 0xD6, r->a);
+  advance(ram, r, 2);
+  hm_wr16(ram, 0x0017F, arg16(ram, r)); hm_dp_w16(ram, r, 0xD8, r->a);
+  advance(ram, r, 2);
+}
+
+/* Event_SetTransitionDest ($84:8A94): $098B = the map to go to. */
+void hm_Event_SetTransitionDest(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  ram[0x0098B] = arg8(ram, r);
+  advance(ram, r, 1);
+  count_frame(ram, r);
+}
+
+/* Event_SetPlayerDirection ($84:8ABF): facing = the argument (also $0911
+ * and the animation request $0901). */
+void hm_Event_SetPlayerDirection(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  uint16_t d = arg8_word(ram, r);
+  hm_dp_w16(ram, r, 0xDA, d);
+  hm_wr16(ram, 0x00911, d);
+  hm_wr16(ram, 0x00901, d);
+  advance(ram, r, 1);
+}
+
+/* Event_UNKChangesGameState ($84:8AE7) / Event_UNKChangesGameState2
+ * ($84:8CFD): game state bit $4000 off / on; turning it off also clears
+ * $08FD / $08FF. */
+void hm_Event_UNKChangesGameState(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->a = hm_dp_r16(ram, r, 0xD2) & 0xBFFF;
+  hm_dp_w16(ram, r, 0xD2, r->a);
+  hm_wr16(ram, 0x008FD, 0);
+  hm_wr16(ram, 0x008FF, 0);
+}
+void hm_Event_UNKChangesGameState2(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->a = hm_dp_r16(ram, r, 0xD2) | 0x4000;
+  hm_dp_w16(ram, r, 0xD2, r->a);
+}
+
+/* Event_NewCCStructure ($84:8B08): start another slot (argument 1) on a
+ * script of the same bank (word argument 2, the bank taken from this
+ * slot's +32): it is reset (ResetsCurrentCCStructureLong) and +3F = its
+ * number; then $CC goes back to this slot. Four bytes. */
+void hm_Event_NewCCStructure(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->a = hm_dp_r16(ram, r, 0xCC);
+  hm_dp_w16(ram, r, 0x72, r->a);
+  *hm_dp(ram, r, 0x74) = lda8(r, *hm_dp(ram, r, 0xCE));
+  hm_push8(ram, r, lda8(r, slot8(ram, r, 0x32)));                  /* PHA */
+  r->a = arg8_word(ram, r);
+  hm_jsl(ram, r, 0x8B36, 0x84);
+  hm_SetCCPoiner(ram, r);
+  hm_rtl(ram, r);
+  slot_w8(ram, r, 0x32, lda8(r, hm_pull8(ram, r)));                /* PLA */
+  hm_push8(ram, r, arg8(ram, r));
+  advance(ram, r, 1);
+  slot_w16(ram, r, 0x30, arg16(ram, r));
+  hm_push8(ram, r, 0x8B); hm_push8(ram, r, 0x5F);                  /* JSR */
+  hm_ResetsCurrentCCStructureLong(ram, r);
+  hm_pull8(ram, r); hm_pull8(ram, r);
+  slot_w8(ram, r, 0x3F, lda8(r, hm_pull8(ram, r)));
+  r->a = hm_dp_r16(ram, r, 0x72);
+  hm_dp_w16(ram, r, 0xCC, r->a);
+  *hm_dp(ram, r, 0xCE) = lda8(r, *hm_dp(ram, r, 0x74));
+  advance(ram, r, 2);
+}
+
+/* Event_UNKset7Aflag ($84:8BAC): $7F1F7A |= bit n. Event_UNKCompare-
+ * set7Aflag ($84:8BDC): waits until bit n of $7F1F7A is set (otherwise
+ * $C9 steps back onto the command and +10 counts a frame). */
+void hm_Event_UNKset7Aflag(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->a = flag_bit_arg(ram, r) | hm_rd16(ram, FLAGS_7A);
+  hm_wr16(ram, FLAGS_7A, r->a);
+  advance(ram, r, 1);
+}
+void hm_Event_UNKCompareset7Aflag(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->a = flag_bit_arg(ram, r) & hm_rd16(ram, FLAGS_7A);
+  if (r->a) { advance(ram, r, 1); return; }
+  step_back(ram, r);
+  count_frame(ram, r);
+}
+
+/* Event_UNKCCchanges2 ($84:8C22): the slot's +03, +04, the low byte of
+ * +10, and +05 = +06 from four argument bytes; +01 |= $20. */
+void hm_Event_UNKCCchanges2(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  slot_w8(ram, r, 0x03, arg8(ram, r));
+  advance(ram, r, 1);
+  slot_w8(ram, r, 0x04, arg8(ram, r));
+  advance(ram, r, 1);
+  slot_w8(ram, r, 0x10, arg8(ram, r));
+  advance(ram, r, 1);
+  uint8_t v = arg8(ram, r);
+  slot_w8(ram, r, 0x05, v);
+  slot_w8(ram, r, 0x06, v);
+  slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) | 0x20));
+  advance(ram, r, 1);
+}
+
+/* Event_UNKDisableCCstruct ($84:8CE2): the slot is no longer in use (and
+ * $C9 does not move). */
+void hm_Event_UNKDisableCCstruct(uint8_t *ram, HmRegs *r)
+{
+  slot_w8(ram, r, 0x00, lda8(r, 0));
+  count_frame(ram, r);
+}
+
+/* Event_JumptoInstruction ($84:8D13): goto the word argument. */
+void hm_Event_JumptoInstruction(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  jump(ram, r);
+}
+
+/* Event_UNKSetsCC10 ($84:8D24): the slot's +10 = the word argument. */
+void hm_Event_UNKSetsCC10(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  slot_w16(ram, r, 0x10, arg16(ram, r));
+  advance(ram, r, 2);
+}
+
+/* Event_JumpifFlagSet ($84:8D44): address (24-bit), bit number, target:
+ * goto target if that bit of the word at the address is set. */
+void hm_Event_JumpifFlagSet(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  hm_dp_w16(ram, r, 0x7E, flag_bit_arg(ram, r));
+  advance(ram, r, 1);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, 0)) & hm_dp_r16(ram, r, 0x7E);
+  if (r->a) jump(ram, r);
+  else advance(ram, r, 2);
+}
+
+/* Event_JumpifEquals ($84:8DA5): address, value, target: goto target if
+ * the byte at the address equals the value. */
+void hm_Event_JumpifEquals(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  *hm_dp(ram, r, 0x92) = arg8(ram, r);
+  advance(ram, r, 1);
+  uint8_t v = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, 0)));
+  uint8_t k = *hm_dp(ram, r, 0x92);
+  r->c = v >= k;
+  if (v == k) jump(ram, r);
+  else advance(ram, r, 2);
+}
+
+/* Event_JumpifBetween ($84:8DFB): address, low, high, target: goto target
+ * if low <= byte <= high (the high bound + 1 is kept in 8 bits: $FF means
+ * nothing is below it). */
+void hm_Event_JumpifBetween(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  *hm_dp(ram, r, 0x92) = arg8(ram, r);
+  advance(ram, r, 1);
+  *hm_dp(ram, r, 0x93) = lda8(r, (uint8_t)(arg8(ram, r) + 1));
+  advance(ram, r, 1);
+  uint32_t at = hm_dp_long(ram, r, 0x72, 0);
+  uint8_t v = lda8(r, hm_bus_rd8(ram, at));
+  r->c = v >= *hm_dp(ram, r, 0x92);
+  if (v >= *hm_dp(ram, r, 0x92)) {
+    v = lda8(r, hm_bus_rd8(ram, at));
+    r->c = v >= *hm_dp(ram, r, 0x93);
+    if (v < *hm_dp(ram, r, 0x93)) { jump(ram, r); return; }
+  }
+  advance(ram, r, 2);
+}
+
+/* Event_GetRNG ($84:8E68): the slot's +0D = a roll of an n-sided die. */
+void hm_Event_GetRNG(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  arg8(ram, r);
+  hm_jsl(ram, r, 0x8E7B, 0x80);
+  hm_RNGReturn0toA(ram, r);
+  hm_rtl(ram, r);
+  slot_w8(ram, r, 0x0D, (uint8_t)r->a);
+  advance(ram, r, 1);
+}
+
+/* Event_JumpIfEqualsRNG ($84:8E90): value, target: goto target if the
+ * last roll (+0D) equals the value. */
+void hm_Event_JumpIfEqualsRNG(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  hm_dp_w16(ram, r, 0x92, arg16(ram, r));
+  uint8_t roll = lda8(r, slot8(ram, r, 0x0D));
+  uint8_t k = *hm_dp(ram, r, 0x92);
+  r->c = roll >= k;
+  if (roll == k) {
+    advance(ram, r, 1);
+    jump(ram, r);
+  } else {
+    advance(ram, r, 3);
+  }
+}
+
+/* Event_UNKSetAnimation ($84:8EC9): $0901 = the word argument (the
+ * player's animation), $090F = the byte argument * 64, game state bit
+ * $2000. */
+void hm_Event_UNKSetAnimation(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  hm_wr16(ram, 0x00901, arg16(ram, r));
+  advance(ram, r, 2);
+  uint16_t v = arg8_word(ram, r);
+  r->c = (v >> 10) & 1;                                  /* the 6th ASL */
+  r->a = (uint16_t)(v << 6);
+  hm_wr16(ram, 0x0090F, r->a);
+  advance(ram, r, 1);
+  r->a = hm_dp_r16(ram, r, 0xD2) | 0x2000;
+  hm_dp_w16(ram, r, 0xD2, r->a);
+}
