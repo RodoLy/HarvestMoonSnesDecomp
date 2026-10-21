@@ -468,6 +468,34 @@ static void prep_new_animal(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   r->a = (uint16_t)((rnd() % 4) ? rnd() % 4 : rnd());
 }
 
+/* animals.c: PlaceAnimalsOnMap: animals spread over maps near the one
+ * entered (often on it), the dog and the horse owned or not */
+static void prep_place_animals(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  static const uint8_t maps[] = { 0, 1, 2, 3, 4, 5, 7, 8, 0x0C, 0x0F, 0x10, 0x13, 0x14, 0x15,
+                                  0x17, 0x18, 0x20, 0x27, 0x28, 0x31, 0x33 };
+  uint8_t here = maps[rnd() % sizeof maps];
+  ram[0x00022] = here;
+  for (unsigned i = 0; i < 13; i++) {                      /* chickens */
+    uint8_t *c = &ram[0x0C286 + 8 * i];
+    for (unsigned k = 0; k < 8; k++) c[k] = (uint8_t)rnd();
+    c[1] = (rnd() % 2) ? here : maps[rnd() % sizeof maps];
+  }
+  for (unsigned i = 0; i < 12; i++) {                      /* cows */
+    uint8_t *c = &ram[0x0C1C6 + 16 * i];
+    for (unsigned k = 0; k < 16; k++) c[k] = (uint8_t)rnd();
+    c[2] = (rnd() % 2) ? here : maps[rnd() % sizeof maps];
+  }
+  hm_wr16(ram, 0x11F68, (uint16_t)rnd());
+  hm_wr16(ram, 0x000D2, (uint16_t)((rnd() % 2) ? 0 : rnd()));   /* game state */
+  hm_wr16(ram, 0x00196, (uint16_t)rnd());
+  ram[0x11F30] = (rnd() % 2) ? here : maps[rnd() % sizeof maps];  /* dog */
+  ram[0x11F31] = (rnd() % 2) ? here : maps[rnd() % sizeof maps];  /* horse */
+  ram[0x11F32] = (uint8_t)((rnd() % 2) ? 0x15 : rnd() % 0x16);
+  hm_wr16(ram, 0x11F2C, (uint16_t)rnd()); hm_wr16(ram, 0x11F2E, (uint16_t)rnd());
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -668,6 +696,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/animals.c", 0x83C807, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_new_animal },
   { "AddNewCow", hm_AddNewCow, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/animals.c", 0x83C8DC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_new_animal },
+  { "PlaceAnimalsOnMap", hm_PlaceAnimalsOnMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/animals.c", 0x83C296, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_place_animals },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

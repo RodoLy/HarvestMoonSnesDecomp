@@ -586,3 +586,272 @@ void hm_AddNewCow(uint8_t *ram, HmRegs *r)
   spawn_from_table(ram, r, COW_SPAWN, 8, 0x0A);
   r->a = 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * PlaceAnimalsOnMap ($83:C296, JSL, RTL; CODE_83C296 in HM-Decomp). On
+ * entering a map: every chicken, cow, the dog and the horse that is on
+ * this map gets its event script started (SUB_8480F8) at its place
+ * ($0985/$0987 = where).
+ *
+ * "On this map" groups the maps: an animal on map m shows on map t when
+ *   m 00-03 and t 00-03 (the farm, any season),  m 04-07 and t 04-07,
+ *   m 08-0F and t 0C-0F,  m 10-13 and t 10-13,  m 14-17 and t 15-17,
+ *   m 31+ and t 31+,  otherwise only m = t.
+ * (The horse's test lacks the 14-17 group: a horse on maps 14-17 shows
+ * only on that very map.)
+ *
+ * Chickens (13; skipped if status bit $20): event $24 + n with script
+ *   0 (bit $02; then the script's byte [$CC] = 3), 1 (bit $04),
+ *   2 (bit $08; $093B + 2n = 0) or $5F; at the record's +4/+6.
+ * Cows (12): in the barn (map $27) at their stall ($83:CA44; entry 12 for
+ *   a cow with status bits $C0), elsewhere at the record's +8/+A. Event
+ *   $18 + n with script 3 (bit $02), 4 (bit $04), or for bit $08: 8 (bit
+ *   $40), 7 ($20), 6 ($10), 5 (bit $80, which is then cleared); scripts
+ *   $17 / $2F / 9 instead of 3 / 4 / 5 when $0196 bit 1 (rain) is set and
+ *   the cow is not in the barn. Then $0953 + 2n = 0.
+ * The dog (owned: $7F1F68 bit $80; not while game state bit $0800): event
+ *   $16 script $11 at $7F1F2C/2E on map $7F1F30; $7F1F58 = 1, $0938 = 0.
+ * The horse (owned: $7F1F68 bit $0100; not while game state bit $0010):
+ *   event $17 at (110, 140) on map $7F1F31, script $10 when grown
+ *   ($7F1F32 = $15) or $13 as a foal; $0939 = 0.
+ * Registers are left as the last path set them (they are compared).
+ * ───────────────────────────────────────────────────────────────────────── */
+#define TILE_AT_X   0x00985
+#define TILE_AT_Y   0x00987
+
+static uint8_t lda8(HmRegs *r, uint8_t v)
+{
+  r->a = (uint16_t)((r->a & 0xFF00) | v);
+  return v;
+}
+static void push16(uint8_t *ram, HmRegs *r, uint16_t v)
+{
+  hm_push8(ram, r, (uint8_t)(v >> 8));
+  hm_push8(ram, r, (uint8_t)v);
+}
+static uint16_t pull16(uint8_t *ram, HmRegs *r)
+{
+  uint8_t lo = hm_pull8(ram, r);
+  return (uint16_t)(lo | hm_pull8(ram, r) << 8);
+}
+
+/* the map test; the animal's map is loaded again before each compare
+ * (from the record with LDY #y_m, or from a fixed address: y_m = NO_Y) */
+#define NO_Y 0xFFFF
+static bool same_place(HmRegs *r, uint8_t m, uint8_t t, uint16_t y_m, int groups)
+{
+  static const struct { uint8_t below, lo, hi; } GROUP[5] = {
+    { 0x04, 0x00, 0x04 }, { 0x08, 0x04, 0x08 }, { 0x10, 0x0C, 0x10 },
+    { 0x14, 0x10, 0x14 }, { 0x18, 0x15, 0x18 } };
+  for (int g = 0; g < groups; g++) {
+    if (y_m != NO_Y) r->y = y_m;
+    lda8(r, m);
+    r->c = m >= GROUP[g].below;
+    if (m < GROUP[g].below) {
+      lda8(r, t);
+      if (g > 0) {
+        r->c = t >= GROUP[g].lo;
+        if (t < GROUP[g].lo) return false;
+      }
+      r->c = t >= GROUP[g].hi;
+      return t < GROUP[g].hi;
+    }
+  }
+  if (y_m != NO_Y) r->y = y_m;
+  lda8(r, m);
+  r->c = m >= 0x31;
+  if (m >= 0x31) {
+    lda8(r, t);
+    r->c = t >= 0x31;
+    return t >= 0x31;
+  }
+  if (y_m != NO_Y) r->y = y_m;
+  lda8(r, m);
+  r->c = m >= t;                                         /* CMP $22 */
+  return m == t;
+}
+
+static uint8_t record8(uint8_t *ram, HmRegs *r, uint16_t at)
+{
+  return hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, at));
+}
+static uint16_t record16(uint8_t *ram, HmRegs *r, uint16_t at)
+{
+  return hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, at));
+}
+/* LDY #0; LDA [$72]; AND #bit */
+static uint8_t status_bit(uint8_t *ram, HmRegs *r, uint8_t bit)
+{
+  r->y = 0;
+  return lda8(r, record8(ram, r, 0) & bit);
+}
+/* REP; LDA [$72],Y (+x / +y) into $0985 / $0987 */
+static void place_from_record(uint8_t *ram, HmRegs *r, uint16_t at)
+{
+  r->y = at;     r->a = record16(ram, r, at);     hm_wr16(ram, TILE_AT_X, r->a);
+  r->y = at + 2; r->a = record16(ram, r, at + 2); hm_wr16(ram, TILE_AT_Y, r->a);
+}
+/* TXA; CLC; ADC #base; LDX #0; (LDY script); JSL SUB_8480F8 */
+static void start_script(uint8_t *ram, HmRegs *r, uint16_t n, uint16_t base, uint16_t script,
+                         uint16_t ret)
+{
+  r->c = (uint32_t)n + base > 0xFFFF;
+  r->a = (uint16_t)(n + base);
+  r->x = 0; r->y = script;
+  hm_jsl(ram, r, ret, 0x84);
+  hm_SUB_8480F8(ram, r);
+  hm_rtl(ram, r);
+}
+/* PLA; PHA; ASL; TAX; STZ base,X (16-bit) */
+static void clear_word_of_slot(uint8_t *ram, HmRegs *r, uint16_t base)
+{
+  uint16_t n = pull16(ram, r);
+  push16(ram, r, n);
+  r->c = n >> 15;
+  r->a = r->x = (uint16_t)(n << 1);
+  hm_wr16(ram, (uint16_t)(base + r->x), 0);
+}
+
+static void place_chickens(uint8_t *ram, HmRegs *r, uint8_t map)
+{
+  for (uint16_t n = 0; n < 13; n++) {
+    push16(ram, r, n); push16(ram, r, n);                /* PHX; PHX */
+    r->a = r->x = n;
+    hm_jsl(ram, r, 0xC2A3, 0x83);
+    hm_GetChickenPointer(ram, r);
+    hm_rtl(ram, r);
+    r->x = pull16(ram, r);                               /* PLX */
+    if (!status_bit(ram, r, 0x01) || status_bit(ram, r, 0x20)) goto next;
+    if (!same_place(r, record8(ram, r, 1), map, 1, 5)) goto next;
+    place_from_record(ram, r, 4);
+    if (status_bit(ram, r, 0x02)) {
+      start_script(ram, r, r->x, 0x24, 0, 0xC39D);
+      r->y = 0;
+      lda8(r, 3);
+      hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0), 3);   /* STA [$CC],Y */
+    } else if (status_bit(ram, r, 0x04)) {
+      start_script(ram, r, r->x, 0x24, 1, 0xC3C6);
+    } else if (status_bit(ram, r, 0x08)) {
+      start_script(ram, r, r->x, 0x24, 2, 0xC3E4);
+      clear_word_of_slot(ram, r, 0x093B);
+    } else {
+      start_script(ram, r, r->x, 0x24, 0x5F, 0xC400);
+    }
+  next:
+    r->x = (uint16_t)(pull16(ram, r) + 1);               /* PLX; INX */
+    r->c = r->x >= 13;
+  }
+}
+
+/* raining ($0196 bit 1) and the cow not in the barn: the wet script */
+static uint16_t cow_script(uint8_t *ram, HmRegs *r, uint16_t wet, uint16_t dry)
+{
+  r->a = hm_rd16(ram, 0x00196) & 0x0002;
+  if (r->a) {
+    r->y = 2;
+    uint8_t m = lda8(r, record8(ram, r, 2));
+    r->c = m >= 0x27;
+    if (m != 0x27) return wet;
+  }
+  return dry;
+}
+
+static void place_cows(uint8_t *ram, HmRegs *r, uint8_t map)
+{
+  for (uint16_t n = 0; n < 12; n++) {
+    push16(ram, r, n); push16(ram, r, n);
+    r->a = r->x = n;
+    hm_jsl(ram, r, 0xC418, 0x83);
+    hm_GetsCowPointer(ram, r);
+    hm_rtl(ram, r);
+    r->x = pull16(ram, r);
+    if (!status_bit(ram, r, 0x01)) goto next;
+    lda8(r, map);
+    r->c = map >= 0x27;
+    if (map == 0x27) {                                   /* in the barn */
+      r->y = 2;
+      uint8_t m = lda8(r, record8(ram, r, 2));
+      r->c = m >= 0x27;
+      if (m != 0x27) goto next;
+      push16(ram, r, r->x);                              /* PHX */
+      uint16_t stall = status_bit(ram, r, 0xC0) ? 12 : r->x;
+      r->x = (uint16_t)(stall << 2);
+      r->c = (stall >> 14) & 1;                          /* ASL; ASL */
+      r->y = 8;
+      r->a = hm_bus_rd16(ram, 0x83CA44u + r->x);
+      hm_wr16(ram, TILE_AT_X, r->a);
+      r->x = (uint16_t)(r->x + 2);
+      r->y = 0x0A;
+      r->a = hm_bus_rd16(ram, 0x83CA44u + r->x);
+      hm_wr16(ram, TILE_AT_Y, r->a);
+      r->x = pull16(ram, r);                             /* PLX */
+    } else {
+      if (!same_place(r, record8(ram, r, 2), map, 2, 5)) goto next;
+      place_from_record(ram, r, 8);
+    }
+
+    uint16_t script, ret;            /* one JSL per branch: its own return */
+    if (status_bit(ram, r, 0x02)) {
+      script = cow_script(ram, r, 0x17, 3); ret = 0xC565;
+    } else if (status_bit(ram, r, 0x04)) {
+      script = cow_script(ram, r, 0x2F, 4); ret = 0xC5A9;
+    } else if (status_bit(ram, r, 0x08)) {
+      ret = 0xC631;
+      if (status_bit(ram, r, 0x80)) {
+        r->y = 0;
+        uint8_t st = lda8(r, record8(ram, r, 0) & 0x7F);
+        hm_bus_wr8(ram, hm_dp_long(ram, r, 0x72, 0), st);
+        script = 5;
+      } else if (status_bit(ram, r, 0x40)) script = 8;
+      else if (status_bit(ram, r, 0x20)) script = 7;
+      else if (status_bit(ram, r, 0x10)) script = 6;
+      else script = cow_script(ram, r, 9, 5);
+    } else {
+      goto next;
+    }
+    start_script(ram, r, r->x, 0x18, script, ret);
+    clear_word_of_slot(ram, r, 0x0953);
+  next:
+    r->x = (uint16_t)(pull16(ram, r) + 1);
+    r->c = r->x >= 12;
+  }
+}
+
+void hm_PlaceAnimalsOnMap(uint8_t *ram, HmRegs *r)
+{
+  uint8_t map = *hm_dp(ram, r, 0x22);
+  place_chickens(ram, r, map);
+  place_cows(ram, r, map);
+
+  /* the dog */
+  if ((r->a = hm_rd16(ram, 0x11F68) & 0x0080)
+      && !(r->a = hm_dp_r16(ram, r, 0xD2) & 0x0800)
+      && same_place(r, ram[0x11F30], map, NO_Y, 5)) {
+    r->a = hm_rd16(ram, 0x11F2C); hm_wr16(ram, TILE_AT_X, r->a);
+    r->a = hm_rd16(ram, 0x11F2E); hm_wr16(ram, TILE_AT_Y, r->a);
+    r->a = 0x0016; r->x = 0; r->y = 0x0011;
+    hm_jsl(ram, r, 0xC725, 0x84);
+    hm_SUB_8480F8(ram, r);
+    hm_rtl(ram, r);
+    r->a = 1;
+    hm_wr16(ram, 0x11F58, 1);
+    ram[0x0938] = 0;
+  }
+
+  /* the horse */
+  if ((r->a = hm_rd16(ram, 0x11F68) & 0x0100)
+      && !(r->a = hm_dp_r16(ram, r, 0xD2) & 0x0010)
+      && same_place(r, ram[0x11F31], map, NO_Y, 4)) {
+    r->a = 0x0110; hm_wr16(ram, TILE_AT_X, 0x0110);
+    r->a = 0x0140; hm_wr16(ram, TILE_AT_Y, 0x0140);
+    r->y = 0x0013;
+    uint8_t age = lda8(r, ram[0x11F32]);
+    r->c = age >= 0x15;
+    if (age == 0x15) r->y = 0x0010;                      /* grown */
+    r->a = 0x0017; r->x = 0;
+    hm_jsl(ram, r, 0xC800, 0x84);
+    hm_SUB_8480F8(ram, r);
+    hm_rtl(ram, r);
+    ram[0x0939] = 0;
+  }
+}

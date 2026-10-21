@@ -319,6 +319,8 @@
 83BA45	LoadGameSlotResume
 03BA45	LoadGameSlotResume_lo
 03BAD4	CheckSRAMIntegrity_lo
+83C296	PlaceAnimalsOnMap
+03C296	PlaceAnimalsOnMap_lo
 83C807	AddNewChicken
 83C995	GetChickenPointer
 03C995	GetChickenPointer_lo
