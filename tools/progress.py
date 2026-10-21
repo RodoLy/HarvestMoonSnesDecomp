@@ -6,12 +6,13 @@
 Measures against the HM-Decomp disassembly (no ROM needed, so anyone can
 recompute it):
 
-  * Routines: every top-level label with an address comment in HM-Decomp's
-    code banks (`GetRNG: ;838138`) whose body has instructions. Data tables
-    (`db`/`dw`/`dl` only) are not counted.
-  * Instructions: the 65816 instructions inside those routines (one per
-    line of the disassembly). This is the headline percentage: a 4096-tile
-    loop weighs more than a three-line helper.
+  * Routines: every top-level label in HM-Decomp's code banks whose body has
+    instructions: the ones with an address comment (`GetRNG: ;838138`) and
+    the ones without (`CODE_81A500:`). Data tables (`db`/`dw`/`dl` only)
+    are not counted.
+  * Instructions: the 65816 instructions inside them (one per line of the
+    disassembly, labelled or not). This is the headline percentage: a
+    4096-tile loop weighs more than a three-line helper.
 
 A routine counts as decompiled when it is registered in src/hm_decomp.c
 (written in C and verified against the original).
@@ -28,75 +29,87 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LABEL = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):\s*;\s*([0-9A-Fa-f]{6})\b")
-ANY_TOP_LABEL = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*:")
+ANY_TOP_LABEL = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):")
 # An instruction: a mnemonic (3 letters, optional .B/.W/.L) or a %Set8bit /
-# %Set16bit macro (one REP/SEP each). Labels and data directives are not.
-INSN = re.compile(r"^\s*(?:[-+]\s+)?(?:\.[A-Za-z0-9_]+:\s*)?"
+# %Set16bit macro (one REP/SEP each), maybe after a label on the same line.
+INSN = re.compile(r"^\s*(?:[-+]\s+)?(?:\.?[A-Za-z0-9_]+:\s*)?"
                   r"(?:([A-Z]{3})(?:\.[BWL])?\b|%Set(?:8|16)bit)")
 DATA = {"DB", "DW", "DL", "DD"}
 
-
-# Routines HM-Decomp only has as a local label inside another routine (see
-# tools/import_decomp_names.py). They count as routines of their own, from
-# the label to the first RTL/RTS, and their instructions are taken out of
-# the parent so nothing is counted twice.
+# Routines HM-Decomp only has as a label inside a bigger block (a local
+# `.label`, an indented `CODE_xxxxxx:`, or a top-level label with no
+# address comment). Each counts as a routine of its own, from its label to
+# the first RTL/RTS, and those instructions are taken out of the block it is
+# written in, so nothing is counted twice. Same list as MANUAL in
+# tools/import_decomp_names.py.
 LOCAL = {
-    0x84A5D4: ("Event_UNKCowRelated", ".AddCowHappiness", "AddCowHappiness"),
-    0x81D1A4: ("CalculateTileinFront", "CODE_81D1A4", "TileAtOffsetFromPlayer"),
-    # top-level labels without an address comment: no parent to split from
-    0x81A801: (None, "SUB_81A801", "SUB_81A801"),
-    0x81A83A: (None, "SUB_81A83A", "SUB_81A83A"),
+    0x84A5D4: (".AddCowHappiness", "AddCowHappiness"),
+    0x81D1A4: ("CODE_81D1A4", "TileAtOffsetFromPlayer"),
+    0x81A801: ("SUB_81A801", "SUB_81A801"),
+    0x81A83A: ("SUB_81A83A", "SUB_81A83A"),
+    0x81A688: ("CODE_81A688", "ChangeMapTile"),
+    0x81A6C1: ("CODE_81A6C1", "QueueTileGraphicsDMA"),
 }
 
 
-def split_locals(decomp_dir, found):
-    by_name = {name: pc for pc, (name, _) in found.items()}
-    for pc, (parent, label, name) in LOCAL.items():
-        for path in glob.glob(os.path.join(decomp_dir, "src", "code_banks", "*.asm")):
-            lines = open(path, encoding="utf-8", errors="replace").read().split("\n")
-            starts = [i for i, l in enumerate(lines)
-                      if l.strip() == label + ":" or l.strip().startswith(label + ": ")]
-            if not starts:
+def is_insn(code):
+    m = INSN.match(code)
+    return bool(m) and (m.group(1) or "").upper() not in DATA
+
+
+def parse(decomp_dir):
+    """(routines, lines): routines = {key: [name, instructions]}, key = the
+    pc for labels with an address, ("noaddr", name) otherwise; lines = for
+    every file, a list of (owner key, code) per line."""
+    routines, lines = {}, {}
+    for path in sorted(glob.glob(os.path.join(decomp_dir, "src", "code_banks", "*.asm"))):
+        current, out = None, []
+        for line in open(path, encoding="utf-8", errors="replace").read().split("\n"):
+            m = LABEL.match(line)
+            code = line.split(";", 1)[0]
+            if m:
+                current = int(m.group(2), 16)
+                routines.setdefault(current, [m.group(1), 0])
+                code = ""
+            else:
+                t = ANY_TOP_LABEL.match(code)
+                if t:
+                    current = ("noaddr", t.group(1))
+                    routines.setdefault(current, [t.group(1), 0])
+            if current is not None and is_insn(code):
+                routines[current][1] += 1
+            out.append((current, code))
+        lines[path] = out
+    return routines, lines
+
+
+def split_locals(routines, lines):
+    for pc, (label, name) in LOCAL.items():
+        for path, rows in lines.items():
+            start = next((i for i, (_, c) in enumerate(rows)
+                          if c.strip() == label + ":" or c.strip().startswith(label + ":")), None)
+            if start is None:
                 continue
+            owner = rows[start][0]
             n = 0
-            first = lines[starts[0]].split(":", 1)[1]    # code on the label's own line
-            if INSN.match(first.split(";", 1)[0]):
-                n += 1
-            for l in lines[starts[0] + 1:]:
-                code = l.split(";", 1)[0]
-                if INSN.match(code):
+            for _, code in rows[start:]:
+                if is_insn(code):
                     n += 1
                     if re.search(r"\bRT[LS]\b", code):
                         break
-            if parent is not None:
-                ppc = by_name[parent]
-                found[ppc] = (parent, found[ppc][1] - n)
-            found[pc] = (name, n)
+            routines[owner][1] -= n
+            routines[pc] = [name, n]
             break
-    return found
+    return routines
 
 
-def routines(decomp_dir):
-    found = {}
-    for path in sorted(glob.glob(os.path.join(decomp_dir, "src", "code_banks", "*.asm"))):
-        current = None
-        for line in open(path, encoding="utf-8", errors="replace"):
-            code = line.split(";", 1)[0] if not LABEL.match(line) else line
-            m = LABEL.match(line)
-            if m:
-                current = int(m.group(2), 16)
-                found.setdefault(current, [m.group(1), 0])
-                continue
-            if ANY_TOP_LABEL.match(code):
-                current = None              # a label without address: not ours
-                continue
-            if current is None:
-                continue
-            i = INSN.match(code)
-            if i and (i.group(1) or "").upper() not in DATA:
-                found[current][1] += 1
-    found = {pc: (name, n) for pc, (name, n) in found.items() if n > 0}
-    return split_locals(decomp_dir, found)
+def routines_of(decomp_dir):
+    found, lines = parse(decomp_dir)
+    found = split_locals(found, lines)
+    return {k: (name, n) for k, (name, n) in found.items() if n > 0}
+
+
+routines = routines_of
 
 
 def registered(path):
