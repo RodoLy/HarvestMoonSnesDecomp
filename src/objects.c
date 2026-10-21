@@ -106,3 +106,48 @@ void hm_LoadSpriteComponent(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, 0xB3, 0xFFFF);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * LoadGameObjectComponents ($85:8AE5, JSR, RTS; CODE_858AE5 in HM-Decomp).
+ * For the game object at offset $A9: reads its piece list ($78-$7A = the
+ * list, bank $86/$87 already in $7A), stores the count at +13, and loads
+ * every piece (LoadSpriteComponent), writing its slot at +14 + n.
+ * Leftovers: $AD = 0, $AF = the byte after the last piece, $B3/$B5 of the
+ * last piece; A = 0, X = $A9, Y = 1 + 5 pieces, C from the last ADC.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_AE5_PIECE 0x8B1E   /* JSR LoadSpriteComponent at $85:8B1C */
+
+void hm_LoadGameObjectComponents(uint8_t *ram, HmRegs *r)
+{
+  uint16_t obj = hm_dp_r16(ram, r, 0xA9);
+  hm_dp_w16(ram, r, 0x78, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x10, obj)));
+  uint8_t pieces = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x78, 0));
+  *hm_dp(ram, r, 0xAD) = pieces;
+  hm_bus_wr8(ram, abs_x(r, GOBJ + 0x13, obj), pieces);
+  *hm_dp(ram, r, 0xAE) = 0;
+  uint16_t first = (uint16_t)(obj + GOBJ);               /* CLC; ADC #$019C */
+  r->c = (uint32_t)first + 0x14 > 0xFFFF;                /* CLC; ADC #$0014 */
+  hm_dp_w16(ram, r, 0xAF, (uint16_t)(first + 0x14));
+
+  uint16_t x = obj, y = 1;
+  while (hm_dp_r16(ram, r, 0xAD) != 0) {
+    hm_dp_w16(ram, r, 0xB3, hm_bus_rd16(ram, hm_dp_long(ram, r, 0x78, y)));
+    hm_dp_w16(ram, r, 0xB5, hm_dp_r16(ram, r, 0xAF));
+    push16(ram, r, x);                                   /* PHX; PHY */
+    push16(ram, r, y);
+    push16(ram, r, RET_AE5_PIECE);                       /* JSR */
+    hm_LoadSpriteComponent(ram, r);
+    pull16(ram, r);                                      /* RTS */
+    y = pull16(ram, r);                                  /* PLY; PLX */
+    x = pull16(ram, r);
+    hm_bus_wr8(ram, abs_x(r, GOBJ + 0x14, x), (uint8_t)hm_dp_r16(ram, r, 0xB3));
+    x++;
+    hm_dp_w16(ram, r, 0xAF, (uint16_t)(hm_dp_r16(ram, r, 0xAF) + 1));
+    r->c = (uint32_t)y + 5 > 0xFFFF;
+    y = (uint16_t)(y + 5);
+    hm_dp_w16(ram, r, 0xAD, (uint16_t)(hm_dp_r16(ram, r, 0xAD) - 1));
+  }
+  r->a = 0;
+  r->x = hm_dp_r16(ram, r, 0xA9);
+  r->y = y;
+}
+

@@ -259,6 +259,21 @@ static void prep_queue(uint8_t *ram, unsigned max_used, uint32_t (*rnd)(void))
   hm_wr16(ram, 0xBD, at);
   hm_wr16(ram, 0xBB, (uint16_t)((at - 4 * used) & 0xFC));
 }
+static uint32_t sprite_pieces(uint8_t *ram, uint16_t sprite)   /* its piece list */
+{
+  uint8_t bank = sprite >= 0x262 ? 0x87 : 0x86;
+  uint32_t table = bank == 0x87 ? 0x878080u + 2u * (sprite - 0x262) : 0x868080u + 2u * sprite;
+  uint16_t entry = hm_bus_rd16(ram, table);
+  return (uint32_t)bank << 16 | hm_bus_rd16(ram, (uint32_t)bank << 16 | entry);
+}
+static void prep_sprite(uint8_t *ram, uint16_t sprite, uint32_t (*rnd)(void))
+{
+  uint32_t list = sprite_pieces(ram, sprite);
+  uint8_t n = hm_bus_rd8(ram, list);
+  for (unsigned k = 0; k < n; k++)
+    prep_piece(ram, hm_bus_rd16(ram, (list & 0xFF0000) | (uint16_t)(list + 1 + 5 * k)), rnd);
+  prep_queue(ram, 50, rnd);
+}
 static void prep_sprite_piece(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   (void)r;
@@ -267,6 +282,16 @@ static void prep_sprite_piece(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0xB5, (uint16_t)rnd());
   prep_piece(ram, piece, rnd);
   prep_queue(ram, 62, rnd);
+}
+static void prep_gobj_pieces(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  uint16_t obj = (uint16_t)(0x24 * (rnd() % 40)), sprite = (uint16_t)(rnd() % 0x450);
+  uint32_t list = sprite_pieces(ram, sprite);
+  hm_wr16(ram, 0xA9, obj);
+  hm_wr16(ram, 0x019C + obj + 0x10, (uint16_t)list);
+  ram[0x7A] = (uint8_t)(list >> 16);
+  prep_sprite(ram, sprite, rnd);
 }
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
@@ -400,6 +425,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/mapedit.c", 0x81A688, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_change_dma },
   { "LoadSpriteComponent", hm_LoadSpriteComponent, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/objects.c", 0x858C30, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_sprite_piece },
+  { "LoadGameObjectComponents", hm_LoadGameObjectComponents,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/objects.c", 0x858AE5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_gobj_pieces },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
