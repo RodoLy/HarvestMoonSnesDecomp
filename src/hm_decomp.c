@@ -237,6 +237,12 @@ static void prep_tile_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x28] = (uint8_t)rnd();                              /* channels queued */
   hm_wr16(ram, 0xC7, (uint16_t)rnd());                     /* DMA budget */
 }
+static void prep_map_change_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_tile_dma(ram, r, rnd);
+  if ((rnd() & 7) == 0) r->a = 0;                          /* "no change" */
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -365,6 +371,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     0x808A33, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_dma },
   { "QueueTileGraphicsDMA", hm_QueueTileGraphicsDMA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/mapedit.c", 0x81A6C1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tile_dma },
+  { "ChangeMapTile", hm_ChangeMapTile, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/mapedit.c", 0x81A688, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_change_dma },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

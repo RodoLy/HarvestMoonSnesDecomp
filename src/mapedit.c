@@ -254,3 +254,45 @@ void hm_QueueTileGraphicsDMA(uint8_t *ram, HmRegs *r)
   r->x = x;
   r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * ChangeMapTile ($81:A688, JSL, RTL; CODE_81A688 in HM-Decomp). A = tile
+ * change (0 = nothing), X/Y = position in pixels. Does all of it: queues
+ * the VRAM copy, writes the BG1 tilemap in WRAM, and, if the change has a
+ * tile type, writes it into $09B6 for the whole block.
+ * Leftovers: $86/$88 = columns / rows; registers from SUB_82B060 when it
+ * runs, otherwise A = 0, X/Y = the position and C from SUB_81A801.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_688_QUEUE   0xA698   /* JSL QueueTileGraphicsDMA at $81:A695 */
+#define RET_688_BG1     0xA6A4   /* JSL SUB_81A83A at $81:A6A1 */
+#define RET_688_CHANGES 0xA6AB   /* JSL SUB_81A801 at $81:A6A8 */
+#define RET_688_TYPES   0xA6BF   /* JSL SUB_82B060 at $81:A6BC */
+
+void hm_ChangeMapTile(uint8_t *ram, HmRegs *r)
+{
+  if (r->a == 0) { r->c = 1; return; }                    /* CMP #0 */
+  uint16_t change = r->a, x = r->x, y = r->y;
+  push16(ram, r, y); push16(ram, r, x); push16(ram, r, change);
+  hm_jsl(ram, r, RET_688_QUEUE, 0x81);
+  hm_QueueTileGraphicsDMA(ram, r);
+  hm_rtl(ram, r);
+  pull16(ram, r); pull16(ram, r); pull16(ram, r);
+  push16(ram, r, y); push16(ram, r, x); push16(ram, r, change);
+  r->a = change; r->x = x; r->y = y;
+  hm_jsl(ram, r, RET_688_BG1, 0x81);
+  hm_SUB_81A83A(ram, r);
+  hm_rtl(ram, r);
+  r->a = pull16(ram, r);                                 /* PLA */
+  hm_jsl(ram, r, RET_688_CHANGES, 0x81);
+  hm_SUB_81A801(ram, r);
+  hm_rtl(ram, r);
+  r->x = pull16(ram, r);                                 /* PLX; PLY */
+  r->y = pull16(ram, r);
+  hm_dp_w16(ram, r, 0x86, hm_dp_r16(ram, r, 0x80));
+  hm_dp_w16(ram, r, 0x88, hm_dp_r16(ram, r, 0x82));
+  r->a = hm_dp_r16(ram, r, 0x84);
+  if (r->a == 0) return;
+  hm_jsl(ram, r, RET_688_TYPES, 0x82);
+  hm_SUB_82B060(ram, r);
+  hm_rtl(ram, r);
+}
