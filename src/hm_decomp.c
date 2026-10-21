@@ -437,6 +437,25 @@ static void prep_map_animation(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   r->a = (uint16_t)(rnd() % 0x60);
 }
 
+/* ending.c: everything the ranch score adds up */
+static void prep_ranch_score(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  static const uint32_t words[] = { 0x11F04, 0x11F1F, 0x11F21, 0x11F23, 0x11F25, 0x11F27,
+                                    0x11F33, 0x11F4A, 0x11F4C, 0x11F4E, 0x11F50, 0x11F56,
+                                    0x11F64, 0x11F66, 0x11F6C, 0x11F6E, 0x11F5E };
+  for (unsigned i = 0; i < sizeof words / sizeof words[0]; i++)
+    hm_wr16(ram, words[i], (uint16_t)((rnd() % 4) ? rnd() % 1200 : rnd()));
+  ram[0x11F06] = (uint8_t)rnd();                           /* money, high byte */
+  ram[0x11F0A] = (uint8_t)((rnd() % 4) ? rnd() % 13 : rnd());   /* cows */
+  ram[0x11F0B] = (uint8_t)((rnd() % 4) ? rnd() % 13 : rnd());   /* chickens */
+  ram[0x00917] = (uint8_t)rnd();                           /* max stamina */
+  for (unsigned i = 0; i < 12; i++) {                      /* cows: 16 bytes at $7E:C1C6 */
+    ram[0x0C1C6 + 16 * i] = (uint8_t)rnd();
+    ram[0x0C1C6 + 16 * i + 4] = (uint8_t)rnd();
+  }
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -630,6 +649,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/toolused.c", 0x82A570, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_tool_unk },
   { "StartMapAnimation", hm_StartMapAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/mapedit.c", 0x81A5E1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_animation },
+  { "RanchMasteryCalculator", hm_RanchMasteryCalculator,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_JSR,
+    "src/ending.c", 0x83F26D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ranch_score },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

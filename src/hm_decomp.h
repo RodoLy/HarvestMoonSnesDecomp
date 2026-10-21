@@ -223,6 +223,7 @@ void hm_SUB_82B060(uint8_t *ram, HmRegs *r);
 void hm_QueueTileGraphicsDMA(uint8_t *ram, HmRegs *r);
 void hm_ChangeMapTile(uint8_t *ram, HmRegs *r);
 void hm_StartMapAnimation(uint8_t *ram, HmRegs *r);
+void hm_RanchMasteryCalculator(uint8_t *ram, HmRegs *r); /* ending.c */
 void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r);    /* dma.c */
 void hm_LoadSpriteComponent(uint8_t *ram, HmRegs *r); /* objects.c */
 void hm_LoadGameObjectComponents(uint8_t *ram, HmRegs *r);
