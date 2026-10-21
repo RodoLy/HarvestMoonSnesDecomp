@@ -218,6 +218,17 @@ static void prep_map_block(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x8F] = 0; ram[0x91] = 0;
 }
 
+static void prep_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  ram[0x27] = (uint8_t)(rnd() % 8);                         /* channel */
+  static const uint8_t dest[] = { 0x18, 0x18, 0x22, 0x04 };   /* VRAM, CGRAM, OAM */
+  ram[0x29] = dest[rnd() % 4];
+  ram[0x28] = (uint8_t)rnd();
+  hm_wr16(ram, 0xC7, (uint16_t)rnd());
+  hm_wr16(ram, 0x72, (uint16_t)rnd()); ram[0x74] = (uint8_t)rnd();
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -342,6 +353,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     0x81A83A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_change },
   { "SUB_82B060", hm_SUB_82B060, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/mapedit.c",
     0x82B060, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_map_block },
+  { "AddProgrammedDMA", hm_AddProgrammedDMA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/dma.c",
+    0x808A33, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_dma },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
