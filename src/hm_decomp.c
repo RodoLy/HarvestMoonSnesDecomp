@@ -43,6 +43,14 @@ static void prep_random_farm_and_date(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(v
   ram[0x11F1B] = (uint8_t)((rnd() & 3) ? 1 + rnd() % 30 : 1); /* day; often 1 */
 }
 
+static void prep_cow_pointer(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  /* $72-$74 -> one of the 16 cow records ($7E:C1C6 + 16 n) */
+  hm_wr16(ram, 0x72, (uint16_t)(0xC1C6 + 16 * (rnd() % 16)));
+  ram[0x74] = 0x7E;
+  static const uint16_t changes[] = { 0xFFF8, 0xFFF0, 0xFFE8, 0xFFF4, 0xFFE2, 1, 8, 0x80, 0x7FFF, 0x8000 };
+  if (rnd() & 1) r->a = changes[rnd() % 10];
+}
 static void prep_cc_pointer(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   (void)r;
@@ -113,6 +121,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
     40, prep_random_farm_and_date },
   { "CalculateFarmDevelopment", hm_CalculateFarmDevelopment, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/farm.c", 0x82AA0C, 0, 0, 0, 0xFFFF, { W16(0x11F56, 0, 0xFFFF) }, 40, prep_random_farm },
+  { "AddCowHappiness", hm_AddCowHappiness, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/animals.c", 0x84A5D4, 0, 0, 0, 0xFFFF,
+    { B8(0x0C1C6 + 4, 0, 255), B8(0x0C1D6 + 4, 0, 255), B8(0x0C1E6 + 4, 0, 255) },
+    0, prep_cow_pointer },
   { "SetCCPoiner", hm_SetCCPoiner, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/events.c",
     0x84887C, 0, 0, 0, 0xFFFF, { { 0 } } },
   { "ResetsCurrentCCStructureLong", hm_ResetsCurrentCCStructureLong,
