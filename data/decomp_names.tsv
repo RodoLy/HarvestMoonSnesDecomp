@@ -354,6 +354,7 @@
 0489BB	Event_AudioRelated_lo
 8489E3	Event_TimeRunning
 0489E3	Event_TimeRunning_lo
+048A0D	Event_TimeStopped_lo
 848A39	Event_SetHour
 048A39	Event_SetHour_lo
 848A58	Event_Empty

@@ -264,3 +264,4 @@ void hm_SUB_8480F8(uint8_t *ram, HmRegs *r);
 void hm_ResetsCurrentCCStructureShort(uint8_t *ram, HmRegs *r);
 void hm_UNK_LoadCCDataLong(uint8_t *ram, HmRegs *r);
 void hm_UNK_LoadCCDataShort(uint8_t *ram, HmRegs *r);
+void hm_Event_UNKChickenRelated(uint8_t *ram, HmRegs *r);  /* eventcmds.c */

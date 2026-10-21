@@ -496,6 +496,31 @@ static void prep_place_animals(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x11F2C, (uint16_t)rnd()); hm_wr16(ram, 0x11F2E, (uint16_t)rnd());
 }
 
+/* eventcmds.c: a chicken's slot running its script: the slot pointer, the
+ * slot's fields, the chicken's record, the player's state and buttons */
+static void prep_chicken_slot(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  uint8_t n = (uint8_t)(rnd() % 13), slot = (uint8_t)(0x24 + n);
+  uint16_t at = (uint16_t)(0xB586 + 64 * slot);
+  hm_wr16(ram, 0xCC, at); ram[0xCE] = 0x7E;
+  for (unsigned i = 0; i < 64; i++) ram[at + i] = (uint8_t)rnd();
+  ram[at + 0x3F] = slot;
+  if (rnd() % 2) ram[at + 0x0E] = 0xE0;
+  if (rnd() % 2) ram[at + 0x0C] = 0;
+  static const uint8_t status[] = { 0x01, 0x05, 0x09, 0x0B, 0x41, 0x09, 0x21, 0x0D };
+  ram[0x0C286 + 8 * n] = status[rnd() % sizeof status];
+  static const uint16_t actions[] = { 0, 0, 1, 2, 4, 0x0A, 0x0C, 0x0D, 0x17, 0x1B };
+  hm_wr16(ram, 0xD4, actions[rnd() % (sizeof actions / sizeof actions[0])]);
+  hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 2) ? 0 : rnd()));            /* game state */
+  hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 2) ? 0 : rnd()));
+  hm_wr16(ram, 0x11F5A, (uint16_t)rnd());
+  hm_wr16(ram, 0x00128, (uint16_t)((rnd() % 2) ? 0x0080 : rnd()));     /* buttons */
+  ram[0x0091D] = (uint8_t)((rnd() % 2) ? 0 : rnd());                   /* in hands */
+  hm_wr16(ram, 0x0093B + 2 * n, (uint16_t)((rnd() % 3) ? 0x0200 - rnd() % 3 : rnd()));
+  ram[0xDE] = (uint8_t)rnd();
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -698,6 +723,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/animals.c", 0x83C8DC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_new_animal },
   { "PlaceAnimalsOnMap", hm_PlaceAnimalsOnMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/animals.c", 0x83C296, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_place_animals },
+  { "Event_UNKChickenRelated", hm_Event_UNKChickenRelated,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849857, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_chicken_slot },
+
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
