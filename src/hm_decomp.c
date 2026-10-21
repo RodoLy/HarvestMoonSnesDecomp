@@ -332,7 +332,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     0x83B253, 0, 0, 0, 0xFFFF, { W16(HM_STORED_GRASS, 0, 1100) } },
   { "AddPlayerHappiness", hm_AddPlayerHappiness, HM_OUT_A | HM_OUT_C, "src/stock.c",
     0x83B282, 0, 0, 0, 0xFFFF, { W16(HM_HAPPINESS, 0, 1100) } },
-  { "ChangeStamina", hm_ChangeStamina, 0, "src/stamina.c",
+  { "ChangeStamina", hm_ChangeStamina, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/stamina.c",
     0x81D061, 1, 0, 0, 0xFF,
     { B8(HM_MAX_STAMINA, 0, 255), B8(HM_CURRENT_STAMINA, 0, 255), B8(HM_EXHAUSTION, 0, 3),
       W16(HM_GAME_STATE, 0, 0xFFFF), B8(0x11F60, 0, 255) } },
