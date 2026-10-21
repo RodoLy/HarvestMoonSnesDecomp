@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 6.22%](https://img.shields.io/badge/decompiled-6.22%25-2f855a)
+![Decompiled: 7.94%](https://img.shields.io/badge/decompiled-7.94%25-2f855a)
 
-**6.22%** of the game's code decompiled and verified: 1888 of 30359 instructions, 24 of 373 routines (6.4%).
+**7.94%** of the game's code decompiled and verified: 2409 of 30359 instructions, 30 of 373 routines (8.0%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -39,10 +39,12 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 |---|---|---|
 | Random numbers | GetRNG, RNGReturn0toA ("roll an n-sided die") | `src/rng.c` |
 | Arithmetic | DivisionUnsigned | `src/math.c` |
-| Weather | SetWeatherFlags, WeatherTomorrow | `src/weather.c` |
+| Weather | SetWeatherFlags, WeatherTomorrow, SUB_8281C0 (the TV forecast) | `src/weather.c` |
 | Farm | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment, Sub_82A9A0 (grazing) | `src/farm.c` |
-| Stock | AddWood, AddGrass, AddPlayerHappiness | `src/stock.c` |
-| Player | ChangeStamina | `src/stamina.c` |
+| Stock and money | AddWood, AddGrass, AddPlayerHappiness, AddMoney | `src/stock.c` |
+| Player | ChangeStamina, HaveLunch | `src/stamina.c` |
+| People | FindMostLovedName, WifePregnanacyandChilds | `src/people.c` |
+| Calendar | LoadsDateNames | `src/calendar.c` |
 | Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night) | `src/animals.c` |
 | Events | SetCCPoiner, ResetsCurrentCCStructureLong, SUB_8480F8 (start an event script) | `src/events.c` |
 
@@ -64,6 +66,11 @@ A few things found along the way (details in each file's comments):
 - A hungry cow may fall sick (1/4); a cow sick to the end dies unless
   tomorrow is a festival. Pregnancy counts down with a global counter, and
   the calf's starting happiness (20 / 50 / 100) depends on the mother's.
+- Children: the first needs 450 hearts with the wife, the second 650 and
+  the first child 90 days old; both need the house at level 2. A child is
+  born 60 days after it is conceived.
+- The date suffix is "st/nd/rd" only for days 1-3, so the game writes
+  "21th", "22th" and "23th".
 - **A bug in the original game:** in CowFeedingandStatus, after a 1-in-16
   roll for a cow left outside, the X register stays 8-bit; if a broken-fence
   night flag ($0196 bit $0400) is also set, `LDY.W #$0002` at $83:BDE1 is

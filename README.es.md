@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 6.22%](https://img.shields.io/badge/descompilado-6.22%25-2f855a)
+![Descompilado: 7.94%](https://img.shields.io/badge/descompilado-7.94%25-2f855a)
 
-**6.22%** del código del juego descompilado y verificado: 1888 de 30359 instrucciones, 24 de 373 rutinas (6.4%).
+**7.94%** del código del juego descompilado y verificado: 2409 de 30359 instrucciones, 30 de 373 rutinas (8.0%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
@@ -39,10 +39,12 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 |---|---|---|
 | Números aleatorios | GetRNG, RNGReturn0toA ("dado de n caras") | `src/rng.c` |
 | Aritmética | DivisionUnsigned | `src/math.c` |
-| Clima | SetWeatherFlags, WeatherTomorrow | `src/weather.c` |
+| Clima | SetWeatherFlags, WeatherTomorrow, SUB_8281C0 (el pronóstico de la tele) | `src/weather.c` |
 | Granja | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment, Sub_82A9A0 (pastar) | `src/farm.c` |
-| Existencias | AddWood, AddGrass, AddPlayerHappiness | `src/stock.c` |
-| Jugador | ChangeStamina | `src/stamina.c` |
+| Existencias y dinero | AddWood, AddGrass, AddPlayerHappiness, AddMoney | `src/stock.c` |
+| Jugador | ChangeStamina, HaveLunch | `src/stamina.c` |
+| Personas | FindMostLovedName, WifePregnanacyandChilds | `src/people.c` |
+| Calendario | LoadsDateNames | `src/calendar.c` |
 | Animales | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (la noche de los animales) | `src/animals.c` |
 | Eventos | SetCCPoiner, ResetsCurrentCCStructureLong, SUB_8480F8 (arrancar un guion de evento) | `src/events.c` |
 
@@ -66,6 +68,11 @@ comentarios de cada archivo):
   final, muere, salvo que mañana sea festival. El embarazo cuenta con un
   contador global, y la felicidad inicial de la cría (20 / 50 / 100) depende
   de la de la madre.
+- Hijos: el primero pide 450 corazones de la esposa; el segundo, 650 y que
+  el primero tenga 90 días; los dos, la casa en nivel 2. Un hijo nace 60
+  días después de concebido.
+- El sufijo del día es "st/nd/rd" solo para los días 1-3, así que el juego
+  escribe "21th", "22th" y "23th".
 - **Un bug del juego original:** en CowFeedingandStatus, después de tirar el
   dado de 1/16 para una vaca que quedó afuera, el registro X se queda en 8
   bits; si además está la bandera de cerca rota ($0196 bit $0400),

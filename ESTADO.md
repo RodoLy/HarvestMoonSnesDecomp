@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **24 rutinas reescritas y verificadas** (0 diferencias):
+- **30 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -41,6 +41,12 @@ en el README (`tools/progress.py`).
 | SetCCPoiner | $84:887C | src/events.c |
 | ResetsCurrentCCStructureLong | $84:88D4 | src/events.c |
 | SUB_8480F8 | $84:80F8 | src/events.c |
+| FindMostLovedName | $82:8EC6 | src/people.c |
+| WifePregnanacyandChilds | $82:8790 | src/people.c |
+| LoadsDateNames | $82:89D6 | src/calendar.c |
+| AddMoney | $83:B1C9 | src/stock.c |
+| SUB_8281C0 (pronóstico de la tele) | $82:81C0 | src/weather.c |
+| HaveLunch | $82:80AA | src/stamina.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -136,6 +142,23 @@ reales de SetCCPoiner / ResetsCurrentCCStructureLong. 0 diferencias.
   `HM_DECOMP_DIFF_ALL`, `HM_DECOMP_FUZZ_ONLY`, `HM_DECOMP_FUZZ_CALL`.
   Para trazar el original: `SNESRECOMP_INTERP_PCTRACE=1` (así se encontró
   el BRK).
+
+## La noche, parte lógica (hecho el 20-oct-2026)
+
+Las subrutinas de NightReset que son lógica del juego ya están todas:
+clima, granja, animales, nombres de la fecha, la chica favorita, esposa e
+hijos, dinero. NightReset misma toca pantalla, sonido y guardado (registros
+del hardware y SRAM), que el comprobador no modela, así que queda para
+después.
+
+- Hijos: primero 450 corazones, segundo 650 y el primer hijo con 90 días;
+  casa nivel 2 ($7F1F64 bit $0080) y 20 días de casados ($7F1F3B). Nace a
+  los 60 días de concebido ($7F1F37 / $7F1F39); cada 120 días, cumpleaños
+  ($7F1F6C $0100 / $0200). El aniversario: cada 120 días de casados.
+- FindMostLovedName: en empate gana la última; las etiquetas de HM-Decomp
+  están cruzadas (Ann / Nina).
+- HaveLunch y ChangeStamina solo comparan la WRAM (sus registros de salida
+  no están modelados).
 
 ## Lo siguiente
 
