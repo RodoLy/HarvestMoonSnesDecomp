@@ -180,6 +180,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
     { B8(HM_RNG_STATE, 0, 255), B8(HM_RNG_STATE + 1, 0, 255), W16(0x11F6E, 0, 0xFFFF),
       W16(0x11F64, 0, 0xFFFF), W16(0x11F45, 0, 0xFFFF), W16(0x11F33, 0, 1100) },
     200, prep_animals },
+  { "FindMostLovedName", hm_FindMostLovedName, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/people.c", 0x828EC6, 0, 0, 0, 0xFFFF,
+    { W16(0x11F1F, 0, 999), W16(0x11F21, 0, 999), W16(0x11F23, 0, 999), W16(0x11F25, 0, 999),
+      W16(0x11F27, 0, 999) } },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
