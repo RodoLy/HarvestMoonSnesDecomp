@@ -195,6 +195,7 @@ void hm_NightlyFarmTilesCheck(uint8_t *ram, HmRegs *r);
 void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r);
 void hm_Sub_82A9A0(uint8_t *ram, HmRegs *r);
 void hm_AddCowHappiness(uint8_t *ram, HmRegs *r);     /* animals.c */
+void hm_CowFeedingandStatus(uint8_t *ram, HmRegs *r);
 void hm_SetCCPoiner(uint8_t *ram, HmRegs *r);         /* events.c */
 void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r);
 void hm_SUB_8480F8(uint8_t *ram, HmRegs *r);

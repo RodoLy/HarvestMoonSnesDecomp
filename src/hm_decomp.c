@@ -65,6 +65,46 @@ static void prep_event_start(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   r->y = (uint16_t)(rnd() % 0x60);   /* script number */
 }
 
+static void prep_animals(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_random_farm_and_weather(ram, r, rnd);      /* grass to graze, $0196 */
+  static const uint8_t cow_status[] = { 0x00, 0x01, 0x03, 0x05, 0x09, 0x19, 0x29, 0x49,
+                                        0x89, 0x39, 0x59, 0x08, 0x0B, 0xFF };
+  static const uint8_t maps[] = { 0x27, 0x27, 0x28, 0x28, 0x00, 0x01, 0x02, 0x03, 0x04, 0x15 };
+  for (int i = 0; i < 12; i++) {                   /* cows: 16 bytes at $7E:C1C6 */
+    uint8_t *c = &ram[0x0C1C6 + 16 * i];
+    c[0] = cow_status[rnd() % sizeof cow_status];
+    c[1] = (uint8_t)rnd();
+    c[2] = maps[rnd() % sizeof maps];
+    static const uint8_t counters[] = { 0, 1, 2, 3, 6, 7, 13, 14, 20, 21, 255 };
+    c[3] = counters[rnd() % sizeof counters];
+    c[4] = (uint8_t)rnd();
+    c[5] = (rnd() & 3) ? (uint8_t)(rnd() % 12) : 10;
+  }
+  static const uint8_t hen_status[] = { 0x00, 0x01, 0x03, 0x05, 0x09, 0x19, 0x11, 0x0F, 0xFF };
+  for (int i = 0; i < 13; i++) {                   /* chickens: 8 bytes at $7E:C286 */
+    uint8_t *h = &ram[0x0C286 + 8 * i];
+    h[0] = hen_status[rnd() % sizeof hen_status];
+    h[1] = maps[rnd() % sizeof maps];
+    static const uint8_t counters[] = { 0, 1, 2, 3, 6, 7, 255 };
+    h[2] = counters[rnd() % sizeof counters];
+  }
+  hm_wr16(ram, 0x11F60, (uint16_t)(rnd() & 0x0009));   /* bit 0: no feeding */
+  hm_wr16(ram, 0x11F5A, (rnd() & 1) ? 0x1000 : 0);
+  hm_wr16(ram, 0x11F68, (rnd() & 1) ? 0x0100 : 0);
+  hm_wr16(ram, 0x00932, (uint16_t)rnd());               /* stalls with fodder */
+  if (rnd() & 1) hm_wr16(ram, 0x00196, (uint16_t)(hm_rd16(ram, 0x00196) | 0x0400));
+  /* Not both: with $7F1F5A bit $1000 and $0196 bit $0400 the original runs
+   * into a BRK at $83:BDE4 (a game bug, see animals.c) and can't be compared. */
+  if (hm_rd16(ram, 0x00196) & 0x0400) hm_wr16(ram, 0x11F5A, 0);
+  ram[0x00931] = (uint8_t)(rnd() % 6);                  /* chicken feed */
+  ram[0x0098C] = (uint8_t)(rnd() % 12);                 /* weather tomorrow */
+  ram[0x11F0A] = (uint8_t)(rnd() % 13);                 /* cows */
+  ram[0x11F0B] = (rnd() & 1) ? 12 : (uint8_t)(rnd() % 13); /* chickens */
+  ram[0x11F12] = (uint8_t)(rnd() % 4);
+  ram[0x11F32] = (rnd() & 1) ? 0x15 : (uint8_t)(rnd() % 0x15);
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -135,6 +175,11 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "SUB_8480F8", hm_SUB_8480F8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/events.c",
     0x8480F8, 0, 0, 0, 0xFFFF, { W16(0x00985, 0, 0xFFFF), W16(0x00987, 0, 0xFFFF) },
     0, prep_event_start },
+  { "CowFeedingandStatus", hm_CowFeedingandStatus, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/animals.c", 0x83BC5A, 0, 0, 0, 0xFFFF,
+    { B8(HM_RNG_STATE, 0, 255), B8(HM_RNG_STATE + 1, 0, 255), W16(0x11F6E, 0, 0xFFFF),
+      W16(0x11F64, 0, 0xFFFF), W16(0x11F45, 0, 0xFFFF), W16(0x11F33, 0, 1100) },
+    200, prep_animals },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
