@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 8.26%](https://img.shields.io/badge/decompiled-8.26%25-2f855a)
+![Decompiled: 12.10%](https://img.shields.io/badge/decompiled-12.10%25-2f855a)
 
-**8.26%** of the game's code decompiled and verified: 3731 of 45176 instructions, 51 of 513 routines (9.9%).
+**12.10%** of the game's code decompiled and verified: 5465 of 45176 instructions, 78 of 514 routines (15.2%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -47,10 +47,11 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Calendar | LoadsDateNames | `src/calendar.c` |
 | Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night) | `src/animals.c` |
 | Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (start an event script) | `src/events.c` |
-| Map edits | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060 (change tiles of the current map) | `src/mapedit.c` |
+| Map edits | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | Video DMA | AddProgrammedDMA (queue a copy to VRAM / CGRAM for the next NMI) | `src/dma.c` |
 | Objects | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites and the objects the tools leave on the map) | `src/objects.c` |
 | Tools | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square | `src/tools.c` |
+| Using the tools | 26 of the 28 ToolUsed* routines: sickle, hoe, hammer, axe, their gold versions, the five seeds, paint, feed, medicine, potion, bell, milker, brush, beans, gem seed, blue feather (not yet: watering can and sprinkler, which talk to the sound chip) | `src/toolused.c` |
 
 A few things found along the way (details in each file's comments):
 
@@ -82,6 +83,19 @@ A few things found along the way (details in each file's comments):
   roll for a cow left outside, the X register stays 8-bit; if a broken-fence
   night flag ($0196 bit $0400) is also set, `LDY.W #$0002` at $83:BDE1 is
   decoded as a 2-byte instruction and the leftover `00` executes as `BRK`.
+- Tool finds: hoeing, once a day, 1 in 16 a coin (10 G) or else 1 in 16 a
+  money bag (50 G); in spring and summer 1 in 32 a mole; 1 in 64 a power
+  berry, only twice ever. The sickle finds a frog in summer (1 in 16,
+  +2 happiness). One more berry each from the rock by the spring (hammer,
+  1 in 4) and from a stump off the farm (axe, 1 in 16).
+- Big stones and stumps break on the 6th hit (one shared counter, $096D);
+  the gold hammer and axe break them at once. The gold hoe tills up to 6
+  tiles in a line and stops at the first it can't; the gold sickle cuts
+  the 9 tiles around. The gold axe forgets the "no finds today" check.
+- Seeds only take in their season (corn and tomato in summer, potato and
+  turnip in spring, grass in spring and summer); out of season the tile
+  just becomes a dead sprout.
+- Painting the house: four parts of the wall, +10 happiness each.
 - There are at most 10 "map objects" (the effects tools leave, like cut
   grass). If all 10 are in use when an 11th is needed, the game freezes:
   `BRA` to itself at $81:A528.
@@ -89,7 +103,7 @@ A few things found along the way (details in each file's comments):
 ## Layout
 
 - `src/` — the rewritten routines and the checker (`hm_decomp.c/.h`).
-- `data/decomp_names.tsv` — names of 493 routines (from HM-Decomp).
+- `data/decomp_names.tsv` — names of 495 routines (from HM-Decomp).
 - `tools/build.sh` — generates, renames and builds the test executable.
 - `tools/check.sh` — runs the checks (random inputs, a new game, nights).
 - `tools/progress.py` — computes the percentage above.

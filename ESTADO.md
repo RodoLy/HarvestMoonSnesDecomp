@@ -8,12 +8,12 @@ en el README (`tools/progress.py`).
 
 - **Proyecto separado** del juego. Se compila con `tools/build.sh` (usa la
   recompilación como base, sin modificarla) y se prueba con `tools/check.sh`.
-- **Nombres**: 493 rutinas renombradas con los nombres de HM-Decomp
+- **Nombres**: 495 rutinas renombradas con los nombres de HM-Decomp
   (`data/decomp_names.tsv`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **51 rutinas reescritas y verificadas** (0 diferencias):
+- **78 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -65,6 +65,8 @@ en el README (`tools/progress.py`).
 | CreateGameObject (CODE_858000) | $85:8000 | src/objects.c |
 | LoadGameObjectComponents (CODE_858AE5) | $85:8AE5 | src/objects.c |
 | LoadSpriteComponent (CODE_858C30) | $85:8C30 | src/objects.c |
+| StartMapAnimation (CODE_81A5E1) | $81:A5E1 | src/mapedit.c |
+| 26 ToolUsed* (todas menos regadera y aspersor) | $82:931E-$82:A570 | src/toolused.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -261,9 +263,42 @@ sistema de texto).
   en el intérprete de la recompilación y el cuerpo compilado le devuelve la
   llamada al instante. Las verifica la prueba al azar.
 
+## Usar las herramientas (hecho el 21-oct-2026)
+
+- Tabla `Tool_Used_Table` en $82:A5C3, una rutina por objeto en la mano
+  ($0921); la llama SUB_829260. Todas JSR/RTS, entran con A de 8 bits.
+- Plan común: PreCheckToolSuccess (Square / Line para semillas y oro) →
+  ChangeMapTile → SpawnMapObject (efecto) → a veces un hallazgo (evento
+  con SUB_8480F8) → $D4 = 0 y ChangeStamina ($FE = -2, $FF = -1, $FC = -4,
+  $F8 = -8).
+- Banderas de hallazgos: $7F1F5A ($1000 topo, $2000 rana), $7F1F5C ($0200
+  moneda/bolsa del día, $0100 baya del día, $0080 baya del martillo del
+  día), $7F1F64 ($0800/$1000 bayas de la azada, $0200 del martillo, $0400
+  del hacha), $7F1F66 (las 4 partes de la casa pintadas), $7F1F6A ($0020
+  evento del hacha en la montaña). $7F1F60 bit 3: "sin hallazgos" (y
+  energía congelada).
+- La bandera C importa: con la energía congelada ChangeStamina no la toca,
+  así que la deja la última comparación del camino. Las reescrituras la
+  llevan (`is`, `below`, `add_c`, `sub_c`).
+- ChangeStamina ahora modela sus registros de salida. **Diferencia de la
+  recompilación con el SNES real:** su `SEP #$10` no borra el byte alto de
+  X/Y (el hardware sí); la reescritura imita a la recompilación.
+- `tools/calls.py`: lista los JSR/JSL de una rutina con su dirección de
+  retorno leída de la ROM.
+- Prueba al azar: la semilla del dado ($0100-$0102) se sortea en cada
+  llamada (si no, todas sacan la misma tirada y los hallazgos nunca
+  salen); una tabla de propiedades propia en $7F:F000 para que las
+  herramientas funcionen; el jugador a 7 casillas del borde (la azada de
+  oro mira 6 adelante; fuera del mapa el original lee hardware).
+- En vivo no se ven: todo el uso de herramientas corre en el intérprete
+  de la recompilación (se pulsa X en el guion, pero el envoltorio no ve la
+  llamada). Las verifica la prueba al azar.
+- Faltan la regadera y el aspersor: UNK_Audio19 → UNK_Audio15 espera al
+  chip de sonido (puertos $2140-$2143), que el comprobador no modela.
+
 ## Lo siguiente
 
-Los ToolUsed* (ya tienen ChangeMapTile y SpawnMapObject); el
+SUB_829260 (el despachador) cuando estén la regadera y el aspersor; el
 sistema de texto (StartTextBox) para ShippingScene y UpdateTime; el resto
 de los eventos de animales (`Event_UNKCowRelated`, $84:9AD4).
 

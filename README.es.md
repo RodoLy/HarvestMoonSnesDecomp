@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 8.26%](https://img.shields.io/badge/descompilado-8.26%25-2f855a)
+![Descompilado: 12.10%](https://img.shields.io/badge/descompilado-12.10%25-2f855a)
 
-**8.26%** del código del juego descompilado y verificado: 3731 de 45176 instrucciones, 51 de 513 rutinas (9.9%).
+**12.10%** del código del juego descompilado y verificado: 5465 de 45176 instrucciones, 78 de 514 rutinas (15.2%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
@@ -47,10 +47,11 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Calendario | LoadsDateNames | `src/calendar.c` |
 | Animales | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (la noche de los animales) | `src/animals.c` |
 | Eventos | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (arrancar un guion de evento) | `src/events.c` |
-| Edición del mapa | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060 (cambiar casillas del mapa actual) | `src/mapedit.c` |
+| Edición del mapa | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | DMA de video | AddProgrammedDMA (encolar una copia a VRAM / CGRAM para el próximo NMI) | `src/dma.c` |
 | Objetos | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites y los objetos que dejan las herramientas en el mapa) | `src/objects.c` |
 | Herramientas | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square | `src/tools.c` |
+| Usar las herramientas | 26 de las 28 rutinas ToolUsed*: hoz, azada, martillo, hacha, sus versiones de oro, las cinco semillas, pintura, comida, medicina, poción, campana, ordeñadora, cepillo, habichuelas, semilla de gema, pluma azul (faltan la regadera y el aspersor, que hablan con el chip de sonido) | `src/toolused.c` |
 
 Algunas cosas que se descubrieron por el camino (detalles en los
 comentarios de cada archivo):
@@ -86,6 +87,21 @@ comentarios de cada archivo):
   bits; si además está la bandera de cerca rota ($0196 bit $0400),
   `LDY.W #$0002` en $83:BDE1 se lee como instrucción de 2 bytes y el `00`
   sobrante se ejecuta como `BRK`.
+- Hallazgos con las herramientas: con la azada, una vez al día, 1 de 16
+  una moneda (10 G) o si no 1 de 16 una bolsa de dinero (50 G); en
+  primavera y verano 1 de 32 un topo; 1 de 64 una baya de poder, solo dos
+  veces en todo el juego. La hoz encuentra una rana en verano (1 de 16,
+  +2 de felicidad). Una baya más en la roca del manantial (martillo, 1 de
+  4) y otra en un tocón fuera de la granja (hacha, 1 de 16).
+- Las piedras grandes y los tocones se rompen al 6.º golpe (un mismo
+  contador, $096D); el martillo y el hacha de oro, de un golpe. La azada
+  de oro ara hasta 6 casillas en línea y para en la primera que no puede;
+  la hoz de oro corta las 9 de alrededor. El hacha de oro se salta la
+  revisión de "hoy no hay hallazgos".
+- Las semillas solo prenden en su estación (maíz y tomate en verano, papa
+  y nabo en primavera, pasto en primavera y verano); fuera de estación la
+  casilla queda como un brote muerto.
+- Pintar la casa: cuatro partes de la pared, +10 de felicidad cada una.
 - Hay como mucho 10 "objetos del mapa" (los efectos que dejan las
   herramientas, como la hierba cortada). Si los 10 están en uso cuando hace
   falta un 11.º, el juego se congela: `BRA` a sí mismo en $81:A528.
@@ -93,7 +109,7 @@ comentarios de cada archivo):
 ## Carpetas
 
 - `src/` — las rutinas reescritas y el comprobador (`hm_decomp.c/.h`).
-- `data/decomp_names.tsv` — nombres de 493 rutinas (de HM-Decomp).
+- `data/decomp_names.tsv` — nombres de 495 rutinas (de HM-Decomp).
 - `tools/build.sh` — genera, renombra y compila el ejecutable de prueba.
 - `tools/check.sh` — corre las pruebas (al azar, partida nueva y noches).
 - `tools/progress.py` — calcula el porcentaje de arriba.
