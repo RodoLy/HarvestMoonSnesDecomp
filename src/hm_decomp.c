@@ -163,6 +163,16 @@ static void prep_player_tool(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 6));                                  /* facing */
   if (rnd() & 1) { r->x = (uint16_t)(rnd() % 32); r->y = (uint16_t)(rnd() % 32); }
 }
+static void prep_player_tool_near(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_player_tool(ram, r, rnd);
+  /* the tile in front must stay on the map: player well inside it, and
+   * a small A (the 8-bit entries would leave a random high byte) */
+  r->a &= 0x00FF;
+  hm_wr16(ram, 0xD6, (uint16_t)(64 + rnd() % 0x380));
+  hm_wr16(ram, 0xD8, (uint16_t)(64 + rnd() % 0x380));
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -271,6 +281,14 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/tools.c", 0x81D14E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_tool },
   { "TileAtOffsetFromPlayer", hm_TileAtOffsetFromPlayer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/tools.c", 0x81D1A4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_tool },
+  { "PreCheckToolSuccess", hm_PreCheckToolSuccess, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/tools.c", 0x8292A0, 0, 0, 0, 0xFFFF, { B8(HM_SEASON, 0, 3) }, 0, prep_player_tool_near },
+  { "PreCheckToolSuccessLine", hm_PreCheckToolSuccessLine,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/tools.c", 0x8292BC, 1, 0, 0, 2,
+    { B8(HM_SEASON, 0, 3) }, 0, prep_player_tool_near },
+  { "PreCheckToolSuccessSquare", hm_PreCheckToolSuccessSquare,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/tools.c", 0x8292D6, 1, 0, 0, 8,
+    { B8(HM_SEASON, 0, 3) }, 0, prep_player_tool_near },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

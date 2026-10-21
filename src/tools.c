@@ -246,3 +246,54 @@ void hm_TileAtOffsetFromPlayer(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)y;
   r->c = y > 0xFFFF;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * PreCheckToolSuccess / Line / Square ($82:92A0 / $82:92BC / $82:92D6;
+ * JSR, RTS): pick the tile, then CheckToolSuccess on it (its A is the
+ * answer). Plain: the tile right in front. Line: A + 1 tiles ahead (the
+ * gold tools reach further). Square: entry A (0..8) of the offset table
+ * $82:92FA, around the player.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define SQUARE_OFFSETS 0x8292FA   /* ROM: dw dx, dy per entry */
+
+static void check_tile_in_front(uint8_t *ram, HmRegs *r, uint16_t ret)
+{
+  r->x = hm_rd16(ram, HM_TILE_IN_FRONT_X);
+  r->y = hm_rd16(ram, HM_TILE_IN_FRONT_Y);
+  hm_jsl(ram, r, ret, 0x82);
+  hm_CheckToolSuccess(ram, r);
+  hm_rtl(ram, r);
+}
+
+static void tile_ahead_then_check(uint8_t *ram, HmRegs *r, uint16_t tiles,
+                                  uint16_t ret_front, uint16_t ret_check)
+{
+  r->a = tiles; r->x = 0; r->y = 0;
+  hm_jsl(ram, r, ret_front, 0x81);
+  hm_CalculateTileinFront(ram, r);
+  hm_rtl(ram, r);
+  check_tile_in_front(ram, r, ret_check);
+}
+
+void hm_PreCheckToolSuccess(uint8_t *ram, HmRegs *r)
+{
+  tile_ahead_then_check(ram, r, 1, 0x92AE, 0x92BA);
+}
+
+void hm_PreCheckToolSuccessLine(uint8_t *ram, HmRegs *r)
+{
+  tile_ahead_then_check(ram, r, (uint16_t)(r->a + 1), 0x92C8, 0x92D4);
+}
+
+void hm_PreCheckToolSuccessSquare(uint8_t *ram, HmRegs *r)
+{
+  uint16_t at = (uint16_t)(r->a << 2);
+  uint16_t dx = hm_bus_rd16(ram, SQUARE_OFFSETS + at);
+  push16(ram, r, dx);                            /* PHA ... PLA */
+  r->y = hm_bus_rd16(ram, SQUARE_OFFSETS + (uint16_t)(at + 2));
+  r->x = pull16(ram, r);
+  hm_jsl(ram, r, 0x92EC, 0x81);
+  hm_TileAtOffsetFromPlayer(ram, r);
+  hm_rtl(ram, r);
+  check_tile_in_front(ram, r, 0x92F8);
+}
