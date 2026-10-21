@@ -219,6 +219,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     0x83B1C9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_money },
   { "SUB_8281C0", hm_SUB_8281C0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/weather.c",
     0x8281C0, 0, 0, 0, 0xFFFF, { B8(HM_WEATHER_TOMORROW, 0, 40), W16(0x00196, 0, 0x03FF) } },
+  { "HaveLunch", hm_HaveLunch, 0, "src/stamina.c", 0x8280AA, 1, 0, 0, 0xFF,
+    { B8(0x11F1C, 11, 13), W16(HM_GAME_STATE, 0, 0xFFFF), W16(HM_PLAYER_ACTION, 0x0E, 0x19),
+      B8(HM_MAX_STAMINA, 0, 255), B8(HM_CURRENT_STAMINA, 0, 255), B8(HM_RNG_STATE, 0, 255) } },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
