@@ -105,6 +105,21 @@ static void prep_animals(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x11F32] = (rnd() & 1) ? 0x15 : (uint8_t)(rnd() % 0x15);
 }
 
+static void prep_family(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  static const uint16_t hearts[] = { 0, 200, 449, 450, 451, 649, 650, 651, 999 };
+  for (int i = 0; i < 5; i++) hm_wr16(ram, 0x11F1F + 2 * i, hearts[rnd() % 9]);
+  static const uint16_t wives[] = { 0, 1, 2, 4, 8, 0x10, 0x20, 0x13 };
+  hm_wr16(ram, 0x11F66, wives[rnd() % 8]);
+  static const uint16_t days[] = { 0, 18, 19, 20, 119, 239, 359, 1000 };
+  hm_wr16(ram, 0x11F3B, days[rnd() % 8]);
+  static const uint16_t ages[] = { 0, 58, 59, 60, 89, 90, 179, 299, 419 };
+  hm_wr16(ram, 0x11F37, ages[rnd() % 9]);
+  hm_wr16(ram, 0x11F39, ages[rnd() % 9]);
+  hm_wr16(ram, 0x11F6E, (uint16_t)((rnd() & 0x001C) | (rnd() & 0xFFE3)));
+  hm_wr16(ram, 0x11F64, (uint16_t)rnd());
+}
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -184,6 +199,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/people.c", 0x828EC6, 0, 0, 0, 0xFFFF,
     { W16(0x11F1F, 0, 999), W16(0x11F21, 0, 999), W16(0x11F23, 0, 999), W16(0x11F25, 0, 999),
       W16(0x11F27, 0, 999) } },
+  { "WifePregnanacyandChilds", hm_WifePregnanacyandChilds,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP, "src/people.c", 0x828790, 0, 0, 0, 0xFFFF,
+    { W16(0x11F6C, 0, 0xFFFF), W16(0x11F33, 0, 1100) }, 0, prep_family },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
