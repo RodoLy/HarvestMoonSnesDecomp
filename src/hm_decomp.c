@@ -322,6 +322,12 @@ static void prep_spawn(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x0980, (uint16_t)rnd()); hm_wr16(ram, 0x0982, (uint16_t)rnd());
 }
 
+static void prep_map_animation(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)ram;
+  r->a = (uint16_t)(rnd() % 0x60);
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -461,6 +467,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/objects.c", 0x858000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_create_gobj },
   { "SpawnMapObject", hm_SpawnMapObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x81A500, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_spawn },
+  { "StartMapAnimation", hm_StartMapAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/mapedit.c", 0x81A5E1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_animation },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

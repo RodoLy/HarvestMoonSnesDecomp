@@ -52,6 +52,7 @@ LOCAL = {
     0x81A500: ("CODE_81A500", "SpawnMapObject"),
     0x858000: ("CODE_858000", "CreateGameObject"),
     0x858C30: ("CODE_858C30", "LoadSpriteComponent"),
+    0x81A5E1: ("CODE_81A5E1", "StartMapAnimation"),
 }
 
 

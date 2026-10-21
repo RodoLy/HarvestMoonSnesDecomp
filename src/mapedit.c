@@ -296,3 +296,31 @@ void hm_ChangeMapTile(uint8_t *ram, HmRegs *r)
   hm_SUB_82B060(ram, r);
   hm_rtl(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * StartMapAnimation ($81:A5E1, JSL, RTL; CODE_81A5E1 in HM-Decomp). A =
+ * an entry of the table $81:B963 (3 bytes each: a long pointer to a map
+ * animation script). Points $CF-$D1 at it and clears $0989 (the script's
+ * wait counter); CODE_81A600 then plays it frame by frame (the magic
+ * beans growing, for one).
+ * Leftovers: $7E = A in; A = (high byte of the pointer word : bank),
+ * X = 3 A + 2, C from the 3 A sum.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define MAP_ANIMATIONS 0x81B963
+
+void hm_StartMapAnimation(uint8_t *ram, HmRegs *r)
+{
+  uint16_t n = r->a;
+  hm_dp_w16(ram, r, 0x7E, n);
+  uint32_t sum = (uint32_t)(uint16_t)(n << 1) + n;       /* ASL; CLC; ADC $7E */
+  r->c = sum > 0xFFFF;
+  uint16_t x = (uint16_t)sum;
+  uint16_t word = hm_bus_rd16(ram, (MAP_ANIMATIONS + x) & 0xFFFFFF);
+  hm_dp_w16(ram, r, 0xCF, word);
+  x = (uint16_t)(x + 2);
+  uint8_t bank = hm_bus_rd8(ram, (MAP_ANIMATIONS + x) & 0xFFFFFF);
+  *hm_dp(ram, r, 0xD1) = bank;
+  r->a = (uint16_t)((word & 0xFF00) | bank);
+  r->x = x;
+  hm_bus_wr8(ram, ((uint32_t)r->db << 16) | 0x0989, 0);
+}

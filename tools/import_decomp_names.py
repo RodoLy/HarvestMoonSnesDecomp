@@ -43,6 +43,7 @@ MANUAL = {
     0x858000: "CreateGameObject",  # CODE_858000
     0x858AE5: "LoadGameObjectComponents",  # CODE_858AE5
     0x858C30: "LoadSpriteComponent",       # CODE_858C30
+    0x81A5E1: "StartMapAnimation",  # CODE_81A5E1
 }
 
 
