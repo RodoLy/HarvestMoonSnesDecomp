@@ -250,6 +250,13 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/tools.c", 0x82AC61, 0, 0, 0, 3, { B8(HM_SEASON, 0, 3) }, 0, prep_tile_in_front },
   { "CheckToolSuccess", hm_CheckToolSuccess, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/tools.c", 0x82AA71, 0, 0, 0, 0xFFFF, { B8(HM_SEASON, 0, 3) }, 0, prep_tile_in_front },
+  { "ResetsCurrentCCStructureShort", hm_ResetsCurrentCCStructureShort,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/events.c",
+    0x848961, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_cc_pointer },
+  { "UNK_LoadCCDataLong", hm_UNK_LoadCCDataLong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/events.c", 0x848097, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_start },
+  { "UNK_LoadCCDataShort", hm_UNK_LoadCCDataShort, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/events.c", 0x84803F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_start },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

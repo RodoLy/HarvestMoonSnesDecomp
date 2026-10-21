@@ -60,53 +60,114 @@ void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_8480F8 ($84:80F8, JSL, RTL): start an event script.
- *   A = CC slot, X = script group, Y = script number in the group.
- * Points the slot at the script (+30/+32), resets it, stores its own number
- * (+3F) and places it on the tile in front of the player (+1A/+1C).
- * Only the first entry of Events_Bank_Table is used ($B3:8000).
- * Leftovers: $7E = group, $80 = script number, $72-$74 = $B3:8000,
- * $C9-$CB = the group's table; A = tile-in-front Y, X = 2, Y = $1C,
- * C = bit 15 of the script number (from its ASL).
+ * ResetsCurrentCCStructureShort ($84:8961, JSR, RTS). The short reset:
+ * marks the slot in use, sets +01 to 1 and clears +03..06, +0F and the word
+ * +10. Ends with A = 0, Y = $10.
  * ───────────────────────────────────────────────────────────────────────── */
-#define RET_SET_CC_POINTER  0x80FE   /* JSL SetCCPoiner at $84:80FB */
-#define RET_RESET_CC        0x814B   /* JSR ResetsCurrentCCStructureLong at $84:8149 */
-
-void hm_SUB_8480F8(uint8_t *ram, HmRegs *r)
+void hm_ResetsCurrentCCStructureShort(uint8_t *ram, HmRegs *r)
 {
-  uint16_t slot = r->a, group = r->x, script = r->y;
-  hm_push8(ram, r, (uint8_t)(slot >> 8));        /* PHA (16-bit) */
-  hm_push8(ram, r, (uint8_t)slot);
-  hm_jsl(ram, r, RET_SET_CC_POINTER, 0x84);
+  static const uint8_t zero_bytes[] = { 0x0F, 0x03, 0x04, 0x05, 0x06 };
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x00), 1);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x01), 1);
+  for (unsigned i = 0; i < sizeof zero_bytes; i++)
+    hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, zero_bytes[i]), 0);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x10), 0);
+  r->a = 0;
+  r->y = 0x10;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Starting an event script: SUB_8480F8, UNK_LoadCCDataLong and
+ * UNK_LoadCCDataShort ($84:80F8, $84:8097, $84:803F; JSL, RTL).
+ *   A = CC slot, X = script group, Y = script number in the group.
+ * They point the slot ($CC, SetCCPoiner) at the script: +30 = the 16-bit
+ * offset, entry `script` of the group's table, +32 = its bank. The group's
+ * table is entry `group` (24-bit) of $B3:8000 (only the first entry of
+ * Events_Bank_Table is used). Then:
+ *  - Long: full reset, +3F = the slot's number;
+ *  - SUB_8480F8: the same, and it also places the event on the tile in
+ *    front of the player (+1A/+1C);
+ *  - Short: short reset, and the script pointer is also left in $C9-$CB
+ *    (Long uses $72-$74 / $C9-$CB for the tables, Short $75-$77 / $78-$7A).
+ * Leftovers: $7E = group, $80 = script number; X = 2; C = bit 15 of the
+ * script number (its ASL).
+ * ───────────────────────────────────────────────────────────────────────── */
+typedef struct ScriptStart {
+  uint16_t ret_set_pointer, ret_reset;   /* where their JSL / JSR return */
+  uint8_t table_dp, group_dp;            /* $72 / $C9 or $75 / $78 */
+  bool short_reset;
+} ScriptStart;
+
+static void jsr(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmRegs *))
+{
+  hm_push8(ram, r, (uint8_t)(ret >> 8));
+  hm_push8(ram, r, (uint8_t)ret);
+  fn(ram, r);
+  hm_pull8(ram, r); hm_pull8(ram, r);
+}
+
+static void start_script(uint8_t *ram, HmRegs *r, const ScriptStart *s)
+{
+  uint16_t group = r->x, script = r->y;
+  hm_jsl(ram, r, s->ret_set_pointer, 0x84);
   hm_SetCCPoiner(ram, r);
   hm_rtl(ram, r);
 
   hm_dp_w16(ram, r, 0x7E, group);
   hm_dp_w16(ram, r, 0x80, script);
-  /* $72-$74 = Events_Bank_Table[0] */
-  hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, EVENTS_BANK_TABLE));
-  *hm_dp(ram, r, 0x74) = hm_bus_rd8(ram, EVENTS_BANK_TABLE + 2);
-  /* $C9-$CB = the group's script table: 24-bit entry `group` */
+  hm_dp_w16(ram, r, s->table_dp, hm_bus_rd16(ram, EVENTS_BANK_TABLE));
+  *hm_dp(ram, r, s->table_dp + 2) = hm_bus_rd8(ram, EVENTS_BANK_TABLE + 2);
   uint16_t y = (uint16_t)(group * 3);
-  hm_dp_w16(ram, r, 0xC9, hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, y)));
-  *hm_dp(ram, r, 0xCB) = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, (uint16_t)(y + 2)));
-  /* script pointer = 16-bit entry `script` of that table, in its bank */
+  hm_dp_w16(ram, r, s->group_dp, hm_bus_rd16(ram, hm_dp_long(ram, r, s->table_dp, y)));
+  *hm_dp(ram, r, s->group_dp + 2) = hm_bus_rd8(ram, hm_dp_long(ram, r, s->table_dp, (uint16_t)(y + 2)));
   r->c = (script >> 15) & 1;                     /* ASL of $80 */
-  uint16_t offset = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xC9, (uint16_t)(script << 1)));
+  uint16_t offset = hm_bus_rd16(ram, hm_dp_long(ram, r, s->group_dp, (uint16_t)(script << 1)));
+  uint8_t bank = *hm_dp(ram, r, s->group_dp + 2);
   hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x30), offset);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x32), *hm_dp(ram, r, 0xCB));
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x32), bank);
+  r->x = 2;
+  if (s->short_reset) {
+    hm_dp_w16(ram, r, 0xC9, offset);
+    *hm_dp(ram, r, 0xCB) = bank;
+    jsr(ram, r, s->ret_reset, hm_ResetsCurrentCCStructureShort);
+  } else {
+    jsr(ram, r, s->ret_reset, hm_ResetsCurrentCCStructureLong);
+  }
+}
 
-  hm_push8(ram, r, (uint8_t)(RET_RESET_CC >> 8)); /* JSR */
-  hm_push8(ram, r, (uint8_t)RET_RESET_CC);
-  hm_ResetsCurrentCCStructureLong(ram, r);
-  hm_pull8(ram, r); hm_pull8(ram, r);           /* RTS */
-
-  uint8_t lo = hm_pull8(ram, r);                 /* PLA */
+/* PHA ... PLA around the start, then +3F = the slot's number. */
+static uint16_t start_script_numbered(uint8_t *ram, HmRegs *r, const ScriptStart *s)
+{
+  uint16_t slot = r->a;
+  hm_push8(ram, r, (uint8_t)(slot >> 8));
+  hm_push8(ram, r, (uint8_t)slot);
+  start_script(ram, r, s);
+  uint8_t lo = hm_pull8(ram, r);
   slot = (uint16_t)(lo | hm_pull8(ram, r) << 8);
   hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x3F), (uint8_t)slot);
+  r->a = slot;
+  r->y = 0x3F;
+  return slot;
+}
+
+void hm_UNK_LoadCCDataShort(uint8_t *ram, HmRegs *r)
+{
+  static const ScriptStart s = { 0x8044, 0x8095, 0x75, 0x78, true };
+  start_script(ram, r, &s);
+}
+
+void hm_UNK_LoadCCDataLong(uint8_t *ram, HmRegs *r)
+{
+  static const ScriptStart s = { 0x809D, 0x80EA, 0x72, 0xC9, false };
+  start_script_numbered(ram, r, &s);
+}
+
+void hm_SUB_8480F8(uint8_t *ram, HmRegs *r)
+{
+  static const ScriptStart s = { 0x80FE, 0x814B, 0x72, 0xC9, false };
+  start_script_numbered(ram, r, &s);
   hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x1A), hm_rd16(ram, HM_TILE_IN_FRONT_X));
   r->a = hm_rd16(ram, HM_TILE_IN_FRONT_Y);
   hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x1C), r->a);
-  r->x = 2;
   r->y = 0x1C;
 }
