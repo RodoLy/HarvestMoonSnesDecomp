@@ -939,6 +939,31 @@ static void prep_collision(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 2) { r->x = (uint16_t)(x + rnd() % 0x20); r->y = (uint16_t)(y + rnd() % 0x20); }
 }
 
+/* toolanim.c: the tool's animation (UNK_ToolUsed and each tool's). Any
+ * tool, prepared as for its own routine, sometimes without stamina. */
+static void prep_tool_animation(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  /* half the time the watering can's (its tiles include water: "fill up") */
+  if (rnd() % 2) {
+    prep_watering_can(ram, r, rnd);
+    if (rnd() % 2) {                                       /* water in front: the farm's */
+      static const uint8_t water[] = { 0xF0, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD };
+      memset(&ram[0x009B6], water[rnd() % 6], 4096);
+      ram[0x00022] = (uint8_t)(rnd() % 4);
+    }
+  } else {
+    prep_any_tool(ram, r, rnd);
+  }
+  hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 4) ? hm_rd16(ram, 0xD2) & ~0x0008u : hm_rd16(ram, 0xD2) | 0x0008));
+  ram[0x0091B] = (uint8_t)rnd();
+  ram[0x00926] = (uint8_t)((rnd() % 2) ? 0 : rnd() % 0x15);
+  /* the facing indexes a flag table in the ROM: past $2A00 it would reach
+   * hardware registers (prep_tile_in_front) */
+  hm_wr16(ram, 0xDA, (uint16_t)((rnd() % 8) ? rnd() % 4 : rnd() % 0x2A00));
+  hm_wr16(ram, 0x11F5A, (uint16_t)rnd());
+  if (ram[0x00921] >= 0x1C) ram[0x00921] = (uint8_t)(rnd() % 0x1C);
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1477,6 +1502,64 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/collision.c", 0x83AD91, 0, 0, 0, 3, { { 0 } }, 0, prep_collision },
   { "CDDDD", hm_CDDDD, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/collision.c", 0x83AEC3, 0, 0, 0, 3, { { 0 } }, 0, prep_collision },
+  { "UNK_ToolUsed", hm_UNK_ToolUsed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/toolanim.c", 0x8290A8, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationNoAction", hm_ToolAnimationNoAction, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x8290DD, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationSickle", hm_ToolAnimationSickle, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x8290DE, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationHoe", hm_ToolAnimationHoe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x8290EC, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationHammer", hm_ToolAnimationHammer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x8290FA, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationAxe", hm_ToolAnimationAxe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829108, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationCornSeeds", hm_ToolAnimationCornSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829116, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationTomatoSeeds", hm_ToolAnimationTomatoSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829121, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationPotatoSeeds", hm_ToolAnimationPotatoSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x82912C, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationTurnipSeeds", hm_ToolAnimationTurnipSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829137, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationCowMedicine", hm_ToolAnimationCowMedicine, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829142, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationMiraclePotion", hm_ToolAnimationMiraclePotion, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829150, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationBell", hm_ToolAnimationBell, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x82915E, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationGrassSeeds", hm_ToolAnimationGrassSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829179, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationPaint", hm_ToolAnimationPaint, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829184, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationMilker", hm_ToolAnimationMilker, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x82918D, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationBrush", hm_ToolAnimationBrush, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x82919B, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationWateringCan", hm_ToolAnimationWateringCan, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x8291A9, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationGoldSickle", hm_ToolAnimationGoldSickle, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x8291E8, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationGoldHoe", hm_ToolAnimationGoldHoe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x8291F1, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationGoldHammer", hm_ToolAnimationGoldHammer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x8291FD, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationGoldAxe", hm_ToolAnimationGoldAxe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829209, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationSprinkler", hm_ToolAnimationSprinkler, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829215, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationBeans", hm_ToolAnimationBeans, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x82921E, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationGem", hm_ToolAnimationGem, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x82922A, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationBlueFeather", hm_ToolAnimationBlueFeather, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829236, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationChickenFeed", hm_ToolAnimationChickenFeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x82923F, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationCowFeed", hm_ToolAnimationCowFeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x82924B, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "ToolAnimationUNK", hm_ToolAnimationUNK, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/toolanim.c", 0x829257, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

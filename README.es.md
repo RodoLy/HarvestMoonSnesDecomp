@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 33.34%](https://img.shields.io/badge/descompilado-33.34%25-2f855a)
+![Descompilado: 33.80%](https://img.shields.io/badge/descompilado-33.80%25-2f855a)
 
-**33.34%** del código del juego descompilado y verificado: 15060 de 45176 instrucciones, 202 de 534 rutinas (37.8%).
+**33.80%** del código del juego descompilado y verificado: 15268 de 45176 instrucciones, 231 de 534 rutinas (43.3%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 

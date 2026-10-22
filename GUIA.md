@@ -258,6 +258,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/scroll.c` | desplazar el mapa |
 | `src/palette.c` | los colores del día |
 | `src/collision.c` | chocar con el mapa, los objetos y el jugador |
+| `src/toolanim.c` | la animación de la herramienta al apretar Y |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -352,6 +353,18 @@ semillas 20. `CheckToolSuccess` responde: 1 funciona, 0 no, 2 se llena la
 regadera.
 
 **Rareza:** cualquier objeto que no esté en la lista "funciona".
+
+**Primero la animación** (`src/toolanim.c`). Apretar Y corre
+`UNK_ToolUsed`: sin energía ($D2 bit 3) el jugador solo muestra la
+animación de "cansado" ($4D). Si no, revisa la casilla de enfrente, lo que
+también elige el sonido de la herramienta, y llama a la rutina de animación
+de la herramienta (`Tool_Animation_Table`, de nuevo una por objeto). Cada
+una solo pone la animación del jugador en $0901: un número por herramienta,
+más la dirección para las herramientas que se ven distintas según hacia
+dónde mira. La regadera tiene tres: regando, vacía y llenándose (frente al
+agua además llena la regadera, 20 usos). La campana además levanta $7F1F5A
+bit $10, que llama a las vacas. Lo que la herramienta le hace a la casilla
+viene después, cuando la animación llega a ese momento (`SUB_829260`).
 
 **Quién las llama:** `SUB_829260` toma el objeto en la mano ($0921), busca
 su rutina en `Tool_Used_Table` (una por objeto, en el orden de los
@@ -1051,3 +1064,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 30,61 % | desplazar el mapa (probado en vivo: unas 1.200 llamadas en una partida nueva) |
 | 22-oct-2026 | 32,17 % | los colores del día (probado en vivo: unas 13.000 llamadas) |
 | 22-oct-2026 | 33,34 % | chocar con las cosas (probado en vivo: unas 2.900 llamadas) |
+| 22-oct-2026 | 33,80 % | las animaciones de las herramientas (29 rutinas) |

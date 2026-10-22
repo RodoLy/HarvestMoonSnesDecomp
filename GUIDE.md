@@ -257,6 +257,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/scroll.c` | scrolling the map |
 | `src/palette.c` | the colours of the day |
 | `src/collision.c` | bumping into the map, objects and the player |
+| `src/toolanim.c` | the tool's animation when pressing Y |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -347,6 +348,18 @@ seasons. Bits: sickle 01, hoe 02, hammer 04, axe 08, water 10, seeds 20.
 refilled.
 
 **Quirk:** any item that is not on the list "works".
+
+**First the animation** (`src/toolanim.c`). Pressing Y runs
+`UNK_ToolUsed`: with no stamina left ($D2 bit 3) the player only shows the
+"tired" animation ($4D). Otherwise it checks the tile in front, which also
+chooses the tool's sound, and calls the tool's animation routine
+(`Tool_Animation_Table`, again one per item). Each only puts the player's
+animation in $0901: a number per tool, plus the direction for the tools
+that look different when facing each way. The watering can has three:
+pouring, empty, and filling up (in front of water it also fills the can,
+20 uses). The bell also raises $7F1F5A bit $10, which calls the cows. What
+the tool does to the tile comes later, when the animation reaches that
+moment (`SUB_829260`).
 
 **Who calls them:** `SUB_829260` takes the item in hand ($0921), looks up
 its routine in `Tool_Used_Table` (one per item, in item order: 28 in
@@ -1025,3 +1038,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 30.61 % | scrolling the map (checked live: about 1,200 calls in a new game) |
 | 22-Oct-2026 | 32.17 % | the colours of the day (checked live: about 13,000 calls) |
 | 22-Oct-2026 | 33.34 % | bumping into things (checked live: about 2,900 calls) |
+| 22-Oct-2026 | 33.80 % | the tools' animations (29 routines) |

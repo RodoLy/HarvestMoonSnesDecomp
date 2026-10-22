@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **202 rutinas reescritas y verificadas** (0 diferencias):
+- **231 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -85,6 +85,7 @@ en el README (`tools/progress.py`).
 | UNK_CustomisePalette, ChangePalettebyTime, PrepareSpritePalette, CustomiseSpritePalette, SetPaletteToLoad | $80:9241-$80:9501 | src/palette.c |
 | Event_TimeofDayPalette | $84:9356 | src/palette.c |
 | CBBBB, CDDDD, CEEEE, CFFFF (choques) | $83:AD91-$83:B1C8 | src/collision.c |
+| UNK_ToolUsed y las 28 ToolAnimation* | $82:90A8-$82:925F | src/toolanim.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |
