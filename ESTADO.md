@@ -8,12 +8,12 @@ en el README (`tools/progress.py`).
 
 - **Proyecto separado** del juego. Se compila con `tools/build.sh` (usa la
   recompilación como base, sin modificarla) y se prueba con `tools/check.sh`.
-- **Nombres**: 511 rutinas renombradas con los nombres de HM-Decomp
+- **Nombres**: 515 rutinas renombradas con los nombres de HM-Decomp
   (`data/decomp_names.tsv`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **138 rutinas reescritas y verificadas** (0 diferencias):
+- **146 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -71,6 +71,9 @@ en el README (`tools/progress.py`).
 | AddNewChicken, AddNewCow | $83:C807, $83:C8DC | src/animals.c |
 | PlaceAnimalsOnMap (CODE_83C296) | $83:C296 | src/animals.c |
 | 56 comandos de evento (Event_*) | $84:89BB-$84:BB4B | src/eventcmds.c |
+| RemoveProgrammedDMA, UNK_SetDMA2 | $80:8AA0, $83:81B7 | src/dma.c |
+| StartTextBox, SUB_83932D, CloseTextBox (CODE_8393F9) | $83:935F, $83:932D, $83:93F9 | src/text.c |
+| DrawTextBoxArrow, BlinkTextBoxArrow, TextBoxArrow | $83:94D7, $83:9495, $83:9447 | src/text.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -369,7 +372,8 @@ sistema de texto).
 
 Más comandos de evento (`python3 tools/candidates.py | grep Event_`);
 SUB_829260 (el despachador) cuando estén la regadera y el aspersor; el
-sistema de texto (StartTextBox) para ShippingScene y UpdateTime; el resto
+impresor de texto (ADDDDFFFF, $83:951C, el que sigue a la flecha) para
+ShippingScene y UpdateTime; el resto
 de los eventos de animales (`Event_UNKCowRelated`, $84:9AD4).
 
 Otras hojas candidatas (no llaman a nada): LoadsDamageProbabilities,

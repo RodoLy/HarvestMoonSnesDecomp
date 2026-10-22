@@ -309,6 +309,10 @@
 03932D	SUB_83932D_lo
 83935F	StartTextBox
 03935F	StartTextBox_lo
+8393F9	CloseTextBox
+0393F9	CloseTextBox_lo
+039495	BlinkTextBoxArrow_lo
+8394D7	DrawTextBoxArrow
 03951C	ADDDDFFFF_lo
 03A9BE	NewGameSetup_lo
 03ABF0	FirstNightReset_lo

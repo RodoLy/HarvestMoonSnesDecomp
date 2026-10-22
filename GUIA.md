@@ -196,6 +196,11 @@ Algunos trucos que fueron necesarios:
   compilada: la recompilación las corre en un intérprete. El comprobador
   en vivo no ve esas llamadas, y entonces la prueba al azar es la
   verificación (llama al original por el intérprete).
+- **Lecturas fuera del cartucho.** Si una prueba al azar hace que una
+  rutina lea una tabla tan lejos que se sale de la ROM, cae en direcciones
+  donde no hay nada (el "bus abierto": se lee lo último que pasó por los
+  cables). En el juego eso nunca pasa, así que las preparaciones dejan las
+  entradas dentro de la ROM.
 
 ### 3.5 El porcentaje
 
@@ -204,6 +209,10 @@ Algunos trucos que fueron necesarios:
 rutina que recorre las 4.096 casillas de la granja pesa más que una de tres
 líneas. El 21 de octubre se corrigió la medición: antes no se contaba el
 código sin dirección anotada y daba de más (10,49 % → 7,29 %).
+Después vino una segunda corrección: HM-Decomp a veces escribe varias
+rutinas una detrás de otra bajo un solo nombre. Ahora una etiqueta a la
+que se llama desde fuera de su bloque cuenta como rutina aparte, y las
+instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 
 ---
 
@@ -227,6 +236,7 @@ código sin dirección anotada y daba de más (10,49 % → 7,29 %).
 | `src/mapedit.c` | cambiar casillas del mapa |
 | `src/dma.c` | la cola de DMA |
 | `src/objects.c` | objetos con sprite |
+| `src/text.c` | el cuadro de diálogo |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -571,6 +581,30 @@ del rancho** (`RanchMasteryCalculator`, de 0 a 999). Suma:
 | Desarrollo de la granja | /2 |
 | Felicidad de cada vaca | /8, máximo 25 |
 
+### 5.14 El cuadro de texto
+
+Los diálogos se muestran en **BG3**, la capa de fondo que se usa para el
+texto.
+
+- **Abrir** (`StartTextBox`, X = número del texto): busca el texto en
+  `Text_Pointer_Table` ($83:9BF6, 3 bytes por texto) y deja su dirección
+  en $01-$03. Reinicia la "impresora" (la siguiente letra va a la VRAM
+  $5010), elige una sola vez la altura del cuadro (2 líneas si $090D es
+  menor que $81, si no 1), sube BG3 para que aparezca el cuadro, **detiene
+  el reloj** y levanta la bandera "hay un cuadro abierto" ($7F:1F5A bit 14)
+  para que otros sistemas esperen.
+- **Cerrar** (`CloseTextBox`): lo contrario. Baja BG3, borra el cuadro
+  copiándole encima un mapa de casillas vacío ($9C:BBA3) y deja correr el
+  reloj otra vez, salvo que ya estuviera detenido antes ($0196 bit 5).
+- **La flecha de "hay más texto"** (`BlinkTextBoxArrow`): mientras el
+  cuadro espera un botón, cada 20 cuadros la flecha cambia entre sus dos
+  dibujos. Es un bloque de 2×2 casillas que `UNK_SetDMA2` copia a la VRAM
+  con dos DMA pequeños (fila de arriba y fila de abajo). Tiene 12 lugares
+  posibles.
+
+El texto en sí, letra por letra, lo imprime la rutina que sigue
+(`ADDDDFFFF` en HM-Decomp, 261 instrucciones), que falta descompilar.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -607,6 +641,10 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     `ResetFlag`, así que `ResetFlagD` y `ResetFlagDD` no se alcanzan nunca;
     `Event_UNKTools` (guarda las herramientas en la bodega) tampoco está en
     la tabla.
+14. **`RemoveProgrammedDMA` usa todo A como índice.** En modo de 8 bits,
+    `TAX` también copia el byte alto escondido de A, así que la tabla de
+    canales se lee en (byte alto : canal). Funciona solo porque todos los
+    que la llaman tienen 0 ahí.
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -637,6 +675,8 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | slot (CC) | estructura donde corre un guion de evento |
 | fuzz | probar una rutina con entradas al azar |
 | intérprete | la parte de la recompilación que ejecuta instrucción por instrucción lo que no está compilado |
+| bus abierto | leer una dirección donde nada responde: se obtiene el último valor que pasó por el bus |
+| BG3 | la tercera capa de fondo; el juego la usa para el texto |
 
 ## 9. Avance
 
@@ -651,3 +691,5 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 21-oct-2026 | 14,41 % | animales en el mapa, el final |
 | 21-oct-2026 | 17,35 % | comandos de evento, perro, gallina |
 | 21-oct-2026 | 20,45 % | 31 comandos de evento más (valores, esperas, levantar cosas) |
+| 21-oct-2026 | 20,33 % | medición corregida (se separan rutinas escritas juntas) |
+| 21-oct-2026 | 20,85 % | el cuadro de texto: abrir, cerrar, la flecha; dos ayudantes de DMA |

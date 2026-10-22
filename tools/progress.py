@@ -62,6 +62,10 @@ LOCAL = {
     0x84B4DC: ("Event_ChangeItemonHand", "Event_ChangeItemonHand"),
     0x84BA51: ("Event_UNKCCchanges16", "Event_UNKCCchanges16"),
     0x84BB31: ("Event_UNKReset5C", "Event_UNKReset5C"),
+    0x8393F9: ("CODE_8393F9", "CloseTextBox"),
+    0x8394D7: ("CODE_8394D7", "DrawTextBoxArrow"),
+    0x839495: ("CODE_839495", "BlinkTextBoxArrow"),
+    0x839447: ("CODE_839447", "TextBoxArrow"),
     0x829999: ("ToolUsedCornSeeds", "ToolUsedCornSeeds"),   # ";82A9999" in HM-Decomp
 }
 

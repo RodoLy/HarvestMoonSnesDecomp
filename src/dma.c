@@ -52,3 +52,54 @@ void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r)
   r->x = ch;
   r->c = 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * RemoveProgrammedDMA ($80:8AA0, JSL, RTL). Takes channel $27 out of the
+ * channels to start ($28 &= ~(1 << ch)); its registers stay as they were.
+ * With 8-bit A and 16-bit X, TAX copies the whole accumulator, so the
+ * table index is (high byte of A : $27): the callers always have 0 there.
+ * Leftovers: A = (high byte of A : the new $28), X = that index.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_RemoveProgrammedDMA(uint8_t *ram, HmRegs *r)
+{
+  r->x = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, 0x27));
+  uint8_t flag = hm_bus_rd8(ram, (DMA_CHANNEL_FLAGS + r->x) & 0xFFFFFF);
+  uint8_t *to_start = hm_dp(ram, r, 0x28);
+  *to_start = (uint8_t)(~flag & *to_start);
+  r->a = (uint16_t)((r->a & 0xFF00) | *to_start);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNK_SetDMA2 ($83:81B7, JSL, RTL). Draws a 2x2 block of BG3 tilemap
+ * entries: X = VRAM address of its top row, $72-$74 = the 4 words (two
+ * per row). Two 4-byte DMAs: channel 6 for the top row, channel 7 for the
+ * bottom one (X + $20, one tilemap row below; source $72 + 4).
+ * Used for the text box arrow (DrawTextBoxArrow).
+ * Leftovers: those of the second AddProgrammedDMA; Y = 4.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_1B7_TOP     0x81CF
+#define RET_1B7_BOTTOM  0x81F6
+
+void hm_UNK_SetDMA2(uint8_t *ram, HmRegs *r)
+{
+  uint16_t top = r->x;
+  *hm_dp(ram, r, 0x27) = 6;
+  *hm_dp(ram, r, 0x29) = 0x18;                        /* VRAM data port */
+  r->y = 4;
+  r->a = 0x0080;
+  hm_push8(ram, r, (uint8_t)(top >> 8));              /* PHX */
+  hm_push8(ram, r, (uint8_t)top);
+  hm_jsl(ram, r, RET_1B7_TOP, 0x80);
+  hm_AddProgrammedDMA(ram, r);
+  hm_rtl(ram, r);
+  *hm_dp(ram, r, 0x27) = 7;
+  *hm_dp(ram, r, 0x29) = 0x18;
+  hm_pull8(ram, r); hm_pull8(ram, r);                 /* PLX */
+  r->x = (uint16_t)(top + 0x20);
+  r->y = 4;
+  hm_dp_w16(ram, r, 0x72, (uint16_t)(hm_dp_r16(ram, r, 0x72) + 4));
+  r->a = 0x0080;
+  hm_jsl(ram, r, RET_1B7_BOTTOM, 0x80);
+  hm_AddProgrammedDMA(ram, r);
+  hm_rtl(ram, r);
+}

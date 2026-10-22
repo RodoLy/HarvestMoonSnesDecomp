@@ -586,6 +586,42 @@ static void prep_event_cmd_ptr(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 2) hm_wr16(ram, 0xD2, (uint16_t)(rnd() & 0x1000));
 }
 
+/* dma.c: RemoveProgrammedDMA / UNK_SetDMA2. A's high byte is the table
+ * index's high byte in RemoveProgrammedDMA (0 from every caller, usually). */
+static void prep_dma_remove(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_dma(ram, r, rnd);
+  r->a = (uint16_t)((rnd() % 4) ? (r->a & 0x00FF) : (r->a & 0x00FF) | (rnd() % 0x74) << 8);
+  /* (beyond $73xx the table read leaves bank $80's ROM: open bus) */
+}
+static void prep_dma_block(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_dma(ram, r, rnd);
+  r->x = (uint16_t)rnd();
+}
+
+/* text.c: the text box state */
+static void prep_text_box(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_dma(ram, r, rnd);
+  r->x = (uint16_t)((rnd() % 4) ? rnd() % 0x500 : rnd() % 0x2155);   /* text number: the
+                                       * pointer must stay in bank $83 (ROM) */
+  r->a = (uint16_t)rnd();
+  static const uint8_t lines[] = { 0, 0, 1, 2, 3 };
+  ram[0x0191] = (uint8_t)((rnd() % 8) ? lines[rnd() % 5] : rnd());
+  hm_wr16(ram, 0x090D, (uint16_t)((rnd() % 2) ? 0x70 + rnd() % 0x20 : rnd()));
+  hm_wr16(ram, 0x0146, (uint16_t)rnd());                              /* BG3 scroll Y */
+  hm_wr16(ram, 0x0196, (uint16_t)rnd());
+  hm_wr16(ram, 0x0973, (uint16_t)rnd());
+  ram[0x019B] = (uint8_t)rnd();
+  hm_wr16(ram, 0x11F5A, (uint16_t)rnd());                             /* $7F1F5A */
+  hm_wr16(ram, 0x0189, (uint16_t)rnd());                              /* $018A: arrow place */
+  if (rnd() % 2) ram[0x018A] = (uint8_t)(rnd() % 14);
+  hm_wr16(ram, 0x018B, (uint16_t)rnd());                              /* arrow blink */
+  if (rnd() % 2) ram[0x018B] = (uint8_t)((rnd() & 0x80) | (0x12 + rnd() % 4));
+  if (rnd() % 4 == 0) r->a = (uint16_t)(rnd() % 3);                   /* arrow frame */
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -902,6 +938,23 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x84BB4B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
   { "Event_DropItemAnimation", hm_Event_DropItemAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B57B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "RemoveProgrammedDMA", hm_RemoveProgrammedDMA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/dma.c", 0x808AA0, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_dma_remove },
+  { "UNK_SetDMA2", hm_UNK_SetDMA2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/dma.c", 0x8381B7, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_dma_block },
+  { "StartTextBox", hm_StartTextBox, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/text.c", 0x83935F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_text_box },
+  { "SUB_83932D", hm_SUB_83932D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/text.c", 0x83932D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_text_box },
+  { "CloseTextBox", hm_CloseTextBox, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/text.c", 0x8393F9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_text_box },
+  { "DrawTextBoxArrow", hm_DrawTextBoxArrow, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/text.c", 0x8394D7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_text_box },
+  { "BlinkTextBoxArrow", hm_BlinkTextBoxArrow,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/text.c", 0x839495, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_text_box },
+  { "TextBoxArrow", hm_TextBoxArrow, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/text.c", 0x839447, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_text_box },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

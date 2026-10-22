@@ -228,6 +228,8 @@ void hm_ChangeMapTile(uint8_t *ram, HmRegs *r);
 void hm_StartMapAnimation(uint8_t *ram, HmRegs *r);
 void hm_RanchMasteryCalculator(uint8_t *ram, HmRegs *r); /* ending.c */
 void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r);    /* dma.c */
+void hm_RemoveProgrammedDMA(uint8_t *ram, HmRegs *r);
+void hm_UNK_SetDMA2(uint8_t *ram, HmRegs *r);
 void hm_LoadSpriteComponent(uint8_t *ram, HmRegs *r); /* objects.c */
 void hm_LoadGameObjectComponents(uint8_t *ram, HmRegs *r);
 void hm_CreateGameObject(uint8_t *ram, HmRegs *r);
@@ -320,3 +322,9 @@ void hm_Event_UNKSet5C(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKReset5C(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKSet60(uint8_t *ram, HmRegs *r);
 void hm_Event_DropItemAnimation(uint8_t *ram, HmRegs *r);
+void hm_StartTextBox(uint8_t *ram, HmRegs *r);       /* text.c */
+void hm_SUB_83932D(uint8_t *ram, HmRegs *r);
+void hm_CloseTextBox(uint8_t *ram, HmRegs *r);
+void hm_DrawTextBoxArrow(uint8_t *ram, HmRegs *r);
+void hm_BlinkTextBoxArrow(uint8_t *ram, HmRegs *r);
+void hm_TextBoxArrow(uint8_t *ram, HmRegs *r);

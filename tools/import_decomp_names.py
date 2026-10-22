@@ -52,6 +52,10 @@ MANUAL = {
     0x84B4DC: "Event_ChangeItemonHand",  # HM-Decomp says 84B4DE
     0x84BA51: "Event_UNKCCchanges16",  # no address in HM-Decomp
     0x84BB31: "Event_UNKReset5C",  # no address in HM-Decomp
+    0x8393F9: "CloseTextBox",      # CODE_8393F9
+    0x8394D7: "DrawTextBoxArrow",  # CODE_8394D7
+    0x839495: "BlinkTextBoxArrow", # CODE_839495
+    0x839447: "TextBoxArrow",      # CODE_839447
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

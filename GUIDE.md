@@ -195,6 +195,11 @@ Some tricks that were needed:
   version: the recompilation runs them in an interpreter. The live
   checker does not see those calls, so the random test is the
   verification (it calls the original through the interpreter).
+- **Reads outside the cartridge.** If a random test makes a routine read
+  a table so far away that it leaves the ROM, it lands on addresses with
+  nothing there (the "open bus": you get whatever was last on the wires).
+  That never happens in the game, so the preparations keep the inputs
+  inside the ROM.
 
 ### 3.5 The percentage
 
@@ -203,6 +208,10 @@ Some tricks that were needed:
 routine that walks the 4,096 farm tiles weighs more than a three-line one.
 On October 21 the measurement was corrected: code without an address was
 not being counted and the figure came out too high (10.49 % → 7.29 %).
+A second correction came later: HM-Decomp sometimes writes several
+routines one after the other under a single name. Now a label that is
+called from outside its block counts as a routine of its own, so the
+instructions are credited to the right one (20.45 % → 20.33 %).
 
 ---
 
@@ -227,6 +236,7 @@ not being counted and the figure came out too high (10.49 % → 7.29 %).
 | `src/dma.c` | the DMA queue |
 | `src/objects.c` | objects with a sprite |
 | `src/ending.c` | the ending's score |
+| `src/text.c` | the dialogue box |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -566,6 +576,27 @@ score** (`RanchMasteryCalculator`, 0 to 999). It adds up:
 | Farm development | /2 |
 | Each cow's happiness | /8, at most 25 |
 
+### 5.14 The text box
+
+Dialogues are shown on **BG3**, the background layer used for text.
+
+- **Opening** (`StartTextBox`, X = number of the text): it looks up the
+  text in `Text_Pointer_Table` ($83:9BF6, 3 bytes per text) and leaves
+  its address in $01-$03. It resets the "printer" (the next letter goes to
+  VRAM $5010), picks the box height once (2 lines if $090D is below $81,
+  otherwise 1), scrolls BG3 up so the box appears, **stops the clock** and
+  raises the flag "a box is open" ($7F:1F5A bit 14) so other systems wait.
+- **Closing** (`CloseTextBox`): the reverse. It scrolls BG3 back, wipes the
+  box by copying an empty tilemap ($9C:BBA3) over it, and lets the clock
+  run again, unless it was already stopped before ($0196 bit 5).
+- **The "more text" arrow** (`BlinkTextBoxArrow`): while the box waits for
+  a button, every 20 frames the arrow switches between its two drawings.
+  It is a 2×2 block of tiles that `UNK_SetDMA2` copies to VRAM in two
+  small DMAs (top row and bottom row). There are 12 possible places for it.
+
+The text itself, letter by letter, is printed by the routine that follows
+(`ADDDDFFFF` in HM-Decomp, 261 instructions), still to be decompiled.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -601,6 +632,10 @@ Things the game does wrong or oddly, found while decompiling:
     `ResetFlag`, so `ResetFlagD` and `ResetFlagDD` are never reached;
     `Event_UNKTools` (puts the tools back in the shed) is not in the table
     either.
+14. **`RemoveProgrammedDMA` uses the whole A as an index.** In 8-bit mode,
+    `TAX` copies the hidden high byte of A too, so the channel table is
+    read at (high byte : channel). It works only because every caller has
+    0 there.
 
 ## 7. Differences found in the recompilation
 
@@ -631,6 +666,8 @@ Things the game does wrong or oddly, found while decompiling:
 | slot (CC) | structure where an event script runs |
 | fuzzing | testing a routine with random inputs |
 | interpreter | the part of the recompilation that runs, instruction by instruction, what is not compiled |
+| open bus | reading an address where nothing answers: you get the last value seen on the bus |
+| BG3 | the third background layer; the game uses it for text |
 
 ## 9. Progress
 
@@ -645,3 +682,5 @@ Things the game does wrong or oddly, found while decompiling:
 | 21-Oct-2026 | 14.41 % | animals on the map, the ending |
 | 21-Oct-2026 | 17.35 % | event commands, dog, chicken |
 | 21-Oct-2026 | 20.45 % | 31 more event commands (values, waits, picking things up) |
+| 21-Oct-2026 | 20.33 % | corrected measure (routines written together are split) |
+| 21-Oct-2026 | 20.85 % | the text box: open, close, the arrow; two DMA helpers |
