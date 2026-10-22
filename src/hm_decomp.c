@@ -907,6 +907,38 @@ static void prep_palette_any(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   palette_inputs(ram, r, rnd, false);
 }
 
+/* collision.c: who moves ($DF/$E1), how far ($E3) and the step ($E5/$E7),
+ * near the player and near some event objects, on a map with random tile
+ * types (prep_tile_in_front). */
+static void prep_collision(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  uint16_t a = r->a;
+  prep_tile_in_front(ram, r, rnd);
+  r->a = a;
+  /* far enough from the map's edges that no corner goes below 0 (the
+   * original would read open bus outside the tile table) */
+  uint16_t x = (uint16_t)(0x40 + rnd() % 0x380), y = (uint16_t)(0x40 + rnd() % 0x380);
+  hm_wr16(ram, 0xDF, x); hm_wr16(ram, 0xE1, y);
+  hm_wr16(ram, 0xE3, (uint16_t)((rnd() % 2) ? 0x10 * (rnd() % 3) : rnd() % 0x20));
+  hm_wr16(ram, 0xE5, (uint16_t)((rnd() % 2) ? 0 : rnd() % 4));
+  hm_wr16(ram, 0xE7, (uint16_t)((rnd() % 2) ? 0 : rnd() % 4));
+  hm_wr16(ram, 0xD6, (uint16_t)((rnd() % 2) ? x - 0x20 + rnd() % 0x40 : rnd() % 0x400));
+  hm_wr16(ram, 0xD8, (uint16_t)((rnd() % 2) ? y - 0x20 + rnd() % 0x40 : rnd() % 0x400));
+  hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 2) ? (rnd() & 0x0010) : rnd()));
+  hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 4) ? rnd() & ~0x4000u : rnd()));
+  hm_wr16(ram, 0xCC, (uint16_t)rnd()); ram[0xCE] = (uint8_t)rnd();
+  for (unsigned i = 0; i < 0x31; i++) {
+    uint32_t s = 0xB586 + i * 0x40;
+    unsigned kind = rnd() % 4;
+    ram[s] = (uint8_t)(kind == 0 ? 0 : kind == 1 ? 1 : kind == 2 ? 3 : rnd());
+    ram[s + 0x0C] = (uint8_t)rnd();
+    hm_wr16(ram, s + 0x1A, (uint16_t)((rnd() % 3) ? x - 0x20 + rnd() % 0x40 : rnd()));
+    hm_wr16(ram, s + 0x1C, (uint16_t)((rnd() % 3) ? y - 0x20 + rnd() % 0x40 : rnd()));
+  }
+  /* a point of a tile for CFFFF */
+  if (rnd() % 2) { r->x = (uint16_t)(x + rnd() % 0x20); r->y = (uint16_t)(y + rnd() % 0x20); }
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1437,6 +1469,14 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/palette.c", 0x809501, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
   { "Event_TimeofDayPalette", hm_Event_TimeofDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/palette.c", 0x849356, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
+  { "CFFFF", hm_CFFFF, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/collision.c", 0x83B0F6, 0, 0, 0, 1, { { 0 } }, 0, prep_collision },
+  { "CEEEE", hm_CEEEE, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/collision.c", 0x83AF37, 0, 0, 0, 3, { { 0 } }, 0, prep_collision },
+  { "CBBBB", hm_CBBBB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/collision.c", 0x83AD91, 0, 0, 0, 3, { { 0 } }, 0, prep_collision },
+  { "CDDDD", hm_CDDDD, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/collision.c", 0x83AEC3, 0, 0, 0, 3, { { 0 } }, 0, prep_collision },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

@@ -257,6 +257,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/menus.c` | botones en los menús |
 | `src/scroll.c` | desplazar el mapa |
 | `src/palette.c` | los colores del día |
+| `src/collision.c` | chocar con el mapa, los objetos y el jugador |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -889,6 +890,37 @@ es el `RTL` de la rutina anterior; el juego llama a $80:93A4.
 `CustomiseSpritePalette` además lee el byte $81 sin haberlo puesto; en el
 juego siempre vale 0, así que no cambia nada.
 
+### 5.20 Chocar con las cosas
+
+Antes de dar un paso, el juego hace tres preguntas. Las entradas están en la
+página directa: $DF / $E1 la posición (x, y) de quien se mueve, $E3 cuánto
+mirar hacia adelante, $E5 / $E7 el paso, y A la dirección (0 abajo, 1 arriba, 2 derecha,
+3 izquierda). Los nombres de botones de HM-Decomp tienen izquierda y derecha
+cambiadas: en el control del SNES el bit $0100 es Derecha y $0200
+Izquierda, así que su `PlayerActionLeft` en realidad es "derecha".
+
+- **El mapa** (`CEEEE`): prueba las dos esquinas del lado que avanza, a 6
+  píxeles a cada lado del centro y $E3 + el paso + 6 píxeles adelante. Cada
+  esquina (`CFFFF`) lee la propiedad de la baldosa:
+
+  | Bit | Qué es sólido |
+  |---|---|
+  | 0 | toda la baldosa |
+  | 1 / 2 | la mitad izquierda / derecha (x & 8) |
+  | 3 / 4 | la mitad de arriba / de abajo (y & 8) |
+  | ninguno | nada; pero cargando algo, las baldosas $C0-$CF bloquean |
+
+  La respuesta es (primera esquina) × 2 + (segunda esquina). Cuando algo
+  bloquea, la rutina también dice cuánto se mete la esquina en la baldosa,
+  para que quien llama se detenga justo en el borde o se deslice por él.
+- **Los objetos** (`CBBBB`): los 49 espacios de evento ($7E:B586). Uno
+  estorba si su posición está a menos de 12 píxeles del punto mirado, en
+  los dos ejes. Los primeros que encuentra quedan marcados (byte +$0C = 1).
+  Los objetos con el bit 1 de su byte +0 no bloquean. Con $7F1F60 bit
+  $4000 nada bloquea.
+- **El jugador** (`CDDDD`): la misma prueba de 12 píxeles contra la
+  posición del jugador; es la que usan los animales y las personas.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1018,3 +1050,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 28,72 % | los botones con un cuadro de texto abierto |
 | 22-oct-2026 | 30,61 % | desplazar el mapa (probado en vivo: unas 1.200 llamadas en una partida nueva) |
 | 22-oct-2026 | 32,17 % | los colores del día (probado en vivo: unas 13.000 llamadas) |
+| 22-oct-2026 | 33,34 % | chocar con las cosas (probado en vivo: unas 2.900 llamadas) |

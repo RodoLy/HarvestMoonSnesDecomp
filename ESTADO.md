@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **198 rutinas reescritas y verificadas** (0 diferencias):
+- **202 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -84,6 +84,7 @@ en el README (`tools/progress.py`).
 | SUB_80916F, SUB_80919D, LoadFirstHalfPaletteToWRAM, LoadSecondHalfPaletteToWRAM | $80:916F-$80:9208 | src/palette.c |
 | UNK_CustomisePalette, ChangePalettebyTime, PrepareSpritePalette, CustomiseSpritePalette, SetPaletteToLoad | $80:9241-$80:9501 | src/palette.c |
 | Event_TimeofDayPalette | $84:9356 | src/palette.c |
+| CBBBB, CDDDD, CEEEE, CFFFF (choques) | $83:AD91-$83:B1C8 | src/collision.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |
@@ -416,6 +417,17 @@ sistema de texto).
   para las que cargan de la tabla) y prep_palette_any (cualquier mapa).
 - Fuzz 3 semillas × 2000 y en vivo (newgame + nights, unas 13.000
   llamadas): 0 diferencias. 15 sabotajes detectados.
+
+## Choques (hecho el 22-oct-2026)
+
+- `src/collision.c`: CEEEE (el mapa, dos esquinas), CFFFF (una esquina),
+  CBBBB (objetos de evento), CDDDD (el jugador). Tablas de saltos leídas
+  de la ROM (HM-Decomp las desensambla como código). Etiquetas indentadas:
+  entradas en MANUAL y LOCAL.
+- prep_collision: posiciones lejos del borde (con una esquina negativa el
+  original lee bus abierto: $B1).
+- Fuzz 3 × 2000 y en vivo (~2.900 llamadas): 0 diferencias; sabotajes
+  detectados.
 
 ## Lo siguiente
 

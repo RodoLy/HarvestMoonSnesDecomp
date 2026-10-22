@@ -420,3 +420,7 @@ void hm_ChangePalettebyTime(uint8_t *ram, HmRegs *r);
 void hm_PrepareSpritePalette(uint8_t *ram, HmRegs *r);
 void hm_SetPaletteToLoad(uint8_t *ram, HmRegs *r);
 void hm_Event_TimeofDayPalette(uint8_t *ram, HmRegs *r);
+void hm_CFFFF(uint8_t *ram, HmRegs *r);          /* collision.c */
+void hm_CEEEE(uint8_t *ram, HmRegs *r);
+void hm_CBBBB(uint8_t *ram, HmRegs *r);
+void hm_CDDDD(uint8_t *ram, HmRegs *r);

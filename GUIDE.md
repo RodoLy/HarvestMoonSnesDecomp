@@ -256,6 +256,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/menus.c` | buttons in menus |
 | `src/scroll.c` | scrolling the map |
 | `src/palette.c` | the colours of the day |
+| `src/collision.c` | bumping into the map, objects and the player |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -867,6 +868,36 @@ is the `RTL` of the routine before it; the game calls $80:93A4.
 `CustomiseSpritePalette` also reads the byte $81 without setting it; in the
 game it is always 0, so it changes nothing.
 
+### 5.20 Bumping into things
+
+Before a step, the game asks three questions. The inputs are in the direct
+page: $DF / $E1 the position (x, y) of who moves, $E3 how far ahead to look,
+$E5 / $E7 the step, and A the direction (0 down, 1 up, 2 right, 3 left).
+HM-Decomp's button names swap left and right: on the SNES pad bit $0100 is
+Right and $0200 Left, so its `PlayerActionLeft` is really "right".
+
+- **The map** (`CEEEE`): it tests the two corners of the side that moves,
+  6 pixels to each side of the middle and $E3 + the step + 6 pixels ahead.
+  Each corner (`CFFFF`) reads the tile's property:
+
+  | Bit | What is solid |
+  |---|---|
+  | 0 | the whole tile |
+  | 1 / 2 | the left / right half (x & 8) |
+  | 3 / 4 | the top / bottom half (y & 8) |
+  | none | nothing; but carrying something, tiles $C0-$CF block |
+
+  The answer is (first corner) × 2 + (second corner). When something
+  blocks, the routine also says how far into the tile the corner is, so
+  the caller can stop right at the edge or slide along it.
+- **The objects** (`CBBBB`): the 49 event slots ($7E:B586). One is in the
+  way if its position is within 12 pixels of the point looked at, on both
+  axes. The first ones found get a mark (byte +$0C = 1). Objects with
+  bit 1 of their byte +0 do not block. With $7F1F60 bit $4000 nothing
+  blocks.
+- **The player** (`CDDDD`): the same 12-pixel test against the player's
+  position; it is what the animals and people use.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -993,3 +1024,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 28.72 % | the buttons while a text box is open |
 | 22-Oct-2026 | 30.61 % | scrolling the map (checked live: about 1,200 calls in a new game) |
 | 22-Oct-2026 | 32.17 % | the colours of the day (checked live: about 13,000 calls) |
+| 22-Oct-2026 | 33.34 % | bumping into things (checked live: about 2,900 calls) |

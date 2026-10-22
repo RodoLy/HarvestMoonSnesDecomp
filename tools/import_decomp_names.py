@@ -69,6 +69,10 @@ MANUAL = {
     0x84C540: "ListInputs",        # CODE_84C540
     0x84CF05: "ImmobileInputs",    # no address in HM-Decomp
     0x8093A4: "CustomiseSpritePalette",  # HM-Decomp says 8093A3 (the RTL before it)
+    0x83AD91: "CBBBB",             # indented labels in HM-Decomp
+    0x83AEC3: "CDDDD",
+    0x83AF37: "CEEEE",
+    0x83B0F6: "CFFFF",
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

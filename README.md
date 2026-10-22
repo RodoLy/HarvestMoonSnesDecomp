@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 32.17%](https://img.shields.io/badge/decompiled-32.17%25-2f855a)
+![Decompiled: 33.34%](https://img.shields.io/badge/decompiled-33.34%25-2f855a)
 
-**32.17%** of the game's code decompiled and verified: 14531 of 45176 instructions, 198 of 533 routines (37.1%).
+**33.34%** of the game's code decompiled and verified: 15060 of 45176 instructions, 202 of 534 routines (37.8%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
