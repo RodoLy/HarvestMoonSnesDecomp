@@ -1295,3 +1295,335 @@ void hm_Event_UNKSet60(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
   r->a = hm_rd16(ram, FLAGS_60_) | 0x8000; hm_wr16(ram, FLAGS_60_, r->a);
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * Event_UNKCowRelated ($84:9AD4, JSR, RTS). A cow's every frame (one
+ * command byte). The cow's record is [$72] (GetsCowPointer, 16 bytes):
+ *   +00 status: $02 calf, $04 young, $08 adult, $10 runs away from the
+ *       player, $20 sick, $40 pregnant / in labour
+ *   +01 today's flags: $01 brushed, $02 milked, $04 talked to, $08 moving,
+ *       $80 bred
+ *   +02 map, +03 days pregnant ($15 = just bred), +04 happiness,
+ *   +05 times hit (up to 10), +08 / +0A position
+ * $0953 + 2 n: a timer per cow that counts to $100 between wanderings.
+ * The slot's +02 is the cow's colour / kind (0-3): every script has four
+ * versions, one per kind.
+ * ═════════════════════════════════════════════════════════════════════════ */
+#define COW_TIMERS     0x00953   /* 16b per cow */
+#define COWS_SPAWN     0x83CA44  /* Table_CowsSpawnPos: a word per cow, 4 bytes apart */
+#define HM_COWS        0x11F0A   /* 8b: cows owned */
+#define HM_SEASON      0x11F19
+#define HM_SALE_PRICE  0x11F15   /* 24b: what the sale pays */
+#define FLAGS_64       0x11F64
+#define HM_TOOL        0x00921   /* 8b: the item in hand */
+#define COW_STATUS_RUNS_AWAY 0x10
+#define MAP_BARN       0x27
+
+static void rec_w8(uint8_t *ram, HmRegs *r, uint16_t y, uint8_t v)
+{
+  r->y = y;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0x72, y), v);
+}
+static void rec_w16(uint8_t *ram, HmRegs *r, uint16_t y, uint16_t v)
+{
+  r->y = y;
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x72, y), v);
+}
+static void rec_or(uint8_t *ram, HmRegs *r, uint16_t y, uint8_t bits)
+{
+  rec_w8(ram, r, y, lda8(r, (uint8_t)(record8(ram, r, y) | bits)));
+}
+static void rec_and(uint8_t *ram, HmRegs *r, uint16_t y, uint8_t bits)
+{
+  rec_w8(ram, r, y, lda8(r, (uint8_t)(record8(ram, r, y) & bits)));
+}
+/* UNK_LoadCCDataShort: script `script` on the cow's own slot */
+static void cow_script(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t ret)
+{
+  r->a = slot8(ram, r, 0x3F);
+  r->x = 0;
+  r->y = script;
+  hm_jsl(ram, r, ret, 0x84);
+  hm_UNK_LoadCCDataShort(ram, r);
+  hm_rtl(ram, r);
+}
+/* the slot's +02 picks one of four versions of a script; any other value
+ * falls into the first */
+static void cow_script4(uint8_t *ram, HmRegs *r, uint16_t first, uint16_t ret)
+{
+  uint8_t kind = slot8(ram, r, 0x02);
+  cow_script(ram, r, (uint16_t)(first + (kind <= 3 ? kind : 0)), ret);
+}
+static void cow_happier(uint8_t *ram, HmRegs *r, uint16_t n, uint16_t ret)
+{
+  r->a = n;
+  hm_jsl(ram, r, ret, 0x84);
+  hm_AddCowHappiness(ram, r);
+  hm_rtl(ram, r);
+}
+/* X = 2 n: the cow's timer */
+static uint16_t cow_timer_x(uint8_t *ram, HmRegs *r)
+{
+  r->x = (uint16_t)(animal_number(ram, r, 0x18) << 1);
+  return r->x;
+}
+/* the timer: true when it reached $100 (and starts again from 0) */
+static bool cow_timer_done(uint8_t *ram, HmRegs *r)
+{
+  uint16_t x = cow_timer_x(ram, r);
+  uint16_t t = hm_rd16(ram, COW_TIMERS + x);
+  if (t != 0x0100) { hm_wr16(ram, COW_TIMERS + x, (uint16_t)(t + 1)); return false; }
+  hm_wr16(ram, COW_TIMERS + x, 0);
+  return true;
+}
+/* adult cows: the script by how it feels */
+static uint16_t adult_script(uint8_t *ram, HmRegs *r, uint16_t sick, uint16_t runs, uint16_t normal)
+{
+  uint8_t st = record8(ram, r, 0);
+  r->x = (st & 0x20) ? sick : (st & 0x10) ? runs : normal;
+  return r->x;
+}
+
+/* the reaction after talking, brushing...: by its age */
+static bool reaction(uint8_t *ram, HmRegs *r)   /* true: on to the wandering */
+{
+  uint8_t st = record8(ram, r, 0);
+  if (st & 0x30) return true;                         /* sick or runs away: none */
+  if (st & 0x02) { cow_script4(ram, r, 0x64, 0x9D42); return false; }
+  if (st & 0x04) { cow_script4(ram, r, 0x60, 0x9DBA); return false; }
+  if (st & 0x40) cow_script4(ram, r, 0x82, 0xA0B8);
+  else           cow_script4(ram, r, 0x0C, 0xA0B8);
+  return true;
+}
+
+static bool talk(uint8_t *ram, HmRegs *r)
+{
+  for (unsigned i = 0; i < 4; i++)                    /* $0889-$088F: what it says */
+    hm_wr16(ram, 0x0889 + 2 * i, record8(ram, r, (uint16_t)(0x0C + i)));
+  uint8_t st = record8(ram, r, 0);
+  uint16_t text = (st & 0x40) ? (record8(ram, r, 3) ? 0x0032 : 0x0145)
+                : (st & 0x20) ? 0x0031 : (st & 0x10) ? 0x0030 : 0x002F;
+  ram[0x0191] = 0;
+  ram[0x019A] = lda8(r, 2);
+  r->x = text;
+  hm_jsl(ram, r, 0x9C75, 0x83);
+  hm_StartTextBox(ram, r);
+  hm_rtl(ram, r);
+  if (record8(ram, r, 1) & 0x04) return true;         /* already talked to today */
+  rec_or(ram, r, 1, 0x04);
+  cow_happier(ram, r, 1, 0x9C97);
+  return reaction(ram, r);
+}
+
+static bool milk(uint8_t *ram, HmRegs *r)
+{
+  if (!(record8(ram, r, 0) & 0x08) || (record8(ram, r, 1) & 0x02) || (record8(ram, r, 0) & 0x70))
+    return true;
+  rec_or(ram, r, 1, 0x02);
+  uint8_t h = record8(ram, r, 4);
+  ram[HM_ITEM_HELD] = h < 0x60 ? 0x15 : h < 0xC0 ? 0x16 : 0x17;   /* milk S / M / L */
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 4);
+  cow_script4(ram, r, 0x0C, 0xA0B8);
+  return true;
+}
+
+static bool brush(uint8_t *ram, HmRegs *r)
+{
+  if (record8(ram, r, 1) & 0x01) return true;
+  rec_or(ram, r, 1, 0x01);
+  cow_happier(ram, r, 3, 0x9ECF);
+  return reaction(ram, r);
+}
+
+static bool hit(uint8_t *ram, HmRegs *r)            /* a tool hits it */
+{
+  uint8_t st = record8(ram, r, 0);
+  uint16_t script = (st & 0x08) ? 0x0A : (st & 0x04) ? 0x68 : (st & 0x02) ? 0x6A : 0x0A;
+  uint8_t kind = slot8(ram, r, 0x02);
+  if (kind != 0 && kind != 2) script++;
+  hm_dp_w16(ram, r, 0x7E, script);
+  if (record8(ram, r, 0) & 0x70) return true;
+  cow_script(ram, r, script, 0x9FA7);
+  uint8_t hits = record8(ram, r, 5);
+  if (hits != 0x0A) rec_w8(ram, r, 5, (uint8_t)(hits + 1));
+  return true;
+}
+
+static bool breed(uint8_t *ram, HmRegs *r)          /* the miracle potion worked */
+{
+  if (hm_rd16(ram, FLAGS_64) & 0x0004) return true;
+  if (ram[HM_COWS] == 0x0C) return true;
+  hm_wr16(ram, FLAGS_64, (uint16_t)(hm_rd16(ram, FLAGS_64) | 0x0004));
+  rec_and(ram, r, 0, 0xCF);
+  rec_or(ram, r, 1, 0x80);
+  cow_happier(ram, r, 10, 0x9E92);
+  rec_w8(ram, r, 3, 0x15);
+  ram[0x11F12] = 0x15;
+  ram[HM_COWS]++;
+  cow_script4(ram, r, 0x0C, 0xA0B8);
+  return true;
+}
+
+static bool cured(uint8_t *ram, HmRegs *r)          /* the medicine worked */
+{
+  rec_and(ram, r, 0, 0xDF);
+  rec_w8(ram, r, 3, 0);
+  cow_script4(ram, r, 0x0C, 0xA0B8);
+  return true;
+}
+
+static bool use_tool(uint8_t *ram, HmRegs *r)
+{
+  uint8_t t = ram[HM_TOOL];
+  if (t == 0) return true;
+  if (t < 0x05 || (t >= 0x11 && t < 0x15)) return hit(ram, r);
+  if (t == 0x0E) return milk(ram, r);
+  if (t == 0x0F) return brush(ram, r);
+  return true;
+}
+
+/* 849B45: the player and the cow. true: go on to the wandering (84A0B9),
+ * false: straight to the moving part (84A46E). */
+static bool interact(uint8_t *ram, HmRegs *r)
+{
+  static const uint16_t BUSY[] = { 0x000A, 0x000C, 0x000D, 0x001B };
+  if (slot8(ram, r, 0x0C) == 0) return true;
+  uint16_t action = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
+  for (unsigned i = 0; i < 4; i++) if (action == BUSY[i]) return true;
+  uint16_t state = hm_dp_r16(ram, r, 0xD2);
+  if ((state & 0x0004) || (state & 0x0040) || (hm_rd16(ram, FLAGS_60) & 0x0006)) return true;
+  if (hm_rd16(ram, HM_JOY_NEW) & JOY_A) return talk(ram, r);
+  if (record8(ram, r, 0) & 0x08) {
+    if (hm_rd16(ram, FLAGS_5A) & 0x0100) return breed(ram, r);
+    if (hm_rd16(ram, FLAGS_5A) & 0x0080) return cured(ram, r);
+  }
+  if (hm_rd16(ram, FLAGS_5A) & 0x0040) return use_tool(ram, r);
+  return true;
+}
+
+/* 84A0B9: every $100 frames the cow starts a wandering script, by age
+ * and the dice ($DE); the moving flag (+01 $08) is set for the first. */
+static void wander(uint8_t *ram, HmRegs *r)
+{
+  static const uint16_t CALF[4] = { 0x78, 0x79, 0x7A, 0x7B }, YOUNG[4] = { 0x74, 0x76, 0x77, 0x75 };
+  static const uint16_t RET_CALF[4] = { 0xA144, 0xA16F, 0xA19A, 0xA1C5 };
+  static const uint16_t RET_YOUNG[4] = { 0xA231, 0xA25C, 0xA287, 0xA2B2 };
+  uint8_t st = record8(ram, r, 0);
+  if (st & 0x08) {
+    if (!cow_timer_done(ram, r) || (record8(ram, r, 0) & 0x40)) return;
+    static const struct { uint8_t below; uint16_t sick, runs, normal, ret; } ADULT[5] = {
+      { 0x33, 0x6C, 0x70, 0x5E, 0xA34E }, { 0x66, 0x6D, 0x71, 0x51, 0xA395 },
+      { 0x99, 0x6E, 0x72, 0x53, 0xA3DC }, { 0xCC, 0x6F, 0x73, 0x54, 0xA423 },
+      { 0x00, 0x6D, 0x71, 0x55, 0xA46A },
+    };
+    uint8_t dice = *hm_dp(ram, r, 0xDE);
+    unsigned k = 0;
+    while (k < 4 && dice >= ADULT[k].below) k++;
+    if (k == 0) rec_or(ram, r, 1, 0x08); else rec_and(ram, r, 1, 0xF7);
+    uint16_t s = adult_script(ram, r, ADULT[k].sick, ADULT[k].runs, ADULT[k].normal);
+    cow_script(ram, r, s, ADULT[k].ret);
+    return;
+  }
+  const uint16_t *ids, *rets;
+  if (st & 0x04)      { ids = YOUNG; rets = RET_YOUNG; }
+  else if (st & 0x02) { ids = CALF; rets = RET_CALF; }
+  else return;
+  if (!cow_timer_done(ram, r)) return;
+  uint8_t dice = *hm_dp(ram, r, 0xDE);
+  unsigned k = dice < 0x40 ? 0 : dice < 0x80 ? 1 : dice < 0xC0 ? 2 : 3;
+  if (k == 0) rec_or(ram, r, 1, 0x08); else rec_and(ram, r, 1, 0xF7);
+  cow_script(ram, r, ids[k], rets[k]);
+}
+
+/* 84A607 / 84A740: start moving (once: +01 $08), its timer back to 0 */
+static void start_moving(uint8_t *ram, HmRegs *r, const uint16_t ret[3])
+{
+  if (record8(ram, r, 1) & 0x08) return;
+  rec_or(ram, r, 1, 0x08);
+  hm_wr16(ram, COW_TIMERS + cow_timer_x(ram, r), 0);
+  uint8_t st = record8(ram, r, 0);
+  uint16_t script, at;
+  if (st & 0x08) {
+    if (st & 0x40) return;
+    script = adult_script(ram, r, 0x6C, 0x70, 0x5E); at = ret[2];
+  } else if (st & 0x04) { script = 0x74; at = ret[1]; }
+  else if (st & 0x02)   { script = 0x78; at = ret[0]; }
+  else return;
+  slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) | 0x28));
+  cow_script(ram, r, script, at);
+}
+
+/* 84A84A: face the player (or away from it, status $10) */
+static void face_player(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0x82, 0);
+  hm_dp_w16(ram, r, 0x84, 0);
+  uint16_t dx = distance(ram, r, slot16(ram, r, 0x1A), hm_dp_r16(ram, r, 0xD6), 0x7E, 0x82);
+  uint16_t dy = distance(ram, r, slot16(ram, r, 0x1C), hm_dp_r16(ram, r, 0xD8), 0x80, 0x84);
+  slot_w8(ram, r, 0x08, lda8(r, 0x20));
+  bool away = record8(ram, r, 0) & COW_STATUS_RUNS_AWAY;
+  uint8_t direction;
+  if (dy >= dx) direction = (hm_dp_r16(ram, r, 0x84) != 0) != away ? 0x01 : 0x02;
+  else          direction = (hm_dp_r16(ram, r, 0x82) != 0) != away ? 0x04 : 0x08;
+  slot_w8(ram, r, 0x0F, lda8(r, direction));
+}
+
+void hm_Event_UNKCowRelated(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  animal_number(ram, r, 0x18);
+  hm_jsl(ram, r, 0x9AF5, 0x83);
+  hm_GetsCowPointer(ram, r);
+  hm_rtl(ram, r);
+  rec_w16(ram, r, 0x08, slot16(ram, r, 0x1A));       /* the record follows the slot */
+  rec_w16(ram, r, 0x0A, slot16(ram, r, 0x1C));
+
+  uint8_t map = *hm_dp(ram, r, 0x22);
+  uint8_t state = slot8(ram, r, 0x0E);
+  if (map == MAP_BARN && state == 0xC2) {             /* 84A595: back in the barn */
+    slot_w8(ram, r, 0x00, 0);
+    slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) | 0x40));
+    rec_w8(ram, r, 0x02, ram[HM_SEASON]);
+    rec_w16(ram, r, 0x08, 0x0148);
+    rec_w16(ram, r, 0x0A, 0x0178);
+  } else if (map < 0x04 && state == 0xE0 && (hm_rd16(ram, FLAGS_5A) & 0x0004)) {
+    /* 84A498: sold (the price by happiness: 500, 800 or 1000) */
+    hm_wr16(ram, FLAGS_5A, (uint16_t)(hm_rd16(ram, FLAGS_5A) & 0xFFFB));
+    uint8_t h = record8(ram, r, 4);
+    hm_wr16(ram, HM_SALE_PRICE, h < 0x60 ? 0x01F4 : h < 0xC0 ? 0x0320 : 0x03E8);
+    ram[HM_SALE_PRICE + 2] = 0;
+    ram[0x09A0] = slot8(ram, r, 0x3F);
+    ram[0x096E] = 0x43; ram[0x096F] = 0; ram[0x0970] = 0;   /* its dialog */
+    hm_dp_w16(ram, r, 0xD2, (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0040));
+    hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
+    slot_w8(ram, r, 0x0E, 0);
+    slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) & 0x57));
+  } else if (map < 0x04 && state == 0xE1) {           /* 84A540: off the farm, to the barn */
+    slot_w8(ram, r, 0x00, 0);
+    slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) | 0x40));
+    r->x = (uint16_t)(animal_number(ram, r, 0x18) << 2);
+    rec_w8(ram, r, 0x02, MAP_BARN);
+    /* the same word for both coordinates (no INX in between) */
+    rec_w16(ram, r, 0x08, hm_bus_rd16(ram, COWS_SPAWN + r->x));
+    rec_w16(ram, r, 0x0A, hm_bus_rd16(ram, COWS_SPAWN + r->x));
+  } else if (interact(ram, r)) {
+    wander(ram, r);
+  }
+
+  /* 84A46E: moving */
+  static const uint16_t RET_MOVE[3] = { 0xA688, 0xA6BA, 0xA70D };
+  static const uint16_t RET_CALLED[3] = { 0xA7C1, 0xA7F3, 0xA849 };
+  bool called = hm_rd16(ram, FLAGS_5A) & 0x0010;      /* the bell */
+  if (!called && slot8(ram, r, 0x0C) != 0) {
+    start_moving(ram, r, RET_MOVE);
+    uint16_t dir = hm_dp_r16(ram, r, 0xDA);           /* the way the player looks */
+    static const uint8_t FACE[4] = { 0x01, 0x02, 0x04, 0x08 };
+    if (dir < 4) slot_w8(ram, r, 0x0F, lda8(r, FACE[dir]));
+    else called = true;
+  }
+  if (called) {
+    start_moving(ram, r, RET_CALLED);
+    face_player(ram, r);
+  }
+  count_frame(ram, r);
+}

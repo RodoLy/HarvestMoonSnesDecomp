@@ -466,6 +466,30 @@ scripts.
 - When it is **called**, it runs towards you along the axis where it is
   farther away.
 
+**The cow, every frame** (`Event_UNKCowRelated`, the biggest routine
+decompiled so far: 1,567 instructions). Each cow has a 16-byte record:
+status (calf, young, adult, sick, pregnant, "runs away from you"),
+today's flags (brushed, milked, talked to, moving, bred), map, days
+pregnant, **happiness**, times hit and position.
+
+- **Talking** (A in front of it): a text that depends on its status. The
+  first time each day: **+1 happiness**.
+- **Brush:** once a day, **+3 happiness**.
+- **Milker:** once a day, adults only, not sick or pregnant. The size of the
+  milk depends on happiness: below 96 small, below 192 medium, otherwise
+  large.
+- **Hitting it** with the sickle, hoe, hammer or axe (or the gold ones):
+  it complains, and the "times hit" counter goes up (up to 10).
+- **Miracle potion** on an adult: it gets pregnant (**+10 happiness**),
+  unless there are already 12 cows. **Medicine:** cured.
+- **Selling it** (from the farm): the price depends on happiness: 500 G
+  below 96, 800 G below 192, 1000 G above.
+- **Wandering:** every 256 frames (about 4 seconds) a random roll picks a
+  walking script, different for calves, young and adult cows.
+- **The bell:** the cows turn towards you (or away, if they are of the
+  "runs away" kind) and come.
+- Every script has four versions, one per kind of cow (slot byte +02).
+
 ### 5.8 People
 
 - **Hearts** of the five girls: `$7F:1F1F + 2·n` (0-999), in the order
@@ -719,6 +743,10 @@ Things the game does wrong or oddly, found while decompiling:
 16. **After a number or a name the printer skips two codes in 8 bits**
     (only the low byte of the position), so in a text of more than 256
     codes it would jump backwards (no text seen so far is that long).
+17. **The cow that goes from the farm to the barn gets a wrong position.**
+    The table of barn places has x and y for each cow, but this code reads
+    the same word twice (it forgets to move to the next one), so the
+    position written for the cow is (x, x).
 
 ## 7. Differences found in the recompilation
 
@@ -774,3 +802,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 21-Oct-2026 | 21.86 % | the watering can and the sprinkler: all 28 tools done |
 | 21-Oct-2026 | 21.91 % | the routine that picks the tool's routine |
 | 22-Oct-2026 | 22.49 % | the text printer (checked live: 2,424 frames of text in a new game) |
+| 22-Oct-2026 | 25.96 % | the cow's every frame (1,567 instructions) |

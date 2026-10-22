@@ -605,6 +605,60 @@ static void prep_chicken_slot(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0xDE] = (uint8_t)rnd();
 }
 
+/* eventcmds.c: a cow's slot ($18 + n) and its record ($7E:C1C6 + 16 n) */
+static void prep_cow_slot(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  uint8_t n = (uint8_t)(rnd() % 12), slot = (uint8_t)(0x18 + n);
+  uint16_t at = (uint16_t)(0xB586 + 64 * slot);
+  hm_wr16(ram, 0xCC, at); ram[0xCE] = 0x7E;
+  for (unsigned i = 0; i < 64; i++) ram[at + i] = (uint8_t)rnd();
+  ram[at + 0x3F] = slot;
+  static const uint8_t states[] = { 0xC2, 0xE0, 0xE1, 0x00, 0x00, 0x00 };
+  ram[at + 0x0E] = (rnd() % 4) ? states[rnd() % 6] : (uint8_t)rnd();
+  if (rnd() % 3 == 0) ram[at + 0x0C] = 0;
+  ram[at + 0x02] = (uint8_t)((rnd() % 4) ? rnd() % 4 : rnd());
+  uint8_t *cow = &ram[0x0C1C6 + 16 * n];
+  static const uint8_t status[] = { 0x02, 0x04, 0x08, 0x18, 0x28, 0x48, 0x0A, 0x0C, 0x01, 0x00 };
+  cow[0] = (rnd() % 4) ? status[rnd() % 10] : (uint8_t)rnd();
+  cow[1] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+  cow[3] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+  static const uint8_t edges[] = { 0x5F, 0x60, 0xBF, 0xC0 };       /* milk / price sizes */
+  cow[4] = (rnd() % 4) ? (uint8_t)rnd() : edges[rnd() % 4];
+  cow[5] = (uint8_t)(rnd() % 12);
+  static const uint8_t maps[] = { 0, 1, 2, 3, 0x27, 0x27, 0x28, 0x10 };
+  ram[0x22] = maps[rnd() % 8];
+  static const uint8_t tools[] = { 0, 1, 2, 3, 4, 0x0E, 0x0E, 0x0E, 0x0F, 0x0F, 0x11, 0x14, 0x15, 0x0A };
+  ram[0x00921] = (rnd() % 4) ? tools[rnd() % 14] : (uint8_t)rnd();
+  static const uint16_t actions[] = { 0, 0, 0, 1, 2, 4, 0x0A, 0x0C, 0x0D, 0x1B };
+  hm_wr16(ram, 0xD4, actions[rnd() % 10]);
+  hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 2) ? 0 : rnd()));
+  hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 2) ? 0 : rnd()));
+  static const uint16_t flags[] = { 0, 0x0004, 0x0010, 0x0040, 0x0040, 0x0040, 0x0080, 0x0100,
+                                    0x0140, 0x00C0 };
+  hm_wr16(ram, 0x11F5A, (rnd() % 4) ? flags[rnd() % 10] : (uint16_t)rnd());
+  hm_wr16(ram, 0x11F64, (uint16_t)((rnd() % 2) ? 0 : rnd()));
+  ram[0x11F0A] = (uint8_t)(rnd() % 13);                                /* cows owned */
+  hm_wr16(ram, 0x00128, (uint16_t)((rnd() % 3) ? 0 : (rnd() % 2) ? 0x0080 : rnd()));
+  hm_wr16(ram, 0x00953 + 2 * n, (uint16_t)((rnd() % 2) ? 0x0100 : rnd() % 0x102));
+  ram[0xDE] = (uint8_t)rnd();
+  hm_wr16(ram, 0xDA, (uint16_t)((rnd() % 4) ? rnd() % 5 : rnd()));     /* facing */
+  hm_wr16(ram, 0xD6, (uint16_t)rnd()); hm_wr16(ram, 0xD8, (uint16_t)rnd());
+  if (rnd() % 4 == 0) {          /* the player free, a tool or a potion on the cow */
+    if (ram[at + 0x0E] == 0xC2 || ram[at + 0x0E] >= 0xE0) ram[at + 0x0E] = 0;
+    ram[at + 0x0C] = 1;
+    hm_wr16(ram, 0xD4, 0); hm_wr16(ram, 0xD2, 0); hm_wr16(ram, 0x11F60, 0);
+    hm_wr16(ram, 0x00128, (rnd() % 4) ? 0 : 0x0080);
+    static const uint16_t used[] = { 0x0040, 0x0040, 0x0040, 0x0080, 0x0100 };
+    hm_wr16(ram, 0x11F5A, used[rnd() % 5]);
+    static const uint8_t near_tools[] = { 0x0E, 0x0E, 0x0F, 0x01, 0x13 };
+    ram[0x00921] = near_tools[rnd() % 5];
+    static const uint8_t ok_status[] = { 0x08, 0x08, 0x04, 0x02, 0x48, 0x28 };
+    cow[0] = ok_status[rnd() % 6];
+    cow[1] = (rnd() % 2) ? 0 : (uint8_t)(rnd() & 0x0F);
+  }
+}
+
 /* eventcmds.c: the dog's slot ($16) running its script */
 static void prep_dog_slot(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -1158,6 +1212,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "PrintTextFrame", hm_PrintTextFrame,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/text.c", 0x83951C, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_printer },
+  { "Event_UNKCowRelated", hm_Event_UNKCowRelated,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849AD4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_cow_slot },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

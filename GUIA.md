@@ -469,6 +469,31 @@ usan otros guiones.
   tirada al azar decide qué hace.
 - Cuando lo **llaman**, corre hacia ti por el eje en que está más lejos.
 
+**La vaca, cada cuadro** (`Event_UNKCowRelated`, la rutina más grande
+descompilada hasta ahora: 1.567 instrucciones). Cada vaca tiene una ficha
+de 16 bytes: estado (ternera, joven, adulta, enferma, preñada, "huye de
+ti"), banderas del día (cepillada, ordeñada, le hablaste, caminando,
+cruzada), mapa, días de preñez, **felicidad**, veces golpeada y posición.
+
+- **Hablarle** (A frente a ella): un texto según su estado. La primera vez
+  de cada día: **+1 de felicidad**.
+- **Cepillo:** una vez al día, **+3 de felicidad**.
+- **Ordeñadora:** una vez al día, solo adultas, ni enfermas ni preñadas. El
+  tamaño de la leche depende de la felicidad: menos de 96 chica, menos de
+  192 mediana, si no grande.
+- **Golpearla** con la hoz, azada, martillo o hacha (o las de oro): se
+  queja y sube el contador de "veces golpeada" (hasta 10).
+- **Poción milagrosa** en una adulta: queda preñada (**+10 de
+  felicidad**), salvo que ya haya 12 vacas. **Medicina:** se cura.
+- **Venderla** (desde la granja): el precio depende de la felicidad: 500 G
+  con menos de 96, 800 G con menos de 192, 1000 G por encima.
+- **Pasear:** cada 256 cuadros (unos 4 segundos) una tirada al azar elige
+  un guion para caminar, distinto para terneras, jóvenes y adultas.
+- **La campana:** las vacas se voltean hacia ti (o al revés, si son de las
+  que "huyen") y vienen.
+- Cada guion tiene cuatro versiones, una por tipo de vaca (byte +02 del
+  slot).
+
 ### 5.8 Las personas
 
 - **Corazones** de las cinco chicas: `$7F:1F1F + 2·n` (0-999), en el orden
@@ -734,6 +759,10 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     8 bits** (solo el byte bajo de la posición), así que en un texto de más
     de 256 códigos saltaría hacia atrás (ninguno visto hasta ahora es tan
     largo).
+17. **La vaca que pasa de la granja al establo queda en una posición
+    equivocada.** La tabla de lugares del establo tiene x e y para cada
+    vaca, pero este código lee dos veces la misma palabra (se olvida de
+    pasar a la siguiente), así que la posición que se le escribe es (x, x).
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -789,3 +818,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 21-oct-2026 | 21,86 % | la regadera y el aspersor: las 28 herramientas listas |
 | 21-oct-2026 | 21,91 % | la rutina que elige la rutina de cada herramienta |
 | 22-oct-2026 | 22,49 % | la impresora de texto (comprobada en vivo: 2.424 cuadros de texto en una partida nueva) |
+| 22-oct-2026 | 25,96 % | cada cuadro de la vaca (1.567 instrucciones) |
