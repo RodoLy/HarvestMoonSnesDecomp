@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **163 rutinas reescritas y verificadas** (0 diferencias):
+- **165 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -66,7 +66,7 @@ en el README (`tools/progress.py`).
 | LoadGameObjectComponents (CODE_858AE5) | $85:8AE5 | src/objects.c |
 | LoadSpriteComponent (CODE_858C30) | $85:8C30 | src/objects.c |
 | StartMapAnimation (CODE_81A5E1) | $81:A5E1 | src/mapedit.c |
-| Las 28 ToolUsed* | $82:931E-$82:A570 | src/toolused.c |
+| Las 28 ToolUsed*, SUB_829260 (las despacha), SUB_82927D | $82:931E-$82:A570 | src/toolused.c |
 | RanchMasteryCalculator | $83:F26D | src/ending.c |
 | AddNewChicken, AddNewCow | $83:C807, $83:C8DC | src/animals.c |
 | PlaceAnimalsOnMap (CODE_83C296) | $83:C296 | src/animals.c |

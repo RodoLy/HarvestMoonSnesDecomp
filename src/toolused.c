@@ -842,3 +842,32 @@ void hm_ToolUsedSprinkler(uint8_t *ram, HmRegs *r)
     water_tile(ram, r, 0xA33D, 0xA356);
   gold_step(ram, r, 9, 0xA375);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_829260 ($82:9260, JSL, RTL): uses the tool in hand. JSR through
+ * Tool_Used_Table ($82:A5C3, one routine per item, in item order) with
+ * A = X = 2 x item (ASL in 8 bits: C = bit 7 of the item), then sets
+ * $7F1F5A bit $0040 (FLAG5A: "a tool was used").
+ * Leftovers: A = the new $7F1F5A; X, Y, C those of the tool's routine.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_260_TOOL    0x926E
+
+void hm_SUB_829260(uint8_t *ram, HmRegs *r)
+{
+  static void (*const used[])(uint8_t *, HmRegs *) = {
+    hm_ToolUsedNoAction, hm_ToolUsedSickle, hm_ToolUsedHoe, hm_ToolUsedHammer,
+    hm_ToolUsedAxe, hm_ToolUsedCornSeeds, hm_ToolUsedTomatoSeeds, hm_ToolUsedPotatoSeeds,
+    hm_ToolUsedTurnipSeeds, hm_ToolUsedCowMedicine, hm_ToolUsedMiraclePotion, hm_ToolUsedBell,
+    hm_ToolUsedGrassSeeds, hm_ToolUsedPaint, hm_ToolUsedMilker, hm_ToolUsedBrush,
+    hm_ToolUsedWateringCan, hm_ToolUsedGoldSickle, hm_ToolUsedGoldHoe, hm_ToolUsedGoldHammer,
+    hm_ToolUsedGoldAxe, hm_ToolUsedSprinkler, hm_ToolUsedMagicBeans, hm_ToolUsedGemSeed,
+    hm_ToolUsedBlueFeather, hm_ToolUsedChickenFeed, hm_ToolUsedCowFeed, hm_ToolUsedUNK,
+  };
+  uint8_t item = ram[HM_TOOL_SELECTED];
+  r->c = item >> 7;
+  r->a = r->x = (uint8_t)(item << 1);
+  if (item < sizeof used / sizeof used[0])               /* the game has no more */
+    jsr(ram, r, RET_260_TOOL, used[item]);
+  r->a = (uint16_t)(hm_rd16(ram, FLAGS_5A) | 0x0040);
+  hm_wr16(ram, FLAGS_5A, r->a);
+}

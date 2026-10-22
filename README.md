@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 21.86%](https://img.shields.io/badge/decompiled-21.86%25-2f855a)
+![Decompiled: 21.91%](https://img.shields.io/badge/decompiled-21.91%25-2f855a)
 
-**21.86%** of the game's code decompiled and verified: 9874 of 45176 instructions, 163 of 529 routines (30.8%).
+**21.91%** of the game's code decompiled and verified: 9900 of 45176 instructions, 165 of 529 routines (31.2%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -54,8 +54,8 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Sound | UNK_Audio17 / 7 (wait for "ready"), UNK_Audio8, UNK_Audio15 / 19 (sound effects), UNK_Audio16, UNK_Audio2 (commands to the sound chip, checked by recording its answers) | `src/audio.c` |
 | Text box | StartTextBox, CloseTextBox (CODE_8393F9), SUB_83932D (wipe the box), BlinkTextBoxArrow / TextBoxArrow / DrawTextBoxArrow (the "more text" arrow), FindLetterGraphics / DrawLetter / AdvanceLetterCursor / BlinkTextCursor (letters), PrintDigit (numbers) | `src/text.c` |
 | Objects | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites and the objects the tools leave on the map) | `src/objects.c` |
-| Tools | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square | `src/tools.c` |
-| Using the tools | All 28 ToolUsed* routines: sickle, hoe, hammer, axe, their gold versions, the five seeds, paint, feed, medicine, potion, bell, milker, brush, beans, gem seed, blue feather, watering can, sprinkler | `src/toolused.c` |
+| Tools | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square, SUB_82927D | `src/tools.c` |
+| Using the tools | All 28 ToolUsed* routines: sickle, hoe, hammer, axe, their gold versions, the five seeds, paint, feed, medicine, potion, bell, milker, brush, beans, gem seed, blue feather, watering can, sprinkler; SUB_829260 (uses the item in hand: one routine per item, through Tool_Used_Table) | `src/toolused.c` |
 
 A few things found along the way (details in each file's comments):
 

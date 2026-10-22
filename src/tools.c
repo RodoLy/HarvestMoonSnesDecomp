@@ -297,3 +297,13 @@ void hm_PreCheckToolSuccessSquare(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
   check_tile_in_front(ram, r, 0x92F8);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_82927D ($82:927D, JSR, RTS): PreCheckToolSuccess that also keeps the
+ * answer (0 / 1 / 2) in $0922, which picks the sound of the tool.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_SUB_82927D(uint8_t *ram, HmRegs *r)
+{
+  tile_ahead_then_check(ram, r, 1, 0x928B, 0x9297);
+  hm_bus_wr8(ram, ((uint32_t)r->db << 16) | 0x0922, (uint8_t)r->a);
+}

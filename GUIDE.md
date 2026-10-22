@@ -337,6 +337,11 @@ refilled.
 
 **Quirk:** any item that is not on the list "works".
 
+**Who calls them:** `SUB_829260` takes the item in hand ($0921), looks up
+its routine in `Tool_Used_Table` (one per item, in item order: 28 in
+all) and runs it; then it raises the flag "a tool was used" ($7F1F5A bit
+$0040).
+
 **What each one does** (`src/toolused.c`; all cost stamina at the end):
 
 | Tool | What it does |
@@ -744,3 +749,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 21-Oct-2026 | 21.31 % | the letters: font, drawing, cursor, numbers |
 | 21-Oct-2026 | 21.59 % | the checker records the sound chip; 7 sound routines |
 | 21-Oct-2026 | 21.86 % | the watering can and the sprinkler: all 28 tools done |
+| 21-Oct-2026 | 21.91 % | the routine that picks the tool's routine |

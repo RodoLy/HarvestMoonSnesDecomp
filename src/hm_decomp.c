@@ -505,6 +505,18 @@ static void prep_feed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), uint8_t to
 }
 static void prep_chicken_feed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void)) { prep_feed(ram, r, rnd, 0x19, 0x28); }
 static void prep_cow_feed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))     { prep_feed(ram, r, rnd, 0x1A, 0x27); }
+/* SUB_829260: any of the 28 items, prepared as for its own routine */
+static void prep_any_tool(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  static void (*const preps[])(uint8_t *, HmRegs *, uint32_t (*)(void)) = {
+    prep_tool_none, prep_sickle, prep_hoe, prep_hammer, prep_axe, prep_corn, prep_tomato,
+    prep_potato, prep_turnip, prep_medicine, prep_potion, prep_bell, prep_grass_seeds,
+    prep_paint, prep_milker, prep_brush, prep_watering_can, prep_gold_sickle, prep_gold_hoe,
+    prep_gold_hammer, prep_gold_axe, prep_sprinkler, prep_beans, prep_gem, prep_feather,
+    prep_chicken_feed, prep_cow_feed, prep_tool_unk,
+  };
+  preps[rnd() % (sizeof preps / sizeof preps[0])](ram, r, rnd);
+}
 static void prep_map_animation(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   (void)ram;
@@ -1101,6 +1113,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "ToolUsedSprinkler", hm_ToolUsedSprinkler,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_JSR,
     "src/toolused.c", 0x82A307, 1, 0, 0, 0xFF, { { 0 } }, 120, prep_sprinkler },
+  { "SUB_829260", hm_SUB_829260, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/toolused.c", 0x829260, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_any_tool },
+  { "SUB_82927D", hm_SUB_82927D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/tools.c", 0x82927D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_none },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

@@ -342,6 +342,11 @@ regadera.
 
 **Rareza:** cualquier objeto que no esté en la lista "funciona".
 
+**Quién las llama:** `SUB_829260` toma el objeto en la mano ($0921), busca
+su rutina en `Tool_Used_Table` (una por objeto, en el orden de los
+objetos: 28 en total) y la corre; después levanta la bandera "se usó una
+herramienta" ($7F1F5A bit $0040).
+
 **Qué hace cada una** (`src/toolused.c`; todas gastan energía al final):
 
 | Herramienta | Qué hace |
@@ -757,3 +762,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 21-oct-2026 | 21,31 % | las letras: fuente, dibujo, cursor, números |
 | 21-oct-2026 | 21,59 % | el comprobador graba el chip de sonido; 7 rutinas de sonido |
 | 21-oct-2026 | 21,86 % | la regadera y el aspersor: las 28 herramientas listas |
+| 21-oct-2026 | 21,91 % | la rutina que elige la rutina de cada herramienta |
