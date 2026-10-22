@@ -118,8 +118,49 @@ def split_locals(routines, lines):
     return routines
 
 
+CALL = re.compile(r"\bJS[LR](?:\.[LW])?\s+([A-Za-z_][A-Za-z0-9_]*)\b")
+CODE_NAME = re.compile(r"^(?:CODE|SUB)_([0-9A-Fa-f]{6})$")
+
+
+def split_called(routines, lines):
+    """A label inside a block that is called (JSL / JSR) from another block
+    is a routine of its own: HM-Decomp often writes several routines under
+    one top-level label. Each is carved out, from its label to its first
+    RTL / RTS, into a routine keyed by its address (CODE_xxxxxx) or name."""
+    local_labels = {label for label, _ in LOCAL.values()}
+    callers = {}
+    for rows in lines.values():
+        for owner, code in rows:
+            for target in CALL.findall(code):
+                callers.setdefault(target, set()).add(owner)
+    for path, rows in lines.items():
+        for i, (owner, code) in enumerate(rows):
+            m = re.match(r"^\s+([A-Za-z_][A-Za-z0-9_]*):", code)
+            if not m or m.group(1) in local_labels:
+                continue
+            name = m.group(1)
+            if not (callers.get(name, set()) - {owner}):
+                continue                      # only called from its own block
+            k = CODE_NAME.match(name)
+            key = int(k.group(1), 16) if k else ("split", name)
+            if key in routines:
+                continue
+            n = 0
+            for j, (own2, code2) in enumerate(rows[i:]):
+                if j and ANY_TOP_LABEL.match(code2):
+                    break
+                if is_insn(code2):
+                    n += 1
+                    routines[own2][1] -= 1
+                    if re.search(r"\bRT[LS]\b", code2):
+                        break
+            routines[key] = [name, n]
+    return routines
+
+
 def routines_of(decomp_dir):
     found, lines = parse(decomp_dir)
+    found = split_called(found, lines)
     found = split_locals(found, lines)
     return {k: (name, n) for k, (name, n) in found.items() if n > 0}
 
