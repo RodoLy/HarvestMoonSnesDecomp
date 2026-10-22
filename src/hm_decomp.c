@@ -565,10 +565,25 @@ static void prep_event_cmd_ptr(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   prep_event_cmd(ram, r, rnd);
   uint16_t at = hm_rd16(ram, 0xC9);
   ram[0x10000 + at + 3] = (uint8_t)(0x7E + rnd() % 2);
+  /* not into the stack or the direct page ($7E:0000-$1FFF): a write there
+   * would change the command's own return address or its variables */
+  if (ram[0x10000 + at + 3] == 0x7E && ram[0x10000 + at + 2] < 0x20) ram[0x10000 + at + 2] |= 0x20;
+  /* nor at the very end of a bank (a 16 / 24-bit value would cross it) */
+  if (ram[0x10000 + at + 2] == 0xFF) ram[0x10000 + at + 2] = 0xFE;
   if (rnd() % 4 == 0) {                                              /* "equals the value" */
     uint32_t a = (uint32_t)(ram[0x10000 + at + 3] - 0x7E) << 16 | hm_rd16(ram, 0x10000u + at + 1);
-    ram[a] = ram[0x10000 + at + 4];
+    for (unsigned k = 0; k < 3; k++) ram[(a + k) & 0x1FFFF] = ram[0x10000 + at + 4 + k];
   }
+  ram[0x0018F] = (uint8_t)((rnd() % 4) ? rnd() : ram[0x10000 + at + 1]);
+  hm_wr16(ram, 0x008FF, (uint16_t)((rnd() % 2) ? rnd() % 3 : rnd()));   /* waits */
+  hm_wr16(ram, 0x11F5A, (uint16_t)rnd()); hm_wr16(ram, 0x11F60, (uint16_t)rnd());
+  hm_wr16(ram, 0x11F04, (uint16_t)rnd()); ram[0x11F06] = (uint8_t)(rnd() % 0x10);
+  static const uint16_t actions[] = { 0, 0, 1, 4, 0x0A, 0x0C, 0x0D, 0x17, 0x1B };
+  hm_wr16(ram, 0xD4, actions[rnd() % (sizeof actions / sizeof actions[0])]);
+  hm_wr16(ram, 0x00128, (uint16_t)((rnd() % 2) ? 0x0080 : rnd()));
+  ram[0x0091D] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+  ram[0x0093A] = (uint8_t)((rnd() % 2) ? 0xB4 : rnd());
+  if (rnd() % 2) hm_wr16(ram, 0xD2, (uint16_t)(rnd() & 0x1000));
 }
 
 const HmDecompFn g_hm_decomp_fns[] = {
@@ -825,6 +840,68 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x848E90, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
   { "Event_UNKSetAnimation", hm_Event_UNKSetAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848EC9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
+  { "Event_UNKPickupMole", hm_Event_UNKPickupMole, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84A94C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKCCchanges6", hm_Event_UNKCCchanges6, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84923F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNK3", hm_Event_UNK3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B93C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_JumpifBetweenValueLong", hm_Event_JumpifBetweenValueLong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B79A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKFishing", hm_Event_UNKFishing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84AA5D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKCCchanges13", hm_Event_UNKCCchanges13, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B427, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKCCchanges12", hm_Event_UNKCCchanges12, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B389, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKCCchanges10", hm_Event_UNKCCchanges10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849777, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKTextrelated", hm_Event_UNKTextrelated, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x8491D2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_JumpifEqualsValueLong", hm_Event_JumpifEqualsValueLong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B6BC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_JumpifBetweenValue", hm_Event_JumpifBetweenValue, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B72D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_ChangeMoney", hm_Event_ChangeMoney, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B602, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKCCchanges4", hm_Event_UNKCCchanges4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848F9B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKCCchanges14", hm_Event_UNKCCchanges14, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B5A9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_JumpifEqualsValue", hm_Event_JumpifEqualsValue, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B666, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_SetFlag", hm_Event_SetFlag, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849306, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_SetValueLong", hm_Event_SetValueLong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B889, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_MapScrolling", hm_Event_MapScrolling, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849513, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_StoreValue", hm_Event_StoreValue, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84A90F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_SetValueSort", hm_Event_SetValueSort, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B84C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKJumpif018F", hm_Event_UNKJumpif018F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84919D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_TransitiontoX", hm_Event_TransitiontoX, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B52D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_ChangeItemonHand", hm_Event_ChangeItemonHand, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B4DC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_SetItemonHand", hm_Event_SetItemonHand, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B556, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNK2", hm_Event_UNK2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B365, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_TransitiontoHouse", hm_Event_TransitiontoHouse, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B503, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKCCchanges16", hm_Event_UNKCCchanges16, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BA51, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKSet5C", hm_Event_UNKSet5C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B58F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKReset5C", hm_Event_UNKReset5C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BB31, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_UNKSet60", hm_Event_UNKSet60, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BB4B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
+  { "Event_DropItemAnimation", hm_Event_DropItemAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B57B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

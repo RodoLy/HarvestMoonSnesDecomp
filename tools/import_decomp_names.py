@@ -46,6 +46,12 @@ MANUAL = {
     0x81A5E1: "StartMapAnimation",  # CODE_81A5E1
     0x83C296: "PlaceAnimalsOnMap",  # CODE_83C296
     0x848A0D: "Event_TimeStopped",  # HM-Decomp's address comment says 808A0D
+    0x8491D2: "Event_UNKTextrelated",  # HM-Decomp says 8091D2
+    0x849513: "Event_MapScrolling",  # HM-Decomp says 809513
+    0x84A90F: "Event_StoreValue",  # no address in HM-Decomp
+    0x84B4DC: "Event_ChangeItemonHand",  # HM-Decomp says 84B4DE
+    0x84BA51: "Event_UNKCCchanges16",  # no address in HM-Decomp
+    0x84BB31: "Event_UNKReset5C",  # no address in HM-Decomp
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

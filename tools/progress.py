@@ -56,6 +56,12 @@ LOCAL = {
     0x83F26D: ("RanchMasteryCalculator", "RanchMasteryCalculator"),
     0x83C296: ("CODE_83C296", "PlaceAnimalsOnMap"),
     0x848A0D: ("Event_TimeStopped", "Event_TimeStopped"),     # ";808A0D" in HM-Decomp
+    0x8491D2: ("Event_UNKTextrelated", "Event_UNKTextrelated"),
+    0x849513: ("Event_MapScrolling", "Event_MapScrolling"),
+    0x84A90F: ("Event_StoreValue", "Event_StoreValue"),
+    0x84B4DC: ("Event_ChangeItemonHand", "Event_ChangeItemonHand"),
+    0x84BA51: ("Event_UNKCCchanges16", "Event_UNKCCchanges16"),
+    0x84BB31: ("Event_UNKReset5C", "Event_UNKReset5C"),
     0x829999: ("ToolUsedCornSeeds", "ToolUsedCornSeeds"),   # ";82A9999" in HM-Decomp
 }
 

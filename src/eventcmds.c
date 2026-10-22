@@ -751,3 +751,547 @@ void hm_Event_UNKSetAnimation(uint8_t *ram, HmRegs *r)
   r->a = hm_dp_r16(ram, r, 0xD2) | 0x2000;
   hm_dp_w16(ram, r, 0xD2, r->a);
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * More commands: values at any address, picking things up, waits.
+ * ═════════════════════════════════════════════════════════════════════════ */
+#define WAIT_BITS        0x84B4D2   /* ROM: dw $0400, $0800, $0100, $0200, $8000 */
+#define HM_WAIT_FLAGS    0x008FD    /* 16b: what the player may do to go on */
+#define HM_WAIT_FRAMES   0x008FF    /* 16b: frames left */
+#define FLAGS_60_        0x11F60
+#define HM_MONEY_LOW     0x11F04
+#define HM_MONEY_HIGH    0x11F06
+
+static uint32_t at72(uint8_t *ram, HmRegs *r, uint16_t y)
+{
+  return hm_dp_long(ram, r, 0x72, y);
+}
+/* the word / 24-bit value at [$72] */
+static uint16_t value16(uint8_t *ram, HmRegs *r) { return hm_bus_rd16(ram, at72(ram, r, 0)); }
+
+/* ── Jumps on values ─────────────────────────────────────────────────── */
+
+/* Event_JumpifEqualsValue ($84:B666): address, word, target: goto target
+ * if the word at the address equals it. */
+void hm_Event_JumpifEqualsValue(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  hm_dp_w16(ram, r, 0x7E, arg16(ram, r));
+  advance(ram, r, 2);
+  uint16_t v = r->a = value16(ram, r);
+  r->c = v >= hm_dp_r16(ram, r, 0x7E);
+  if (v == hm_dp_r16(ram, r, 0x7E)) jump(ram, r);
+  else advance(ram, r, 2);
+}
+
+/* Event_JumpifEqualsValueLong ($84:B6BC): the same with a 24-bit value. */
+void hm_Event_JumpifEqualsValueLong(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  hm_dp_w16(ram, r, 0x7E, arg16(ram, r));
+  advance(ram, r, 2);
+  *hm_dp(ram, r, 0x80) = arg8(ram, r);
+  advance(ram, r, 1);
+  uint16_t low = r->a = value16(ram, r);
+  r->c = low >= hm_dp_r16(ram, r, 0x7E);
+  if (low == hm_dp_r16(ram, r, 0x7E)) {
+    r->y = 2;
+    uint8_t high = lda8(r, hm_bus_rd8(ram, at72(ram, r, 2)));
+    r->c = high >= *hm_dp(ram, r, 0x80);
+    if (high == *hm_dp(ram, r, 0x80)) { jump(ram, r); return; }
+  }
+  advance(ram, r, 2);
+}
+
+/* Event_JumpifBetweenValue ($84:B72D): address, low, high (words),
+ * target: goto target if low <= word <= high (high + 1 in 16 bits). */
+void hm_Event_JumpifBetweenValue(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  hm_dp_w16(ram, r, 0x7E, arg16(ram, r));
+  advance(ram, r, 2);
+  r->a = (uint16_t)(arg16(ram, r) + 1);
+  hm_dp_w16(ram, r, 0x80, r->a);
+  advance(ram, r, 2);
+  uint16_t v = r->a = value16(ram, r);
+  r->c = v >= hm_dp_r16(ram, r, 0x7E);
+  if (v >= hm_dp_r16(ram, r, 0x7E)) {
+    v = r->a = value16(ram, r);
+    r->c = v >= hm_dp_r16(ram, r, 0x80);
+    if (v < hm_dp_r16(ram, r, 0x80)) { jump(ram, r); return; }
+  }
+  advance(ram, r, 2);
+}
+
+/* Event_JumpifBetweenValueLong ($84:B79A): the same with 24-bit values
+ * (each compare is CMP on the low word, then SBC on the high byte). */
+static bool at_least24(uint8_t *ram, HmRegs *r, unsigned bound)
+{
+  uint16_t low = r->a = value16(ram, r);
+  r->c = low >= hm_dp_r16(ram, r, bound);                  /* CMP */
+  r->y = 2;
+  uint8_t high = lda8(r, hm_bus_rd8(ram, at72(ram, r, 2)));
+  unsigned borrow = !r->c;
+  r->c = (unsigned)high >= (unsigned)*hm_dp(ram, r, bound + 2) + borrow;   /* SBC */
+  r->a = (uint16_t)((r->a & 0xFF00) | (uint8_t)(high - *hm_dp(ram, r, bound + 2) - borrow));
+  return r->c;
+}
+void hm_Event_JumpifBetweenValueLong(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  hm_dp_w16(ram, r, 0x7E, arg16(ram, r)); advance(ram, r, 2);
+  *hm_dp(ram, r, 0x80) = arg8(ram, r);     advance(ram, r, 1);
+  hm_dp_w16(ram, r, 0x82, arg16(ram, r)); advance(ram, r, 2);
+  *hm_dp(ram, r, 0x84) = arg8(ram, r);     advance(ram, r, 1);
+  /* high + 1, 24 bits */
+  uint16_t low = hm_dp_r16(ram, r, 0x82);
+  r->c = low == 0xFFFF;
+  hm_dp_w16(ram, r, 0x82, (uint16_t)(low + 1));
+  uint8_t high = *hm_dp(ram, r, 0x84);
+  unsigned sum = (unsigned)high + r->c;
+  r->c = sum > 0xFF;
+  *hm_dp(ram, r, 0x84) = lda8(r, (uint8_t)sum);
+  if (at_least24(ram, r, 0x7E) && !at_least24(ram, r, 0x82)) {
+    jump(ram, r);
+    return;
+  }
+  advance(ram, r, 2);
+}
+
+/* Event_UNKJumpif018F ($84:919D): value, target: goto target if $018F
+ * equals the value. */
+void hm_Event_UNKJumpif018F(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  *hm_dp(ram, r, 0x92) = arg8(ram, r);
+  uint8_t v = lda8(r, ram[0x0018F]);
+  r->c = v >= *hm_dp(ram, r, 0x92);
+  if (v == *hm_dp(ram, r, 0x92)) {
+    advance(ram, r, 1);
+    jump(ram, r);
+  } else {
+    advance(ram, r, 3);
+  }
+}
+
+/* ── Values ──────────────────────────────────────────────────────────── */
+
+/* Event_SetFlag ($84:9306): address, bit: the word at the address |= the
+ * bit. */
+void hm_Event_SetFlag(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  hm_dp_w16(ram, r, 0x7E, flag_bit_arg(ram, r));
+  r->a = value16(ram, r) | hm_dp_r16(ram, r, 0x7E);
+  hm_bus_wr16(ram, at72(ram, r, 0), r->a);
+  advance(ram, r, 1);
+}
+
+/* Event_StoreValue ($84:A90F): address, word: store it. */
+void hm_Event_StoreValue(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  hm_bus_wr16(ram, at72(ram, r, 0), arg16(ram, r));
+  advance(ram, r, 2);
+}
+
+/* Event_SetValueSort ($84:B84C): address, byte: store it. */
+void hm_Event_SetValueSort(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  hm_bus_wr8(ram, at72(ram, r, 0), arg8(ram, r));
+  advance(ram, r, 1);
+}
+
+/* Event_SetValueLong ($84:B889): address, 24-bit value: store it. */
+void hm_Event_SetValueLong(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  hm_bus_wr16(ram, at72(ram, r, 0), arg16(ram, r));
+  advance(ram, r, 2);
+  uint8_t high = arg8(ram, r);
+  r->y = 2;
+  hm_bus_wr8(ram, at72(ram, r, 2), high);
+  advance(ram, r, 1);
+}
+
+/* Event_UNKTextrelated ($84:91D2; not about text): address, signed byte:
+ * add it to the byte at the address, kept in 0..255. */
+void hm_Event_UNKTextrelated(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  uint8_t d = (uint8_t)arg8_word(ram, r);
+  r->a = (uint16_t)(int16_t)(int8_t)d;                     /* BPL; XBA; LDA #$FF; XBA */
+  hm_dp_w16(ram, r, 0x7E, r->a);
+  advance(ram, r, 1);
+  uint16_t v = hm_bus_rd8(ram, at72(ram, r, 0));
+  uint32_t sum = (uint32_t)v + hm_dp_r16(ram, r, 0x7E);
+  r->c = sum > 0xFFFF;
+  r->a = (uint16_t)sum;
+  if (r->a & 0x8000) {
+    lda8(r, 0);                                            /* below 0 */
+  } else {
+    r->c = r->a >= 0x00FF;
+    if (r->a >= 0x00FF) lda8(r, 0xFF);                     /* above 255 */
+  }
+  hm_bus_wr8(ram, at72(ram, r, 0), (uint8_t)r->a);
+}
+
+/* Event_UNKCCchanges14 ($84:B5A9): address, signed word: add it to the
+ * word at the address, kept in 0..999. */
+void hm_Event_UNKCCchanges14(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  hm_dp_w16(ram, r, 0x7E, arg16(ram, r));
+  advance(ram, r, 2);
+  uint32_t sum = (uint32_t)value16(ram, r) + hm_dp_r16(ram, r, 0x7E);
+  r->c = sum > 0xFFFF;
+  r->a = (uint16_t)sum;
+  hm_bus_wr16(ram, at72(ram, r, 0), r->a);
+  if (r->a & 0x8000) {
+    r->a = 0;
+    hm_bus_wr16(ram, at72(ram, r, 0), 0);
+    return;
+  }
+  r->c = r->a >= 999;
+  if (r->a >= 999) {
+    r->a = 999;
+    hm_bus_wr16(ram, at72(ram, r, 0), 999);
+  }
+}
+
+/* Event_ChangeMoney ($84:B602): two 24-bit arguments; the first is read
+ * and then overwritten by the second (quirk: only the second counts),
+ * which is added to the money (AddMoney, signed, in tens of G). If the
+ * money would go below 0 it becomes 0: the script never "can't pay". */
+void hm_Event_ChangeMoney(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);                                     /* read, then lost */
+  address_arg(ram, r);
+  hm_jsl(ram, r, 0xB651, 0x83);
+  hm_AddMoney(ram, r);
+  hm_rtl(ram, r);
+  if (r->a != 0) {                                         /* would be negative */
+    r->a = 0;
+    hm_wr16(ram, HM_MONEY_LOW, 0);
+    ram[HM_MONEY_HIGH] = lda8(r, 0);
+  }
+}
+
+/* ── The slot ────────────────────────────────────────────────────────── */
+
+/* Event_UNKCCchanges4 ($84:8F9B): +16 = word, +14 = byte * 64, +01 |= 4. */
+void hm_Event_UNKCCchanges4(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  slot_w16(ram, r, 0x16, arg16(ram, r));
+  advance(ram, r, 2);
+  uint16_t v = arg8_word(ram, r);
+  r->c = (v >> 10) & 1;
+  r->a = (uint16_t)(v << 6);
+  slot_w16(ram, r, 0x14, r->a);
+  advance(ram, r, 1);
+  slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) | 0x04));
+}
+
+/* start a walk: +36 = word, +07 = +08 = byte, +01 |= flags, and the
+ * starting point +1E / +20 = the position +1A / +1C */
+static void start_walk(uint8_t *ram, HmRegs *r, uint8_t flags)
+{
+  slot_w16(ram, r, 0x36, arg16(ram, r));
+  advance(ram, r, 2);
+  uint8_t v = arg8(ram, r);
+  slot_w8(ram, r, 0x07, v);
+  slot_w8(ram, r, 0x08, v);
+  advance(ram, r, 1);
+  slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) | flags));
+  r->a = slot16(ram, r, 0x1A); slot_w16(ram, r, 0x1E, r->a);
+  r->a = slot16(ram, r, 0x1C); slot_w16(ram, r, 0x20, r->a);
+}
+
+/* Event_UNKCCchanges6 ($84:923F): +09, +0A, +0B (= +05 = +06), then a
+ * walk with flags $28. */
+void hm_Event_UNKCCchanges6(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  slot_w8(ram, r, 0x09, arg8(ram, r));
+  advance(ram, r, 1);
+  slot_w8(ram, r, 0x0A, arg8(ram, r));
+  advance(ram, r, 1);
+  uint8_t v = arg8(ram, r);
+  slot_w8(ram, r, 0x0B, v); slot_w8(ram, r, 0x05, v); slot_w8(ram, r, 0x06, v);
+  advance(ram, r, 1);
+  start_walk(ram, r, 0x28);
+}
+
+/* Event_UNKCCchanges10 ($84:9777): +0B (= +05 = +06), then a walk with
+ * flags $A8. */
+void hm_Event_UNKCCchanges10(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  uint8_t v = arg8(ram, r);
+  slot_w8(ram, r, 0x0B, v); slot_w8(ram, r, 0x05, v); slot_w8(ram, r, 0x06, v);
+  advance(ram, r, 1);
+  start_walk(ram, r, 0xA8);
+}
+
+/* Event_UNKCCchanges16 ($84:BA51): +00 |= 2. */
+void hm_Event_UNKCCchanges16(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  slot_w8(ram, r, 0x00, lda8(r, slot8(ram, r, 0x00) | 0x02));
+}
+
+/* ── Waiting for the player ──────────────────────────────────────────── */
+
+/* Event_UNKCCchanges12 ($84:B389) / 13 ($84:B427): a wait. The first
+ * frame: $08FD |= the allowed input (table $84:B4D2: entry n; 13 also
+ * adds entry 4, $8000), $08FF = frames, game state bit $1000, and the
+ * script stays on the command. Then each frame $08FF counts down; at 0
+ * everything is cleared, the player goes idle and the script moves on
+ * (4 bytes). */
+static void wait_frames(uint8_t *ram, HmRegs *r, bool also_entry_4)
+{
+  if ((r->a = hm_dp_r16(ram, r, 0xD2) & 0x1000)) {
+    uint16_t left = r->a = hm_rd16(ram, HM_WAIT_FRAMES);
+    if (left) {
+      r->a = (uint16_t)(left - 1);
+      hm_wr16(ram, HM_WAIT_FRAMES, r->a);
+      count_frame(ram, r);
+      return;
+    }
+    hm_wr16(ram, HM_WAIT_FLAGS, 0);
+    hm_wr16(ram, HM_WAIT_FRAMES, 0);
+    r->a = hm_dp_r16(ram, r, 0xD2) & 0xEFFF;
+    hm_dp_w16(ram, r, 0xD2, r->a);
+    r->a = 0;
+    hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
+    advance(ram, r, 4);
+    return;
+  }
+  advance(ram, r, 1);
+  uint16_t n = arg8_word(ram, r);
+  r->c = (n >> 15) & 1;
+  r->x = (uint16_t)(n << 1);
+  r->a = hm_bus_rd16(ram, WAIT_BITS + r->x) | hm_rd16(ram, HM_WAIT_FLAGS);
+  hm_wr16(ram, HM_WAIT_FLAGS, r->a);
+  if (also_entry_4) {
+    r->x = 8;
+    r->a = hm_bus_rd16(ram, WAIT_BITS + 8) | hm_rd16(ram, HM_WAIT_FLAGS);
+    hm_wr16(ram, HM_WAIT_FLAGS, r->a);
+  }
+  advance(ram, r, 1);
+  hm_wr16(ram, HM_WAIT_FRAMES, arg16(ram, r));
+  uint16_t pc = hm_dp_r16(ram, r, 0xC9);                   /* back onto the command */
+  r->c = pc >= 2;                                          /* SEC; SBC #2 */
+  r->a = (uint16_t)(pc - 2);
+  hm_dp_w16(ram, r, 0xC9, r->a);
+  count_frame(ram, r);
+  r->a = hm_dp_r16(ram, r, 0xD2) | 0x1000;
+  hm_dp_w16(ram, r, 0xD2, r->a);
+}
+void hm_Event_UNKCCchanges12(uint8_t *ram, HmRegs *r) { wait_frames(ram, r, false); }
+void hm_Event_UNKCCchanges13(uint8_t *ram, HmRegs *r) { wait_frames(ram, r, true); }
+
+/* Event_UNK2 ($84:B365): wait until $7F1F5A bit $8000. */
+void hm_Event_UNK2(uint8_t *ram, HmRegs *r)
+{
+  if ((r->a = hm_rd16(ram, FLAGS_5A) & 0x8000)) advance(ram, r, 1);
+  else count_frame(ram, r);
+}
+
+/* ── Picking things up: the mole, the fish, ... ──────────────────────── */
+
+/* the free-hands tests, in each command's own order */
+enum { T_SLOT_0C, T_BUSY, T_STATE, T_FLAGS_60, T_JOY_A, T_ITEM, T_ACTION };
+typedef struct Test { uint8_t kind; uint16_t value; } Test;
+
+static bool free_hands(uint8_t *ram, HmRegs *r, const Test *t, int n)
+{
+  for (int i = 0; i < n; i++) {
+    switch (t[i].kind) {
+    case T_SLOT_0C:
+      if (lda8(r, slot8(ram, r, 0x0C)) == 0) { r->c = 1; return false; }
+      break;
+    case T_BUSY: {                         /* LDA action; CMP #v, each reloaded */
+      static const uint16_t busy[] = { 0x000A, 0x000C, 0x000D, 0x001B };
+      for (unsigned k = 0; k < 4; k++) {
+        uint16_t action = r->a = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
+        r->c = action >= busy[k];
+        if (action == busy[k]) return false;
+      }
+      break;
+    }
+    case T_STATE:
+      if ((r->a = hm_dp_r16(ram, r, 0xD2) & t[i].value)) return false;
+      break;
+    case T_FLAGS_60:
+      if ((r->a = hm_rd16(ram, FLAGS_60_) & 0x0006)) return false;
+      break;
+    case T_JOY_A:
+      r->a = hm_rd16(ram, HM_JOY_NEW);
+      if (!(r->a & JOY_A)) return false;
+      break;
+    case T_ITEM:
+      if (lda8(r, ram[HM_ITEM_HELD])) return false;
+      break;
+    case T_ACTION: {
+      uint16_t action = r->a = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
+      r->c = action >= t[i].value;
+      if (action == t[i].value) return false;
+      break;
+    }
+    }
+  }
+  return true;
+}
+/* taken: the slot stops, the player carries `item` (action 4) */
+static void carry(uint8_t *ram, HmRegs *r, uint8_t item, bool remember_slot)
+{
+  if (remember_slot) ram[HM_CARRIED_SLOT] = lda8(r, slot8(ram, r, 0x3F));
+  slot_w8(ram, r, 0x00, lda8(r, 0));
+  slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) | 0x40));
+  count_frame(ram, r);
+  ram[HM_ITEM_HELD] = lda8(r, item);
+  r->a = 4;
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 4);
+}
+
+static const Test FREE_LONG[] = {
+  { T_SLOT_0C, 0 }, { T_BUSY, 0 }, { T_STATE, 0x0004 }, { T_FLAGS_60, 0 }, { T_JOY_A, 0 },
+  { T_STATE, 0x0800 }, { T_ACTION, 0x0017 }, { T_ITEM, 0 } };
+static const Test FREE_SHORT[] = {
+  { T_SLOT_0C, 0 }, { T_BUSY, 0 }, { T_STATE, 0x0004 }, { T_FLAGS_60, 0 }, { T_JOY_A, 0 },
+  { T_ITEM, 0 } };
+
+/* Event_UNKPickupMole ($84:A94C): the mole after the hoe finds it. Picked
+ * up: item $29. Otherwise every $B4 frames (3 seconds, $093A), half the
+ * time ($DE bit 7) it starts script $81 on slot $11. */
+void hm_Event_UNKPickupMole(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  if (free_hands(ram, r, FREE_LONG, 8)) { carry(ram, r, 0x29, true); return; }
+  uint8_t t = lda8(r, ram[0x0093A]);
+  r->c = t >= 0xB4;
+  if (t != 0xB4) {
+    ram[0x0093A] = lda8(r, (uint8_t)(t + 1));
+  } else {
+    ram[0x0093A] = 0;
+    if (lda8(r, *hm_dp(ram, r, 0xDE) & 0x80)) {
+      r->a = 0x0011; r->x = 0; r->y = 0x0081;
+      hm_jsl(ram, r, 0xAA4E, 0x84);
+      hm_UNK_LoadCCDataShort(ram, r);
+      hm_rtl(ram, r);
+    }
+  }
+  count_frame(ram, r);
+}
+
+/* Event_UNKFishing ($84:AA5D): picked up: item $07 (a fish). */
+void hm_Event_UNKFishing(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  if (free_hands(ram, r, FREE_SHORT, 6)) { carry(ram, r, 0x07, true); return; }
+  count_frame(ram, r);
+}
+
+/* Event_UNK3 ($84:B93C): picked up: item $08 (the slot is not
+ * remembered in $0920). */
+void hm_Event_UNK3(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  if (free_hands(ram, r, FREE_LONG, 8)) { carry(ram, r, 0x08, false); return; }
+  count_frame(ram, r);
+}
+
+/* ── The player, places, flags ───────────────────────────────────────── */
+
+/* Event_SetItemonHand ($84:B556): the player carries the item (action 4).
+ * Event_ChangeItemonHand ($84:B4DC): the item, and game state bit 2.
+ * Event_DropItemAnimation ($84:B57B): action 5 (put it down). */
+void hm_Event_SetItemonHand(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  ram[HM_ITEM_HELD] = arg8(ram, r);
+  advance(ram, r, 1);
+  r->a = 4;
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 4);
+}
+void hm_Event_ChangeItemonHand(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  ram[HM_ITEM_HELD] = arg8(ram, r);
+  advance(ram, r, 1);
+  r->a = hm_dp_r16(ram, r, 0xD2) | 0x0002;
+  hm_dp_w16(ram, r, 0xD2, r->a);
+}
+void hm_Event_DropItemAnimation(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->a = 5;
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 5);
+}
+
+/* Event_TransitiontoX ($84:B52D): go to map n ($098B; $0196 bit $4000
+ * starts the transition). Event_TransitiontoHouse ($84:B503): go home
+ * (map $15) and $7F1F60 bit $20. */
+void hm_Event_TransitiontoX(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  ram[0x0098B] = arg8(ram, r);
+  advance(ram, r, 1);
+  r->a = hm_rd16(ram, 0x00196) | 0x4000;
+  hm_wr16(ram, 0x00196, r->a);
+}
+void hm_Event_TransitiontoHouse(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  ram[0x0098B] = lda8(r, 0x15);
+  r->a = hm_rd16(ram, 0x00196) | 0x4000;
+  hm_wr16(ram, 0x00196, r->a);
+  r->a = hm_rd16(ram, FLAGS_60_) | 0x0020;
+  hm_wr16(ram, FLAGS_60_, r->a);
+}
+
+/* Event_MapScrolling ($84:9513): the camera moves by itself: X speed, Y
+ * speed (words) for n frames ($087C / $087E / $0880). */
+void hm_Event_MapScrolling(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  hm_wr16(ram, 0x0087C, arg16(ram, r));
+  advance(ram, r, 2);
+  hm_wr16(ram, 0x0087E, arg16(ram, r));
+  advance(ram, r, 2);
+  ram[0x00880] = arg8(ram, r);
+  advance(ram, r, 1);
+}
+
+/* flags of $7F1F5C / $7F1F60: Event_UNKSet5C ($84:B58F) / Event_UNKReset5C
+ * ($84:BB31) bit 3 of $7F1F5C; Event_UNKSet60 ($84:BB4B) bit 15 of
+ * $7F1F60. */
+void hm_Event_UNKSet5C(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->a = hm_rd16(ram, FLAGS_5C) | 0x0008; hm_wr16(ram, FLAGS_5C, r->a);
+}
+void hm_Event_UNKReset5C(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->a = hm_rd16(ram, FLAGS_5C) & 0xFFF7; hm_wr16(ram, FLAGS_5C, r->a);
+}
+void hm_Event_UNKSet60(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->a = hm_rd16(ram, FLAGS_60_) | 0x8000; hm_wr16(ram, FLAGS_60_, r->a);
+}

@@ -412,6 +412,8 @@
 049034	Event_StartTextBoxCopy_lo
 84919D	Event_UNKJumpif018F
 04919D	Event_UNKJumpif018F_lo
+8491D2	Event_UNKTextrelated
+0491D2	Event_UNKTextrelated_lo
 84923F	Event_UNKCCchanges6
 04923F	Event_UNKCCchanges6_lo
 849306	Event_SetFlag
@@ -420,6 +422,8 @@
 049356	Event_TimeofDayPalette_lo
 849375	Event_UNKCCchanges7
 049375	Event_UNKCCchanges7_lo
+849513	Event_MapScrolling
+049513	Event_MapScrolling_lo
 84957D	Event_UNKCCchanges8
 04957D	Event_UNKCCchanges8_lo
 849777	Event_UNKCCchanges10
@@ -431,6 +435,8 @@
 849AD4	Event_UNKCowRelated
 049AD4	Event_UNKCowRelated_lo
 84A5D4	AddCowHappiness
+84A90F	Event_StoreValue
+04A90F	Event_StoreValue_lo
 84A94C	Event_UNKPickupMole
 04A94C	Event_UNKPickupMole_lo
 84AA5D	Event_UNKFishing
@@ -447,6 +453,8 @@
 04B389	Event_UNKCCchanges12_lo
 84B427	Event_UNKCCchanges13
 04B427	Event_UNKCCchanges13_lo
+84B4DC	Event_ChangeItemonHand
+04B4DC	Event_ChangeItemonHand_lo
 84B503	Event_TransitiontoHouse
 04B503	Event_TransitiontoHouse_lo
 84B52D	Event_TransitiontoX
@@ -477,8 +485,12 @@
 04B8D9	Event_UNKCCchanges15_lo
 84B93C	Event_UNK3
 04B93C	Event_UNK3_lo
+84BA51	Event_UNKCCchanges16
+04BA51	Event_UNKCCchanges16_lo
 84BA72	Event_UNKCCchanges17
 04BA72	Event_UNKCCchanges17_lo
+84BB31	Event_UNKReset5C
+04BB31	Event_UNKReset5C_lo
 84BB4B	Event_UNKSet60
 04BB4B	Event_UNKSet60_lo
 84BBDA	Event_UNKChickenRelated2
