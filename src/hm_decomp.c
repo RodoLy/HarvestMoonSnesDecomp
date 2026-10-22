@@ -406,7 +406,9 @@ static void prep_tool(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), uint8_t to
     uint8_t tile = (n_tiles && rnd() % 4) ? tiles[rnd() % n_tiles] : (uint8_t)rnd();
     memset(&ram[0x009B6], tile, 4096);
   }
-  if (rnd() % 4) {
+  uint8_t table_bank = ram[0x0F];                          /* the game's table: sane? */
+  bool game_table = (table_bank >= 0x80 && table_bank < 0xC0) || table_bank == 0x7E;
+  if (rnd() % 4 || !game_table) {
     /* a tile property table of our own in WRAM ($7F:F000; restored after
      * the fuzz): most tools work on most tiles, from every side and in
      * every season, so the interesting paths are reached */
@@ -1602,6 +1604,18 @@ static void fuzz_at(unsigned frame)
       else cpu_push_jsl_return_frame(&g_cpu);
       uint8_t frame_size = (f->out_mask & HM_JSR) ? 2 : 3;
       if (pick >= 0 && n != pick) continue;
+      /* HM_DECOMP_FUZZ_DUMP=<file>: with HM_DECOMP_FUZZ_CALL, save that call's
+       * WRAM (128 KB) and registers before it runs (debugging). */
+      const char *dump = getenv("HM_DECOMP_FUZZ_DUMP");
+      if (dump && *dump && pick == n) {
+        FILE *fd = fopen(dump, "wb");
+        if (fd) {
+          fwrite(g_cpu.ram, 1, 0x20000, fd);
+          uint16_t regs[4] = { g_cpu.A, g_cpu.X, g_cpu.Y, g_cpu.DB };
+          fwrite(regs, sizeof regs, 1, fd);
+          fclose(fd);
+        }
+      }
       unsigned bad_before = s_stats[i].bad;
       if (f->out_mask & HM_INTERP) {
         /* No wrapper around it: check this call here. */
