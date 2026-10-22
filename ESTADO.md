@@ -8,12 +8,12 @@ en el README (`tools/progress.py`).
 
 - **Proyecto separado** del juego. Se compila con `tools/build.sh` (usa la
   recompilación como base, sin modificarla) y se prueba con `tools/check.sh`.
-- **Nombres**: 499 rutinas renombradas con los nombres de HM-Decomp
+- **Nombres**: 511 rutinas renombradas con los nombres de HM-Decomp
   (`data/decomp_names.tsv`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **107 rutinas reescritas y verificadas** (0 diferencias):
+- **138 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -70,7 +70,7 @@ en el README (`tools/progress.py`).
 | RanchMasteryCalculator | $83:F26D | src/ending.c |
 | AddNewChicken, AddNewCow | $83:C807, $83:C8DC | src/animals.c |
 | PlaceAnimalsOnMap (CODE_83C296) | $83:C296 | src/animals.c |
-| 25 comandos de evento (Event_*) | $84:89BB-$84:AF06 | src/eventcmds.c |
+| 56 comandos de evento (Event_*) | $84:89BB-$84:BB4B | src/eventcmds.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -343,6 +343,27 @@ sistema de texto).
 - HM-Decomp anota Event_TimeStopped en ;808A0D; es $84:8A0D (nombre
   manual). `progress.py` ahora guarda el texto de las etiquetas con
   dirección para poder encontrarlas en `LOCAL`.
+
+## Más comandos de evento (hecho el 21-oct-2026)
+
+- 31 más: valores en cualquier dirección (Jumpif*Value*, SetFlag,
+  StoreValue, SetValue*), sumas con tope (UNKTextrelated 0-255,
+  UNKCCchanges14 0-999), ChangeMoney, esperas (UNKCCchanges12/13 con
+  $08FD/$08FF, UNK2), levantar cosas (topo $29, pescado $07, objeto $08),
+  caminatas (UNKCCchanges4/6/10), transiciones, objetos en la mano,
+  banderas.
+- Nombres corregidos: HM-Decomp anota $80 en vez de $84 en
+  Event_UNKTextrelated, Event_MapScrolling; Event_ChangeItemonHand empieza
+  en $84:B4DC (dice B4DE); Event_StoreValue ($84:A90F),
+  Event_UNKCCchanges16 ($84:BA51) y Event_UNKReset5C ($84:BB31) no tenían
+  dirección. ResetFlagD / ResetFlagDD no están en la tabla (código
+  muerto); Event_UNKTools ($84:BB65) tampoco y no tiene cuerpo compilado.
+- La prueba al azar de los comandos con dirección evita la pila y la
+  página directa ($7E:0000-1FFF) y el final de un banco.
+- Faltan 34 comandos: los de texto (StartTextBox), pantalla (fades,
+  paleta), sonido, la vaca (Event_UNKCowRelated, 1.567 instrucciones),
+  Event_UNKChickenRelated2, Event_UNKPlayerPos, y los que usan
+  SUB_848895.
 
 ## Lo siguiente
 

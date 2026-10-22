@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 17.35%](https://img.shields.io/badge/descompilado-17.35%25-2f855a)
+![Descompilado: 20.45%](https://img.shields.io/badge/descompilado-20.45%25-2f855a)
 
-**17.35%** del código del juego descompilado y verificado: 7837 de 45176 instrucciones, 107 de 514 rutinas (20.8%).
+**20.45%** del código del juego descompilado y verificado: 9237 de 45176 instrucciones, 138 de 514 rutinas (26.8%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
@@ -47,7 +47,7 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Calendario | LoadsDateNames | `src/calendar.c` |
 | Animales | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (la noche de los animales), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: gallinas, vacas, perro y caballo en el mapa al que entras) | `src/animals.c` |
 | Final | RanchMasteryCalculator (el puntaje final del rancho) | `src/ending.c` |
-| Comandos de los guiones de evento | 25 de los 90: cada cuadro de la gallina y del perro (Event_UNKChickenRelated, Event_UNKDogRelated), saltos y pruebas (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), reloj (TimeRunning / Stopped, SetHour), jugador (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) y banderas | `src/eventcmds.c` |
+| Comandos de los guiones de evento | 56 de los 90 (todos menos los que necesitan texto, sonido o la pantalla): cada cuadro de la gallina y del perro (Event_UNKChickenRelated, Event_UNKDogRelated), saltos y pruebas (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), reloj (TimeRunning / Stopped, SetHour), jugador (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) y banderas | `src/eventcmds.c` |
 | Eventos | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (arrancar un guion de evento) | `src/events.c` |
 | Edición del mapa | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | DMA de video | AddProgrammedDMA (encolar una copia a VRAM / CGRAM para el próximo NMI) | `src/dma.c` |
@@ -128,7 +128,8 @@ comentarios de cada archivo):
 - `tools/import_decomp_names.py`, `tools/decomp_overrides.py` — herramientas.
 - `scripts/` — recorridos automáticos usados por las pruebas.
 - `GUIA.md` — **una guía de cómo funciona el juego por dentro**, para
-  quien no sabe nada de esto, con todo lo descubierto hasta ahora.
+  quien no sabe nada de esto, con todo lo descubierto hasta ahora (en
+  inglés: `GUIDE.md`).
 - `DECOMPILACION.md` — el método explicado. `ESTADO.md` — estado y notas.
 
 ## Uso

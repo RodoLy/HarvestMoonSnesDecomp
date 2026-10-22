@@ -1,5 +1,7 @@
 # Guía: Harvest Moon (SNES) por dentro
 
+[English](GUIDE.md) · **Español**
+
 Esta guía explica, sin dar nada por sabido, **cómo funciona el juego por
 dentro** según lo que vamos descubriendo al descompilarlo. Se actualiza con
 cada descubrimiento nuevo.
@@ -452,6 +454,9 @@ usan otros guiones.
 - **El dinero** (`$7F:1F04`, 3 bytes) se guarda en **decenas de G**: el
   último 0 que ves en pantalla es de adorno. Tiene un tope de 999.999.
 - **Madera, pasto y felicidad** tienen tope 999.
+- **Cuando un guion cobra o paga** (comando `ChangeMoney`) y el dinero
+  quedaría en negativo, el dinero queda en **0** en vez de no alcanzar.
+  Ver 6.
 
 ### 5.10 Los eventos
 
@@ -483,6 +488,29 @@ va. Algunos comandos:
 | `TimeRunning`, `TimeStopped`, `SetHour` | mueven el reloj |
 | `SetPlayerPosition`, `SetPlayerDirection` | mueven al jugador |
 | `NewCCStructure` | arranca otro slot con otro guion |
+| `JumpifEqualsValue` / `...Long`, `JumpifBetweenValue` / `...Long` | saltan comparando un valor de 16 o 24 bits en cualquier dirección |
+| `SetFlag`, `StoreValue`, `SetValueSort`, `SetValueLong` | escriben una bandera o un valor en cualquier dirección |
+| `UNKTextrelated` | suma (con signo) a un byte, entre 0 y 255; pese al nombre, no tiene que ver con texto |
+| `UNKCCchanges14` | suma (con signo) a un valor, entre 0 y 999 (corazones, felicidad...) |
+| `ChangeMoney` | suma o resta dinero |
+| `UNKCCchanges12` / `13` | espera un número de cuadros dejando hacer ciertas cosas (`$08FD` / `$08FF`, estado bit `$1000`) |
+| `UNK2` | espera hasta que se ponga `$7F:1F5A` bit `$8000` |
+| `MapScrolling` | mueve la cámara sola: velocidad X, velocidad Y y cuadros |
+| `TransitiontoX`, `TransitiontoHouse` | cambian de mapa (`$098B`; `$0196` bit `$4000` arranca la transición) |
+| `SetItemonHand`, `ChangeItemonHand`, `DropItemAnimation` | ponen o quitan un objeto en las manos |
+| `UNKCCchanges4`, `6`, `10` | preparan una caminata del slot: velocidad, destino, punto de partida |
+
+**Cosas que se levantan.** Varios comandos usan la misma prueba de "manos
+libres": el slot lo permite (+0C), pulsas A, no tienes nada en las manos y
+no estás usando una herramienta, en un menú o en una escena. Cada uno
+revisa las condiciones en un orden un poco distinto:
+
+| Comando | Qué levantas |
+|---|---|
+| `UNKChickenRelated` | una gallina ($25) o un pollito ($26) |
+| `UNKPickupMole` | el topo ($29); si no, cada 3 segundos puede moverse |
+| `UNKFishing` | un pescado ($07) |
+| `UNK3` | el objeto $08 |
 
 ### 5.11 Los mapas
 
@@ -572,6 +600,13 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 10. **El contador de pasto crecido** solo baja en las primeras 4 filas del
     campo.
 11. **`ChangeStamina`** decide el signo con la bandera N de quien la llama.
+12. **`ChangeMoney` lee dos veces la cantidad:** se queda con la segunda y
+    los 3 primeros bytes del argumento se ignoran. Y si el resultado sería
+    negativo, deja el dinero en 0 en vez de rechazar la operación.
+13. **Comandos que no se usan:** la tabla de comandos apunta tres veces a
+    `ResetFlag`, así que `ResetFlagD` y `ResetFlagDD` no se alcanzan nunca;
+    `Event_UNKTools` (guarda las herramientas en la bodega) tampoco está en
+    la tabla.
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -615,3 +650,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 21-oct-2026 | 12,10 % | las herramientas |
 | 21-oct-2026 | 14,41 % | animales en el mapa, el final |
 | 21-oct-2026 | 17,35 % | comandos de evento, perro, gallina |
+| 21-oct-2026 | 20,45 % | 31 comandos de evento más (valores, esperas, levantar cosas) |

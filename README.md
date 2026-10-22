@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 17.35%](https://img.shields.io/badge/decompiled-17.35%25-2f855a)
+![Decompiled: 20.45%](https://img.shields.io/badge/decompiled-20.45%25-2f855a)
 
-**17.35%** of the game's code decompiled and verified: 7837 of 45176 instructions, 107 of 514 routines (20.8%).
+**20.45%** of the game's code decompiled and verified: 9237 of 45176 instructions, 138 of 514 routines (26.8%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -47,7 +47,7 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Calendar | LoadsDateNames | `src/calendar.c` |
 | Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: chickens, cows, dog and horse on the map you enter) | `src/animals.c` |
 | Ending | RanchMasteryCalculator (the final ranch score) | `src/ending.c` |
-| Event script commands | 25 of the 90: the chicken's and the dog's every frame (Event_UNKChickenRelated, Event_UNKDogRelated), jumps and tests (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), clock (TimeRunning / Stopped, SetHour), player (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) and flags | `src/eventcmds.c` |
+| Event script commands | 56 of the 90 (all but those that need text, sound or the screen): the chicken's and the dog's every frame (Event_UNKChickenRelated, Event_UNKDogRelated), jumps and tests (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), clock (TimeRunning / Stopped, SetHour), player (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) and flags | `src/eventcmds.c` |
 | Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (start an event script) | `src/events.c` |
 | Map edits | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | Video DMA | AddProgrammedDMA (queue a copy to VRAM / CGRAM for the next NMI) | `src/dma.c` |
@@ -120,8 +120,8 @@ A few things found along the way (details in each file's comments):
 - `tools/progress.py` — computes the percentage above.
 - `tools/import_decomp_names.py`, `tools/decomp_overrides.py` — helpers.
 - `scripts/` — scripted playthroughs used by the checks.
-- `GUIA.md` — **a guide to how the game works inside**, written for
-  someone new to it, with everything found so far (in Spanish).
+- `GUIDE.md` — **a guide to how the game works inside**, written for
+  someone new to it, with everything found so far (Spanish: `GUIA.md`).
 - `DECOMPILACION.md` — the method, explained. `ESTADO.md` — status and
   notes. (Both in Spanish.)
 
