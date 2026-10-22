@@ -14,8 +14,6 @@
 
 void interp_bridge_set_master_deadline(uint64_t master_clock);  /* snes/interp_bridge.h */
 uint8_t ReadReg(uint16_t reg);                                    /* common_rtl.h */
-extern int snes_frame_counter;                                    /* common_rtl.h */
-void rtl_apu_restore_pacing(uint64_t frame_start_master, uint8_t frame_time_valid);
 /* The emulated DMA unit (snes/dma.h): reading $43xx has no side effects. */
 typedef struct Dma Dma;
 extern Dma *g_dma;
@@ -410,7 +408,7 @@ static void prep_tool(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), uint8_t to
      * every season, so the interesting paths are reached */
     for (unsigned i = 0; i < 256; i++) {
       uint8_t *e = &ram[0x1F000 + 4 * i];
-      e[0] = (uint8_t)rnd();
+      e[0] = (uint8_t)(rnd() % 0xFF);     /* (tile change $FF is 0 rows: a 65536-turn loop) */
       e[1] = (rnd() % 4) ? 0xFF : (uint8_t)rnd();
       e[2] = (uint8_t)((rnd() % 4) ? (rnd() & 0x7F) : rnd());
       e[3] = (rnd() % 4) ? 0xFF : (uint8_t)rnd();
@@ -724,6 +722,43 @@ static void prep_letter(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   v &= 0xFFFFFF;
   hm_wr16(ram, 0x0192, (uint16_t)v); ram[0x0194] = (uint8_t)(v >> 16);
 }
+/* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
+ * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
+ * the game prints them: fewer digits than the number has would loop for a
+ * long time) and the end. */
+static void prep_printer(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_letter(ram, r, rnd);
+  uint16_t *text = (uint16_t *)&ram[0x1E000];
+  for (unsigned i = 0; i < 96; ) {
+    unsigned k = rnd() % 16;
+    if (k < 8) text[i++] = (uint16_t)(rnd() % 0x280);               /* a letter */
+    else if (k < 10) text[i++] = 0x00B1;                           /* a space */
+    else if (k == 10) text[i++] = (rnd() % 2) ? 0x00A2 : 0xFFFF;   /* wait / end */
+    else if (k == 11) { text[i++] = 0xFFFE; text[i++] = (uint16_t)(1 + rnd() % 4); }
+    else if (k == 12) { text[i++] = 0xFFFD; text[i++] = (uint16_t)(1 + rnd() % 8);
+                        text[i++] = (uint16_t)(1 + rnd() % 8); }
+    else if (k == 13) { text[i++] = 0xFFFC; text[i++] = 8; text[i++] = (uint16_t)(1 + rnd() % 12); }
+    else text[i++] = (uint16_t)(0xBC + rnd() % 10);                /* a digit letter */
+  }
+  hm_wr16(ram, 0x01, 0xE000); ram[0x03] = 0x7F;
+  hm_wr16(ram, 0x0187, (uint16_t)(rnd() % 80));
+  ram[0x0189] = (uint8_t)((rnd() % 2) ? 4 : rnd() % 6);
+  ram[0x018C] = 0;
+  if (rnd() % 4 == 0) {                                            /* half-way */
+    uint8_t n = (uint8_t)(1 + rnd() % 8);
+    ram[0x018C] = n; ram[0x018D] = (uint8_t)(n + rnd() % 3);
+    static const uint32_t powers[] = { 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000 };
+    uint32_t v = (uint32_t)(rnd() % (10u * powers[n - 1])) & 0xFFFFFF;
+    hm_wr16(ram, 0x0192, (uint16_t)v); ram[0x0194] = (uint8_t)(v >> 16);
+  }
+  ram[0x018F] = (uint8_t)(rnd() % 5);
+  ram[0x0190] = (uint8_t)(rnd() % 2);
+  ram[0x019B] = (uint8_t)((rnd() % 4) ? (0x01 | (rnd() & 0x9E)) : rnd());
+  /* the numbers' variables are 8 digits at most; keep them so */
+  for (uint32_t a = 0x11F04; a < 0x11F80; a += 2) if (rnd() % 2) hm_wr16(ram, a, (uint16_t)rnd());
+  ram[0x11F06] = (uint8_t)(rnd() % 0x98);
+}
 static void prep_letter_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_dma_block(ram, r, rnd);
@@ -737,10 +772,13 @@ static void prep_audio(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   ram[0x92] = 0x0C;          /* UNK_Audio8 alone: $0A/$0B would leave the chip
                               * waiting for their arguments */
-  ram[0x0114] = (rnd() % 2) ? 1 : 3;                 /* as the game sets them */
-  ram[0x0115] = 6;
-  ram[0x0116] = (uint8_t)(rnd() % 0x20);              /* the sound effect */
-  r->a = (uint16_t)((r->a & 0xFF00) | (rnd() % 0x10));
+  /* only sound effects the game plays (other values can be orders that
+   * leave the chip waiting for data the CPU never sends) */
+  static const uint8_t effects[] = { 0x01, 0x03, 0x0F, 0x11, 0x14, 0x17, 0x1B, 0x28 };
+  ram[0x0114] = effects[rnd() % sizeof effects];
+  ram[0x0115] = (rnd() % 2) ? 6 : 7;
+  ram[0x0116] = 0x0A;
+  r->a = (uint16_t)(r->a & 0xFF00);                   /* UNK_Audio2: the game passes 0 */
 }
 
 const HmDecompFn g_hm_decomp_fns[] = {
@@ -1117,6 +1155,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/toolused.c", 0x829260, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_any_tool },
   { "SUB_82927D", hm_SUB_82927D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/tools.c", 0x82927D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_none },
+  { "PrintTextFrame", hm_PrintTextFrame,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/text.c", 0x83951C, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_printer },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
@@ -1289,13 +1330,13 @@ static void fuzz_at(unsigned frame)
   /* One routine per frame, starting at frame `at`: the frame watchdog
    * (5 s of real time per frame) then applies to each routine on its own. */
   /* The routines that talk to the sound chip get a window of their own
-   * (HM_DECOMP_FUZZ_APU=<frame>, by default 300 frames earlier): in some
+   * (HM_DECOMP_FUZZ_APU=<frame>, by default 900 frames earlier): in some
    * moments of the game the chip is busy for a long time (loading music)
-   * and never says "ready". */
+   * and never says "ready" (in the demo, around frames 1210 and 1650). */
   static int apu_at = -2;
   if (apu_at == -2) {
     const char *e = getenv("HM_DECOMP_FUZZ_APU");
-    apu_at = e && *e ? atoi(e) : (at >= 300 ? at - 300 : at + g_hm_decomp_count);
+    apu_at = e && *e ? atoi(e) : (at >= 900 ? at - 900 : at + g_hm_decomp_count);
   }
   if (at < 0) return;
   int only = -1;
@@ -1335,11 +1376,29 @@ static void fuzz_at(unsigned frame)
     if (!s_rng) s_rng = 1;
     /* HM_DECOMP_FUZZ_ONLY=<name>: fuzz just that routine (debugging). */
     const char *only_name = getenv("HM_DECOMP_FUZZ_ONLY");
-    if (only_name && *only_name && strcmp(only_name, f->name)) n_calls = 0;
+    if (only_name && *only_name) {                /* a name, or several: a,b,c */
+      size_t len = strlen(f->name);
+      const char *s = only_name;
+      int found = 0;
+      while (!found && (s = strstr(s, f->name)) != NULL) {
+        found = (s == only_name || s[-1] == ',') && (s[len] == '\0' || s[len] == ',');
+        s += len;
+      }
+      if (!found) n_calls = 0;
+    }
     /* HM_DECOMP_FUZZ_CALL=<n>: run only call n of it (same inputs as in the
      * full run), e.g. to trace it. */
     const char *one_call = getenv("HM_DECOMP_FUZZ_CALL");
     int pick = one_call && *one_call ? atoi(one_call) : -1;
+    /* A routine that talks to the sound chip changes the chip too, and the
+     * chip only runs up to the CPU's time: for these the CPU clock never
+     * goes back. Each call starts where the previous one ended (the chip
+     * goes on as if the game called the routine again and again), and the
+     * game resumes after the last one, like after a long frame. Before each
+     * call, wait (outside the check) until the chip says "ready" (port 3 =
+     * 1), as the game would before sending anything; if it does not (busy
+     * loading music), the call is skipped. */
+    int apu = (f->out_mask & HM_APU) != 0;
     uint64_t apu_clock = saved_cpu.master_cycles;
     for (int n = 0; n < n_calls; n++) {
       g_cpu = saved_cpu;
@@ -1348,21 +1407,14 @@ static void fuzz_at(unsigned frame)
       /* Every call starts with a fresh frame budget: long routines (the
        * 4096-tile farm loop) would otherwise hit the frame deadline, yield
        * half-way and not be comparable. The machine is restored after. */
-      g_cpu.master_cycles = (f->out_mask & HM_APU) ? apu_clock : 0;
-      if (f->out_mask & HM_APU) {
-        /* The sound chip only runs up to the end of the current frame (in
-         * the runtime's clock), so each call gets a frame of its own. The
-         * frame counter stays advanced: the chip cannot go back in time. */
-        snes_frame_counter++;
-        rtl_apu_restore_pacing(g_cpu.master_cycles, 1);
-        /* Wait (outside the check) until the chip says "ready" (port 3 =
-         * 1), as the game would before sending anything: it may be busy
-         * with what the game sent it before the fuzzing started. */
+      g_cpu.master_cycles = apu ? apu_clock : 0;
+      if (apu) {
         int ready = 0;
-        for (long k = 0; k < 4000000 && !ready; k++) {
+        for (long k = 0; k < 200000 && !ready; k++) {
           g_cpu.master_cycles += 64;
           ready = ReadReg(0x2143) == 1;
         }
+        apu_clock = g_cpu.master_cycles;
         if (!ready) { s_stats[i].skipped++; continue; }
       }
       for (int v = 0; v < HM_FUZZ_MAX_VARS && f->vars[v].size; v++) {
@@ -1409,10 +1461,11 @@ static void fuzz_at(unsigned frame)
       } else {
         cpu_dispatch_pc_paired(&g_cpu, f->pc24, frame_size);
       }
-      apu_clock = g_cpu.master_cycles;
       if (s_stats[i].bad != bad_before && s_stats[i].bad <= 5)
         fprintf(stderr, "[decomp-fuzz]   (that was %s call %d)\n", f->name, n);
+      if (apu) apu_clock = g_cpu.master_cycles;
     }
+    if (apu) saved_cpu.master_cycles = apu_clock;       /* time only goes forward */
   }
   g_cpu = saved_cpu;
   memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);

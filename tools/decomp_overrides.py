@@ -75,11 +75,12 @@ def decomp_registry(path):
     if not path or not os.path.exists(path):
         return []
     text = open(path, encoding="utf-8").read()
-    # Entries flagged HM_INTERP have no compiled body to wrap (the fuzzer
-    # checks them directly; see src/hm_decomp.h).
-    return [name for name, flags in
-            re.findall(r'\{\s*"([A-Za-z_][A-Za-z0-9_]*)",\s*hm_\w+,\s*([^,]*),', text)
-            if "HM_INTERP" not in flags]
+    # Entries flagged HM_INTERP have no compiled body at their address (the
+    # fuzzer runs them in the interpreter; see src/hm_decomp.h), but the game
+    # may still run a compiled copy from the bank $00-$3F mirror (Name_lo):
+    # those are wrapped too, so live calls are checked.
+    return [(name, "HM_INTERP" in flags) for name, flags in
+            re.findall(r'\{\s*"([A-Za-z_][A-Za-z0-9_]*)",\s*hm_\w+,\s*([^,]*),', text)]
 
 
 def wrap(gen_dir, routines):
@@ -90,7 +91,7 @@ def wrap(gen_dir, routines):
         if "__rom(CpuState *cpu)" in text:
             continue                                    # already wrapped
         tail = []
-        for name in routines:
+        for name, _ in routines:
             pat = re.compile(r"^RecompReturn ((?:%s|%s_lo)_M[01]X[01])\(CpuState \*cpu\) \{" % (name, name), re.M)
             for fn in sorted(set(pat.findall(text))):
                 text = text.replace("RecompReturn %s(CpuState *cpu) {" % fn,
@@ -119,7 +120,7 @@ def main():
     routines = decomp_registry(args.decomp)
     w = wrap(args.gen_dir, routines)
     print("decomp_overrides: %d rewritten routines, %d compiled variants wrapped" % (len(routines), w))
-    missing = [r for r in routines if r not in names.values()]
+    missing = [r for r, interp in routines if not interp and r not in names.values()]
     if missing:
         print("decomp_overrides: rewritten routines with no compiled body: %s" % ", ".join(missing),
               file=sys.stderr)

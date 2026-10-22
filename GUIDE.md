@@ -197,8 +197,11 @@ Some tricks that were needed:
   got at that same point, and each write must be exactly the one the
   original made (same port, same value, same order). One difference and
   the check fails. In the random test, these routines are tested in a
-  calmer moment of the game (300 frames earlier), because sometimes the
-  chip is busy loading music for a long time and never says "ready".
+  calmer moment of the game (900 frames earlier), because sometimes the
+  chip is busy loading music for a long time and never says "ready". And
+  since the chip's clock cannot go back, for these routines the CPU's clock
+  never goes back either: each call starts where the previous one ended,
+  as if the game called the routine again and again.
 - **What runs in the interpreter.** Some routines have no compiled
   version: the recompilation runs them in an interpreter. The live
   checker does not see those calls, so the random test is the
@@ -628,9 +631,26 @@ in order, and the printer *draws* each letter into the next tile:
 - While the text waits for a button, `BlinkTextCursor` alternates the
   letter at the cursor with a mark every 20 frames.
 
-The main printer, which reads the text code by code (`ADDDDFFFF` in
-HM-Decomp, 261 instructions), also sends a sound effect for each letter
-(`UNK_Audio19`, see 5.15).
+**The printer** (`PrintTextFrame`, `ADDDDFFFF` in HM-Decomp) runs once
+per frame. A text is a list of 16-bit codes. A normal code is a letter:
+one is printed **every 5 frames**, each with a little sound effect
+(`UNK_Audio19`, see 5.15). Some codes are orders:
+
+| Code | Meaning |
+|---|---|
+| `$00A2` | wait for a button (the cursor blinks at the bottom) |
+| `$00B1` | a space: the cursor moves and the next code is read at once |
+| `$FFFC n k` | the number in variable k, with n digits, one digit per frame (money, day...) |
+| `$FFFD n k` | name k (the player, the farm, the dog...), n letters, without sound |
+| `$FFFE n` | a choice between n options (the cursor blinks on the chosen one) |
+| `$FFFF` | the end of the text |
+
+The variables for numbers are in `Text_Number_Pointer_Table` ($83:98EE:
+address and size in bytes) and the names in `Text_Name_Pointer_Table`
+($83:9AAE).
+
+In a new game the printer runs 2,424 times and the checker compared every
+one of them, together with its 248 sound effects (see 3.4).
 
 ### 5.15 Talking to the sound chip
 
@@ -696,6 +716,9 @@ Things the game does wrong or oddly, found while decompiling:
     letter: yes / no" to `DrawLetter` and `AdvanceLetterCursor`, but both
     start by setting it to 0. Every letter is 8 pixels wide. (Probably a
     leftover of the Japanese version, whose characters were 16 wide.)
+16. **After a number or a name the printer skips two codes in 8 bits**
+    (only the low byte of the position), so in a text of more than 256
+    codes it would jump backwards (no text seen so far is that long).
 
 ## 7. Differences found in the recompilation
 
@@ -750,3 +773,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 21-Oct-2026 | 21.59 % | the checker records the sound chip; 7 sound routines |
 | 21-Oct-2026 | 21.86 % | the watering can and the sprinkler: all 28 tools done |
 | 21-Oct-2026 | 21.91 % | the routine that picks the tool's routine |
+| 22-Oct-2026 | 22.49 % | the text printer (checked live: 2,424 frames of text in a new game) |

@@ -61,6 +61,7 @@ MANUAL = {
     0x839838: "AdvanceLetterCursor",  # CODE_839838
     0x83975F: "BlinkTextCursor",   # CODE_83975F
     0x8397A6: "PrintDigit",        # CODE_8397A6
+    0x83951C: "PrintTextFrame",    # ADDDDFFFF
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 
@@ -83,7 +84,7 @@ def main():
             labels.setdefault(pc, name)
 
     for pc, name in MANUAL.items():
-        labels.setdefault(pc, name)
+        labels[pc] = name           # our name wins (HM-Decomp may have a placeholder)
 
     variants = {}          # pc24 -> sorted list of (m, x)
     for path in glob.glob(os.path.join(a.gen, "bank*_v2.c")):

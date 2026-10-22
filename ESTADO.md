@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **165 rutinas reescritas y verificadas** (0 diferencias):
+- **166 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -79,6 +79,7 @@ en el README (`tools/progress.py`).
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |
 | BlinkTextCursor, PrintDigit (CODE_83975F, CODE_8397A6) | $83:975F, $83:97A6 | src/text.c |
+| PrintTextFrame (ADDDDFFFF) | $83:951C | src/text.c |
 
 Rareza encontrada: ChangeStamina decide el signo del cambio con la bandera N
 que deja quien la llama, no con el valor de A.
@@ -386,8 +387,7 @@ sistema de texto).
 
 Más comandos de evento (`python3 tools/candidates.py | grep Event_`);
 SUB_829260 (el despachador de herramientas: ya están todas); el
-impresor de texto (ADDDDFFFF, $83:951C: todas sus ayudantes ya están) para
-ShippingScene y UpdateTime; el resto
+ShippingScene y UpdateTime (ya está todo el texto); el resto
 de los eventos de animales (`Event_UNKCowRelated`, $84:9AD4).
 
 Otras hojas candidatas (no llaman a nada): LoadsDamageProbabilities,

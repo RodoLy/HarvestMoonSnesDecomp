@@ -384,3 +384,207 @@ void hm_PrintDigit(uint8_t *ram, HmRegs *r)
   r->x = 0;
   jsl(ram, r, RET_7A6_DIGIT, hm_DrawLetter);
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * PrintTextFrame ($83:951C, JSL, RTL; ADDDDFFFF in HM-Decomp): the text
+ * printer, once per frame. The text is a list of 16-bit codes at [$01]
+ * ($0187 = which one). A normal code is a letter: one every 5 frames
+ * ($0189 counts 0-4), with a sound effect (3, 6, $0A) each. Special codes:
+ *   $00A2  wait for a button: the cursor goes to VRAM $5528 and blinks
+ *          (bit 3 of $019B)
+ *   $00B1  a space: the cursor moves and the next code is read at once
+ *   $FFFC n k  a number of n digits, variable k (Text_Number_Pointer_Table,
+ *          $83:98EE: 3-byte address and size), one digit per frame
+ *   $FFFD n k  a name of n letters (Text_Name_Pointer_Table, $83:9AAE),
+ *          one letter every 5 frames, no sound
+ *   $FFFE n  a choice of n options: the cursor goes to the place of option
+ *          $018F (table $83:98CC) and blinks; $018E = n - 1 (bit 4)
+ *   $FFFF  the end (bit 2)
+ * $019B: bit 0 printing, bit 1 "a letter was printed this frame", bit 5
+ * "waiting at the end of the box": only the arrow blinks (TextBoxArrow),
+ * bit 7 "a digit was printed" (no more leading zeros).
+ * Codes $BC-$C5 (digits) and $270 are "narrow" ($0190 = 0), others 1; the
+ * width is ignored anyway (see DrawLetter).
+ * Quirk: after a number or a name, $0187 += 2 is done in 8 bits (only the
+ * low byte), so a text longer than 256 codes would jump back.
+ * ═════════════════════════════════════════════════════════════════════════ */
+#define TEXT_NUMBERS      0x8398EE
+#define TEXT_NAMES        0x839AAE
+#define CHOICE_PLACES     0x8398CC
+#define CODE_WAIT         0x00A2
+#define CODE_SPACE        0x00B1
+#define CODE_NUMBER       0xFFFC
+#define CODE_NAME         0xFFFD
+#define CODE_CHOICE       0xFFFE
+#define CODE_END          0xFFFF
+
+static uint16_t text_word(uint8_t *ram, HmRegs *r, uint16_t y) { return hm_bus_rd16(ram, hm_dp_long(ram, r, 0x01, y)); }
+static uint8_t text_byte(uint8_t *ram, HmRegs *r, uint16_t y) { return hm_bus_rd8(ram, hm_dp_long(ram, r, 0x01, y)); }
+static void set_a8(HmRegs *r, uint8_t v) { r->a = (uint16_t)((r->a & 0xFF00) | v); }
+static void set_flags_019B(uint8_t *ram, HmRegs *r, uint8_t bits)
+{
+  uint8_t v = (uint8_t)(rd8(ram, r, 0x019B) | bits);
+  wr8(ram, r, 0x019B, v);
+  set_a8(r, v);
+}
+
+/* 8395C9: unless a number / name is half-way ($018C), the next code; the
+ * cursor moves; $0189 counts the frame. */
+static void next_letter(uint8_t *ram, HmRegs *r)
+{
+  if (rd8(ram, r, 0x018C) == 0) {
+    r->a = (uint16_t)(rd16(ram, r, 0x0187) + 1);
+    wr16(ram, r, 0x0187, r->a);
+  }
+  r->a = r->x = rd8(ram, r, 0x0190);                  /* LDA #0; XBA; LDA $0190; TAX */
+  jsr(ram, r, 0x95E6, hm_AdvanceLetterCursor);
+  uint8_t frames = (uint8_t)(rd8(ram, r, 0x0189) + 1);   /* 8395E7 */
+  wr8(ram, r, 0x0189, frames);
+  set_a8(r, frames);
+}
+/* LDA $0187; INC; INC; STA $0187 in 8 bits */
+static void skip_two_codes8(uint8_t *ram, HmRegs *r)
+{
+  uint8_t v = (uint8_t)(rd8(ram, r, 0x0187) + 2);
+  wr8(ram, r, 0x0187, v);
+  set_a8(r, v);
+}
+
+static void print_number(uint8_t *ram, HmRegs *r)
+{
+  if (rd8(ram, r, 0x018C) == 0) {                     /* first digit: copy the value */
+    uint16_t y = (uint16_t)(rd16(ram, r, 0x0187) * 2 + 2);
+    wr8(ram, r, 0x018C, text_byte(ram, r, y));       /* digits */
+    y = (uint16_t)(y + 2);
+    uint16_t x = (uint16_t)((text_word(ram, r, y) - 1) << 2);
+    hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, (TEXT_NUMBERS + x) & 0xFFFFFF));
+    x = (uint16_t)(x + 2);
+    *hm_dp(ram, r, 0x74) = hm_bus_rd8(ram, (TEXT_NUMBERS + x) & 0xFFFFFF);
+    wr8(ram, r, 0x0192, 0); wr8(ram, r, 0x0193, 0); wr8(ram, r, 0x0194, 0);
+    wr8(ram, r, 0x019B, rd8(ram, r, 0x019B) & 0x7F);
+    x = (uint16_t)(x + 1);
+    uint8_t size = hm_bus_rd8(ram, (TEXT_NUMBERS + x) & 0xFFFFFF);
+    uint16_t i = 0;
+    do {                                              /* PHA; LDA [$72],Y; STA $0192,X; ... DEC; BNE */
+      hm_push8(ram, r, size);
+      wr8(ram, r, (uint16_t)(0x0192 + i), hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, i)));
+      i++;
+      hm_pull8(ram, r);
+    } while (--size);
+    r->x = r->y = i;
+  }
+  wr8(ram, r, 0x018C, (uint8_t)(rd8(ram, r, 0x018C) - 1));
+  set_a8(r, rd8(ram, r, 0x018C));
+  jsl(ram, r, 0x9686, hm_PrintDigit);
+  wr8(ram, r, 0x0190, 0);
+  wr8(ram, r, 0x0189, 0);
+  set_a8(r, rd8(ram, r, 0x018C));
+  if (rd8(ram, r, 0x018C) == 0) skip_two_codes8(ram, r);
+  next_letter(ram, r);
+}
+
+static void print_name(uint8_t *ram, HmRegs *r)
+{
+  if (rd8(ram, r, 0x018C) == 0) {
+    uint16_t y = (uint16_t)(rd16(ram, r, 0x0187) * 2 + 2);
+    uint8_t n = text_byte(ram, r, y);
+    wr8(ram, r, 0x018C, n);
+    wr8(ram, r, 0x018D, (uint8_t)(n - 1));
+  }
+  uint16_t y = (uint16_t)(rd16(ram, r, 0x0187) * 2 + 4);
+  r->y = y;
+  uint16_t x = (uint16_t)((text_word(ram, r, y) - 1) << 2);
+  hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, (TEXT_NAMES + x) & 0xFFFFFF));
+  x = (uint16_t)(x + 2);
+  *hm_dp(ram, r, 0x74) = hm_bus_rd8(ram, (TEXT_NAMES + x) & 0xFFFFFF);
+  uint8_t left = (uint8_t)(rd8(ram, r, 0x018C) - 1);
+  wr8(ram, r, 0x018C, left);
+  uint8_t which = (uint8_t)(rd8(ram, r, 0x018D) - left);  /* SEC; SBC $018C */
+  r->y = (uint16_t)(which << 1);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, r->y));
+  r->x = 1;
+  jsl(ram, r, 0x96FC, hm_DrawLetter);
+  wr8(ram, r, 0x0190, 1);
+  wr8(ram, r, 0x0189, 0);
+  set_a8(r, rd8(ram, r, 0x018C));
+  if (rd8(ram, r, 0x018C) == 0) skip_two_codes8(ram, r);
+  next_letter(ram, r);
+}
+
+void hm_PrintTextFrame(uint8_t *ram, HmRegs *r)
+{
+  uint8_t flags = rd8(ram, r, 0x019B);
+  set_a8(r, flags & 0x20);                            /* AND #$20 */
+  if (flags & 0x20) {                                 /* JMP CODE_839447 */
+    jsr(ram, r, RET_447_BLINK, hm_BlinkTextBoxArrow);
+    return;
+  }
+  if (!(flags & 0x01)) { set_a8(r, 0); return; }      /* AND #$01 */
+
+  for (;;) {                                          /* 839534 */
+    set_a8(r, rd8(ram, r, 0x019B) & 0xFD);
+    wr8(ram, r, 0x019B, (uint8_t)r->a);
+    uint16_t at = rd16(ram, r, 0x0187);
+    r->y = (uint16_t)(at << 1);
+    uint16_t code = text_word(ram, r, r->y);
+    r->a = code;
+    r->c = 1;                                         /* the CMP that matched */
+    switch (code) {
+    case CODE_WAIT:
+      set_flags_019B(ram, r, 0x08);
+      wr16(ram, r, 0x0185, 0x5528);
+      r->a = CODE_WAIT;
+      jsr(ram, r, 0x960A, hm_BlinkTextCursor);
+      return;
+    case CODE_SPACE:
+      r->a = (uint16_t)(at + 1);
+      wr16(ram, r, 0x0187, r->a);
+      r->x = 1;
+      jsr(ram, r, 0x961D, hm_AdvanceLetterCursor);
+      continue;                                       /* JMP 839534 */
+    case CODE_NUMBER:
+      print_number(ram, r);
+      return;
+    case CODE_CHOICE: {
+      set_flags_019B(ram, r, 0x10);
+      uint8_t n = text_byte(ram, r, (uint16_t)(r->y + 2));
+      wr8(ram, r, 0x018E, (uint8_t)(n - 1));
+      r->y = (uint16_t)(r->y + 2);
+      uint16_t x = (uint8_t)(rd8(ram, r, 0x018F) << 1);  /* 8-bit ASL */
+      r->x = x;
+      wr16(ram, r, 0x0185, hm_bus_rd16(ram, CHOICE_PLACES + x));
+      r->a = 0x0275;
+      jsr(ram, r, 0x974E, hm_BlinkTextCursor);
+      return;
+    }
+    case CODE_END:
+      set_flags_019B(ram, r, 0x04);
+      return;
+    }
+    r->c = code >= CODE_END;                          /* CMP #$FFFF, not equal */
+
+    uint8_t frames = rd8(ram, r, 0x0189);             /* 83956F */
+    set_a8(r, frames);
+    r->c = frames >= 4;
+    if (frames != 4) {                                /* not yet: count the frame */
+      wr8(ram, r, 0x0189, (uint8_t)(frames + 1));
+      set_a8(r, (uint8_t)(frames + 1));
+      return;
+    }
+    wr8(ram, r, 0x0189, 0);
+    if (code == CODE_NAME) { print_name(ram, r); return; }
+
+    uint8_t narrow = (code >= 0x00BC && code < 0x00C6) || code == 0x0270;
+    r->x = (uint16_t)((r->x & 0xFF00) | (narrow ? 0 : 1));   /* SEP #$10; LDX */
+    wr8(ram, r, 0x0190, (uint8_t)r->x);
+    r->a = code;
+    jsl(ram, r, 0x95AA, hm_DrawLetter);
+    set_a8(r, 6);
+    wr8(ram, r, 0x0114, 3);
+    wr8(ram, r, 0x0115, 6);
+    jsl(ram, r, 0x95BC, hm_UNK_Audio19);
+    set_flags_019B(ram, r, 0x02);
+    next_letter(ram, r);
+    return;
+  }
+}

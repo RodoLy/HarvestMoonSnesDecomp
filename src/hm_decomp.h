@@ -377,3 +377,4 @@ void hm_ToolUsedWateringCan(uint8_t *ram, HmRegs *r); /* toolused.c */
 void hm_ToolUsedSprinkler(uint8_t *ram, HmRegs *r);
 void hm_SUB_829260(uint8_t *ram, HmRegs *r);
 void hm_SUB_82927D(uint8_t *ram, HmRegs *r);         /* tools.c */
+void hm_PrintTextFrame(uint8_t *ram, HmRegs *r);    /* text.c */

@@ -199,8 +199,11 @@ Algunos trucos que fueron necesarios:
   y cada escritura tiene que ser exactamente la que hizo el original
   (mismo puerto, mismo valor, mismo orden). Una diferencia y la prueba
   falla. En la prueba al azar, estas rutinas se prueban en un momento más
-  tranquilo del juego (300 cuadros antes), porque a veces el chip está
-  ocupado cargando música mucho tiempo y nunca dice "listo".
+  tranquilo del juego (900 cuadros antes), porque a veces el chip está
+  ocupado cargando música mucho tiempo y nunca dice "listo". Y como el
+  reloj del chip no puede volver atrás, en estas rutinas el reloj de la CPU
+  tampoco vuelve: cada llamada empieza donde terminó la anterior, como si
+  el juego llamara a la rutina una y otra vez.
 - **Lo que corre en el intérprete.** Algunas rutinas no tienen versión
   compilada: la recompilación las corre en un intérprete. El comprobador
   en vivo no ve esas llamadas, y entonces la prueba al azar es la
@@ -639,9 +642,27 @@ casilla siguiente:
 - Mientras el texto espera un botón, `BlinkTextCursor` alterna cada 20
   cuadros la letra del cursor con una marca.
 
-La impresora principal, que lee el texto código por código (`ADDDDFFFF` en
-HM-Decomp, 261 instrucciones), también manda un efecto de sonido por cada
-letra (`UNK_Audio19`, ver 5.15).
+**La impresora** (`PrintTextFrame`, `ADDDDFFFF` en HM-Decomp) corre una
+vez por cuadro. Un texto es una lista de códigos de 16 bits. Un código
+normal es una letra: se imprime **una cada 5 cuadros**, cada una con un
+pequeño efecto de sonido (`UNK_Audio19`, ver 5.15). Algunos códigos son
+órdenes:
+
+| Código | Significado |
+|---|---|
+| `$00A2` | esperar un botón (el cursor parpadea abajo) |
+| `$00B1` | un espacio: el cursor avanza y el siguiente código se lee enseguida |
+| `$FFFC n k` | el número de la variable k, con n cifras, una cifra por cuadro (dinero, día...) |
+| `$FFFD n k` | el nombre k (el jugador, la granja, el perro...), n letras, sin sonido |
+| `$FFFE n` | elegir entre n opciones (el cursor parpadea en la elegida) |
+| `$FFFF` | el fin del texto |
+
+Las variables de los números están en `Text_Number_Pointer_Table`
+($83:98EE: dirección y tamaño en bytes) y los nombres en
+`Text_Name_Pointer_Table` ($83:9AAE).
+
+En una partida nueva la impresora corre 2.424 veces y el comprobador
+comparó cada una, junto con sus 248 efectos de sonido (ver 3.4).
 
 ### 5.15 Hablar con el chip de sonido
 
@@ -709,6 +730,10 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     ancha: sí / no" a `DrawLetter` y a `AdvanceLetterCursor`, pero las dos
     empiezan poniéndolo en 0. Todas las letras miden 8 píxeles de ancho.
     (Seguramente es un resto de la versión japonesa, con caracteres de 16.)
+16. **Después de un número o un nombre la impresora salta dos códigos en
+    8 bits** (solo el byte bajo de la posición), así que en un texto de más
+    de 256 códigos saltaría hacia atrás (ninguno visto hasta ahora es tan
+    largo).
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -763,3 +788,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 21-oct-2026 | 21,59 % | el comprobador graba el chip de sonido; 7 rutinas de sonido |
 | 21-oct-2026 | 21,86 % | la regadera y el aspersor: las 28 herramientas listas |
 | 21-oct-2026 | 21,91 % | la rutina que elige la rutina de cada herramienta |
+| 22-oct-2026 | 22,49 % | la impresora de texto (comprobada en vivo: 2.424 cuadros de texto en una partida nueva) |

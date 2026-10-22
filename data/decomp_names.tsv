@@ -313,7 +313,7 @@
 0393F9	CloseTextBox_lo
 039495	BlinkTextBoxArrow_lo
 8394D7	DrawTextBoxArrow
-03951C	ADDDDFFFF_lo
+03951C	PrintTextFrame_lo
 03975F	BlinkTextCursor_lo
 8397A6	PrintDigit
 839823	DrawLetter
