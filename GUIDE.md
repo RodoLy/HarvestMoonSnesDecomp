@@ -254,6 +254,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/audio.c` | talking to the sound chip |
 | `src/save.c` | the saved games |
 | `src/menus.c` | buttons in menus |
+| `src/scroll.c` | scrolling the map |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -763,6 +764,50 @@ the button's **auto-repeat**, so holding it keeps moving. A closes the list.
   and down move inside a column, left and right jump to the other one,
   and A closes the box with the chosen option in $018F.
 
+### 5.18 Scrolling the map
+
+A map can be bigger than the screen, and bigger than what video memory
+holds. The whole map is in WRAM (`$7E:2000`, see 5.11); video memory keeps
+only a **window** of 64 × 32 tiles around the camera. When the camera
+moves, the game brings in the row or column that is about to come into
+view, a little before you see it.
+
+**Every frame, for each direction** (down `UpdateBGOffset`, up
+`SUB_80A0E1`, right `UNK_StaticMapScroling`, left `SUB_80A152`):
+
+1. The camera position ($F5 across, $F7 down) is copied to the BG1
+   offset ($013C / $013E): that is what makes the picture move.
+2. If the camera is at one of its limits ($ED left, $EF up, $F1 right,
+   $F3 down), nothing else happens.
+3. The speed $1E is capped so it does not go past the end.
+4. If the map scrolls (bit 0 of $0196), the speed is added to (or taken
+   from) a **counter of pixels inside a tile** ($20 across, $21 down,
+   0 to 7). When it reaches 8 (or goes below 0) it wraps, and a new line of
+   tiles is needed.
+
+**The new line** (`SUB_80A18D` the row below, `SUB_80A308` the row above,
+`SUB_80A481` the column at the right, `SUB_80A617` the column at the left):
+
+- The map in WRAM is stored in blocks of 32 × 32 tiles (one "screen"). A
+  row or a column of the window usually crosses from one screen to the
+  next, so it is copied in **two runs** that each jump to the next screen
+  when they reach its edge.
+- The 32 + 32 tiles go into two buffers ($0746 and $07C6) and two DMAs are
+  queued (channels 0 and 1) to send them to video memory at $6000 + the
+  position. For columns the DMA uses the "step 32" mode, so the tiles
+  land one under the other.
+- Then the position in video memory ($14 rows, $10 columns) and in WRAM
+  ($16 rows, $12 columns) moves on, wrapping around the window.
+
+| Variable | What it holds |
+|---|---|
+| $10 / $14 | where the next column / row goes in video memory |
+| $12 / $16 | where it comes from in the WRAM map |
+| $1A | the length of a map row |
+| $1C | the camera's offset inside the row |
+| $1E | the camera speed (pixels per frame) |
+| $20 / $21 | pixels inside the tile (0-7), across / down |
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -816,6 +861,12 @@ Things the game does wrong or oddly, found while decompiling:
 18. **The flag "a save was reset"** ($7F1F60 bit $0800) is only set when
     *both* slots fail the check, not when one does (the code looks at slot
     1's result only on slot 2's failure path).
+19. **The camera's speed cap looks at the wrong side.** Going down (or
+    right), the speed is capped by the camera's position, that is, the
+    distance from the *top*, not what is left to the bottom; going up (or
+    left) it is capped by the distance to the *bottom* limit. Since the
+    camera moves one or two pixels per frame, it only shows in the first
+    pixel or two of a map.
 
 ## 7. Differences found in the recompilation
 
@@ -824,6 +875,10 @@ Things the game does wrong or oddly, found while decompiling:
   recompilation it is kept. It does not seem to change anything visible
   in the game, but the checker notices it. The rewrites imitate the
   recompilation, which is the reference.
+- **A 16-bit read at the last byte of bank $7E.** On the SNES, reading two
+  bytes at `$7E:FFFF` takes the second from `$7F:0000`; in the
+  recompilation it comes from `$7E:0000`. The game never does it (it was
+  found only by random tests of the scroll routines, which then avoid it).
 
 ## 8. Glossary
 
@@ -875,3 +930,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 27.28 % | the saved games (the checker now compares the SRAM) |
 | 22-Oct-2026 | 28.16 % | the buttons in the menus |
 | 22-Oct-2026 | 28.72 % | the buttons while a text box is open |
+| 22-Oct-2026 | 30.61 % | scrolling the map (checked live: about 1,200 calls in a new game) |

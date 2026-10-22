@@ -255,6 +255,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/audio.c` | hablar con el chip de sonido |
 | `src/save.c` | las partidas guardadas |
 | `src/menus.c` | botones en los menús |
+| `src/scroll.c` | desplazar el mapa |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -779,6 +780,53 @@ mantenerlo sigue moviéndose. A cierra la lista.
   y abajo mueven dentro de una columna, izquierda y derecha saltan a la
   otra, y A cierra el cuadro con la opción elegida en $018F.
 
+### 5.18 Desplazar el mapa
+
+Un mapa puede ser más grande que la pantalla, y más grande que lo que
+cabe en la memoria de video. El mapa entero está en la WRAM (`$7E:2000`,
+ver 5.11); la memoria de video solo guarda una **ventana** de 64 × 32
+baldosas alrededor de la cámara. Cuando la cámara se mueve, el juego trae
+la fila o la columna que está a punto de verse, un poco antes de que la
+veas.
+
+**Cada cuadro, para cada dirección** (abajo `UpdateBGOffset`, arriba
+`SUB_80A0E1`, derecha `UNK_StaticMapScroling`, izquierda `SUB_80A152`):
+
+1. La posición de la cámara ($F5 horizontal, $F7 vertical) se copia al
+   desplazamiento de BG1 ($013C / $013E): eso es lo que mueve la imagen.
+2. Si la cámara está en uno de sus límites ($ED izquierda, $EF arriba,
+   $F1 derecha, $F3 abajo), no pasa nada más.
+3. La velocidad $1E se recorta para no pasarse del final.
+4. Si el mapa se desplaza (bit 0 de $0196), la velocidad se suma (o se
+   resta) a un **contador de píxeles dentro de la baldosa** ($20
+   horizontal, $21 vertical, de 0 a 7). Cuando llega a 8 (o baja de 0) da
+   la vuelta, y hace falta una línea nueva de baldosas.
+
+**La línea nueva** (`SUB_80A18D` la fila de abajo, `SUB_80A308` la de
+arriba, `SUB_80A481` la columna de la derecha, `SUB_80A617` la de la
+izquierda):
+
+- El mapa en la WRAM está guardado en bloques de 32 × 32 baldosas (una
+  "pantalla"). Una fila o columna de la ventana suele cruzar de una
+  pantalla a la siguiente, así que se copia en **dos tramos** que saltan a
+  la pantalla siguiente al llegar a su borde.
+- Las 32 + 32 baldosas van a dos búferes ($0746 y $07C6) y se programan
+  dos DMA (canales 0 y 1) que las mandan a la memoria de video en $6000 +
+  la posición. Para las columnas el DMA usa el modo "de 32 en 32", así las
+  baldosas quedan una debajo de otra.
+- Después la posición en la memoria de video ($14 filas, $10 columnas) y
+  en la WRAM ($16 filas, $12 columnas) avanza, dando la vuelta dentro de
+  la ventana.
+
+| Variable | Qué guarda |
+|---|---|
+| $10 / $14 | dónde va la próxima columna / fila en la memoria de video |
+| $12 / $16 | de dónde sale en el mapa de la WRAM |
+| $1A | el largo de una fila del mapa |
+| $1C | el desplazamiento de la cámara dentro de la fila |
+| $1E | la velocidad de la cámara (píxeles por cuadro) |
+| $20 / $21 | píxeles dentro de la baldosa (0-7), horizontal / vertical |
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -834,6 +882,12 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 18. **La bandera "se reinició una partida"** ($7F1F60 bit $0800) solo se
     pone cuando fallan *las dos* ranuras, no cuando falla una (el código
     mira el resultado de la ranura 1 solo en el camino de fallo de la 2).
+19. **El tope de velocidad de la cámara mira el lado equivocado.** Al
+    bajar (o ir a la derecha), la velocidad se recorta con la posición de
+    la cámara, es decir, la distancia desde *arriba*, no lo que falta hasta
+    abajo; al subir (o ir a la izquierda) se recorta con la distancia al
+    límite de *abajo*. Como la cámara se mueve uno o dos píxeles por
+    cuadro, solo se nota en el primer píxel o dos de un mapa.
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -842,6 +896,11 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
   guardado. No parece cambiar nada visible del juego, pero el comprobador
   lo nota. Las reescrituras imitan a la recompilación, que es la
   referencia.
+- **Una lectura de 16 bits en el último byte del banco $7E.** En el SNES,
+  leer dos bytes en `$7E:FFFF` toma el segundo de `$7F:0000`; en la
+  recompilación sale de `$7E:0000`. El juego nunca lo hace (solo apareció
+  en las pruebas al azar de las rutinas de desplazamiento, que ahora lo
+  evitan).
 
 ## 8. Glosario
 
@@ -893,3 +952,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 27,28 % | las partidas guardadas (el comprobador ya compara la SRAM) |
 | 22-oct-2026 | 28,16 % | los botones en los menús |
 | 22-oct-2026 | 28,72 % | los botones con un cuadro de texto abierto |
+| 22-oct-2026 | 30,61 % | desplazar el mapa (probado en vivo: unas 1.200 llamadas en una partida nueva) |

@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **176 rutinas reescritas y verificadas** (0 diferencias):
+- **184 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -78,6 +78,8 @@ en el README (`tools/progress.py`).
 | EditTileonMap, EditTileonMapandsets0181 | $82:B03A, $82:B049 | src/mapedit.c |
 | SaveSlotMenuInputs, LoadSlotMenuInputs, StartMenuInputs, TitleMenuInputs, ListInputs | $84:C2FE-$84:C6B6 | src/menus.c |
 | ImmobileInputs | $84:CF05 | src/menus.c |
+| SUB_80A18D, SUB_80A308, SUB_80A481, SUB_80A617 (fila/columna nueva) | $80:A18D-$80:A617 | src/scroll.c |
+| UpdateBGOffset, SUB_80A0E1, UNK_StaticMapScroling, SUB_80A152 (la cámara) | $80:A0AB-$80:A152 | src/scroll.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |
@@ -385,6 +387,19 @@ sistema de texto).
   sonido del texto de una partida nueva, todos iguales.
 - Con eso: ToolUsedWateringCan y ToolUsedSprinkler (src/toolused.c) y
   EditTileonMap / EditTileonMapandsets0181 (src/mapedit.c).
+
+## Desplazar el mapa (hecho el 22-oct-2026)
+
+- `src/scroll.c`: las 4 rutinas de la cámara (abajo, arriba, derecha,
+  izquierda) y las 4 que copian la fila o columna nueva de la WRAM a dos
+  búferes y programan dos DMA a la VRAM.
+- prep_scroll limita $16 < $7000, $1C < $400, $12 < $E0 y los tramos
+  $7E-$84 pares < $40: con valores más grandes una lectura de 16 bits cae
+  en $7E:FFFF y la recompilación toma el segundo byte de $7E:0000 (el SNES
+  de $7F:0000). Anotado como diferencia 2 en la guía.
+- Fuzz 3 semillas × 2000 y en vivo (newgame.txt, ~1.200 llamadas): 0
+  diferencias. Sabotajes detectados (el de `<` por `<=` en el tope de
+  velocidad es equivalente: no cambia nada).
 
 ## Lo siguiente
 

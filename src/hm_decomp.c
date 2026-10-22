@@ -807,6 +807,32 @@ static void prep_letter(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   v &= 0xFFFFFF;
   hm_wr16(ram, 0x0192, (uint16_t)v); ram[0x0194] = (uint8_t)(v >> 16);
 }
+/* scroll.c: the camera and the map windows. Positions in the ranges the
+ * windows use, a small speed, sometimes at a limit. */
+static void prep_scroll(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_dma(ram, r, rnd);
+  hm_wr16(ram, 0x10, (uint16_t)((rnd() % 4) ? rnd() % 0x440 : rnd()));
+  hm_wr16(ram, 0x12, (uint16_t)((rnd() % 4) ? rnd() % 0xE0 : rnd()));
+  hm_wr16(ram, 0x14, (uint16_t)((rnd() % 4) ? 0x20 * (rnd() % 0x60) : rnd()));
+  hm_wr16(ram, 0x16, (uint16_t)(rnd() % 0x7000));
+  hm_wr16(ram, 0x1A, (uint16_t)((rnd() % 2) ? 0x40 * (1 + rnd() % 4) : rnd()));
+  hm_wr16(ram, 0x1C, (uint16_t)(rnd() % 0x400));
+  hm_wr16(ram, 0x1E, (uint16_t)((rnd() % 4) ? 1 + rnd() % 8 : rnd()));
+  ram[0x20] = (uint8_t)((rnd() % 4) ? rnd() % 8 : rnd());
+  ram[0x21] = (uint8_t)((rnd() % 4) ? rnd() % 8 : rnd());
+  for (unsigned a = 0xED; a < 0xF9; a += 2) hm_wr16(ram, a, (uint16_t)(rnd() % 0x400));
+  if (rnd() % 4 == 0) hm_wr16(ram, 0xF5, hm_rd16(ram, (rnd() % 2) ? 0xED : 0xF1));
+  if (rnd() % 4 == 0) hm_wr16(ram, 0xF7, hm_rd16(ram, (rnd() % 2) ? 0xEF : 0xF3));
+  hm_wr16(ram, 0x0196, (uint16_t)rnd());
+  /* the runs as a window left them (used as they are past the last one);
+   * small, so no 16-bit read falls on the last byte of bank $7E: there the
+   * recompilation takes the second byte from $7E:0000, the SNES from
+   * $7F:0000 (GUIDE.md, 7) */
+  for (unsigned a = 0x7E; a < 0x86; a += 2) hm_wr16(ram, a, (uint16_t)(2 * (rnd() % 0x20)));
+  hm_wr16(ram, 0x12, (uint16_t)(hm_rd16(ram, 0x12) % 0xE0));
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1293,6 +1319,22 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/menus.c", 0x84C540, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_menu },
   { "ImmobileInputs", hm_ImmobileInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/menus.c", 0x84CF05, 1, 0, 0, 0xFFFF, { { 0 } }, 400, prep_menu },
+  { "SUB_80A18D", hm_SUB_80A18D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/scroll.c", 0x80A18D, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
+  { "SUB_80A308", hm_SUB_80A308, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/scroll.c", 0x80A308, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
+  { "SUB_80A481", hm_SUB_80A481, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/scroll.c", 0x80A481, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
+  { "SUB_80A617", hm_SUB_80A617, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/scroll.c", 0x80A617, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
+  { "UpdateBGOffset", hm_UpdateBGOffset, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/scroll.c", 0x80A0AB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
+  { "SUB_80A0E1", hm_SUB_80A0E1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/scroll.c", 0x80A0E1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
+  { "UNK_StaticMapScroling", hm_UNK_StaticMapScroling, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/scroll.c", 0x80A11C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
+  { "SUB_80A152", hm_SUB_80A152, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/scroll.c", 0x80A152, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

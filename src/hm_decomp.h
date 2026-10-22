@@ -398,3 +398,11 @@ void hm_StartMenuInputs(uint8_t *ram, HmRegs *r);
 void hm_TitleMenuInputs(uint8_t *ram, HmRegs *r);
 void hm_ListInputs(uint8_t *ram, HmRegs *r);
 void hm_ImmobileInputs(uint8_t *ram, HmRegs *r);
+void hm_SUB_80A18D(uint8_t *ram, HmRegs *r);         /* scroll.c */
+void hm_SUB_80A308(uint8_t *ram, HmRegs *r);
+void hm_SUB_80A481(uint8_t *ram, HmRegs *r);
+void hm_SUB_80A617(uint8_t *ram, HmRegs *r);
+void hm_UpdateBGOffset(uint8_t *ram, HmRegs *r);
+void hm_SUB_80A0E1(uint8_t *ram, HmRegs *r);
+void hm_UNK_StaticMapScroling(uint8_t *ram, HmRegs *r);
+void hm_SUB_80A152(uint8_t *ram, HmRegs *r);

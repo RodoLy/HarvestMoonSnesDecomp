@@ -36,7 +36,7 @@ def main():
     # names of everything (HM-Decomp label -> key) and the code of each block
     name_of = {k: n for k, (n, _) in found.items()}
     label_key = {n: k for k, n in name_of.items()}
-    for pc, (label, name) in progress.LOCAL.items():
+    for pc, (label, name, *_) in progress.LOCAL.items():
         label_key[label.lstrip(".")] = pc
         label_key[name] = pc
     code = {}
