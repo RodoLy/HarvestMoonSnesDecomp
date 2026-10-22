@@ -142,8 +142,8 @@ usa como variables de trabajo:
 
 La música y los efectos los hace otro procesador (el SPC700, o "APU"). El
 juego habla con él por 4 puertos (`$2140-$2143`): escribe un pedido y
-**espera** a que el chip responda. Esas esperas son las que todavía no
-podemos verificar (ver 3.4).
+**espera** a que el chip responda (ver 5.15 para la conversación y 3.4
+para cómo lo maneja el comprobador).
 
 ---
 
@@ -189,9 +189,18 @@ Algunos trucos que fueron necesarios:
 
 ### 3.4 Lo que el comprobador no puede ver
 
-- **El hardware** (video, sonido): sus registros no son memoria y sus
-  respuestas no se pueden repetir. Por eso la regadera y el aspersor, que
-  esperan al chip de sonido, quedan para después.
+- **El hardware de video**: sus registros no son memoria. Lo que el juego
+  escribe ahí no se compara, salvo los registros de DMA.
+- **El chip de sonido, resuelto grabando.** Sus respuestas vienen de otro
+  procesador y no se pueden calcular. Entonces, mientras corre el
+  original, el comprobador anota cada lectura y escritura en los puertos
+  de sonido, en orden. Después, cuando corre la reescritura, cada lectura
+  de un puerto recibe el valor que recibió el original en ese mismo punto,
+  y cada escritura tiene que ser exactamente la que hizo el original
+  (mismo puerto, mismo valor, mismo orden). Una diferencia y la prueba
+  falla. En la prueba al azar, estas rutinas se prueban en un momento más
+  tranquilo del juego (300 cuadros antes), porque a veces el chip está
+  ocupado cargando música mucho tiempo y nunca dice "listo".
 - **Lo que corre en el intérprete.** Algunas rutinas no tienen versión
   compilada: la recompilación las corre en un intérprete. El comprobador
   en vivo no ve esas llamadas, y entonces la prueba al azar es la
@@ -237,6 +246,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/dma.c` | la cola de DMA |
 | `src/objects.c` | objetos con sprite |
 | `src/text.c` | el cuadro de diálogo |
+| `src/audio.c` | hablar con el chip de sonido |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -623,8 +633,30 @@ casilla siguiente:
   cuadros la letra del cursor con una marca.
 
 La impresora principal, que lee el texto código por código (`ADDDDFFFF` en
-HM-Decomp, 261 instrucciones), también toca el "bip" de cada letra en el
-chip de sonido, así que espera igual que la regadera (ver 3.4).
+HM-Decomp, 261 instrucciones), también manda un efecto de sonido por cada
+letra (`UNK_Audio19`, ver 5.15).
+
+### 5.15 Hablar con el chip de sonido
+
+El chip de sonido es un segundo procesador. El juego y el chip comparten
+cuatro "puertos" de un byte. La conversación siempre es igual:
+
+1. El juego lee el puerto 3 dos veces seguidas hasta que las dos lecturas
+   coinciden (el chip podría estar cambiándolo en ese momento) y espera a
+   que diga **1: "listo"**.
+2. Escribe la orden en los puertos 0-2 y **2 en el puerto 3: "ahí va"**.
+3. Espera a que el puerto 3 diga **4** (orden simple) u **8** (orden con
+   argumentos): **"hecho"**.
+4. Escribe **0** en el puerto 3.
+
+Órdenes vistas hasta ahora: `$0A` toca un efecto de sonido (con tres
+argumentos: $0114, $0115, $0116; cada letra de texto usa 3, 6, $0A), `$0B`
+lleva un argumento, `$0C` ninguno. Antes de un efecto el juego pregunta si
+el chip está ocupado (puerto 0, bit 4) y, si lo está, simplemente se salta
+el sonido.
+
+En una partida nueva, solo el texto manda 248 efectos de sonido: todos se
+comprobaron en vivo, con la grabación de 3.4.
 
 ---
 
@@ -702,6 +734,8 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | intérprete | la parte de la recompilación que ejecuta instrucción por instrucción lo que no está compilado |
 | bus abierto | leer una dirección donde nada responde: se obtiene el último valor que pasó por el bus |
 | BG3 | la tercera capa de fondo; el juego la usa para el texto |
+| puerto | un byte que comparten dos procesadores (la CPU y el chip de sonido) |
+| apretón de manos | el intercambio "listo / ahí va / hecho" por los puertos |
 
 ## 9. Avance
 
@@ -719,3 +753,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 21-oct-2026 | 20,33 % | medición corregida (se separan rutinas escritas juntas) |
 | 21-oct-2026 | 20,85 % | el cuadro de texto: abrir, cerrar, la flecha; dos ayudantes de DMA |
 | 21-oct-2026 | 21,31 % | las letras: fuente, dibujo, cursor, números |
+| 21-oct-2026 | 21,59 % | el comprobador graba el chip de sonido; 7 rutinas de sonido |

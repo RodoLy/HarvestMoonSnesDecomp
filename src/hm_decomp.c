@@ -2,6 +2,7 @@
  * hm_decomp.c — registry and differential checker for the decompilation.
  * See hm_decomp.h.
  */
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +13,9 @@
 #include "mod_runtime.h"
 
 void interp_bridge_set_master_deadline(uint64_t master_clock);  /* snes/interp_bridge.h */
+uint8_t ReadReg(uint16_t reg);                                    /* common_rtl.h */
+extern int snes_frame_counter;                                    /* common_rtl.h */
+void rtl_apu_restore_pacing(uint64_t frame_start_master, uint8_t frame_time_valid);
 /* The emulated DMA unit (snes/dma.h): reading $43xx has no side effects. */
 typedef struct Dma Dma;
 extern Dma *g_dma;
@@ -19,6 +23,65 @@ uint8_t dma_read(Dma *dma, uint16_t adr);
 void dma_write(Dma *dma, uint16_t adr, uint8_t val);
 
 uint8_t *g_hm_dma_regs;
+
+/* ── The sound chip's ports (see g_hm_apu in hm_decomp.h) ─────────────── */
+typedef int (*ApuWriteObserver)(uint16_t reg, uint8_t value);
+typedef int (*ApuReadObserver)(uint16_t reg, uint8_t *value);
+int RtlAddApuPortObserver(ApuWriteObserver observer);        /* common_rtl.h */
+int RtlAddApuPortReadObserver(ApuReadObserver observer);
+enum { APU_LOG = 1 << 16 };
+static HmApuEvent s_apu_log[APU_LOG];
+static int s_apu_n, s_apu_overflow, s_apu_recording;
+HmApuReplay *g_hm_apu;
+/* A rewrite that goes off the recorded traffic would wait forever for an
+ * answer that is not there: the first difference ends it here. */
+static jmp_buf s_apu_abort;
+
+static void apu_log(uint16_t reg, uint8_t val, uint8_t write)
+{
+  if (!s_apu_recording) return;
+  { static int tr = -1, k; if (tr < 0) tr = getenv("HM_APU_TRACE") != NULL;
+    if (tr && k < 60) { k++; fprintf(stderr, "[apu] %s %04X %02X clk=%llu\n", write ? "W" : "R", reg, val, (unsigned long long)g_cpu.master_cycles); } }
+  if (s_apu_n == APU_LOG) { s_apu_overflow = 1; return; }
+  s_apu_log[s_apu_n++] = (HmApuEvent){ reg, val, write };
+}
+static int apu_wrote(uint16_t reg, uint8_t value) { apu_log(reg, value, 1); return 0; }
+static int apu_read(uint16_t reg, uint8_t *value) { apu_log(reg, *value, 0); return 0; }
+
+static void apu_mismatch(HmApuReplay *p, const char *what, uint16_t reg, uint8_t v)
+{
+  if (p->bad) return;
+  p->bad = 1;
+  if (p->pos < p->n) {
+    const HmApuEvent *e = &p->ev[p->pos];
+    snprintf(p->why, sizeof p->why, "APU #%d: %s $%04X=%02X, rom %s $%04X=%02X", p->pos, what, reg, v,
+             e->write ? "wrote" : "read", e->reg, e->val);
+  } else {
+    snprintf(p->why, sizeof p->why, "APU #%d: %s $%04X=%02X, rom did nothing more", p->pos, what, reg, v);
+  }
+  longjmp(s_apu_abort, 1);
+}
+uint8_t hm_apu_read(uint16_t reg)
+{
+  HmApuReplay *p = g_hm_apu;
+  if (!p) return 0;
+  if (p->bad) return 0;
+  if (p->pos >= p->n || p->ev[p->pos].write || p->ev[p->pos].reg != reg) {
+    apu_mismatch(p, "read", reg, 0);
+    return 0;
+  }
+  return p->ev[p->pos++].val;
+}
+void hm_apu_write(uint16_t reg, uint8_t v)
+{
+  HmApuReplay *p = g_hm_apu;
+  if (!p || p->bad) return;
+  if (p->pos >= p->n || !p->ev[p->pos].write || p->ev[p->pos].reg != reg || p->ev[p->pos].val != v) {
+    apu_mismatch(p, "wrote", reg, v);
+    return;
+  }
+  p->pos++;
+}
 enum { DMA_REGS = 0x80 };
 static void dma_regs_save(uint8_t *out)
 {
@@ -644,6 +707,19 @@ static void prep_letter_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   r->a = (uint16_t)((rnd() % 4) ? rnd() % 2 : rnd());
 }
 
+/* audio.c: the commands the game really sends, and sound-effect numbers.
+ * The original talks to the real (emulated) sound chip; its answers are
+ * replayed to the rewrite. */
+static void prep_audio(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  ram[0x92] = 0x0C;          /* UNK_Audio8 alone: $0A/$0B would leave the chip
+                              * waiting for their arguments */
+  ram[0x0114] = (rnd() % 2) ? 1 : 3;                 /* as the game sets them */
+  ram[0x0115] = 6;
+  ram[0x0116] = (uint8_t)(rnd() % 0x20);              /* the sound effect */
+  r->a = (uint16_t)((r->a & 0xFF00) | (rnd() % 0x10));
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -990,6 +1066,20 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/text.c", 0x83975F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_letter },
   { "PrintDigit", hm_PrintDigit, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/text.c", 0x8397A6, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_letter },
+  { "UNK_Audio17", hm_UNK_Audio17, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_JSR,
+    "src/audio.c", 0x838EE4, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
+  { "UNK_Audio7", hm_UNK_Audio7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_JSR,
+    "src/audio.c", 0x838EC9, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
+  { "UNK_Audio8", hm_UNK_Audio8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_JSR,
+    "src/audio.c", 0x838E8B, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
+  { "UNK_Audio15", hm_UNK_Audio15, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x838DDF, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
+  { "UNK_Audio19", hm_UNK_Audio19, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x838332, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
+  { "UNK_Audio16", hm_UNK_Audio16, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/audio.c", 0x838E7F, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
+  { "UNK_Audio2", hm_UNK_Audio2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/audio.c", 0x838E32, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
@@ -999,6 +1089,7 @@ typedef struct Snapshot {
   CpuState cpu;
   uint8_t ram[0x20000];
   uint8_t dma[0x80];       /* $4300-$437F before the call */
+  int apu_from;            /* where its sound-port traffic starts in s_apu_log */
 } Snapshot;
 
 typedef struct Stats { unsigned calls, ok, bad, skipped; } Stats;
@@ -1030,6 +1121,8 @@ __attribute__((constructor)) static void hm_decomp_init(void)
     atexit(report);
     fprintf(stderr, "[decomp-check] checking %d decompiled routines\n", g_hm_decomp_count);
   }
+  RtlAddApuPortObserver(apu_wrote);
+  RtlAddApuPortReadObserver(apu_read);
 }
 
 /* While fuzzing, only the routine being fuzzed is compared: the calls it
@@ -1043,6 +1136,9 @@ void *hm_decomp_check_begin(const CpuState *cpu)
   s_check_depth++;
   Snapshot *s = malloc(sizeof *s);
   if (!s) { s_check_depth--; return NULL; }
+  if (s_check_depth == 1) { s_apu_n = 0; s_apu_overflow = 0; }
+  s_apu_recording = 1;
+  s->apu_from = s_apu_n;
   s->cpu = *cpu;
   memcpy(s->ram, cpu->ram, sizeof s->ram);
   dma_regs_save(s->dma);
@@ -1055,6 +1151,8 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   int index = 0;
   if (!s) return;                       /* nested call not checked (fuzzing) */
   s_check_depth--;
+  if (s_check_depth == 0) s_apu_recording = 0;
+  HmApuReplay apu = { s_apu_log + s->apu_from, s_apu_n - s->apu_from, 0, 0, "" };
   const HmDecompFn *f = find(name, &index);
   if (!f) { free(s); return; }
   Stats *st = &s_stats[index];
@@ -1071,13 +1169,19 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   HmRegs out = in;
   uint8_t dma_after[0x80];
   dma_regs_save(dma_after);
+  if (s_apu_overflow) { st->skipped++; free(s); return; }
   g_hm_dma_regs = s->dma;
-  f->fn(s->ram, &out);
+  g_hm_apu = &apu;
+  if (!setjmp(s_apu_abort)) f->fn(s->ram, &out);
+  g_hm_apu = NULL;
   g_hm_dma_regs = NULL;
+  if (!apu.bad && apu.pos != apu.n)
+    snprintf(apu.why, sizeof apu.why, "APU: rewrite did %d port accesses, rom %d", apu.pos, apu.n), apu.bad = 1;
 
   int bad = 0;
   char why[256] = "";
-  if ((f->out_mask & HM_OUT_A) && out.a != cpu->A) { bad = 1; snprintf(why, sizeof why, "A %04X != rom %04X", out.a, cpu->A); }
+  if (apu.bad) { bad = 1; snprintf(why, sizeof why, "%s", apu.why); }
+  if (!bad && (f->out_mask & HM_OUT_A) && out.a != cpu->A) { bad = 1; snprintf(why, sizeof why, "A %04X != rom %04X", out.a, cpu->A); }
   if (!bad && (f->out_mask & HM_OUT_X) && out.x != cpu->X) { bad = 1; snprintf(why, sizeof why, "X %04X != rom %04X", out.x, cpu->X); }
   if (!bad && (f->out_mask & HM_OUT_Y) && out.y != cpu->Y) { bad = 1; snprintf(why, sizeof why, "Y %04X != rom %04X", out.y, cpu->Y); }
   if (!bad && (f->out_mask & HM_OUT_C) && out.c != cpu->_flag_C) { bad = 1; snprintf(why, sizeof why, "C %u != rom %u", out.c, cpu->_flag_C); }
@@ -1147,8 +1251,26 @@ static void fuzz_at(unsigned frame)
   }
   /* One routine per frame, starting at frame `at`: the frame watchdog
    * (5 s of real time per frame) then applies to each routine on its own. */
-  if (at < 0 || (int)frame < at || (int)frame >= at + g_hm_decomp_count) return;
-  int only = (int)frame - at;
+  /* The routines that talk to the sound chip get a window of their own
+   * (HM_DECOMP_FUZZ_APU=<frame>, by default 300 frames earlier): in some
+   * moments of the game the chip is busy for a long time (loading music)
+   * and never says "ready". */
+  static int apu_at = -2;
+  if (apu_at == -2) {
+    const char *e = getenv("HM_DECOMP_FUZZ_APU");
+    apu_at = e && *e ? atoi(e) : (at >= 300 ? at - 300 : at + g_hm_decomp_count);
+  }
+  if (at < 0) return;
+  int only = -1;
+  if ((int)frame >= at && (int)frame < at + g_hm_decomp_count &&
+      !(g_hm_decomp_fns[(int)frame - at].out_mask & HM_APU))
+    only = (int)frame - at;
+  for (int i = 0, k = 0; i < g_hm_decomp_count && only < 0; i++)
+    if (g_hm_decomp_fns[i].out_mask & HM_APU) {
+      if ((int)frame == apu_at + k) only = i;
+      k++;
+    }
+  if (only < 0) return;
 
   static CpuState saved_cpu;
   static uint8_t saved_ram[0x20000], saved_dma[0x80];
@@ -1181,6 +1303,7 @@ static void fuzz_at(unsigned frame)
      * full run), e.g. to trace it. */
     const char *one_call = getenv("HM_DECOMP_FUZZ_CALL");
     int pick = one_call && *one_call ? atoi(one_call) : -1;
+    uint64_t apu_clock = saved_cpu.master_cycles;
     for (int n = 0; n < n_calls; n++) {
       g_cpu = saved_cpu;
       memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
@@ -1188,7 +1311,23 @@ static void fuzz_at(unsigned frame)
       /* Every call starts with a fresh frame budget: long routines (the
        * 4096-tile farm loop) would otherwise hit the frame deadline, yield
        * half-way and not be comparable. The machine is restored after. */
-      g_cpu.master_cycles = 0;
+      g_cpu.master_cycles = (f->out_mask & HM_APU) ? apu_clock : 0;
+      if (f->out_mask & HM_APU) {
+        /* The sound chip only runs up to the end of the current frame (in
+         * the runtime's clock), so each call gets a frame of its own. The
+         * frame counter stays advanced: the chip cannot go back in time. */
+        snes_frame_counter++;
+        rtl_apu_restore_pacing(g_cpu.master_cycles, 1);
+        /* Wait (outside the check) until the chip says "ready" (port 3 =
+         * 1), as the game would before sending anything: it may be busy
+         * with what the game sent it before the fuzzing started. */
+        int ready = 0;
+        for (long k = 0; k < 4000000 && !ready; k++) {
+          g_cpu.master_cycles += 64;
+          ready = ReadReg(0x2143) == 1;
+        }
+        if (!ready) { s_stats[i].skipped++; continue; }
+      }
       for (int v = 0; v < HM_FUZZ_MAX_VARS && f->vars[v].size; v++) {
         uint16_t x = rnd_in(f->vars[v].lo, f->vars[v].hi);
         g_cpu.ram[f->vars[v].addr] = (uint8_t)x;
@@ -1233,6 +1372,7 @@ static void fuzz_at(unsigned frame)
       } else {
         cpu_dispatch_pc_paired(&g_cpu, f->pc24, frame_size);
       }
+      apu_clock = g_cpu.master_cycles;
       if (s_stats[i].bad != bad_before && s_stats[i].bad <= 5)
         fprintf(stderr, "[decomp-fuzz]   (that was %s call %d)\n", f->name, n);
     }

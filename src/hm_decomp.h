@@ -85,13 +85,36 @@ static inline uint16_t hm_dp_r16(uint8_t *ram, const HmRegs *r, unsigned off)
  * chunk, addresses $8000-$FFFF). WRAM is `ram`: banks $7E/$7F, and the
  * first 8 KB mirrored in banks $00-$3F / $80-$BF. Hardware registers are
  * not modelled (reads give 0, writes are dropped), except the DMA
- * registers $4300-$437F (g_hm_dma_regs below). */
+ * registers $4300-$437F (g_hm_dma_regs below) and the sound chip's ports
+ * $2140-$217F (g_hm_apu below). */
 extern const uint8_t *g_rom;
 
 /* The DMA registers $4300-$437F, while the checker runs a rewrite: a copy
  * of them taken before the call (the checker compares it with the real
  * ones afterwards). NULL otherwise. */
 extern uint8_t *g_hm_dma_regs;
+
+/* The sound chip's ports $2140-$217F. Their answers come from another
+ * processor and cannot be computed, so the checker records every port
+ * read and write the original makes, in order; while the rewrite runs on
+ * the snapshot, each read it makes gets the value the original read at
+ * that point, and each write must be the one the original made. Any
+ * difference in the order, the port or the value is a mismatch. NULL when
+ * no rewrite is being checked. */
+typedef struct HmApuEvent { uint16_t reg; uint8_t val, write; } HmApuEvent;
+typedef struct HmApuReplay {
+  const HmApuEvent *ev;
+  int n, pos, bad;
+  char why[96];
+} HmApuReplay;
+extern HmApuReplay *g_hm_apu;
+uint8_t hm_apu_read(uint16_t reg);
+void hm_apu_write(uint16_t reg, uint8_t v);
+static inline int hm_is_apu_port(uint32_t addr)
+{
+  uint16_t a = (uint16_t)addr;
+  return ((addr >> 16) & 0x7F) < 0x40 && a >= 0x2140 && a < 0x2180;
+}
 
 static inline uint8_t *hm_bus_ram(uint8_t *ram, uint32_t addr)
 {
@@ -112,6 +135,7 @@ static inline uint8_t hm_bus_rd8(uint8_t *ram, uint32_t addr)
   uint16_t a = (uint16_t)addr;
   if (a >= 0x8000 && (bank & 0x7F) < 0x7E)
     return g_rom[(uint32_t)(bank & 0x3F) << 15 | (a & 0x7FFF)];
+  if (hm_is_apu_port(addr)) return hm_apu_read(a);
   return 0;
 }
 static inline uint16_t hm_bus_rd16(uint8_t *ram, uint32_t addr)
@@ -122,6 +146,7 @@ static inline void hm_bus_wr8(uint8_t *ram, uint32_t addr, uint8_t v)
 {
   uint8_t *p = hm_bus_ram(ram, addr);
   if (p) *p = v;
+  else if (hm_is_apu_port(addr)) hm_apu_write((uint16_t)addr, v);
 }
 static inline void hm_bus_wr16(uint8_t *ram, uint32_t addr, uint16_t v)
 {
@@ -142,7 +167,12 @@ enum { HM_OUT_A = 1, HM_OUT_X = 2, HM_OUT_Y = 4, HM_OUT_C = 8,
         * fuzzer checks it by calling the original directly. */
        HM_INTERP = 16,
        /* Called with JSR / returns with RTS (2-byte frame), not JSL / RTL. */
-       HM_JSR = 32 };
+       HM_JSR = 32,
+       /* Talks to the sound chip: while fuzzing, the CPU clock keeps going
+        * from call to call (the chip only runs up to the CPU's time, so a
+        * clock set back to 0 would leave it stopped and the routine
+        * waiting for its answer forever). */
+       HM_APU = 64 };
 
 /* Fuzzing: which inputs to randomize when testing a routine on its own
  * (HM_DECOMP_FUZZ). Ranges are inclusive; size 1 or 2 bytes. */
@@ -334,3 +364,10 @@ void hm_DrawLetter(uint8_t *ram, HmRegs *r);
 void hm_AdvanceLetterCursor(uint8_t *ram, HmRegs *r);
 void hm_BlinkTextCursor(uint8_t *ram, HmRegs *r);
 void hm_PrintDigit(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio17(uint8_t *ram, HmRegs *r);       /* audio.c */
+void hm_UNK_Audio7(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio8(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio15(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio19(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio16(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio2(uint8_t *ram, HmRegs *r);

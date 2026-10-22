@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **152 rutinas reescritas y verificadas** (0 diferencias):
+- **159 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -75,6 +75,7 @@ en el README (`tools/progress.py`).
 | StartTextBox, SUB_83932D, CloseTextBox (CODE_8393F9) | $83:935F, $83:932D, $83:93F9 | src/text.c |
 | DrawTextBoxArrow, BlinkTextBoxArrow, TextBoxArrow | $83:94D7, $83:9495, $83:9447 | src/text.c |
 | UNK_SetDMA1 | $83:8166 | src/dma.c |
+| UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |
 | BlinkTextCursor, PrintDigit (CODE_83975F, CODE_8397A6) | $83:975F, $83:97A6 | src/text.c |
 

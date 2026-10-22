@@ -140,8 +140,8 @@ working variables:
 
 Music and effects are made by another processor (the SPC700, or "APU").
 The game talks to it through 4 ports (`$2140-$2143`): it writes a request
-and **waits** for the chip to answer. Those waits are what we cannot
-verify yet (see 3.4).
+and **waits** for the chip to answer (see 5.15 for the conversation, and
+3.4 for how the checker deals with it).
 
 ---
 
@@ -188,9 +188,17 @@ Some tricks that were needed:
 
 ### 3.4 What the checker cannot see
 
-- **The hardware** (video, sound): its registers are not memory and its
-  answers cannot be replayed. That is why the watering can and the
-  sprinkler, which wait for the sound chip, are left for later.
+- **The video hardware**: its registers are not memory. What the game
+  writes there is not compared, except the DMA registers.
+- **The sound chip, solved by recording.** Its answers come from another
+  processor and cannot be computed. So, while the original runs, the
+  checker writes down every read and write on the sound ports, in order.
+  Then, when the rewrite runs, each port read gets the value the original
+  got at that same point, and each write must be exactly the one the
+  original made (same port, same value, same order). One difference and
+  the check fails. In the random test, these routines are tested in a
+  calmer moment of the game (300 frames earlier), because sometimes the
+  chip is busy loading music for a long time and never says "ready".
 - **What runs in the interpreter.** Some routines have no compiled
   version: the recompilation runs them in an interpreter. The live
   checker does not see those calls, so the random test is the
@@ -237,6 +245,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/objects.c` | objects with a sprite |
 | `src/ending.c` | the ending's score |
 | `src/text.c` | the dialogue box |
+| `src/audio.c` | talking to the sound chip |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -613,8 +622,29 @@ in order, and the printer *draws* each letter into the next tile:
   letter at the cursor with a mark every 20 frames.
 
 The main printer, which reads the text code by code (`ADDDDFFFF` in
-HM-Decomp, 261 instructions), also plays the "beep" of each letter on the
-sound chip, so it waits like the watering can does (see 3.4).
+HM-Decomp, 261 instructions), also sends a sound effect for each letter
+(`UNK_Audio19`, see 5.15).
+
+### 5.15 Talking to the sound chip
+
+The sound chip is a second processor. The game and the chip share four
+one-byte "ports". The conversation always goes the same way:
+
+1. The game reads port 3 twice in a row until both reads agree (the chip
+   may be changing it at that very moment), and waits until it says
+   **1: "ready"**.
+2. It writes the command in ports 0-2 and **2 in port 3: "here it is"**.
+3. It waits until port 3 says **4** (simple command) or **8** (command with
+   arguments): **"done"**.
+4. It writes **0** in port 3.
+
+Commands seen so far: `$0A` plays a sound effect (with three arguments:
+$0114, $0115, $0116; each letter of text uses 3, 6, $0A), `$0B` takes one
+argument, `$0C` none. Before a sound effect the game asks whether the chip
+is busy (port 0, bit 4) and, if it is, simply skips the sound.
+
+In a new game, the text alone sends 248 sound effects: all of them were
+checked live, with the recording of 3.4.
 
 ---
 
@@ -691,6 +721,8 @@ Things the game does wrong or oddly, found while decompiling:
 | interpreter | the part of the recompilation that runs, instruction by instruction, what is not compiled |
 | open bus | reading an address where nothing answers: you get the last value seen on the bus |
 | BG3 | the third background layer; the game uses it for text |
+| port | a byte shared by two processors (the CPU and the sound chip) |
+| handshake | the "ready / here it is / done" exchange over the ports |
 
 ## 9. Progress
 
@@ -708,3 +740,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 21-Oct-2026 | 20.33 % | corrected measure (routines written together are split) |
 | 21-Oct-2026 | 20.85 % | the text box: open, close, the arrow; two DMA helpers |
 | 21-Oct-2026 | 21.31 % | the letters: font, drawing, cursor, numbers |
+| 21-Oct-2026 | 21.59 % | the checker records the sound chip; 7 sound routines |
