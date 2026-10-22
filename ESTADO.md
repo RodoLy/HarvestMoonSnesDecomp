@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **269 rutinas reescritas y verificadas** (0 diferencias):
+- **326 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -98,6 +98,7 @@ en el README (`tools/progress.py`).
 | DecompressTileMap (LZSS) | $83:81F8 | src/decompress.c |
 | SUB_809EBC (la cámara al entrar), SUB_809F61 (BG2: nubes, paralaje) | $80:9EBC, $80:9F61 | src/scroll.c |
 | Event_ResetFlag ($84:93C9), Event_EditTileonMap ($84:BA10), Event_StartTextBox/Copy, Event_UNKTools | bank $84 | src/eventcmds.c |
+| UNK_SetPointer42, UNK_BigLoop, Zeroes*42Pointer(s), CallIndexedSubrutines y las 51 SUB_80C36C... de Subrutines_Table | $80:8E48-$80:95B2, $80:C36C- | src/coloranim.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |

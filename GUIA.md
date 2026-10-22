@@ -262,6 +262,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/interact.c` | apretar A frente a algo |
 | `src/playerinput.c` | los botones al caminar |
 | `src/decompress.c` | los datos comprimidos (LZSS) |
+| `src/coloranim.c` | colores que se mueven (ciclo de paleta) |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -1099,6 +1100,32 @@ instrucciones a las que nada llega, y el bloque de $84:C852-$84:C934
 (convertiría $0911 en las acciones 6 y 7) nunca se llama. Cuentan como
 parte de la rutina.
 
+### 5.23 Colores que se mueven
+
+El agua que brilla, luces que parpadean: el juego cambia colores sueltos
+de la paleta, paso a paso (ciclo de paleta, `src/coloranim.c`).
+
+- Hay **16 canales**. Cada uno tiene un puntero a una lista ($42 + 3 n), el
+  color que cambia ($015A + n: el color, $016A + n: la fila de la paleta) y
+  cuántos cuadros le quedan al paso actual ($014A + n).
+- Una lista son pasos de 3 bytes: el color nuevo (una palabra) y cuántos
+  cuadros se queda (un byte). $FFFE seguido de un puntero salta (así la
+  lista da vueltas); $FFFF la termina.
+- `UNK_BigLoop` corre cada cuadro: avanza cada canal y, si alguno anduvo,
+  manda la paleta a la consola por DMA. Los canales 0-3 solo corren
+  mientras llueve o nieva. Desde el canal 4, el primer canal vacío termina
+  el recorrido, así que siempre se usan en orden.
+- `CallIndexedSubrutines` arranca las animaciones del mapa según la parte
+  del día, con `Subrutines_Table` ($80:BEEC): 6 palabras por mapa (5 partes
+  del día, y una palabra que, si no es $FFFF, significa "solo en otoño e
+  invierno"). Cada palabra es una de 51 rutinas pequeñas, y cada una
+  arranca unos canales (`UNK_SetPointer42`: lista, color, fila, canal).
+
+*Rareza:* después de la marca de fin $FFFF el puntero del canal se borra,
+pero el mismo cuadro sigue y todavía escribe el color $FFFF y mueve el
+puntero borrado a $00:0003. Como todas las listas terminan en un salto
+($FFFE), nunca pasa.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1245,3 +1272,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 39,59 % | el descompresor (LZSS); el comprobador ahora también conoce todas las banderas de la entrada, para `PHP` |
 | 22-oct-2026 | 40,09 % | poner la cámara al entrar a un mapa, y el segundo fondo (nubes, paralaje) |
 | 22-oct-2026 | 40,54 % | cinco comandos de evento más (textos, apagar un bit, una baldosa, el cobertizo); ya está más de la mitad de las rutinas |
+| 22-oct-2026 | 47,73 % | las animaciones de colores: 57 rutinas (51 de ellas, pequeñas, de una tabla) |

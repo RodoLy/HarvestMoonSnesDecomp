@@ -1260,6 +1260,49 @@ static void prep_event_shed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   for (unsigned i = 0; i < 8; i++) ram[0x11F00 + i] = (uint8_t)rnd();
 }
 
+/* coloranim.c: the colour animations. 16 channels with lists of our own
+ * in WRAM ($7F:E000: colours, delays, a jump back, sometimes the end), the
+ * frames left, the colours and rows; rain or not; the map and the hour for
+ * CallIndexedSubrutines; arguments for UNK_SetPointer42 (colour, row and a
+ * channel below 16) and the Zeroes routines (a channel below 16). */
+static void prep_colour_anim(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  for (unsigned c = 0; c < 16; c++) {
+    uint16_t list = (uint16_t)(0xE000 + c * 0x40);
+    unsigned steps = 1 + rnd() % 6;
+    for (unsigned s = 0; s < steps; s++) {
+      uint16_t col = (uint16_t)(rnd() & 0x7FFF);
+      ram[0x10000 + list + 3 * s] = (uint8_t)col; ram[0x10000 + list + 3 * s + 1] = (uint8_t)(col >> 8);
+      ram[0x10000 + list + 3 * s + 2] = (uint8_t)(rnd() % 8);
+    }
+    uint16_t end = (uint16_t)(list + 3 * steps);
+    if (rnd() % 4) {                                        /* a loop back */
+      ram[0x10000 + end] = 0xFE; ram[0x10000 + end + 1] = 0xFF;
+      ram[0x10000 + end + 2] = (uint8_t)list; ram[0x10000 + end + 3] = (uint8_t)(list >> 8);
+      ram[0x10000 + end + 4] = 0x7F;
+    } else {
+      ram[0x10000 + end] = 0xFF; ram[0x10000 + end + 1] = 0xFF;
+    }
+    bool used = c < 4 ? rnd() % 2 : (c < 4 + rnd() % 13);
+    uint16_t at = (uint16_t)(list + 3 * (rnd() % (steps + 1)));
+    hm_wr16(ram, 0x42 + 3 * c, used ? at : 0);
+    ram[0x44 + 3 * c] = used ? 0x7F : 0;
+    ram[0x014A + c] = (uint8_t)((rnd() % 2) ? 0 : rnd() % 4);
+    ram[0x015A + c] = (uint8_t)(rnd() % 16);
+    ram[0x016A + c] = (uint8_t)(rnd() % 16);
+  }
+  hm_wr16(ram, 0x0196, (uint16_t)((rnd() % 2) ? (rnd() & 0x000A) : rnd()));
+  ram[0x22] = (uint8_t)(rnd() % 0x60);
+  ram[0x11F1C] = (uint8_t)(rnd() % 24);
+  ram[0x11F19] = (uint8_t)(rnd() % 4);
+  ram[0x27] = (uint8_t)(rnd() % 8); ram[0x28] = (uint8_t)rnd();   /* the DMA queue */
+  hm_wr16(ram, 0xC7, (uint16_t)rnd());
+  hm_wr16(ram, 0x72, (uint16_t)(0xE000 + (rnd() % 16) * 0x40)); ram[0x74] = 0x7F;
+  r->a = (uint16_t)((r->a & 0xFF00) | (rnd() % 16));
+  r->x = (uint16_t)(rnd() % 16);
+  r->y = (uint16_t)(rnd() % 16);
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1970,6 +2013,120 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x849034, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
   { "Event_UNKTools", hm_Event_UNKTools, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/eventcmds.c", 0x84BB65, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_shed },
+  { "UNK_SetPointer42", hm_UNK_SetPointer42, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/coloranim.c", 0x808E48, 1, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "UNK_BigLoop", hm_UNK_BigLoop, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/coloranim.c", 0x808E69, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "Zeroes42Pointers", hm_Zeroes42Pointers, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/coloranim.c", 0x808FAB, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "ZeroesPartial42Pointers", hm_ZeroesPartial42Pointers, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/coloranim.c", 0x808F92, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "ZeroesOne42Pointer", hm_ZeroesOne42Pointer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/coloranim.c", 0x808F82, 0, 0, 0, 0x000F, { { 0 } }, 0, prep_colour_anim },
+  { "CallIndexedSubrutines", hm_CallIndexedSubrutines, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/coloranim.c", 0x809553, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C36C", hm_SUB_80C36C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/coloranim.c", 0x80C36C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C3D9", hm_SUB_80C3D9, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C3D9, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C446", hm_SUB_80C446, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C446, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C4B3", hm_SUB_80C4B3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C4B3, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C520", hm_SUB_80C520, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C520, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C58D", hm_SUB_80C58D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C58D, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C5FA", hm_SUB_80C5FA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C5FA, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C667", hm_SUB_80C667, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C667, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C6D4", hm_SUB_80C6D4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C6D4, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C792", hm_SUB_80C792, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C792, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C7FF", hm_SUB_80C7FF, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C7FF, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C86C", hm_SUB_80C86C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C86C, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C945", hm_SUB_80C945, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C945, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80C9B2", hm_SUB_80C9B2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80C9B2, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CA1F", hm_SUB_80CA1F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CA1F, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CA8C", hm_SUB_80CA8C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CA8C, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CADE", hm_SUB_80CADE, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CADE, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CB30", hm_SUB_80CB30, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CB30, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CB82", hm_SUB_80CB82, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CB82, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CBD4", hm_SUB_80CBD4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CBD4, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CC92", hm_SUB_80CC92, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CC92, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CCE4", hm_SUB_80CCE4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CCE4, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CD36", hm_SUB_80CD36, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CD36, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CD88", hm_SUB_80CD88, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CD88, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CE46", hm_SUB_80CE46, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CE46, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CE98", hm_SUB_80CE98, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CE98, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CEEA", hm_SUB_80CEEA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CEEA, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CF3C", hm_SUB_80CF3C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CF3C, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80CFFA", hm_SUB_80CFFA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80CFFA, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D067", hm_SUB_80D067, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D067, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D125", hm_SUB_80D125, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D125, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D1E3", hm_SUB_80D1E3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D1E3, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D2A1", hm_SUB_80D2A1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D2A1, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D344", hm_SUB_80D344, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D344, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D402", hm_SUB_80D402, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D402, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D4C0", hm_SUB_80D4C0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D4C0, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D563", hm_SUB_80D563, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D563, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D606", hm_SUB_80D606, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D606, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D6FA", hm_SUB_80D6FA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D6FA, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D7EE", hm_SUB_80D7EE, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D7EE, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D891", hm_SUB_80D891, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D891, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D934", hm_SUB_80D934, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D934, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D96B", hm_SUB_80D96B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D96B, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D9A2", hm_SUB_80D9A2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D9A2, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80D9D9", hm_SUB_80D9D9, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80D9D9, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80DA10", hm_SUB_80DA10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80DA10, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80DA47", hm_SUB_80DA47, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80DA47, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80DAB4", hm_SUB_80DAB4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80DAB4, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80DB06", hm_SUB_80DB06, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80DB06, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80DC30", hm_SUB_80DC30, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80DC30, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "SUB_80DD09", hm_SUB_80DD09, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/coloranim.c", 0x80DD09, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

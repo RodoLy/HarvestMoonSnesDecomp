@@ -261,6 +261,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/interact.c` | pressing A in front of something |
 | `src/playerinput.c` | the buttons while walking |
 | `src/decompress.c` | the compressed data (LZSS) |
+| `src/coloranim.c` | colours that move (palette cycling) |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -1074,6 +1075,32 @@ X $0040, L $0020, R $0010. (HM-Decomp swaps left and right, see 5.20.)
 reaches, and the block at $84:C852-$84:C934 (it would turn $0911 into
 actions 6 and 7) is never called. They count as part of the routine.
 
+### 5.23 Colours that move
+
+Water that shimmers, lights that blink: the game changes single colours of
+the palette, step by step (palette cycling, `src/coloranim.c`).
+
+- There are **16 channels**. Each has a pointer to a list ($42 + 3 n), the
+  colour it changes ($015A + n: colour, $016A + n: palette row) and how
+  many frames are left of the current step ($014A + n).
+- A list is made of steps of 3 bytes: the new colour (a word) and how many
+  frames it stays (a byte). $FFFE followed by a pointer jumps (so the list
+  loops); $FFFF ends it.
+- `UNK_BigLoop` runs every frame: it advances every channel and, if one
+  ran, sends the palette to the console by DMA. Channels 0-3 only run
+  while it rains or snows. From channel 4 on, the first empty channel ends
+  the loop, so they are always used in order.
+- `CallIndexedSubrutines` starts the animations of the map for the part of
+  the day, from `Subrutines_Table` ($80:BEEC): 6 words per map (5 parts of
+  the day, then a word that, when it is not $FFFF, means "only in autumn
+  and winter"). Each word is one of 51 small routines, each starting a few
+  channels (`UNK_SetPointer42`: list, colour, row, channel).
+
+*Quirk:* after the end mark $FFFF the channel's pointer is cleared, but the
+same frame goes on and still writes colour $FFFF and moves the cleared
+pointer to $00:0003. Since all the lists end in a loop ($FFFE), it never
+happens.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1217,3 +1244,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 39.59 % | the decompressor (LZSS); the checker now also knows all the flags at the entry, for `PHP` |
 | 22-Oct-2026 | 40.09 % | placing the camera on entering a map, and the second background (clouds, parallax) |
 | 22-Oct-2026 | 40.54 % | five more event commands (texts, clearing a bit, a tile, the shed); more than half of the routines are done |
+| 22-Oct-2026 | 47.73 % | the colour animations: 57 routines (51 of them, small, read from a table) |
