@@ -2043,3 +2043,97 @@ end:
   }
   count_frame(ram, r);
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * More commands.
+ * ═════════════════════════════════════════════════════════════════════════ */
+#define INVERSE_FLAG_BITS 0x8494F3   /* Events_Inverse_Flags_Tables: ~(1 << n) */
+#define SHED_ITEMS        0x7F1F00   /* the shed: one bit per tool */
+#define SHED_PLACES       0x81BE0F   /* per item, 8 bytes: +6 shed byte, +7 its bit */
+
+/* Event_ResetFlag ($84:93C9; commands 38, 39, 40 all point here, so
+ * Event_ResetFlagD / DD are the same code): <address 24> <bit>: clear that
+ * bit of the word at the address. HM-Decomp's address comment says
+ * $80:93C9. */
+void hm_Event_ResetFlag(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  uint16_t n = arg8_word(ram, r);
+  r->c = (n >> 15) & 1;
+  r->x = (uint16_t)(n << 1);
+  r->a = hm_bus_rd16(ram, INVERSE_FLAG_BITS + r->x);
+  hm_dp_w16(ram, r, 0x7E, r->a);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, 0)) & r->a;
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x72, 0), r->a);
+  advance(ram, r, 1);
+}
+
+/* Event_EditTileonMap ($84:BA10, command 75): <tile> <x word> <y word>:
+ * set that tile type on the current map (command 58 does it on the farm). */
+void hm_Event_EditTileonMap(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  hm_push8(ram, r, arg8(ram, r));
+  advance(ram, r, 1);
+  push16b(ram, r, arg16(ram, r));
+  advance(ram, r, 2);
+  push16b(ram, r, arg16(ram, r));
+  advance(ram, r, 2);
+  r->y = pull16b(ram, r);
+  r->x = pull16b(ram, r);
+  lda8(r, hm_pull8(ram, r));
+  hm_jsl(ram, r, 0xBA4F, 0x82);
+  hm_EditTileonMap(ram, r);
+  hm_rtl(ram, r);
+}
+
+/* Event_StartTextBox / Event_StartTextBoxCopy ($84:8FEF / $84:9034,
+ * commands 28 / 29, the same code): <text word> <lines>: open a text box
+ * (input mode 2). */
+static void start_text(uint8_t *ram, HmRegs *r, uint16_t ret)
+{
+  advance(ram, r, 1);
+  r->x = arg16(ram, r);
+  advance(ram, r, 2);
+  hm_bus_wr8(ram, dbw(r, 0x0191), arg8(ram, r));
+  lda8(r, 2);
+  hm_bus_wr8(ram, dbw(r, 0x019A), 2);
+  hm_jsl(ram, r, ret, 0x83);
+  hm_StartTextBox(ram, r);
+  hm_rtl(ram, r);
+  advance(ram, r, 1);
+  count_frame(ram, r);
+}
+void hm_Event_StartTextBox(uint8_t *ram, HmRegs *r)     { start_text(ram, r, 0x901B); }
+void hm_Event_StartTextBoxCopy(uint8_t *ram, HmRegs *r) { start_text(ram, r, 0x9060); }
+
+/* Event_UNKTools ($84:BB65, not in the command table: nothing runs it):
+ * put the tool in hand and the one in the backpack back in the shed (its
+ * bit in $7F1F00 + byte +6 of the item's entry). */
+static void to_shed(uint8_t *ram, HmRegs *r, uint16_t at)
+{
+  r->a = 0;                                                /* LDA #0; XBA */
+  uint8_t item = lda8(r, hm_bus_rd8(ram, dbw(r, at)));
+  if (!item) return;
+  uint16_t x = (uint16_t)((item << 3) + 6);                /* ASL x3; CLC; ADC #6 */
+  r->c = 0;
+  r->x = x;
+  uint8_t place = hm_bus_rd8(ram, SHED_PLACES + x);
+  r->a = (uint16_t)((x & 0xFF00) | place);
+  hm_push8(ram, r, place);                                 /* PHA */
+  r->x = (uint16_t)(x + 1);
+  uint8_t bit = hm_bus_rd8(ram, SHED_PLACES + r->x);
+  *hm_dp(ram, r, 0x92) = bit;
+  hm_pull8(ram, r);                                        /* PLA; XBA; LDA #0; XBA */
+  r->a = r->x = place;
+  uint8_t v = (uint8_t)(hm_bus_rd8(ram, SHED_ITEMS + r->x) | bit);
+  r->a = v;
+  hm_bus_wr8(ram, SHED_ITEMS + r->x, v);
+  hm_bus_wr8(ram, dbw(r, at), 0);
+}
+void hm_Event_UNKTools(uint8_t *ram, HmRegs *r)
+{
+  to_shed(ram, r, 0x0921);
+  to_shed(ram, r, 0x0923);
+}

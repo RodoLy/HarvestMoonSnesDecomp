@@ -488,3 +488,8 @@ void hm_Event_Cmd59(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKPlayerPos(uint8_t *ram, HmRegs *r);
 void hm_DivisionSigned(uint8_t *ram, HmRegs *r);   /* math.c */
 void hm_DecompressTileMap(uint8_t *ram, HmRegs *r); /* decompress.c */
+void hm_Event_ResetFlag(uint8_t *ram, HmRegs *r);
+void hm_Event_EditTileonMap(uint8_t *ram, HmRegs *r);
+void hm_Event_StartTextBox(uint8_t *ram, HmRegs *r);
+void hm_Event_StartTextBoxCopy(uint8_t *ram, HmRegs *r);
+void hm_Event_UNKTools(uint8_t *ram, HmRegs *r);

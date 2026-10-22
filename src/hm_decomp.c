@@ -1244,6 +1244,22 @@ static void prep_camera(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x0140, (uint16_t)rnd()); hm_wr16(ram, 0x0142, (uint16_t)rnd());
 }
 
+/* Event_EditTileonMap: positions on the map ($0181: 1, 2 or 4 screens) */
+static void prep_event_tile(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_58(ram, r, rnd);
+  static const uint8_t widths[] = { 1, 2, 4 };
+  ram[0x00181] = widths[rnd() % 3];
+}
+/* Event_UNKTools: tools in the hand and the backpack */
+static void prep_event_shed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_cmd(ram, r, rnd);
+  ram[0x00921] = (uint8_t)((rnd() % 4) ? rnd() % 0x1C : 0);
+  ram[0x00923] = (uint8_t)((rnd() % 4) ? rnd() % 0x1C : 0);
+  for (unsigned i = 0; i < 8; i++) ram[0x11F00 + i] = (uint8_t)rnd();
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1944,6 +1960,16 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/scroll.c", 0x809EBC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_camera },
   { "SUB_809F61", hm_SUB_809F61, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/scroll.c", 0x809F61, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_camera },
+  { "Event_ResetFlag", hm_Event_ResetFlag, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x8493C9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_55 },
+  { "Event_EditTileonMap", hm_Event_EditTileonMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BA10, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_tile },
+  { "Event_StartTextBox", hm_Event_StartTextBox, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848FEF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
+  { "Event_StartTextBoxCopy", hm_Event_StartTextBoxCopy, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849034, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
+  { "Event_UNKTools", hm_Event_UNKTools, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/eventcmds.c", 0x84BB65, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_shed },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

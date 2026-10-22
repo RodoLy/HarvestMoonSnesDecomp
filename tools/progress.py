@@ -83,6 +83,8 @@ LOCAL = {
     0x84C2B4: ("CODE_84C2B4", "CODE_84C2B4"),
     0x84C2D8: ("CODE_84C2D8", "CODE_84C2D8"),
     0x82EA60: ("Unk_OutOfMenu", "Unk_OutOfMenu"),
+    0x8493C9: ("Event_ResetFlagDD", "Event_ResetFlag"),  # three labels on the same code
+    0x84BA10: ("Event_EditTileonMap", "Event_EditTileonMap"),
     0x84BC9C: ("@84BC9C", "Event_Cmd51", "@84BD44"),
     0x84BD44: ("@84BD44", "Event_Cmd52", "@84BE0D"),
     0x84BE0D: ("@84BE0D", "Event_Cmd53", "@84BED6"),

@@ -606,6 +606,14 @@ al primero; aquí son `Event_Cmd51`...`Event_Cmd59`:
 | 58 | `<baldosa> <x> <y>`: pone ese tipo de baldosa en la granja |
 | 59 | la acción del jugador $1C |
 
+**Más comandos:** `StartTextBox` y `StartTextBoxCopy` (28 y 29, el mismo
+código) abren un cuadro de texto con `<texto> <líneas>`; `ResetFlag` (38;
+el 39 y el 40 apuntan al mismo código, ver el error 13) apaga un bit de una
+palabra en cualquier lugar; `EditTileonMap` (75, $84:BA10) pone un tipo de
+baldosa en el mapa actual, como el 58 en la granja. `Event_UNKTools`
+devuelve al cobertizo las herramientas de la mano y de la mochila (un bit
+por herramienta en $7F1F00), pero ningún número de comando llega a él.
+
 **El comando 37, `UNKPlayerPos`** ($84:AB27), cada cuadro, para un objeto
 del grupo $17 que el jugador puede cargar (probablemente el hijo: cuando el
 jugador lo deja, empieza el guion $17/$14). Sus pedidos son bits de
@@ -1236,3 +1244,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 39,37 % | la división con signo (sin uso) |
 | 22-oct-2026 | 39,59 % | el descompresor (LZSS); el comprobador ahora también conoce todas las banderas de la entrada, para `PHP` |
 | 22-oct-2026 | 40,09 % | poner la cámara al entrar a un mapa, y el segundo fondo (nubes, paralaje) |
+| 22-oct-2026 | 40,54 % | cinco comandos de evento más (textos, apagar un bit, una baldosa, el cobertizo); ya está más de la mitad de las rutinas |

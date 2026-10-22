@@ -445,6 +445,8 @@
 049356	Event_TimeofDayPalette_lo
 849375	Event_UNKCCchanges7
 049375	Event_UNKCCchanges7_lo
+8493C9	Event_ResetFlag
+0493C9	Event_ResetFlag_lo
 849513	Event_MapScrolling
 049513	Event_MapScrolling_lo
 84957D	Event_UNKCCchanges8
@@ -508,6 +510,8 @@
 04B8D9	Event_UNKCCchanges15_lo
 84B93C	Event_UNK3
 04B93C	Event_UNK3_lo
+84BA10	Event_EditTileonMap
+04BA10	Event_EditTileonMap_lo
 84BA51	Event_UNKCCchanges16
 04BA51	Event_UNKCCchanges16_lo
 84BA72	Event_UNKCCchanges17

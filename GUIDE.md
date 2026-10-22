@@ -600,6 +600,14 @@ here they are `Event_Cmd51`...`Event_Cmd59`:
 | 58 | `<tile> <x> <y>`: put that tile type on the farm |
 | 59 | the player's action $1C |
 
+**More commands:** `StartTextBox` and `StartTextBoxCopy` (28 and 29, the
+same code) open a text box with `<text> <lines>`; `ResetFlag` (38; 39 and 40
+point to the same code, see bug 13) clears a bit of a word anywhere;
+`EditTileonMap` (75, $84:BA10) sets a tile type on the current map, as 58
+does on the farm. `Event_UNKTools` puts the tools in the hand and in the
+backpack back in the shed (one bit per tool in $7F1F00), but no command
+number reaches it.
+
 **Command 37, `UNKPlayerPos`** ($84:AB27), every frame for an object of
 group $17 the player can carry (probably the child: when the player puts it
 down, script $17/$14 starts). Its requests are bits of $7F1F5C:
@@ -1208,3 +1216,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 39.37 % | the signed division (unused) |
 | 22-Oct-2026 | 39.59 % | the decompressor (LZSS); the checker now also knows all the flags at the entry, for `PHP` |
 | 22-Oct-2026 | 40.09 % | placing the camera on entering a map, and the second background (clouds, parallax) |
+| 22-Oct-2026 | 40.54 % | five more event commands (texts, clearing a bit, a tile, the shed); more than half of the routines are done |
