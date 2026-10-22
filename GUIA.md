@@ -767,12 +767,14 @@ Lo que se guarda (`SaveGameSlot`), al principio de la ranura:
 ### 5.17 Botones y menús
 
 Cada cuadro `InputTypeSelector` mira el **modo de entrada** ($019A): 1
-caminando, 2 sin moverse, 3 una lista dentro de un cuadro de texto, 4
-menús, 5 la pantalla de nombres. En los menús, el **número de menú** ($95)
-dice cuál está abierto:
+caminando (5.22), 2 sin moverse, 3 una lista dentro de un cuadro de texto,
+4 menús, 5 la pantalla de nombres, 6 un cuadro de texto que se cierra solo
+(con $019B bit 2, a los 120 cuadros; después se vuelve a caminar). En los
+menús, el **número de menú** ($95) dice cuál está abierto:
 
 | Menú | Qué hacen los botones |
 |---|---|
+| 1 | al jugador lo mueve el control de un evento ($08FD); con $7F1F5A bit $8000, Start lo salta (menú 9, $7F1F5C bit 2) |
 | 2, 3 | Start pasa al menú 6 (cuando lo permite $7F1F5A bit $8000) |
 | 5 | el menú del título: tres opciones, arriba y abajo dan la vuelta; A abre el menú 8, 7 o $0A |
 | 7 | elegir ranura para guardar: arriba / abajo cambian la ranura, B cancela, A acepta |
@@ -786,6 +788,17 @@ hace un efecto de sonido: 3 al moverse, 1 al aceptar, 2 al rechazar.
 la vuelta (en la segunda no hacen nada); derecha e izquierda saltan a la
 otra columna. Usan la **repetición automática** del botón, así que al
 mantenerlo sigue moviéndose. A cierra la lista.
+
+**La pantalla del nombre** (modo 5). Las letras están en una cuadrícula
+de tres páginas (las cuadrículas de $82:EBF8, $82:EE30 y $82:F0D0, con 71,
+84 y 49 casillas). Cada casilla tiene 8 bytes: su x y su y, la casilla a la
+que lleva cada flecha, la letra y un código (1-3: mostrar la página 0-2,
+4: listo). Las flechas (con repetición) mueven el cursor $0991 a la casilla
+que dice la cuadrícula, así que los movimientos vienen "precocinados". A
+agrega la letra (hasta 4, en $0885) u obedece el código; "listo" necesita
+al menos una letra. B borra la última letra (una letra vacía es $B1).
+Cambiar de página desplaza BG1: las tres páginas están en la misma imagen,
+la 1 a la derecha de la 0 y la 2 debajo.
 
 **Mientras hay un cuadro de texto abierto** (modo 2, `ImmobileInputs`):
 
@@ -1152,3 +1165,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 33,80 % | las animaciones de las herramientas (29 rutinas) |
 | 22-oct-2026 | 34,31 % | apretar A; un guion nuevo (`scripts/actions.txt`) prueba las herramientas en vivo |
 | 22-oct-2026 | 36,10 % | los botones al caminar (las 15 etiquetas de ese bloque ahora cuentan como una rutina: 519 rutinas en total) |
+| 22-oct-2026 | 36,92 % | `InputTypeSelector`, la pantalla del nombre, el menú 1, el modo 6: todos los modos de entrada reescritos; probados en vivo cada cuadro (unas 21.000 llamadas) |

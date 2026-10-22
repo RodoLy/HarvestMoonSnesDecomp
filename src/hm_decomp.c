@@ -1154,6 +1154,44 @@ static void prep_audio(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   r->a = (uint16_t)(r->a & 0xFF00);                   /* UNK_Audio2: the game passes 0 */
 }
 
+/* menus.c: the name screen, menu 1 and mode 6, and InputTypeSelector
+ * (every input mode). The page and cell of the name grid, the letters
+ * typed, the pad, the mode and the menu. */
+static void prep_inputs(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  HmRegs keep = *r;
+  if (rnd() % 2) prep_player_input(ram, r, rnd); else prep_menu(ram, r, rnd);
+  *r = keep;
+  prep_audio(ram, r, rnd);
+  *r = keep;
+  ram[0x00993] = (uint8_t)((rnd() % 8) ? rnd() % 3 : rnd() % 4);   /* page */
+  ram[0x00994] = (uint8_t)(rnd() % 5);                                /* letters */
+  /* the cell: the pages have 71, 84 and 49 cells (the grids at $82:EBF8,
+   * $82:EE30, $82:F0D0) */
+  static const uint16_t grids[] = { 0xEBF8, 0xEE30, 0xF0D0, 0xF0D0 };
+  static const uint8_t cells_in[] = { 71, 84, 49, 49 };
+  unsigned pg = ram[0x00993] & 3;
+  hm_wr16(ram, 0x00991, (uint16_t)(rnd() % cells_in[pg]));
+  if (rnd() % 2) {                       /* a cell with a code: a page, "done" */
+    uint32_t g = 0x820000u | grids[pg];
+    uint16_t cells[84]; unsigned n = 0;
+    for (uint16_t c = 0; c < cells_in[pg]; c++) if (hm_bus_rd8(ram, g + c * 8u + 7)) cells[n++] = c;
+    if (n) hm_wr16(ram, 0x00991, cells[rnd() % n]);
+    if (rnd() % 4 == 0) ram[0x00994] = 0;                             /* no letter yet */
+  }
+  for (unsigned i = 0; i < 4; i++) ram[0x00885 + i] = (uint8_t)rnd();
+  static const uint16_t keys[] = { 0x8000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100, 0x0080, 0 };
+  if (rnd() % 2) hm_wr16(ram, 0x0128, keys[rnd() % 8]);
+  if (rnd() % 2) hm_wr16(ram, 0x012C, keys[rnd() % 8]);
+  ram[0x0019A] = (uint8_t)((rnd() % 8) ? 1 + rnd() % 6 : rnd());       /* input mode */
+  static const uint8_t menus[] = { 1, 1, 2, 3, 5, 7, 8, 9, 0 };
+  ram[0x95] = (uint8_t)((rnd() % 8) ? menus[rnd() % 9] : rnd());
+  hm_wr16(ram, 0x009B1, (uint16_t)((rnd() % 2) ? 0x77 : rnd() % 0x78));  /* mode 6 timer */
+  if (rnd() % 2) ram[0x0019B] |= 0x04;
+  if (rnd() % 2) hm_wr16(ram, 0x11F5A, (uint16_t)(hm_rd16(ram, 0x11F5A) | 0x8000));
+}
+
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -1666,6 +1704,36 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/interact.c", 0x82AD0E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_interact },
   { "PlayerMovementInputs", hm_PlayerMovementInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerinput.c", 0x84C6B7, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_input },
+  { "CODE_84C7D6", hm_CODE_84C7D6, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/playerinput.c", 0x84C7D6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_input },
+  { "NameCursorPharse", hm_NameCursorPharse, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/menus.c", 0x82EBAC, 0, 0, 0, 5, { { 0 } }, 0, prep_inputs },
+  { "Unk_OutOfMenu", hm_Unk_OutOfMenu, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/menus.c", 0x82EA60, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_inputs },
+  { "NameMenuKeyDown", hm_NameMenuKeyDown, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C204, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "NameMenuKeyUp", hm_NameMenuKeyUp, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C225, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "NameMenuKeyLeft", hm_NameMenuKeyLeft, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C246, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "NameMenuKeyRight", hm_NameMenuKeyRight, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C267, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "NameMenuKeyB", hm_NameMenuKeyB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C0AB, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "NameMenuKeyA", hm_NameMenuKeyA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C0EE, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "NameMenuInputs", hm_NameMenuInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C066, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "CODE_84C2D8", hm_CODE_84C2D8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C2D8, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "CODE_84C2B4", hm_CODE_84C2B4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C2B4, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "MenuInputs", hm_MenuInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C288, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "CODE_84CED2", hm_CODE_84CED2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/menus.c", 0x84CED2, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_inputs },
+  { "InputTypeSelector", hm_InputTypeSelector, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C034, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

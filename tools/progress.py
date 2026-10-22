@@ -79,6 +79,10 @@ LOCAL = {
     0x83AF37: ("CEEEE", "CEEEE"),
     0x83B0F6: ("CFFFF", "CFFFF"),
     0x84C6B7: ("PlayerMovementInputs", "PlayerMovementInputs", "CODE_84CED2"),  # the whole block, to mode 6
+    0x84CED2: ("CODE_84CED2", "CODE_84CED2"),
+    0x84C2B4: ("CODE_84C2B4", "CODE_84C2B4"),
+    0x84C2D8: ("CODE_84C2D8", "CODE_84C2D8"),
+    0x82EA60: ("Unk_OutOfMenu", "Unk_OutOfMenu"),
     0x829999: ("ToolUsedCornSeeds", "ToolUsedCornSeeds"),   # ";82A9999" in HM-Decomp
 }
 
@@ -131,10 +135,12 @@ def split_locals(routines, lines, carved=None):
                 if end and j and code.strip().startswith(end + ":"):
                     break
                 if is_insn(code):
+                    # a line split_called already carved out (a routine
+                    # called with JSL from elsewhere) stays in that routine
+                    if (path, start + j) in carved:
+                        continue
                     n += 1
-                    # a line split_called already carved out is taken from
-                    # that routine (not counted twice)
-                    routines[carved.get((path, start + j), owner)][1] -= 1
+                    routines[owner][1] -= 1
                     if not end and re.search(r"\bRT[LS]\b", code):
                         break
             routines[pc] = [name, n]

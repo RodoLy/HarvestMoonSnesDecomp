@@ -753,11 +753,14 @@ is saved (`SaveGameSlot`), at the start of the slot:
 ### 5.17 Buttons and menus
 
 Each frame `InputTypeSelector` looks at the **input mode** ($019A): 1
-walking, 2 no movement, 3 a list inside a text box, 4 menus, 5 the name
-screen. In menus, the **menu number** ($95) says which one is open:
+walking (5.22), 2 no movement, 3 a list inside a text box, 4 menus, 5 the
+name screen, 6 a text box that closes by itself (with $019B bit 2, after
+120 frames; then back to walking). In menus, the **menu number** ($95) says
+which one is open:
 
 | Menu | What the buttons do |
 |---|---|
+| 1 | the player is moved by an event's pad ($08FD); with $7F1F5A bit $8000, Start skips (menu 9, $7F1F5C bit 2) |
 | 2, 3 | Start goes to menu 6 (when $7F1F5A bit $8000 allows it) |
 | 5 | the title menu: three options, up and down wrap around; A opens menu 8, 7 or $0A |
 | 7 | choose a slot to save: up / down switch the slot, B cancels, A accepts |
@@ -770,6 +773,16 @@ effect: 3 for moving, 1 for accepting, 2 for refusing.
 arrow. Up and down move inside the first column and wrap around (they do
 nothing in the second); right and left jump to the other column. They use
 the button's **auto-repeat**, so holding it keeps moving. A closes the list.
+
+**The name screen** (mode 5). The letters are laid out in a grid with
+three pages (the grids at $82:EBF8, $82:EE30 and $82:F0D0, with 71, 84
+and 49 cells). Each cell has 8 bytes: its x and y, the cell each arrow
+leads to, the letter, and a code (1-3: show page 0-2, 4: done). The arrows
+(with auto-repeat) move the cursor $0991 to the cell the grid says, so the
+moves are "precooked". A adds the letter (up to 4, at $0885) or obeys the
+code; "done" needs at least one letter. B erases the last letter (an empty
+letter is $B1). Switching page scrolls BG1: the three pages are in the
+same picture, page 1 to the right of page 0 and page 2 below it.
 
 **While a text box is open** (mode 2, `ImmobileInputs`):
 
@@ -1124,3 +1137,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 33.80 % | the tools' animations (29 routines) |
 | 22-Oct-2026 | 34.31 % | pressing A; a new script (`scripts/actions.txt`) checks the tools live |
 | 22-Oct-2026 | 36.10 % | the buttons while walking (the 15 labels of that block now count as one routine: 519 routines in all) |
+| 22-Oct-2026 | 36.92 % | `InputTypeSelector`, the name screen, menu 1, mode 6: every input mode is rewritten; checked live every frame (about 21,000 calls) |

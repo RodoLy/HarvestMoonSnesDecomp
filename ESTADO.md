@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **233 rutinas reescritas y verificadas** (0 diferencias):
+- **248 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -88,6 +88,9 @@ en el README (`tools/progress.py`).
 | UNK_ToolUsed y las 28 ToolAnimation* | $82:90A8-$82:925F | src/toolanim.c |
 | SUB_82AD0E (apretar A) | $82:AD0E | src/interact.c |
 | PlayerMovementInputs (todo el bloque hasta CODE_84CED2) | $84:C6B7-$84:CED1 | src/playerinput.c |
+| CODE_84C7D6 (el control de los eventos) | $84:C7D6 | src/playerinput.c |
+| InputTypeSelector, MenuInputs, CODE_84C2B4, CODE_84C2D8, CODE_84CED2 | $84:C034-$84:CF04 | src/menus.c |
+| NameMenuInputs y sus 6 teclas, NameCursorPharse, Unk_OutOfMenu | $84:C066-$84:C286, $82:EBAC, $82:EA60 | src/menus.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |
@@ -447,6 +450,19 @@ sistema de texto).
   propiedad en el byte +2 (se lee con A = 2: bytes +2/+3) y sin objetos.
 - Fuzz 4 × 2500: 0 diferencias. 23 sabotajes detectados (el de las
   esquinas $C0-$CF de "dejar algo" solo 1 vez en 6000: camino raro).
+
+## Todos los modos de entrada (hecho el 22-oct-2026)
+
+- InputTypeSelector reescrito (solo tiene cuerpo compilado en la copia
+  $00, `_lo`): ahora todo el sistema de botones se prueba en vivo cada
+  cuadro (newgame 3.321, actions 10.271, nights 7.474 llamadas: 0
+  diferencias).
+- CODE_84C7D6 es una rutina de verdad (MenuInputs la llama con JSL):
+  registrada aparte; progress.py deja sus líneas fuera del rango LOCAL de
+  PlayerMovementInputs.
+- La pantalla del nombre: cuadrículas de 71, 84 y 49 casillas; la
+  preparación elige a veces casillas con código (cambio de página, listo).
+- Regresión completa (248 rutinas, 2 semillas): 0 diferencias.
 
 ## Lo siguiente
 

@@ -356,6 +356,13 @@ static bool arrows(uint8_t *ram, HmRegs *r, uint16_t pad_at)
   return false;
 }
 
+/* CODE_84C7D6 ($84:C7D6, also called with JSL from MenuInputs, menu 1):
+ * the event's pad, $08FD: an arrow, else a button. */
+void hm_CODE_84C7D6(uint8_t *ram, HmRegs *r)
+{
+  if (!arrows(ram, r, PAD_SCRIPT)) script_buttons(ram, r);
+}
+
 void hm_PlayerMovementInputs(uint8_t *ram, HmRegs *r)
 {
   if (state(ram, r, 0x00C4)) return;                       /* can't act now */
@@ -363,10 +370,7 @@ void hm_PlayerMovementInputs(uint8_t *ram, HmRegs *r)
   if (is(r, 0x0003)) return;                               /* in the air */
   r->a = hm_bus_rd16(ram, FLAGS_5C) & 0x0020;
   if (r->a) return;
-  if (state(ram, r, 0x1000)) {                             /* an event: its own pad */
-    if (!arrows(ram, r, PAD_SCRIPT)) script_buttons(ram, r);
-    return;
-  }
+  if (state(ram, r, 0x1000)) { hm_CODE_84C7D6(ram, r); return; }   /* an event's pad */
   if (!state(ram, r, 0x4000)) return;
   r->a = dp16(ram, r, ACTION);
   if (is(r, 0x0011) || is(r, 0x0012)) {                    /* fishing: only Y */

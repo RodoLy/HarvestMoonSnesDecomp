@@ -455,3 +455,18 @@ void hm_ToolAnimationCowFeed(uint8_t *ram, HmRegs *r);
 void hm_ToolAnimationUNK(uint8_t *ram, HmRegs *r);
 void hm_SUB_82AD0E(uint8_t *ram, HmRegs *r);       /* interact.c */
 void hm_PlayerMovementInputs(uint8_t *ram, HmRegs *r); /* playerinput.c */
+void hm_CODE_84C7D6(uint8_t *ram, HmRegs *r);
+void hm_NameCursorPharse(uint8_t *ram, HmRegs *r); /* menus.c */
+void hm_Unk_OutOfMenu(uint8_t *ram, HmRegs *r);
+void hm_NameMenuKeyDown(uint8_t *ram, HmRegs *r);
+void hm_NameMenuKeyUp(uint8_t *ram, HmRegs *r);
+void hm_NameMenuKeyLeft(uint8_t *ram, HmRegs *r);
+void hm_NameMenuKeyRight(uint8_t *ram, HmRegs *r);
+void hm_NameMenuKeyB(uint8_t *ram, HmRegs *r);
+void hm_NameMenuKeyA(uint8_t *ram, HmRegs *r);
+void hm_NameMenuInputs(uint8_t *ram, HmRegs *r);
+void hm_CODE_84C2D8(uint8_t *ram, HmRegs *r);
+void hm_CODE_84C2B4(uint8_t *ram, HmRegs *r);
+void hm_MenuInputs(uint8_t *ram, HmRegs *r);
+void hm_CODE_84CED2(uint8_t *ram, HmRegs *r);
+void hm_InputTypeSelector(uint8_t *ram, HmRegs *r);

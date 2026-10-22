@@ -255,6 +255,8 @@
 02B124	GetTileContent_lo
 82B13C	GetTileIndex
 02B13C	GetTileIndex_lo
+82EA60	Unk_OutOfMenu
+02EA60	Unk_OutOfMenu_lo
 82EBAC	NameCursorPharse
 02EBAC	NameCursorPharse_lo
 838000	Unk_Audio23
@@ -517,6 +519,8 @@
 84BBDA	Event_UNKChickenRelated2
 04BBDA	Event_UNKChickenRelated2_lo
 04C034	InputTypeSelector_lo
+84C7D6	CODE_84C7D6
+04C7D6	CODE_84C7D6_lo
 858000	CreateGameObject
 058000	CreateGameObject_lo
 85820F	InitializeOBJs
