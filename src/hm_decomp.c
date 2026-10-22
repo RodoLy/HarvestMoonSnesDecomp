@@ -1094,6 +1094,58 @@ static void prep_partial_map(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x00181] = 4;                                        /* 64 tiles wide */
 }
 
+/* eventcmds.c: commands 50-59. The script at $7F:F000- (prep_event_cmd),
+ * what is carried (a chicken $25 / $26 from slot $24 + n, item $29, the
+ * dog), the busy states, and each command's arguments. */
+static void prep_event_50s(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_cmd(ram, r, rnd);
+  static const uint8_t items[] = { 0, 0, 0x25, 0x26, 0x29, 0x03 };
+  ram[0x0091D] = (uint8_t)((rnd() % 8) ? items[rnd() % 6] : rnd());
+  ram[0x00920] = (uint8_t)(0x24 + rnd() % 8);
+  uint16_t st = (uint16_t)((rnd() % 2) ? 0 : rnd());
+  if (rnd() % 3 == 0) st |= 0x0800;
+  hm_wr16(ram, 0xD2, st);
+  static const uint16_t actions[] = { 0, 1, 2, 0x0A, 0x0C, 0x0D, 0x1B };
+  hm_wr16(ram, 0xD4, actions[rnd() % 7]);
+  hm_wr16(ram, 0x0128, (uint16_t)((rnd() % 2) ? 0x0080 : rnd()));
+  hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 2) ? rnd() & ~0x0006u : rnd()));
+  uint16_t slot = hm_rd16(ram, 0xCC);
+  ram[slot + 0x0C] = (uint8_t)((rnd() % 2) ? 1 : 0);
+  hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
+  ram[0x11F19] = (uint8_t)(rnd() % 4);
+  uint16_t at = hm_rd16(ram, 0xC9);
+  uint8_t *s = &ram[0x10000 + at];
+  /* 54: <text word> <lines>: a text whose pointer is in the ROM */
+  s[1] = (uint8_t)rnd(); s[2] = (uint8_t)(rnd() % 5); s[3] = (uint8_t)(rnd() % 4);
+  ram[0x0191] = s[3];
+}
+/* 55: <address 24 in WRAM> <bit> <target word> */
+static void prep_event_55(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_50s(ram, r, rnd);
+  uint8_t *s = &ram[0x10000 + hm_rd16(ram, 0xC9)];
+  s[1] = (uint8_t)rnd(); s[2] = (uint8_t)(0x20 + rnd() % 0xDF); s[3] = (uint8_t)(0x7E + rnd() % 2);
+  s[4] = (uint8_t)((rnd() % 8) ? rnd() % 16 : rnd());
+}
+/* 58: <tile> <x word> <y word>, on the farm */
+static void prep_event_58(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_50s(ram, r, rnd);
+  uint8_t *s = &ram[0x10000 + hm_rd16(ram, 0xC9)];
+  uint16_t x = (uint16_t)(rnd() % 0x400), y = (uint16_t)(rnd() % 0x400);
+  s[2] = (uint8_t)x; s[3] = (uint8_t)(x >> 8); s[4] = (uint8_t)y; s[5] = (uint8_t)(y >> 8);
+}
+/* 56: a tool in hand, as for UNK_ToolUsed */
+static void prep_event_tool(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_tool_animation(ram, r, rnd);
+  HmRegs keep = *r;
+  prep_event_cmd(ram, r, rnd);
+  *r = keep;
+  if (rnd() % 4 == 0) ram[0x00921] = 0;
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1764,6 +1816,26 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/menus.c", 0x84C034, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
   { "UNK_PartialMap", hm_UNK_PartialMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/mapedit.c", 0x82AF00, 1, 0, 0, 0xFFFF, { { 0 } }, 20, prep_partial_map },
+  { "Event_UNKChickenRelated2", hm_Event_UNKChickenRelated2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BBDA, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
+  { "Event_Cmd51", hm_Event_Cmd51, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BC9C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
+  { "Event_Cmd52", hm_Event_Cmd52, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BD44, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
+  { "Event_Cmd53", hm_Event_Cmd53, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BE0D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
+  { "Event_Cmd54", hm_Event_Cmd54, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BED6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
+  { "Event_Cmd55", hm_Event_Cmd55, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BF20, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_55 },
+  { "Event_Cmd56", hm_Event_Cmd56, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BF81, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_tool },
+  { "Event_Cmd57", hm_Event_Cmd57, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BFA0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
+  { "Event_Cmd58", hm_Event_Cmd58, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BFBF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_58 },
+  { "Event_Cmd59", hm_Event_Cmd59, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84C000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

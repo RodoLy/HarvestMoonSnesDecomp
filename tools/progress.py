@@ -83,6 +83,15 @@ LOCAL = {
     0x84C2B4: ("CODE_84C2B4", "CODE_84C2B4"),
     0x84C2D8: ("CODE_84C2D8", "CODE_84C2D8"),
     0x82EA60: ("Unk_OutOfMenu", "Unk_OutOfMenu"),
+    0x84BC9C: ("@84BC9C", "Event_Cmd51", "@84BD44"),
+    0x84BD44: ("@84BD44", "Event_Cmd52", "@84BE0D"),
+    0x84BE0D: ("@84BE0D", "Event_Cmd53", "@84BED6"),
+    0x84BED6: ("@84BED6", "Event_Cmd54", "@84BF20"),
+    0x84BF20: ("@84BF20", "Event_Cmd55", "@84BF81"),
+    0x84BF81: ("@84BF81", "Event_Cmd56", "@84BFA0"),
+    0x84BFA0: ("@84BFA0", "Event_Cmd57", "@84BFBF"),
+    0x84BFBF: ("@84BFBF", "Event_Cmd58", "@84C000"),
+    0x84C000: ("@84C000", "Event_Cmd59", "@84C014"),
     0x829999: ("ToolUsedCornSeeds", "ToolUsedCornSeeds"),   # ";82A9999" in HM-Decomp
 }
 
@@ -100,6 +109,9 @@ def parse(decomp_dir):
     for path in sorted(glob.glob(os.path.join(decomp_dir, "src", "code_banks", "*.asm"))):
         current, out = None, []
         for line in open(path, encoding="utf-8", errors="replace").read().split("\n"):
+            a = ADDR.search(line)
+            if a:
+                ADDRESSES.setdefault((path, a.group(1).upper()), len(out))
             m = LABEL.match(line)
             code = line.split(";", 1)[0]
             if m:
@@ -118,21 +130,36 @@ def parse(decomp_dir):
     return routines, lines
 
 
+# where each address comment is (";84BC9C;"): LOCAL entries may start or
+# end at an address ("@84BC9C") for routines HM-Decomp gives no label
+ADDR = re.compile(r";\s*([0-9A-Fa-f]{6})\s*;")
+ADDRESSES = {}
+
+
+def find_start(path, rows, label):
+    if label.startswith("@"):
+        return ADDRESSES.get((path, label[1:].upper()))
+    return next((i for i, (_, c) in enumerate(rows)
+                 if c.strip() == label + ":" or c.strip().startswith(label + ":")), None)
+
+
 def split_locals(routines, lines, carved=None):
     carved = carved or {}
     for pc, entry in LOCAL.items():
         label, name = entry[0], entry[1]
         end = entry[2] if len(entry) > 2 else None     # up to this label, not the first RTL
         for path, rows in lines.items():
-            start = next((i for i, (_, c) in enumerate(rows)
-                          if c.strip() == label + ":" or c.strip().startswith(label + ":")), None)
+            start = find_start(path, rows, label)
             if start is None:
                 continue
+            stop = ADDRESSES.get((path, end[1:].upper())) if end and end.startswith("@") else None
             # each instruction is taken out of the block that owns its line
             # (the routine may end in another top-level label: `return85: RTL`)
             n = 0
             for j, (owner, code) in enumerate(rows[start:]):
-                if end and j and code.strip().startswith(end + ":"):
+                if stop is not None and start + j >= stop:
+                    break
+                if end and stop is None and j and code.strip().startswith(end + ":"):
                     break
                 if is_insn(code):
                     # a line split_called already carved out (a routine

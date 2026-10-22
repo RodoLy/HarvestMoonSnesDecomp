@@ -584,6 +584,21 @@ slightly different order:
 | `UNKFishing` | a fish ($07) |
 | `UNK3` | item $08 |
 
+**Commands 50-59** ($84:BBDA-$84:C013). HM-Decomp names only the first;
+here they are `Event_Cmd51`...`Event_Cmd59`:
+
+| Command | What it does |
+|---|---|
+| 50 `UNKChickenRelated2` | puts down what is carried when a scene starts: a hen or chick goes back to its place in the coop (table $83:CA10), any other item disappears, the carried dog goes back to the farm (the season's map, at 120, 424); the player stands |
+| 51 | the same, but without the animation, and of the other items only the mole ($29) is dropped |
+| 52 / 53 | if A was pressed on the slot's object with free hands, the object goes away and $7F1F60 bit 1 / bit 2 is set (with those bits, A in front of tile $F5 gives action $1A) |
+| 54 | `<text> <lines>`: a text box that closes by itself (input mode 6, 120 frames) |
+| 55 | `<address> <bit> <target>`: jump if that bit of the word there is clear |
+| 56 | use the tool in hand |
+| 57 | `<n>`: change the stamina by n (`ChangeStamina`: the sign comes from bit 7, bug 11) |
+| 58 | `<tile> <x> <y>`: put that tile type on the farm |
+| 59 | the player's action $1C |
+
 ### 5.11 Maps
 
 - `$22` is the **current map**:
@@ -1145,3 +1160,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 36.10 % | the buttons while walking (the 15 labels of that block now count as one routine: 519 routines in all) |
 | 22-Oct-2026 | 36.92 % | `InputTypeSelector`, the name screen, menu 1, mode 6: every input mode is rewritten; checked live every frame (about 21,000 calls) |
 | 22-Oct-2026 | 37.26 % | drawing the whole map, with fences joining their neighbours |
+| 22-Oct-2026 | 38.35 % | event commands 50-59 (the 9 without a label in HM-Decomp now count by their address) |

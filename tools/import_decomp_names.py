@@ -76,6 +76,15 @@ MANUAL = {
     0x84C6B7: "PlayerMovementInputs",  # no address in HM-Decomp
     0x84C7D6: "CODE_84C7D6",       # a JSL target inside PlayerMovementInputs
     0x82EA60: "Unk_OutOfMenu",     # no address in HM-Decomp
+    0x84BC9C: "Event_Cmd51",
+    0x84BD44: "Event_Cmd52",
+    0x84BE0D: "Event_Cmd53",
+    0x84BED6: "Event_Cmd54",
+    0x84BF20: "Event_Cmd55",
+    0x84BF81: "Event_Cmd56",
+    0x84BFA0: "Event_Cmd57",
+    0x84BFBF: "Event_Cmd58",
+    0x84C000: "Event_Cmd59",
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

@@ -1627,3 +1627,224 @@ void hm_Event_UNKCowRelated(uint8_t *ram, HmRegs *r)
   }
   count_frame(ram, r);
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * Commands 50-59 ($84:BBDA-$84:C013). HM-Decomp labels only the first
+ * (Event_UNKChickenRelated2); the others are named by their number here.
+ * ═════════════════════════════════════════════════════════════════════════ */
+#define CHICKEN_PLACES  0x83CA10   /* 4 bytes per chicken: x, y in the coop */
+#define FLAG_BITS_84    0x84C014   /* DATA16_84C014: dw 1 << n */
+
+static uint32_t dbw(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
+static void push16b(uint8_t *ram, HmRegs *r, uint16_t v)
+{
+  hm_push8(ram, r, (uint8_t)(v >> 8));
+  hm_push8(ram, r, (uint8_t)v);
+}
+static uint16_t pull16b(uint8_t *ram, HmRegs *r)
+{
+  uint16_t lo = hm_pull8(ram, r);
+  return (uint16_t)(lo | hm_pull8(ram, r) << 8);
+}
+/* LDA #0; CLC; ADC $DA; STA $0901: the player's standing animation */
+static void stand(uint8_t *ram, HmRegs *r)
+{
+  uint32_t s = hm_dp_r16(ram, r, 0xDA);
+  r->c = s > 0xFFFF;
+  r->a = (uint16_t)s;
+  hm_bus_wr16(ram, dbw(r, 0x0901), r->a);
+}
+/* a carried chicken (slot $24 + n) goes back to its place in the coop */
+static void chicken_home(uint8_t *ram, HmRegs *r, uint16_t ret)
+{
+  uint8_t slot = hm_bus_rd8(ram, dbw(r, 0x0920));
+  uint16_t s = (uint16_t)(slot - 0x24);
+  r->c = slot >= 0x24;
+  uint16_t n = (uint8_t)s;
+  r->a = n;
+  push16b(ram, r, n);
+  hm_jsl(ram, r, ret, 0x83);
+  hm_GetChickenPointer(ram, r);
+  hm_rtl(ram, r);
+  r->y = 1;
+  lda8(r, 0x28);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0x72, 1), 0x28);
+  r->y = 0;
+  uint8_t f = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, 0)) & 0xDF);   /* not carried */
+  lda8(r, f);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0x72, 0), f);
+  n = pull16b(ram, r);
+  r->c = (n >> 14) & 1;                                    /* ASL; ASL */
+  r->x = (uint16_t)(n << 2);
+  uint32_t x = (uint32_t)hm_bus_rd16(ram, CHICKEN_PLACES + r->x) + 0x10;
+  r->c = x > 0xFFFF;
+  r->y = 4;
+  r->a = (uint16_t)x;
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x72, 4), r->a);
+  r->x = (uint16_t)(r->x + 2);
+  r->y = 6;
+  r->a = hm_bus_rd16(ram, CHICKEN_PLACES + r->x);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0x72, 6), r->a);
+  lda8(r, (uint8_t)r->a);
+  hm_bus_wr8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF), 0);
+}
+/* the carried dog goes back to the farm (the map of this season) */
+static bool dog_home(uint8_t *ram, HmRegs *r)
+{
+  r->a = hm_dp_r16(ram, r, 0xD2) & 0x0800;
+  if (!r->a) return false;
+  r->a = (uint16_t)(0x0800 ^ 0xFFFF) & hm_dp_r16(ram, r, 0xD2);
+  hm_dp_w16(ram, r, 0xD2, r->a);
+  uint8_t season = lda8(r, hm_bus_rd8(ram, 0x7F1F19));
+  hm_bus_wr8(ram, 0x7F1F30, season);
+  r->a = 0x0078; hm_bus_wr16(ram, 0x7F1F2C, 0x0078);
+  r->a = 0x01A8; hm_bus_wr16(ram, 0x7F1F2E, 0x01A8);
+  return true;
+}
+
+/* Command 50, Event_UNKChickenRelated2 ($84:BBDA): put down what is carried
+ * when an event starts: a chicken goes back to the coop, any other item
+ * disappears, the dog goes back to the farm; the player stands. */
+void hm_Event_UNKChickenRelated2(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  uint8_t item = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF)));
+  if (item) {
+    r->c = item >= 0x25;
+    if (item != 0x25) r->c = item >= 0x26;
+    if (item == 0x25 || item == 0x26) chicken_home(ram, r, 0xBC19);
+    else hm_bus_wr8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF), 0);
+    stand(ram, r);
+    return;
+  }
+  if (dog_home(ram, r)) stand(ram, r);
+}
+/* Command 51 ($84:BC9C): the same without the animation, and only item
+ * $29 disappears (other items stay in the hands). */
+void hm_Event_Cmd51(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  uint8_t item = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF)));
+  if (item) {
+    r->c = item >= 0x25;
+    if (item != 0x25) r->c = item >= 0x26;
+    if (item == 0x25 || item == 0x26) { chicken_home(ram, r, 0xBCD7); return; }
+    r->c = item >= 0x29;
+    if (item == 0x29) hm_bus_wr8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF), 0);
+    return;
+  }
+  dog_home(ram, r);
+}
+/* Commands 52 / 53 ($84:BD44 / $84:BE0D): if the player pressed A on this
+ * object (CBBBB set its +$0C) with free hands and not busy, the object
+ * goes away (+0 = 0, +1 bit 6) and $7F1F60 bit 1 (53: bit 2) is set.
+ * Either way the slot's frame count +$10 goes up. */
+static void pressed_on(uint8_t *ram, HmRegs *r, uint16_t flag)
+{
+  advance(ram, r, 1);
+  bool ok = lda8(r, slot8(ram, r, 0x0C)) != 0;
+  r->c = 1;                                                /* CMP #0 */
+  static const uint16_t busy[] = { 0x0A, 0x0C, 0x0D, 0x1B };
+  for (unsigned i = 0; ok && i < 4; i++) {
+    r->a = hm_dp_r16(ram, r, 0xD4);
+    r->c = r->a >= busy[i];
+    if (r->a == busy[i]) ok = false;
+  }
+  if (ok) { r->a = hm_dp_r16(ram, r, 0xD2) & 0x0004; ok = !r->a; }
+  if (ok) { r->a = hm_bus_rd16(ram, 0x7F1F60) & 0x0006; ok = !r->a; }
+  if (ok) { r->a = hm_bus_rd16(ram, dbw(r, 0x0128)); ok = (r->a & 0x0080) != 0; }
+  if (ok) { r->a = hm_dp_r16(ram, r, 0xD2) & 0x0800; ok = !r->a; }
+  if (ok) { ok = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF))) == 0; }
+  if (!ok) { count_frame(ram, r); return; }
+  lda8(r, 0);
+  slot_w8(ram, r, 0x00, 0);
+  uint8_t v = (uint8_t)(slot8(ram, r, 0x01) | 0x40);
+  lda8(r, v);
+  slot_w8(ram, r, 0x01, v);
+  count_frame(ram, r);
+  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F60) | flag);
+  hm_bus_wr16(ram, 0x7F1F60, r->a);
+}
+void hm_Event_Cmd52(uint8_t *ram, HmRegs *r) { pressed_on(ram, r, 0x0002); }
+void hm_Event_Cmd53(uint8_t *ram, HmRegs *r) { pressed_on(ram, r, 0x0004); }
+
+/* Command 54 ($84:BED6): <text word> <lines byte>: a text box that closes
+ * by itself (input mode 6, CODE_84CED2: after 120 frames). */
+void hm_Event_Cmd54(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->x = arg16(ram, r);
+  advance(ram, r, 2);
+  uint8_t lines = arg8(ram, r);
+  hm_bus_wr8(ram, dbw(r, 0x0191), lines);
+  hm_bus_wr16(ram, dbw(r, 0x09B1), 0);
+  lda8(r, 6);
+  hm_bus_wr8(ram, dbw(r, 0x019A), 6);
+  hm_jsl(ram, r, 0xBF07, 0x83);
+  hm_StartTextBox(ram, r);
+  hm_rtl(ram, r);
+  advance(ram, r, 1);
+  count_frame(ram, r);
+}
+/* Command 55 ($84:BF20): <address 24> <bit byte> <target word>: if that bit
+ * of the word at the address is clear, jump to the target; else go on. */
+void hm_Event_Cmd55(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  address_arg(ram, r);
+  uint16_t n = arg8_word(ram, r);
+  r->c = (n >> 15) & 1;
+  r->x = (uint16_t)(n << 1);
+  r->a = hm_bus_rd16(ram, FLAG_BITS_84 + r->x);
+  hm_dp_w16(ram, r, 0x7E, r->a);
+  advance(ram, r, 1);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, 0)) & hm_dp_r16(ram, r, 0x7E);
+  if (!r->a) { jump(ram, r); return; }
+  advance(ram, r, 2);
+}
+/* Command 56 ($84:BF81): use the tool in hand, if any. */
+void hm_Event_Cmd56(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  if (!lda8(r, hm_bus_rd8(ram, dbw(r, HM_TOOL & 0xFFFF)))) return;
+  r->a = 0x000A;
+  hm_dp_w16(ram, r, 0xD4, 0x000A);
+  hm_jsl(ram, r, 0xBF9E, 0x82);
+  hm_UNK_ToolUsed(ram, r);
+  hm_rtl(ram, r);
+}
+/* Command 57 ($84:BFA0): <byte>: change the stamina by it (ChangeStamina). */
+void hm_Event_Cmd57(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->n = arg8(ram, r) >> 7;                                /* ChangeStamina reads N */
+  hm_jsl(ram, r, 0xBFB3, 0x81);
+  hm_ChangeStamina(ram, r);
+  hm_rtl(ram, r);
+  advance(ram, r, 1);
+}
+/* Command 58 ($84:BFBF): <tile byte> <x word> <y word>: set that tile type
+ * on the farm (EditTileonMapandsets0181). */
+void hm_Event_Cmd58(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  hm_push8(ram, r, arg8(ram, r));
+  advance(ram, r, 1);
+  push16b(ram, r, arg16(ram, r));
+  advance(ram, r, 2);
+  push16b(ram, r, arg16(ram, r));
+  advance(ram, r, 2);
+  r->y = pull16b(ram, r);
+  r->x = pull16b(ram, r);
+  lda8(r, hm_pull8(ram, r));
+  hm_jsl(ram, r, 0xBFFE, 0x82);
+  hm_EditTileonMapandsets0181(ram, r);
+  hm_rtl(ram, r);
+}
+/* Command 59 ($84:C000): the player's action $1C. */
+void hm_Event_Cmd59(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->a = 0x001C;
+  hm_dp_w16(ram, r, 0xD4, 0x001C);
+}

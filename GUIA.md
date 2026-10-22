@@ -590,6 +590,21 @@ revisa las condiciones en un orden un poco distinto:
 | `UNKFishing` | un pescado ($07) |
 | `UNK3` | el objeto $08 |
 
+**Los comandos 50-59** ($84:BBDA-$84:C013). HM-Decomp solo le pone nombre
+al primero; aquí son `Event_Cmd51`...`Event_Cmd59`:
+
+| Comando | Qué hace |
+|---|---|
+| 50 `UNKChickenRelated2` | deja lo que se carga cuando empieza una escena: una gallina o un pollito vuelve a su lugar del gallinero (tabla $83:CA10), cualquier otro objeto desaparece, el perro cargado vuelve a la granja (el mapa de la estación, en 120, 424); el jugador queda de pie |
+| 51 | lo mismo, pero sin la animación, y de los otros objetos solo se suelta el topo ($29) |
+| 52 / 53 | si se apretó A sobre el objeto del espacio con las manos libres, el objeto se va y se prende $7F1F60 bit 1 / bit 2 (con esos bits, A frente a la baldosa $F5 da la acción $1A) |
+| 54 | `<texto> <líneas>`: un cuadro de texto que se cierra solo (modo de entrada 6, 120 cuadros) |
+| 55 | `<dirección> <bit> <destino>`: salta si ese bit de la palabra de ahí está apagado |
+| 56 | usar la herramienta en la mano |
+| 57 | `<n>`: cambia la energía en n (`ChangeStamina`: el signo sale del bit 7, error 11) |
+| 58 | `<baldosa> <x> <y>`: pone ese tipo de baldosa en la granja |
+| 59 | la acción del jugador $1C |
+
 ### 5.11 Los mapas
 
 - `$22` es el **mapa actual**:
@@ -1173,3 +1188,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 36,10 % | los botones al caminar (las 15 etiquetas de ese bloque ahora cuentan como una rutina: 519 rutinas en total) |
 | 22-oct-2026 | 36,92 % | `InputTypeSelector`, la pantalla del nombre, el menú 1, el modo 6: todos los modos de entrada reescritos; probados en vivo cada cuadro (unas 21.000 llamadas) |
 | 22-oct-2026 | 37,26 % | dibujar el mapa entero, con las cercas unidas a sus vecinas |
+| 22-oct-2026 | 38,35 % | los comandos de evento 50-59 (los 9 sin etiqueta en HM-Decomp ahora cuentan por su dirección) |

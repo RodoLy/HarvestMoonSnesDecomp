@@ -471,3 +471,13 @@ void hm_MenuInputs(uint8_t *ram, HmRegs *r);
 void hm_CODE_84CED2(uint8_t *ram, HmRegs *r);
 void hm_InputTypeSelector(uint8_t *ram, HmRegs *r);
 void hm_UNK_PartialMap(uint8_t *ram, HmRegs *r);   /* mapedit.c */
+void hm_Event_UNKChickenRelated2(uint8_t *ram, HmRegs *r); /* eventcmds.c */
+void hm_Event_Cmd51(uint8_t *ram, HmRegs *r);
+void hm_Event_Cmd52(uint8_t *ram, HmRegs *r);
+void hm_Event_Cmd53(uint8_t *ram, HmRegs *r);
+void hm_Event_Cmd54(uint8_t *ram, HmRegs *r);
+void hm_Event_Cmd55(uint8_t *ram, HmRegs *r);
+void hm_Event_Cmd56(uint8_t *ram, HmRegs *r);
+void hm_Event_Cmd57(uint8_t *ram, HmRegs *r);
+void hm_Event_Cmd58(uint8_t *ram, HmRegs *r);
+void hm_Event_Cmd59(uint8_t *ram, HmRegs *r);
