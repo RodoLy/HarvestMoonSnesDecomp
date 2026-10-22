@@ -103,3 +103,39 @@ void hm_UNK_SetDMA2(uint8_t *ram, HmRegs *r)
   hm_AddProgrammedDMA(ram, r);
   hm_rtl(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNK_SetDMA1 ($83:8166, JSL, RTL). Copies one letter of the font to VRAM:
+ * X = VRAM address, $72-$74 = its graphics, A = extra width (0: one 8x8
+ * tile of 16 bytes per half; each unit adds 16 bytes). Two DMAs: the top
+ * half on channel 6, the bottom half (source + $100, VRAM X + $80) on
+ * channel 7. $7E = 16 A.
+ * Leftovers: those of the second AddProgrammedDMA; Y = 16 + 16 A.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_166_TOP     0x818A
+#define RET_166_BOTTOM  0x81B5
+
+void hm_UNK_SetDMA1(uint8_t *ram, HmRegs *r)
+{
+  uint16_t extra = (uint16_t)(r->a << 4), top = r->x;
+  hm_dp_w16(ram, r, 0x7E, extra);
+  *hm_dp(ram, r, 0x27) = 6;
+  *hm_dp(ram, r, 0x29) = 0x18;                        /* VRAM data port */
+  r->y = (uint16_t)(0x10 + extra);
+  r->a = 0x0080;
+  hm_push8(ram, r, (uint8_t)(top >> 8));              /* PHX */
+  hm_push8(ram, r, (uint8_t)top);
+  hm_jsl(ram, r, RET_166_TOP, 0x80);
+  hm_AddProgrammedDMA(ram, r);
+  hm_rtl(ram, r);
+  *hm_dp(ram, r, 0x27) = 7;
+  *hm_dp(ram, r, 0x29) = 0x18;
+  hm_pull8(ram, r); hm_pull8(ram, r);                 /* PLX */
+  r->x = (uint16_t)(top + 0x80);
+  r->y = (uint16_t)(0x10 + extra);
+  hm_dp_w16(ram, r, 0x72, (uint16_t)(hm_dp_r16(ram, r, 0x72) + 0x100));
+  r->a = 0x0080;
+  hm_jsl(ram, r, RET_166_BOTTOM, 0x80);
+  hm_AddProgrammedDMA(ram, r);
+  hm_rtl(ram, r);
+}

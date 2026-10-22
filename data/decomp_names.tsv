@@ -314,6 +314,13 @@
 039495	BlinkTextBoxArrow_lo
 8394D7	DrawTextBoxArrow
 03951C	ADDDDFFFF_lo
+03975F	BlinkTextCursor_lo
+8397A6	PrintDigit
+839823	DrawLetter
+039823	DrawLetter_lo
+039838	AdvanceLetterCursor_lo
+839862	FindLetterGraphics
+039862	FindLetterGraphics_lo
 03A9BE	NewGameSetup_lo
 03ABF0	FirstNightReset_lo
 83B1C9	AddMoney

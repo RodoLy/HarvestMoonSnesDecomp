@@ -602,8 +602,29 @@ texto.
   con dos DMA pequeños (fila de arriba y fila de abajo). Tiene 12 lugares
   posibles.
 
-El texto en sí, letra por letra, lo imprime la rutina que sigue
-(`ADDDDFFFF` en HM-Decomp, 261 instrucciones), que falta descompilar.
+**Cómo llega una letra a la pantalla.** El cuadro no tiene un lugar por
+letra en su mapa de casillas. En cambio, el mapa del cuadro apunta a una
+fila de casillas en orden, y la impresora *dibuja* cada letra en la
+casilla siguiente:
+
+- La **fuente** está en la ROM en grupos de 64 letras (8 por fila). Cada
+  letra son dos casillas de 8×8, una arriba de la otra.
+  `FindLetterGraphics` convierte un código de letra en la dirección de sus
+  gráficos.
+- `DrawLetter` copia esas dos casillas a la VRAM en el cursor ($0185) con
+  `UNK_SetDMA1` (dos DMA pequeños: mitad de arriba y mitad de abajo).
+- `AdvanceLetterCursor` mueve el cursor una casilla; al final de una línea
+  salta las mitades de abajo.
+- Los **números** (dinero, días...) se imprimen cifra por cifra con
+  `PrintDigit`: resta la potencia de diez (1, 10, 100...) hasta que el
+  número queda negativo, eso da la cifra, y se salta los ceros del
+  principio. Los códigos de las cifras son $BC-$C5.
+- Mientras el texto espera un botón, `BlinkTextCursor` alterna cada 20
+  cuadros la letra del cursor con una marca.
+
+La impresora principal, que lee el texto código por código (`ADDDDFFFF` en
+HM-Decomp, 261 instrucciones), también toca el "bip" de cada letra en el
+chip de sonido, así que espera igual que la regadera (ver 3.4).
 
 ---
 
@@ -645,6 +666,10 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     `TAX` también copia el byte alto escondido de A, así que la tabla de
     canales se lee en (byte alto : canal). Funciona solo porque todos los
     que la llaman tienen 0 ahí.
+15. **El ancho de las letras se ignora.** La impresora le pasa "letra
+    ancha: sí / no" a `DrawLetter` y a `AdvanceLetterCursor`, pero las dos
+    empiezan poniéndolo en 0. Todas las letras miden 8 píxeles de ancho.
+    (Seguramente es un resto de la versión japonesa, con caracteres de 16.)
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -693,3 +718,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 21-oct-2026 | 20,45 % | 31 comandos de evento más (valores, esperas, levantar cosas) |
 | 21-oct-2026 | 20,33 % | medición corregida (se separan rutinas escritas juntas) |
 | 21-oct-2026 | 20,85 % | el cuadro de texto: abrir, cerrar, la flecha; dos ayudantes de DMA |
+| 21-oct-2026 | 21,31 % | las letras: fuente, dibujo, cursor, números |

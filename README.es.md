@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 20.85%](https://img.shields.io/badge/descompilado-20.85%25-2f855a)
+![Descompilado: 21.31%](https://img.shields.io/badge/descompilado-21.31%25-2f855a)
 
-**20.85%** del código del juego descompilado y verificado: 9418 de 45176 instrucciones, 146 de 529 rutinas (27.6%).
+**21.31%** del código del juego descompilado y verificado: 9627 de 45176 instrucciones, 152 de 529 rutinas (28.7%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
@@ -50,8 +50,8 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Comandos de los guiones de evento | 56 de los 90 (todos menos los que necesitan texto, sonido o la pantalla): cada cuadro de la gallina y del perro (Event_UNKChickenRelated, Event_UNKDogRelated), saltos y pruebas (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), reloj (TimeRunning / Stopped, SetHour), jugador (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) y banderas | `src/eventcmds.c` |
 | Eventos | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (arrancar un guion de evento) | `src/events.c` |
 | Edición del mapa | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
-| DMA de video | AddProgrammedDMA (encolar una copia a VRAM / CGRAM para el próximo NMI), RemoveProgrammedDMA, UNK_SetDMA2 (un bloque de 2x2 casillas de BG3) | `src/dma.c` |
-| Cuadro de texto | StartTextBox, CloseTextBox (CODE_8393F9), SUB_83932D (borrar el cuadro), BlinkTextBoxArrow / TextBoxArrow / DrawTextBoxArrow (la flecha de "hay más texto") | `src/text.c` |
+| DMA de video | AddProgrammedDMA (encolar una copia a VRAM / CGRAM para el próximo NMI), RemoveProgrammedDMA, UNK_SetDMA2 (un bloque de 2x2 casillas de BG3), UNK_SetDMA1 (una letra) | `src/dma.c` |
+| Cuadro de texto | StartTextBox, CloseTextBox (CODE_8393F9), SUB_83932D (borrar el cuadro), BlinkTextBoxArrow / TextBoxArrow / DrawTextBoxArrow (la flecha de "hay más texto"), FindLetterGraphics / DrawLetter / AdvanceLetterCursor / BlinkTextCursor (letras), PrintDigit (números) | `src/text.c` |
 | Objetos | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites y los objetos que dejan las herramientas en el mapa) | `src/objects.c` |
 | Herramientas | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square | `src/tools.c` |
 | Usar las herramientas | 26 de las 28 rutinas ToolUsed*: hoz, azada, martillo, hacha, sus versiones de oro, las cinco semillas, pintura, comida, medicina, poción, campana, ordeñadora, cepillo, habichuelas, semilla de gema, pluma azul (faltan la regadera y el aspersor, que hablan con el chip de sonido) | `src/toolused.c` |

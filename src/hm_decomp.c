@@ -622,6 +622,28 @@ static void prep_text_box(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 4 == 0) r->a = (uint16_t)(rnd() % 3);                   /* arrow frame */
 }
 
+/* text.c: letters. Codes up to $27F (10 font groups) most of the time;
+ * PrintDigit: a power 10^n (n < 8) and a number below 16 times it, as when
+ * the game prints a number digit by digit (more would loop for ages). */
+static void prep_letter(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_text_box(ram, r, rnd);
+  r->a = (uint16_t)((rnd() % 4) ? rnd() % 0x280 : rnd());
+  hm_wr16(ram, 0x0185, (uint16_t)((rnd() % 2) ? 0x5000 + 8 * (rnd() % 0x200) : rnd()));
+  if (rnd() % 4 == 0) hm_wr16(ram, 0x0185, (uint16_t)((rnd() & 0xFF00) | 0x78));  /* end of line */
+  static const uint32_t powers[] = { 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000 };
+  uint8_t n = (uint8_t)(rnd() % 8);
+  ram[0x018C] = n;
+  uint32_t v = (uint32_t)((((uint64_t)rnd() << 8) | (rnd() & 0xFF)) % (16ull * powers[n]));
+  v &= 0xFFFFFF;
+  hm_wr16(ram, 0x0192, (uint16_t)v); ram[0x0194] = (uint8_t)(v >> 16);
+}
+static void prep_letter_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_dma_block(ram, r, rnd);
+  r->a = (uint16_t)((rnd() % 4) ? rnd() % 2 : rnd());
+}
+
 const HmDecompFn g_hm_decomp_fns[] = {
   { "GetRNG", hm_GetRNG, HM_OUT_A | HM_OUT_C, "src/rng.c",
     0x838138, 1, 0, 0, 0xFFFF,
@@ -955,6 +977,19 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/text.c", 0x839495, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_text_box },
   { "TextBoxArrow", hm_TextBoxArrow, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/text.c", 0x839447, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_text_box },
+  { "UNK_SetDMA1", hm_UNK_SetDMA1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/dma.c", 0x838166, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_letter_dma },
+  { "FindLetterGraphics", hm_FindLetterGraphics, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/text.c", 0x839862, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_letter },
+  { "DrawLetter", hm_DrawLetter, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/text.c", 0x839823, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_letter },
+  { "AdvanceLetterCursor", hm_AdvanceLetterCursor,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/text.c", 0x839838, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_letter },
+  { "BlinkTextCursor", hm_BlinkTextCursor, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/text.c", 0x83975F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_letter },
+  { "PrintDigit", hm_PrintDigit, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/text.c", 0x8397A6, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_letter },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

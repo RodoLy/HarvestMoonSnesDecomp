@@ -196,3 +196,191 @@ void hm_TextBoxArrow(uint8_t *ram, HmRegs *r)
   hm_BlinkTextBoxArrow(ram, r);
   hm_pull8(ram, r); hm_pull8(ram, r);                 /* RTS */
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * Letters. The font is in the ROM in groups of 64 letters (table $83:98AE,
+ * a long pointer per group: $94:9843 + $1000 k for groups 0-5, $95:8000 +
+ * $1000 (k - 6) for 6-9). In a group, 8 letters per row of $200 bytes,
+ * 32 bytes apart; a letter is two 8x8 tiles one above the other, the
+ * bottom one $100 bytes after the top one. Codes $BC-$C5 are the digits
+ * 0-9, $B1 the "waiting" mark.
+ *
+ * A letter is not written on a fixed tilemap: the box's tilemap points at
+ * tiles in order, and the printer copies each letter's graphics into the
+ * next tile ($0185, VRAM; +8 words per letter; a line is 16 tiles, its
+ * bottom halves $80 words further, so at $xx80 the cursor jumps $80).
+ * ═════════════════════════════════════════════════════════════════════════ */
+#define FONT_GROUPS       0x8398AE
+#define POWERS_OF_TEN     0x8398D6   /* 8 x 3 bytes: 1, 10, ... 10,000,000 */
+#define LETTER_WAITING    0x00B1
+#define LETTER_ZERO       0x00BC
+
+static void push16(uint8_t *ram, HmRegs *r, uint16_t v)
+{
+  hm_push8(ram, r, (uint8_t)(v >> 8));
+  hm_push8(ram, r, (uint8_t)v);
+}
+static void jsr(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmRegs *))
+{
+  push16(ram, r, ret);
+  fn(ram, r);
+  hm_pull8(ram, r); hm_pull8(ram, r);
+}
+static void jsl(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmRegs *))
+{
+  hm_jsl(ram, r, ret, 0x83);
+  fn(ram, r);
+  hm_rtl(ram, r);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * FindLetterGraphics ($83:9862, JSR, RTS; CODE_839862 in HM-Decomp).
+ * A = letter code; $72-$74 = where its graphics are.
+ * Leftovers: A = $72, X = 3 (code / 64) + 2, $7E = 32 (code & 7),
+ * $80 = $200 ((code & $3F) / 8), C from the last ADC.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_FindLetterGraphics(uint8_t *ram, HmRegs *r)
+{
+  uint16_t code = r->a, group = (uint16_t)(code >> 6);
+  hm_dp_w16(ram, r, 0x7E, code);
+  hm_dp_w16(ram, r, 0x80, group);
+  uint16_t x = (uint16_t)(group * 3);
+  hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, FONT_GROUPS + x));
+  x = (uint16_t)(x + 2);
+  *hm_dp(ram, r, 0x74) = hm_bus_rd8(ram, FONT_GROUPS + x);
+  uint16_t row = (uint16_t)(((code & 0x3F) >> 3) << 9);
+  uint16_t column = (uint16_t)((code & 7) << 5);
+  hm_dp_w16(ram, r, 0x80, row);
+  hm_dp_w16(ram, r, 0x7E, column);
+  uint32_t s = (uint32_t)hm_dp_r16(ram, r, 0x72) + column;       /* CLC; ADC $7E */
+  s = (s & 0xFFFF) + row + (s >> 16);                             /* ADC $80 */
+  r->c = s > 0xFFFF;
+  r->a = (uint16_t)s;
+  hm_dp_w16(ram, r, 0x72, r->a);
+  r->x = x;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * DrawLetter ($83:9823, JSL, RTL; CODE_839823 in HM-Decomp). A = letter
+ * code: copies it to the tile at the cursor $0185 (UNK_SetDMA1). Callers
+ * pass X = 1 or 0 (a wide letter?), but the routine starts with LDX #0
+ * and the width is always 0: one 8x8 tile per half.
+ * Leftovers: those of UNK_SetDMA1. The PHX of 0 stays on the stack.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_823_FIND    0x982B
+#define RET_823_COPY    0x9836
+
+void hm_DrawLetter(uint8_t *ram, HmRegs *r)
+{
+  r->x = 0;
+  push16(ram, r, 0);                                  /* LDX #0; PHX */
+  jsr(ram, r, RET_823_FIND, hm_FindLetterGraphics);
+  hm_pull8(ram, r); hm_pull8(ram, r);                 /* PLX */
+  r->a = 0;                                           /* TXA: the width */
+  r->x = rd16(ram, r, 0x0185);
+  jsl(ram, r, RET_823_COPY, hm_UNK_SetDMA1);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * AdvanceLetterCursor ($83:9838, JSR, RTS; CODE_839838 in HM-Decomp). The
+ * cursor $0185 goes one tile (8 words) forward; at the end of a line
+ * ($xx80) it skips the $80 words of the bottom halves. Like DrawLetter,
+ * it ignores the X its callers pass (LDX #0): $80 = 8 always.
+ * Leftovers: X = 0; A = the low byte of $0185 and C from CMP #$80, or
+ * A = the new $0185 and C from that ADC.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_AdvanceLetterCursor(uint8_t *ram, HmRegs *r)
+{
+  r->x = 0;
+  hm_dp_w16(ram, r, 0x80, 8);                         /* TXA; ASL x3; ADC #8 */
+  uint16_t at = (uint16_t)(rd16(ram, r, 0x0185) + 8);
+  wr16(ram, r, 0x0185, at);
+  if ((at & 0xFF) != 0x80) {
+    r->a = at & 0xFF;
+    r->c = r->a >= 0x80;
+    return;
+  }
+  uint32_t next = (uint32_t)at + 0x80;
+  r->c = next > 0xFFFF;
+  r->a = (uint16_t)next;
+  wr16(ram, r, 0x0185, r->a);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * BlinkTextCursor ($83:975F, JSR, RTS; CODE_83975F in HM-Decomp). Like
+ * BlinkTextBoxArrow, but inside the text: every 20 frames it alternates
+ * between letter A (in) and the mark $B1 at the cursor. Used while the
+ * text waits for a button (codes $00A2 and $FFFE).
+ * Leftovers: A = (high byte of DrawLetter's A : the new $018B); X, Y, C
+ * those of DrawLetter.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_75F_LETTER  0x978D
+#define RET_75F_MARK    0x979B
+
+void hm_BlinkTextCursor(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0x7E, r->a);
+  if ((rd16(ram, r, 0x018B) & 0x007F) == 0x14)
+    wr8(ram, r, 0x018B, (uint8_t)((rd8(ram, r, 0x018B) & 0x80) ^ 0x80));
+  r->x = 1;
+  if (rd8(ram, r, 0x018B) & 0x80) {
+    r->a = LETTER_WAITING;
+    jsl(ram, r, RET_75F_MARK, hm_DrawLetter);
+  } else {
+    r->a = hm_dp_r16(ram, r, 0x7E);
+    jsl(ram, r, RET_75F_LETTER, hm_DrawLetter);
+  }
+  uint8_t counter = (uint8_t)(rd8(ram, r, 0x018B) + 1);
+  wr8(ram, r, 0x018B, counter);
+  r->a = (uint16_t)((r->a & 0xFF00) | counter);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * PrintDigit ($83:97A6, JSL, RTL; CODE_8397A6 in HM-Decomp). Prints one
+ * digit of the 24-bit number at $0192-$0194: the one worth 10^$018C. It
+ * counts how many times that power fits (subtracting until the number
+ * goes negative, then adding the last one back), leaves the rest in
+ * $0192-$0194 and draws the digit. $019B bit 7 = "a digit was already
+ * printed": while it is clear, zeros are skipped (no leading zeros).
+ * $7E-$7F / $80 = the power, then $7E = the digit.
+ * Leftovers if a zero is skipped: A = (high byte of $0192 : 0), X = 0,
+ * C = 1 (CPX #0). Otherwise those of DrawLetter.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_7A6_DIGIT   0x9821
+
+void hm_PrintDigit(uint8_t *ram, HmRegs *r)
+{
+  uint8_t n = rd8(ram, r, 0x018C);
+  uint16_t x = (uint8_t)(n * 3);                       /* 8-bit ASL; CLC; ADC */
+  uint16_t power_lo = hm_bus_rd16(ram, POWERS_OF_TEN + x);
+  hm_dp_w16(ram, r, 0x7E, power_lo);
+  uint8_t power_hi = hm_bus_rd8(ram, POWERS_OF_TEN + (uint16_t)(x + 2));
+  *hm_dp(ram, r, 0x80) = power_hi;
+  uint32_t power = (uint32_t)power_hi << 16 | power_lo;
+
+  uint32_t number = rd16(ram, r, 0x0192) | (uint32_t)rd8(ram, r, 0x0194) << 16;
+  uint16_t digit = 0;
+  for (;;) {
+    number = (number - power) & 0xFFFFFF;
+    if (number & 0x800000) break;                       /* BMI */
+    digit++;
+  }
+  number = (number + power) & 0xFFFFFF;                 /* add the last one back */
+  wr16(ram, r, 0x0192, (uint16_t)number);
+  wr8(ram, r, 0x0194, (uint8_t)(number >> 16));
+
+  uint8_t flags = rd8(ram, r, 0x019B);
+  if (!(flags & 0x80)) {
+    if (digit == 0) {                                   /* a leading zero */
+      r->a = (uint16_t)(number & 0xFF00);
+      r->x = 0;
+      r->c = 1;
+      return;
+    }
+    wr8(ram, r, 0x019B, flags | 0x80);
+  }
+  hm_dp_w16(ram, r, 0x7E, digit);
+  r->a = (uint16_t)(LETTER_ZERO + digit);
+  r->x = 0;
+  jsl(ram, r, RET_7A6_DIGIT, hm_DrawLetter);
+}

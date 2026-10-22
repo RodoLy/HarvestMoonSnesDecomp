@@ -594,8 +594,27 @@ Dialogues are shown on **BG3**, the background layer used for text.
   It is a 2×2 block of tiles that `UNK_SetDMA2` copies to VRAM in two
   small DMAs (top row and bottom row). There are 12 possible places for it.
 
-The text itself, letter by letter, is printed by the routine that follows
-(`ADDDDFFFF` in HM-Decomp, 261 instructions), still to be decompiled.
+**How a letter gets on the screen.** The box does not have a slot per
+letter in its tilemap. Instead, the box's tilemap points at a row of tiles
+in order, and the printer *draws* each letter into the next tile:
+
+- The **font** is in the ROM in groups of 64 letters (8 per row). Each
+  letter is two 8×8 tiles, one above the other. `FindLetterGraphics`
+  turns a letter code into the address of its graphics.
+- `DrawLetter` copies those two tiles to VRAM at the cursor ($0185) with
+  `UNK_SetDMA1` (two small DMAs: top half and bottom half).
+- `AdvanceLetterCursor` moves the cursor one tile forward; at the end of a
+  line it jumps over the bottom halves.
+- **Numbers** (money, days...) are printed digit by digit by `PrintDigit`:
+  it subtracts the power of ten (1, 10, 100...) until the number goes
+  negative, which gives the digit, and skips the zeros at the start.
+  Digit codes are $BC-$C5.
+- While the text waits for a button, `BlinkTextCursor` alternates the
+  letter at the cursor with a mark every 20 frames.
+
+The main printer, which reads the text code by code (`ADDDDFFFF` in
+HM-Decomp, 261 instructions), also plays the "beep" of each letter on the
+sound chip, so it waits like the watering can does (see 3.4).
 
 ---
 
@@ -636,6 +655,10 @@ Things the game does wrong or oddly, found while decompiling:
     `TAX` copies the hidden high byte of A too, so the channel table is
     read at (high byte : channel). It works only because every caller has
     0 there.
+15. **The width of the letters is ignored.** The printer passes "wide
+    letter: yes / no" to `DrawLetter` and `AdvanceLetterCursor`, but both
+    start by setting it to 0. Every letter is 8 pixels wide. (Probably a
+    leftover of the Japanese version, whose characters were 16 wide.)
 
 ## 7. Differences found in the recompilation
 
@@ -684,3 +707,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 21-Oct-2026 | 20.45 % | 31 more event commands (values, waits, picking things up) |
 | 21-Oct-2026 | 20.33 % | corrected measure (routines written together are split) |
 | 21-Oct-2026 | 20.85 % | the text box: open, close, the arrow; two DMA helpers |
+| 21-Oct-2026 | 21.31 % | the letters: font, drawing, cursor, numbers |

@@ -56,6 +56,11 @@ MANUAL = {
     0x8394D7: "DrawTextBoxArrow",  # CODE_8394D7
     0x839495: "BlinkTextBoxArrow", # CODE_839495
     0x839447: "TextBoxArrow",      # CODE_839447
+    0x839862: "FindLetterGraphics",  # CODE_839862
+    0x839823: "DrawLetter",        # CODE_839823
+    0x839838: "AdvanceLetterCursor",  # CODE_839838
+    0x83975F: "BlinkTextCursor",   # CODE_83975F
+    0x8397A6: "PrintDigit",        # CODE_8397A6
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

@@ -230,6 +230,7 @@ void hm_RanchMasteryCalculator(uint8_t *ram, HmRegs *r); /* ending.c */
 void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r);    /* dma.c */
 void hm_RemoveProgrammedDMA(uint8_t *ram, HmRegs *r);
 void hm_UNK_SetDMA2(uint8_t *ram, HmRegs *r);
+void hm_UNK_SetDMA1(uint8_t *ram, HmRegs *r);
 void hm_LoadSpriteComponent(uint8_t *ram, HmRegs *r); /* objects.c */
 void hm_LoadGameObjectComponents(uint8_t *ram, HmRegs *r);
 void hm_CreateGameObject(uint8_t *ram, HmRegs *r);
@@ -328,3 +329,8 @@ void hm_CloseTextBox(uint8_t *ram, HmRegs *r);
 void hm_DrawTextBoxArrow(uint8_t *ram, HmRegs *r);
 void hm_BlinkTextBoxArrow(uint8_t *ram, HmRegs *r);
 void hm_TextBoxArrow(uint8_t *ram, HmRegs *r);
+void hm_FindLetterGraphics(uint8_t *ram, HmRegs *r);
+void hm_DrawLetter(uint8_t *ram, HmRegs *r);
+void hm_AdvanceLetterCursor(uint8_t *ram, HmRegs *r);
+void hm_BlinkTextCursor(uint8_t *ram, HmRegs *r);
+void hm_PrintDigit(uint8_t *ram, HmRegs *r);
