@@ -1066,6 +1066,34 @@ static void prep_player_input(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
     if (hm_rd16(ram, a) < 0x40 || hm_rd16(ram, a) >= 0x3C0) hm_wr16(ram, a, (uint16_t)(0x40 + rnd() % 0x380));
 }
 
+/* mapedit.c: UNK_PartialMap. A map of random tile types with clusters of
+ * the joining ones ($73-$79), a property table of our own ($7F:F000) whose
+ * byte +0 (the drawing) is a tile change with a real size, or 0. */
+static void prep_partial_map(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_map_change(ram, r, rnd);
+  uint8_t good[48]; unsigned n = 0;
+  for (uint16_t k = 1; k <= 48; k++) {
+    uint32_t at = 0x81B363u + 6u * k;
+    uint8_t rows = hm_bus_rd8(ram, at + 2), cols = hm_bus_rd8(ram, at + 3);
+    if (rows && cols && rows <= 8 && cols <= 8) good[n++] = (uint8_t)k;
+  }
+  for (unsigned i = 0; i < 256; i++) {
+    uint8_t *e = &ram[0x1F000 + 4 * i];
+    e[0] = (uint8_t)((rnd() % 4 && n) ? good[rnd() % n] : 0);
+    e[1] = (uint8_t)rnd(); e[2] = (uint8_t)rnd(); e[3] = (uint8_t)rnd();
+  }
+  /* the joining types: their drawing plus the join (up to 8) stays a real
+   * tile change */
+  for (unsigned i = 0x73; i < 0x7A; i++) ram[0x1F000 + 4 * i] = (uint8_t)(n ? good[rnd() % n] : 1);
+  hm_wr16(ram, 0x0D, 0xF000); ram[0x0F] = 0x7F;
+  for (unsigned i = 0; i < 4096; i++) {
+    unsigned k = rnd() % 8;
+    ram[0x009B6 + i] = (uint8_t)(k < 3 ? 0x73 + rnd() % 7 : k < 5 ? 0 : rnd());
+  }
+  ram[0x00181] = 4;                                        /* 64 tiles wide */
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1734,6 +1762,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/menus.c", 0x84CED2, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_inputs },
   { "InputTypeSelector", hm_InputTypeSelector, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/menus.c", 0x84C034, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
+  { "UNK_PartialMap", hm_UNK_PartialMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/mapedit.c", 0x82AF00, 1, 0, 0, 0xFFFF, { { 0 } }, 20, prep_partial_map },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

@@ -470,3 +470,4 @@ void hm_CODE_84C2B4(uint8_t *ram, HmRegs *r);
 void hm_MenuInputs(uint8_t *ram, HmRegs *r);
 void hm_CODE_84CED2(uint8_t *ram, HmRegs *r);
 void hm_InputTypeSelector(uint8_t *ram, HmRegs *r);
+void hm_UNK_PartialMap(uint8_t *ram, HmRegs *r);   /* mapedit.c */

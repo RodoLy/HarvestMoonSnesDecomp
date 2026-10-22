@@ -609,6 +609,12 @@ slightly different order:
   new picture into that map in memory, queues the DMA copy to video
   memory and, if needed, changes the tile's type. What to put comes from
   the table `$81:B363`.
+- **Drawing the whole map** (`UNK_PartialMap`): for each of the 64 × 64
+  tiles it takes the drawing in byte +0 of the tile type's property entry
+  (0: nothing). The types $73-$79 join their neighbours of the same kind
+  (fences and the like, "autotiling"): the four neighbours make a mask
+  (left 8, right 2, up 4, down 1) and the table `$82:B02A` says which of
+  the drawings to add. It is long: it does not finish in one frame.
 
 ### 5.12 Objects with a sprite
 
@@ -1138,3 +1144,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 34.31 % | pressing A; a new script (`scripts/actions.txt`) checks the tools live |
 | 22-Oct-2026 | 36.10 % | the buttons while walking (the 15 labels of that block now count as one routine: 519 routines in all) |
 | 22-Oct-2026 | 36.92 % | `InputTypeSelector`, the name screen, menu 1, mode 6: every input mode is rewritten; checked live every frame (about 21,000 calls) |
+| 22-Oct-2026 | 37.27 % | drawing the whole map, with fences joining their neighbours |

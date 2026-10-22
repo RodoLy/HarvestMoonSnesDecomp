@@ -364,3 +364,114 @@ void hm_EditTileonMapandsets0181(uint8_t *ram, HmRegs *r)
   uint16_t x = tile_index_keeping(ram, r, type, RET_049_INDEX);
   hm_bus_wr8(ram, (HM_FARM_TILES + x) & 0xFFFFFF, type);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNK_PartialMap ($82:AF00, JSL, RTL): draw the whole map (64 x 64 tiles of
+ * 16 pixels) from its tile types ($09B6). For each tile type t (1-$9F):
+ * the drawing is byte +0 of its entry in the property table [$0D] (0:
+ * nothing to draw). The types $73-$79 join with their neighbours of the
+ * same kind ("autotiling", fences and the like): the four neighbours give
+ * a mask (left 8, right 2, up 4, down 1) and DATA8_82B02A[mask] - 1 is
+ * added to the drawing. Each tile is drawn with SUB_81A83A.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define JOINS        0x82B02A   /* DATA8_82B02A: 16 entries */
+
+static uint8_t tile_at(uint8_t *ram, const HmRegs *r, uint16_t x)
+{
+  return hm_bus_rd8(ram, (((uint32_t)r->db << 16) + HM_MAP_TILES + x) & 0xFFFFFF);
+}
+static bool joins(HmRegs *r, uint8_t t)                    /* CMP #$73; CMP #$7A */
+{
+  r->c = t >= 0x73;
+  if (!r->c) return false;
+  r->c = t >= 0x7A;
+  return !r->c;
+}
+
+void hm_UNK_PartialMap(uint8_t *ram, HmRegs *r)
+{
+  for (uint16_t y = 0; y != 0x0400; ) {
+    for (uint16_t x = 0; x != 0x0400; ) {
+      push16(ram, r, y);                                   /* PHY; PHX */
+      push16(ram, r, x);
+      hm_dp_w16(ram, r, 0x82, x);
+      hm_dp_w16(ram, r, 0x84, y);
+      r->x = x; r->y = y;
+      push16(ram, r, 0xAF10);                              /* JSR GetTileIndex */
+      hm_GetTileIndex(ram, r);
+      pull16(ram, r);
+      uint16_t at = r->x;
+      uint8_t t = tile_at(ram, r, at);
+      r->a = (uint16_t)((r->a & 0xFF00) | t);
+      bool draw = false;
+      uint8_t pic = 0;
+      if (t != 0) {
+        r->c = t >= 0xA0;
+        if (!r->c) {
+          bool fence = joins(r, t);
+          if (fence) {
+            uint16_t mask = 0;
+            static const struct { int16_t d; uint16_t bit; } N[4] = {
+              { -1, 8 }, { 1, 2 }, { -0x40, 4 }, { 0x40, 1 } };
+            hm_dp_w16(ram, r, 0x86, 0);
+            for (unsigned k = 0; k < 4; k++) {
+              push16(ram, r, at);                          /* PHX ... PLX */
+              uint16_t nx = (uint16_t)(at + N[k].d);
+              r->c = N[k].d < 0 ? at >= (uint16_t)-N[k].d : (uint32_t)at + N[k].d > 0xFFFF;
+              r->x = nx;
+              uint8_t nt = tile_at(ram, r, nx);
+              r->a = (uint16_t)((nx & 0xFF00) | nt);
+              pull16(ram, r);
+              r->x = at;
+              if (joins(r, nt)) {
+                mask |= N[k].bit;
+                r->a = mask;
+                hm_dp_w16(ram, r, 0x86, mask);
+              }
+            }
+            push16(ram, r, at);                            /* PHX; LDA $86; TAX */
+            r->x = mask;
+            uint8_t join = (uint8_t)(hm_bus_rd8(ram, JOINS + mask) - 1);
+            *hm_dp(ram, r, 0x94) = join;
+            pull16(ram, r);
+            r->x = at;
+            uint16_t yy = (uint16_t)(t << 2);              /* LDA #0; XBA; LDA; ASL; ASL */
+            r->c = 0;
+            r->y = yy;
+            uint8_t base = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0D, yy));
+            uint16_t s = (uint16_t)(base + join);          /* CLC; ADC $94 (8 bits) */
+            r->c = s > 0xFF;
+            pic = (uint8_t)s;
+            draw = true;
+          } else {
+            uint16_t yy = (uint16_t)(t << 2);
+            r->c = 0;
+            r->y = yy;
+            pic = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0D, yy));
+            r->a = pic;
+            draw = pic != 0;
+          }
+        }
+      }
+      if (draw) {
+        r->a = pic;
+        r->x = hm_dp_r16(ram, r, 0x82);
+        r->y = hm_dp_r16(ram, r, 0x84);
+        hm_jsl(ram, r, 0xB008, 0x81);
+        hm_SUB_81A83A(ram, r);
+        hm_rtl(ram, r);
+      }
+      x = pull16(ram, r);                                  /* PLX; PLY */
+      y = pull16(ram, r);
+      x = (uint16_t)(x + 0x10);
+      r->a = x;
+      r->c = x >= 0x0400;
+      r->x = x;
+      r->y = y;
+    }
+    y = (uint16_t)(y + 0x10);
+    r->a = y;
+    r->c = y >= 0x0400;
+    r->y = y;
+  }
+}
