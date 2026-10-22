@@ -260,6 +260,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/collision.c` | chocar con el mapa, los objetos y el jugador |
 | `src/toolanim.c` | la animación de la herramienta al apretar Y |
 | `src/interact.c` | apretar A frente a algo |
+| `src/playerinput.c` | los botones al caminar |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -975,6 +976,49 @@ $60, $61, $6E y $6F no dan nada.
 hay un objeto de evento 16 píxeles adelante; el objeto encontrado queda con
 su byte +$0C = 1, y su propio guion (una persona, un animal) reacciona.
 
+### 5.22 Los botones al caminar
+
+En el modo de entrada 1 (5.17), `PlayerMovementInputs` ($84:C6B7) lee el
+control cada cuadro. HM-Decomp lo escribe como muchas etiquetas
+(`PlayerActionKeysPressed`, `PlayerActionDown`, `PlayerKeyA`...) unidas con
+saltos, pero es una sola rutina con muchas salidas.
+
+**Primero, ¿puede actuar el jugador?** No mientras $D2 tenga el bit 2, 6 o
+7, no en el aire (acción 3), no con $7F1F5C bit 5, y solo con $D2 bit
+$4000. Pescando (acciones $11, $12) solo cuenta la Y. Y muchas acciones
+(mostrar un objeto, comer...) no dejan moverse: la tabla
+`PlayerActionCanInteract` dice cuáles (1 = ocupado).
+
+**Las flechas** ponen la acción "caminar" ($D4 = 1) y la dirección ($DA:
+0 abajo, 1 arriba, 2 derecha, 3 izquierda). Después se mira un botón, en
+este orden:
+
+| Botón | Qué hace |
+|---|---|
+| A | hablar, leer, abrir, levantar (`SUB_82AD0E`, 5.21); con el perro en brazos, soltarlo enfrente (acción $16; se guardan el lugar y el mapa del perro); con algo en brazos, dejarlo en un lado libre (acción $18); con un objeto en la mano, tirarlo (acción 5) |
+| B (mantenido) | correr (acción 2); frente a una baldosa con el bit de propiedad $20 o $40, saltarla (acción 3, 28 o 33 píxeles) si hay lugar para caer |
+| Select | mostrar el objeto en la mano (acción $0C) |
+| X | acción $1C |
+| R | silbarle al caballo, si lo tienes ($7F1F68 bit $100; acción $0D) |
+| L | silbarle al perro, si lo tienes (bit $80; acción $1B) |
+| Y | usar la herramienta (acción $0A, `UNK_ToolUsed`); con la caña: lanzar ($0F → $10), recoger vacía ($11 → $0F), o si picó ($12 → $13) una de cuatro animaciones de pesca al azar |
+
+R, L, Select, X y Y no hacen nada mientras se carga algo ($D2 bits 1, 4,
+11).
+
+**Durante los eventos** ($D2 bit $1000) no se lee el control: el guion del
+evento "aprieta" los botones en $08FD, con los mismos bits.
+
+**Los bits del control** ($0124 mantenidos, $0128 nuevos): B $8000, Y
+$4000, Select $2000, Start $1000, arriba $0800, abajo $0400, izquierda
+$0200, derecha $0100, A $0080, X $0040, L $0020, R $0010. (HM-Decomp cambia
+izquierda y derecha, ver 5.20.)
+
+**Código muerto:** después del salto de cada flecha hay unas pocas
+instrucciones a las que nada llega, y el bloque de $84:C852-$84:C934
+(convertiría $0911 en las acciones 6 y 7) nunca se llama. Cuentan como
+parte de la rutina.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1107,3 +1151,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 33,34 % | chocar con las cosas (probado en vivo: unas 2.900 llamadas) |
 | 22-oct-2026 | 33,80 % | las animaciones de las herramientas (29 rutinas) |
 | 22-oct-2026 | 34,31 % | apretar A; un guion nuevo (`scripts/actions.txt`) prueba las herramientas en vivo |
+| 22-oct-2026 | 36,10 % | los botones al caminar (las 15 etiquetas de ese bloque ahora cuentan como una rutina: 519 rutinas en total) |

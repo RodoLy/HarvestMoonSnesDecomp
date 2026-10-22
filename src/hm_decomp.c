@@ -1004,6 +1004,68 @@ static void prep_interact(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
 }
 
+/* playerinput.c: the buttons while walking. The pad (held, new, and the
+ * events' $08FD) with one or two buttons, the game state's bits, the
+ * action, and what A and Y need (prep_interact / prep_tool_animation). */
+static void prep_player_input(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  HmRegs keep = *r;
+  if (rnd() % 2) prep_tool_animation(ram, r, rnd); else prep_interact(ram, r, rnd);
+  r->a = keep.a; r->x = keep.x; r->y = keep.y;
+  static const uint16_t keys[] = { 0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200,
+                                   0x0100, 0x0080, 0x0040, 0x0020, 0x0010 };
+  static const uint32_t pads[] = { 0x00124, 0x00128, 0x008FD };
+  for (unsigned i = 0; i < 3; i++) {
+    uint16_t v = 0;
+    switch (rnd() % 4) {
+    case 0: break;
+    case 1: v = keys[rnd() % 12]; break;
+    case 2: v = (uint16_t)(keys[rnd() % 12] | keys[rnd() % 12]); break;
+    default: v = (uint16_t)rnd(); break;
+    }
+    hm_wr16(ram, pads[i], v);
+  }
+  uint16_t st = (uint16_t)((rnd() % 8) ? 0x4000 : 0);
+  static const uint16_t bits[] = { 0x0002, 0x0010, 0x0020, 0x0200, 0x0800, 0x1000, 0x0004 };
+  for (unsigned i = 0; i < 7; i++) if (rnd() % 6 == 0) st |= bits[i];
+  if (rnd() % 8 == 0) st = (uint16_t)rnd();
+  hm_wr16(ram, 0xD2, st);
+  static const uint16_t actions[] = { 0, 0, 1, 1, 2, 3, 4, 9, 0x0F, 0x0F, 0x11, 0x11, 0x12, 0x12 };
+  hm_wr16(ram, 0xD4, (uint16_t)((rnd() % 8) ? actions[rnd() % 14] : rnd() % 0x40));
+  hm_wr16(ram, 0x11F5C, (uint16_t)((rnd() % 8) ? rnd() & ~0x20u : rnd()));
+  hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 2) ? rnd() & 0x7FF9 : rnd()));
+  hm_wr16(ram, 0x11F68, (uint16_t)rnd());
+  hm_wr16(ram, 0x0911, (uint16_t)(rnd() % 4));
+  /* the facing is always 0-3 in the game: CEEEE / CBBBB jump through a
+   * 4-entry table with it */
+  hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
+  if (rnd() % 2) ram[0x00921] = (uint8_t)(rnd() % 0x1C);
+  for (unsigned i = 0; i < 3; i++) ram[HM_RNG_STATE + i] = (uint8_t)rnd();
+  /* sometimes an even floor of one tile type, with its own property (free,
+   * jumpable $20 / $40) and facing every side (+3 = $FF), and no event
+   * objects: so jumps land, things are put down and the dog is let go */
+  if (rnd() % 2) {
+    static const uint8_t types[] = { 0x10, 0x20, 0x40, 0xC4, 0xE1, 0xF5, 0x30, 0x60 };
+    uint8_t ty = types[rnd() % 8];
+    for (unsigned i = 0; i < 256; i++) {
+      uint8_t *e = &ram[0x1F000 + 4 * i];
+      e[0] = (uint8_t)rnd(); e[1] = (uint8_t)rnd(); e[2] = (uint8_t)rnd(); e[3] = (uint8_t)rnd();
+    }
+    static const uint8_t props[] = { 0x00, 0x20, 0x40, 0x60, 0x01, 0x02, 0x04, 0x08, 0x10 };
+    ram[0x11F19] = (uint8_t)(rnd() % 4);
+    ram[0x1F000 + 4 * ty + 2] = props[rnd() % 9];          /* (read with A = 2: bytes +2, +3) */
+    ram[0x1F000 + 4 * ty + 3] = 0xFF;
+    hm_wr16(ram, 0x0D, 0xF000); ram[0x0F] = 0x7F;
+    memset(&ram[0x009B6], ty, 4096);
+    hm_wr16(ram, 0x11F5C, (uint16_t)(hm_rd16(ram, 0x11F5C) & ~0x0008u));   /* (bit 3: no tile answers) */
+    if (rnd() % 2) for (unsigned i = 0; i < 0x31; i++) ram[0xB586 + i * 0x40] = 0;
+  }
+  /* the player away from the map's edges: a jump's corner below 0 would
+   * make the original read open bus (prep_collision) */
+  for (unsigned a = 0xD6; a <= 0xD8; a += 2)
+    if (hm_rd16(ram, a) < 0x40 || hm_rd16(ram, a) >= 0x3C0) hm_wr16(ram, a, (uint16_t)(0x40 + rnd() % 0x380));
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1602,6 +1664,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/toolanim.c", 0x829257, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
   { "SUB_82AD0E", hm_SUB_82AD0E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/interact.c", 0x82AD0E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_interact },
+  { "PlayerMovementInputs", hm_PlayerMovementInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerinput.c", 0x84C6B7, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_input },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

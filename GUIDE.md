@@ -259,6 +259,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/collision.c` | bumping into the map, objects and the player |
 | `src/toolanim.c` | the tool's animation when pressing Y |
 | `src/interact.c` | pressing A in front of something |
+| `src/playerinput.c` | the buttons while walking |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -952,6 +953,47 @@ $60, $61, $6E and $6F give nothing.
 event object is 16 pixels ahead; the object found gets its byte +$0C = 1,
 and its own script (a person, an animal) reacts to it.
 
+### 5.22 The buttons while walking
+
+In input mode 1 (5.17), `PlayerMovementInputs` ($84:C6B7) reads the pad
+every frame. HM-Decomp writes it as many labels (`PlayerActionKeysPressed`,
+`PlayerActionDown`, `PlayerKeyA`...) joined by jumps, but it is one routine
+with many exits.
+
+**First, can the player act?** Not while $D2 has bit 2, 6 or 7, not in the
+air (action 3), not with $7F1F5C bit 5, and only with $D2 bit $4000. While
+fishing (actions $11, $12) only Y counts. And many actions (holding up an
+item, eating...) do not let the player move: the table
+`PlayerActionCanInteract` says which (1 = busy).
+
+**The arrows** set the action "walk" ($D4 = 1) and the direction ($DA:
+0 down, 1 up, 2 right, 3 left). Then one button is looked at, in this
+order:
+
+| Button | What it does |
+|---|---|
+| A | talk, read, open, pick up (`SUB_82AD0E`, 5.21); with the dog in the arms, let it go in front (action $16; the dog's place and map are saved); with something in the arms, put it down on a free side (action $18); holding an item, drop it (action 5) |
+| B (held) | run (action 2); in front of a tile with property bit $20 or $40, jump over it (action 3, 28 or 33 pixels) if there is room to land |
+| Select | show the item in hand (action $0C) |
+| X | action $1C |
+| R | whistle for the horse, if you have one ($7F1F68 bit $100; action $0D) |
+| L | whistle for the dog, if you have one (bit $80; action $1B) |
+| Y | use the tool (action $0A, `UNK_ToolUsed`); with the rod: cast ($0F → $10), reel in empty ($11 → $0F), or with a bite ($12 → $13) one of four catch animations at random |
+
+R, L, Select, X and Y do nothing while holding something ($D2 bits 1, 4,
+11).
+
+**During events** ($D2 bit $1000) the pad is not read: the event's script
+"presses" the buttons in $08FD instead, with the same bits.
+
+**The pad's bits** ($0124 held, $0128 new): B $8000, Y $4000, Select
+$2000, Start $1000, up $0800, down $0400, left $0200, right $0100, A $0080,
+X $0040, L $0020, R $0010. (HM-Decomp swaps left and right, see 5.20.)
+
+**Dead code:** after each arrow's jump there are a few instructions nothing
+reaches, and the block at $84:C852-$84:C934 (it would turn $0911 into
+actions 6 and 7) is never called. They count as part of the routine.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1081,3 +1123,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 33.34 % | bumping into things (checked live: about 2,900 calls) |
 | 22-Oct-2026 | 33.80 % | the tools' animations (29 routines) |
 | 22-Oct-2026 | 34.31 % | pressing A; a new script (`scripts/actions.txt`) checks the tools live |
+| 22-Oct-2026 | 36.10 % | the buttons while walking (the 15 labels of that block now count as one routine: 519 routines in all) |

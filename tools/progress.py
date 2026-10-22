@@ -78,6 +78,7 @@ LOCAL = {
     0x83AEC3: ("CDDDD", "CDDDD"),
     0x83AF37: ("CEEEE", "CEEEE"),
     0x83B0F6: ("CFFFF", "CFFFF"),
+    0x84C6B7: ("PlayerMovementInputs", "PlayerMovementInputs", "CODE_84CED2"),  # the whole block, to mode 6
     0x829999: ("ToolUsedCornSeeds", "ToolUsedCornSeeds"),   # ";82A9999" in HM-Decomp
 }
 
@@ -113,7 +114,8 @@ def parse(decomp_dir):
     return routines, lines
 
 
-def split_locals(routines, lines):
+def split_locals(routines, lines, carved=None):
+    carved = carved or {}
     for pc, entry in LOCAL.items():
         label, name = entry[0], entry[1]
         end = entry[2] if len(entry) > 2 else None     # up to this label, not the first RTL
@@ -130,7 +132,9 @@ def split_locals(routines, lines):
                     break
                 if is_insn(code):
                     n += 1
-                    routines[owner][1] -= 1
+                    # a line split_called already carved out is taken from
+                    # that routine (not counted twice)
+                    routines[carved.get((path, start + j), owner)][1] -= 1
                     if not end and re.search(r"\bRT[LS]\b", code):
                         break
             routines[pc] = [name, n]
@@ -148,6 +152,7 @@ def split_called(routines, lines):
     one top-level label. Each is carved out, from its label to its first
     RTL / RTS, into a routine keyed by its address (CODE_xxxxxx) or name."""
     local_labels = {entry[0] for entry in LOCAL.values()}
+    carved = {}
     callers = {}
     for rows in lines.values():
         for owner, code in rows:
@@ -172,16 +177,17 @@ def split_called(routines, lines):
                 if is_insn(code2):
                     n += 1
                     routines[own2][1] -= 1
+                    carved[(path, i + j)] = key
                     if re.search(r"\bRT[LS]\b", code2):
                         break
             routines[key] = [name, n]
-    return routines
+    return routines, carved
 
 
 def routines_of(decomp_dir):
     found, lines = parse(decomp_dir)
-    found = split_called(found, lines)
-    found = split_locals(found, lines)
+    found, carved = split_called(found, lines)
+    found = split_locals(found, lines, carved)
     return {k: (name, n) for k, (name, n) in found.items() if n > 0}
 
 

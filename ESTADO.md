@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **232 rutinas reescritas y verificadas** (0 diferencias):
+- **233 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -87,6 +87,7 @@ en el README (`tools/progress.py`).
 | CBBBB, CDDDD, CEEEE, CFFFF (choques) | $83:AD91-$83:B1C8 | src/collision.c |
 | UNK_ToolUsed y las 28 ToolAnimation* | $82:90A8-$82:925F | src/toolanim.c |
 | SUB_82AD0E (apretar A) | $82:AD0E | src/interact.c |
+| PlayerMovementInputs (todo el bloque hasta CODE_84CED2) | $84:C6B7-$84:CED1 | src/playerinput.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |
@@ -430,6 +431,22 @@ sistema de texto).
   original lee bus abierto: $B1).
 - Fuzz 3 × 2000 y en vivo (~2.900 llamadas): 0 diferencias; sabotajes
   detectados.
+
+## Los botones al caminar (hecho el 22-oct-2026)
+
+- `src/playerinput.c`: PlayerMovementInputs es una sola rutina con muchas
+  salidas (HM-Decomp la parte en 15 etiquetas unidas con JMP). LOCAL de
+  $84:C6B7 hasta CODE_84CED2. progress.py: una línea ya separada por
+  split_called (CODE_84C7D6) se resta de esa rutina, no del bloque (si no,
+  se contaba dos veces).
+- HM_INTERP: no tiene cuerpo compilado propio (está dentro de
+  InputTypeSelector); en vivo se probará cuando se reescriba
+  InputTypeSelector (falta NameMenuInputs y MenuInputs).
+- prep_player_input: $DA siempre 0-3 (CEEEE/CBBBB saltan por una tabla de
+  4), jugador lejos del borde (bus abierto), a veces piso parejo con
+  propiedad en el byte +2 (se lee con A = 2: bytes +2/+3) y sin objetos.
+- Fuzz 4 × 2500: 0 diferencias. 23 sabotajes detectados (el de las
+  esquinas $C0-$CF de "dejar algo" solo 1 vez en 6000: camino raro).
 
 ## Lo siguiente
 

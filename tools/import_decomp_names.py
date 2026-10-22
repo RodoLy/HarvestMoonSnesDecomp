@@ -73,6 +73,7 @@ MANUAL = {
     0x83AEC3: "CDDDD",
     0x83AF37: "CEEEE",
     0x83B0F6: "CFFFF",
+    0x84C6B7: "PlayerMovementInputs",  # no address in HM-Decomp
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 
