@@ -842,6 +842,25 @@ static void prep_printer(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   for (uint32_t a = 0x11F04; a < 0x11F80; a += 2) if (rnd() % 2) hm_wr16(ram, a, (uint16_t)rnd());
   ram[0x11F06] = (uint8_t)(rnd() % 0x98);
 }
+/* menus.c: the buttons (one at a time, mostly), the menu state, the
+ * saved games (for the load menu) and a text box (for the list). */
+static void prep_menu(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_text_box(ram, r, rnd);
+  HmRegs keep = *r;
+  prep_sram(ram, r, rnd);
+  *r = keep;
+  static const uint16_t buttons[] = { 0x8000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100, 0x0080, 0 };
+  hm_wr16(ram, 0x0128, (rnd() % 4) ? buttons[rnd() % 8] : (uint16_t)rnd());
+  hm_wr16(ram, 0x012C, (rnd() % 4) ? buttons[rnd() % 8] : (uint16_t)rnd());
+  ram[0x098D] = (uint8_t)((rnd() % 4) ? rnd() % 3 : rnd());
+  ram[0x098E] = (uint8_t)((rnd() % 4) ? rnd() % 2 : rnd());
+  ram[0x018A] = (uint8_t)((rnd() % 4) ? rnd() % 22 : rnd());
+  ram[0x94] = (uint8_t)rnd(); ram[0x95] = (uint8_t)rnd(); ram[0x97] = (uint8_t)rnd();
+  hm_wr16(ram, 0x90, (uint16_t)rnd());
+  if (rnd() % 2) hm_wr16(ram, 0x11F5A, (uint16_t)(hm_rd16(ram, 0x11F5A) | 0x8000));
+}
+
 static void prep_letter_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_dma_block(ram, r, rnd);
@@ -1250,6 +1269,16 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/save.c", 0x83BA45, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_sram },
   { "CheckSRAMIntegrity", hm_CheckSRAMIntegrity, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/save.c", 0x83BAD4, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_sram },
+  { "SaveSlotMenuInputs", hm_SaveSlotMenuInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C2FE, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_menu },
+  { "LoadSlotMenuInputs", hm_LoadSlotMenuInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C380, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_menu },
+  { "StartMenuInputs", hm_StartMenuInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C428, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_menu },
+  { "TitleMenuInputs", hm_TitleMenuInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C458, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_menu },
+  { "ListInputs", hm_ListInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84C540, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_menu },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

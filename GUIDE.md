@@ -253,6 +253,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/text.c` | the dialogue box |
 | `src/audio.c` | talking to the sound chip |
 | `src/save.c` | the saved games |
+| `src/menus.c` | buttons in menus |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -731,6 +732,27 @@ is saved (`SaveGameSlot`), at the start of the slot:
 - The title screen reads only the date and the name of each slot
   (`LoadGameSlotResume`); a slot with day 0 is empty.
 
+### 5.17 Buttons and menus
+
+Each frame `InputTypeSelector` looks at the **input mode** ($019A): 1
+walking, 2 no movement, 3 a list inside a text box, 4 menus, 5 the name
+screen. In menus, the **menu number** ($95) says which one is open:
+
+| Menu | What the buttons do |
+|---|---|
+| 2, 3 | Start goes to menu 6 (when $7F1F5A bit $8000 allows it) |
+| 5 | the title menu: three options, up and down wrap around; A opens menu 8, 7 or $0A |
+| 7 | choose a slot to save: up / down switch the slot, B cancels, A accepts |
+| 8 | choose a slot to load: the same, but A only works on a slot with a game (if not, a "refused" sound) |
+
+The answer goes to $94 (1 = cancel, 2 = accept). Every move makes a sound
+effect: 3 for moving, 1 for accepting, 2 for refusing.
+
+**The list in a text box** (mode 3): 22 places in two columns of 11 and an
+arrow. Up and down move inside the first column and wrap around (they do
+nothing in the second); right and left jump to the other column. They use
+the button's **auto-repeat**, so holding it keeps moving. A closes the list.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -841,3 +863,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 22.49 % | the text printer (checked live: 2,424 frames of text in a new game) |
 | 22-Oct-2026 | 25.96 % | the cow's every frame (1,567 instructions) |
 | 22-Oct-2026 | 27.28 % | the saved games (the checker now compares the SRAM) |
+| 22-Oct-2026 | 28.16 % | the buttons in the menus |

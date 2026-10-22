@@ -66,6 +66,12 @@ LOCAL = {
     0x8394D7: ("CODE_8394D7", "DrawTextBoxArrow"),
     0x839495: ("CODE_839495", "BlinkTextBoxArrow"),
     0x839447: ("CODE_839447", "TextBoxArrow"),
+    # several routines with many RTLs under one label: up to the next one
+    0x84C2FE: ("CODE_84C2FE", "SaveSlotMenuInputs", "CODE_84C380"),
+    0x84C380: ("CODE_84C380", "LoadSlotMenuInputs", "CODE_84C428"),
+    0x84C428: ("CODE_84C428", "StartMenuInputs", "CODE_84C458"),
+    0x84C458: ("CODE_84C458", "TitleMenuInputs", "CODE_84C540"),
+    0x84C540: ("CODE_84C540", "ListInputs", "PlayerMovementInputs"),
     0x829999: ("ToolUsedCornSeeds", "ToolUsedCornSeeds"),   # ";82A9999" in HM-Decomp
 }
 
@@ -102,7 +108,9 @@ def parse(decomp_dir):
 
 
 def split_locals(routines, lines):
-    for pc, (label, name) in LOCAL.items():
+    for pc, entry in LOCAL.items():
+        label, name = entry[0], entry[1]
+        end = entry[2] if len(entry) > 2 else None     # up to this label, not the first RTL
         for path, rows in lines.items():
             start = next((i for i, (_, c) in enumerate(rows)
                           if c.strip() == label + ":" or c.strip().startswith(label + ":")), None)
@@ -111,11 +119,13 @@ def split_locals(routines, lines):
             # each instruction is taken out of the block that owns its line
             # (the routine may end in another top-level label: `return85: RTL`)
             n = 0
-            for owner, code in rows[start:]:
+            for j, (owner, code) in enumerate(rows[start:]):
+                if end and j and code.strip().startswith(end + ":"):
+                    break
                 if is_insn(code):
                     n += 1
                     routines[owner][1] -= 1
-                    if re.search(r"\bRT[LS]\b", code):
+                    if not end and re.search(r"\bRT[LS]\b", code):
                         break
             routines[pc] = [name, n]
             break
@@ -131,7 +141,7 @@ def split_called(routines, lines):
     is a routine of its own: HM-Decomp often writes several routines under
     one top-level label. Each is carved out, from its label to its first
     RTL / RTS, into a routine keyed by its address (CODE_xxxxxx) or name."""
-    local_labels = {label for label, _ in LOCAL.values()}
+    local_labels = {entry[0] for entry in LOCAL.values()}
     callers = {}
     for rows in lines.values():
         for owner, code in rows:

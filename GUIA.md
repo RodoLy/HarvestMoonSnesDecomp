@@ -254,6 +254,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/text.c` | el cuadro de diálogo |
 | `src/audio.c` | hablar con el chip de sonido |
 | `src/save.c` | las partidas guardadas |
+| `src/menus.c` | botones en los menús |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -745,6 +746,29 @@ Lo que se guarda (`SaveGameSlot`), al principio de la ranura:
 - La pantalla de título lee solo la fecha y el nombre de cada ranura
   (`LoadGameSlotResume`); una ranura con día 0 está vacía.
 
+### 5.17 Botones y menús
+
+Cada cuadro `InputTypeSelector` mira el **modo de entrada** ($019A): 1
+caminando, 2 sin moverse, 3 una lista dentro de un cuadro de texto, 4
+menús, 5 la pantalla de nombres. En los menús, el **número de menú** ($95)
+dice cuál está abierto:
+
+| Menú | Qué hacen los botones |
+|---|---|
+| 2, 3 | Start pasa al menú 6 (cuando lo permite $7F1F5A bit $8000) |
+| 5 | el menú del título: tres opciones, arriba y abajo dan la vuelta; A abre el menú 8, 7 o $0A |
+| 7 | elegir ranura para guardar: arriba / abajo cambian la ranura, B cancela, A acepta |
+| 8 | elegir ranura para cargar: igual, pero A solo funciona en una ranura con partida (si no, un sonido de "no") |
+
+La respuesta queda en $94 (1 = cancelar, 2 = aceptar). Cada movimiento
+hace un efecto de sonido: 3 al moverse, 1 al aceptar, 2 al rechazar.
+
+**La lista en un cuadro de texto** (modo 3): 22 lugares en dos columnas de
+11 y una flecha. Arriba y abajo mueven dentro de la primera columna y dan
+la vuelta (en la segunda no hacen nada); derecha e izquierda saltan a la
+otra columna. Usan la **repetición automática** del botón, así que al
+mantenerlo sigue moviéndose. A cierra la lista.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -857,3 +881,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 22,49 % | la impresora de texto (comprobada en vivo: 2.424 cuadros de texto en una partida nueva) |
 | 22-oct-2026 | 25,96 % | cada cuadro de la vaca (1.567 instrucciones) |
 | 22-oct-2026 | 27,28 % | las partidas guardadas (el comprobador ya compara la SRAM) |
+| 22-oct-2026 | 28,16 % | los botones en los menús |

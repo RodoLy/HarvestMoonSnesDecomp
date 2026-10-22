@@ -392,3 +392,8 @@ void hm_PrintTextFrame(uint8_t *ram, HmRegs *r);    /* text.c */
 void hm_SaveGameSlot(uint8_t *ram, HmRegs *r);       /* save.c */
 void hm_LoadGameSlotResume(uint8_t *ram, HmRegs *r);
 void hm_CheckSRAMIntegrity(uint8_t *ram, HmRegs *r);
+void hm_SaveSlotMenuInputs(uint8_t *ram, HmRegs *r); /* menus.c */
+void hm_LoadSlotMenuInputs(uint8_t *ram, HmRegs *r);
+void hm_StartMenuInputs(uint8_t *ram, HmRegs *r);
+void hm_TitleMenuInputs(uint8_t *ram, HmRegs *r);
+void hm_ListInputs(uint8_t *ram, HmRegs *r);

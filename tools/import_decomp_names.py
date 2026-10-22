@@ -62,6 +62,11 @@ MANUAL = {
     0x83975F: "BlinkTextCursor",   # CODE_83975F
     0x8397A6: "PrintDigit",        # CODE_8397A6
     0x83951C: "PrintTextFrame",    # ADDDDFFFF
+    0x84C2FE: "SaveSlotMenuInputs",  # CODE_84C2FE
+    0x84C380: "LoadSlotMenuInputs",  # CODE_84C380
+    0x84C428: "StartMenuInputs",   # CODE_84C428
+    0x84C458: "TitleMenuInputs",   # CODE_84C458
+    0x84C540: "ListInputs",        # CODE_84C540
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

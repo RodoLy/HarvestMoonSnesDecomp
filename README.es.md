@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 27.28%](https://img.shields.io/badge/descompilado-27.28%25-2f855a)
+![Descompilado: 28.16%](https://img.shields.io/badge/descompilado-28.16%25-2f855a)
 
-**27.28%** del código del juego descompilado y verificado: 12322 de 45176 instrucciones, 170 de 529 rutinas (32.1%).
+**28.16%** del código del juego descompilado y verificado: 12722 de 45176 instrucciones, 175 de 533 rutinas (32.8%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
@@ -51,6 +51,7 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Eventos | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (arrancar un guion de evento) | `src/events.c` |
 | Edición del mapa | EditTileonMap / EditTileonMapandsets0181, ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | DMA de video | AddProgrammedDMA (encolar una copia a VRAM / CGRAM para el próximo NMI), RemoveProgrammedDMA, UNK_SetDMA2 (un bloque de 2x2 casillas de BG3), UNK_SetDMA1 (una letra) | `src/dma.c` |
+| Menús | SaveSlotMenuInputs, LoadSlotMenuInputs, StartMenuInputs, TitleMenuInputs, ListInputs (los botones de cada menú) | `src/menus.c` |
 | Partidas guardadas | SaveGameSlot (todo el formato de la partida), LoadGameSlotResume, CheckSRAMIntegrity (el comprobador también compara la RAM con batería) | `src/save.c` |
 | Sonido | UNK_Audio17 / 7 (esperar "listo"), UNK_Audio8, UNK_Audio15 / 19 (efectos de sonido), UNK_Audio16, UNK_Audio2 (órdenes al chip de sonido, comprobadas grabando sus respuestas) | `src/audio.c` |
 | Cuadro de texto | PrintTextFrame (ADDDDFFFF: la impresora, código por código), StartTextBox, CloseTextBox (CODE_8393F9), SUB_83932D (borrar el cuadro), BlinkTextBoxArrow / TextBoxArrow / DrawTextBoxArrow (la flecha de "hay más texto"), FindLetterGraphics / DrawLetter / AdvanceLetterCursor / BlinkTextCursor (letras), PrintDigit (números) | `src/text.c` |
