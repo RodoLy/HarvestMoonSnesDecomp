@@ -406,3 +406,17 @@ void hm_UpdateBGOffset(uint8_t *ram, HmRegs *r);
 void hm_SUB_80A0E1(uint8_t *ram, HmRegs *r);
 void hm_UNK_StaticMapScroling(uint8_t *ram, HmRegs *r);
 void hm_SUB_80A152(uint8_t *ram, HmRegs *r);
+void hm_SetTimeofDayPalette(uint8_t *ram, HmRegs *r);   /* palette.c */
+void hm_TransitionTimeofDayPalettes(uint8_t *ram, HmRegs *r);
+void hm_ClearsTimeofDayPaletteIndexandSetsNext(uint8_t *ram, HmRegs *r);
+void hm_ClearsTimeofDayPalette(uint8_t *ram, HmRegs *r);
+void hm_SUB_80916F(uint8_t *ram, HmRegs *r);
+void hm_SUB_80919D(uint8_t *ram, HmRegs *r);
+void hm_LoadFirstHalfPaletteToWRAM(uint8_t *ram, HmRegs *r);
+void hm_LoadSecondHalfPaletteToWRAM(uint8_t *ram, HmRegs *r);
+void hm_CustomiseSpritePalette(uint8_t *ram, HmRegs *r);
+void hm_UNK_CustomisePalette(uint8_t *ram, HmRegs *r);
+void hm_ChangePalettebyTime(uint8_t *ram, HmRegs *r);
+void hm_PrepareSpritePalette(uint8_t *ram, HmRegs *r);
+void hm_SetPaletteToLoad(uint8_t *ram, HmRegs *r);
+void hm_Event_TimeofDayPalette(uint8_t *ram, HmRegs *r);

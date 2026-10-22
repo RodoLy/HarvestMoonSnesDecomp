@@ -833,6 +833,80 @@ static void prep_scroll(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x12, (uint16_t)(hm_rd16(ram, 0x12) % 0xE0));
 }
 
+/* palette.c: the time-of-day palettes. A map (strict: one whose palettes
+ * exist for this part of the day and for the night; an entry $FF would
+ * point outside the pointer table), the target sometimes equal to the
+ * shown colours (so the change ends) or one step away. */
+static void palette_inputs(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), bool strict)
+{
+  prep_dma(ram, r, rnd);
+  static const uint8_t starts[4] = { 7, 15, 17, 18 };
+  for (int tries = 0; tries < 200; tries++) {
+    uint8_t map = (uint8_t)(rnd() % 0x60), hour = (uint8_t)(rnd() % 24);
+    unsigned part = 0;
+    while (part < 4 && hour >= starts[part]) part++;
+    uint8_t now = hm_bus_rd8(ram, 0x80BB5C + map * 6 + part);
+    uint8_t night = hm_bus_rd8(ram, 0x80BB5C + map * 6 + 4);
+    uint8_t s0 = hm_bus_rd8(ram, 0x80BE44 + map * 2), s1 = hm_bus_rd8(ram, 0x80BE44 + map * 2 + 1);
+    ram[0x22] = map; ram[0x11F1C] = hour;
+    if (!strict || now < 0x75 && night < 0x75 && s0 < 0x75 && s1 < 0x75) break;
+  }
+  ram[0x00973] = (uint8_t)((rnd() % 4) ? 1 : rnd());
+  ram[0x0017A] = (uint8_t)((rnd() % 2) ? 0x1F : rnd() % 0x20);
+  ram[0x0017B] = (uint8_t)((rnd() % 2) ? hm_bus_rd8(ram, 0x80BB5C + ram[0x22] * 6 + rnd() % 5) : rnd());
+  ram[0x0017C] = (uint8_t)rnd();
+  hm_wr16(ram, 0x00196, (uint16_t)rnd());
+  ram[0x11F19] = (uint8_t)(rnd() % 4);
+  hm_wr16(ram, 0x11F3B, (uint16_t)((rnd() % 2) ? 0 : rnd()));
+  hm_wr16(ram, 0x11F66, (uint16_t)((rnd() % 2) ? (1u << (rnd() % 6)) & 0x1F : rnd()));
+  hm_wr16(ram, 0x11F5E, (uint16_t)((rnd() % 2) ? (0x40u << (rnd() % 4)) : rnd()));
+  ram[0x92] = (uint8_t)((rnd() % 2) ? rnd() % 2 : rnd());
+  /* the byte at $81 is read but never set by CustomiseSpritePalette: small,
+   * so the colour table index stays in the ROM */
+  ram[0x81] = (uint8_t)((rnd() % 4) ? 0 : rnd() % 0x20);
+  /* the target: none, a palette of the table or the night one ($7F:0B00) */
+  uint32_t target = 0;
+  switch (rnd() % 4) {
+  case 0: break;
+  case 1: target = 0x7F0B00; break;
+  default: {
+    unsigned n = rnd() % 0x75;
+    target = hm_bus_rd16(ram, 0x80B9FD + n * 3) | (uint32_t)hm_bus_rd8(ram, 0x80B9FD + n * 3 + 2) << 16;
+  } }
+  hm_wr16(ram, 0x04, (uint16_t)target); ram[0x06] = (uint8_t)(target >> 16);
+  for (unsigned i = 0; i < 0x400; i++) ram[0x10900 + i] = (uint8_t)rnd();
+  for (unsigned i = 0; i < 0x200; i += 2) {
+    uint16_t c = (uint16_t)(rnd() & 0x7FFF);
+    if (target) {
+      uint16_t w = hm_bus_rd16(ram, (target + i) & 0xFFFFFF);
+      unsigned how = rnd() % 4;
+      if (how == 0) c = w;                                   /* already there */
+      else if (how == 1) c = (uint16_t)(w ^ (1u << (rnd() % 15)));
+    }
+    hm_wr16(ram, 0x10D00 + i, c);
+  }
+  if (target && rnd() % 4 == 0)                              /* everything there */
+    for (unsigned i = 0; i < 0x200; i += 2) hm_wr16(ram, 0x10D00 + i, hm_bus_rd16(ram, (target + i) & 0xFFFFFF));
+  /* the arguments: a colour place (row, colour) */
+  /* A (a palette, or a colour) comes from the registry's range */
+  r->x = (uint16_t)((rnd() % 4) ? rnd() % 0x10 : rnd() % 0x100);
+  r->y = (uint16_t)((rnd() % 4) ? rnd() % 0x10 : rnd() % 0x100);
+  /* Event_TimeofDayPalette: a script with the palette byte */
+  uint16_t at = (uint16_t)((rnd() % 16) ? 0xF000 + (rnd() & 0x3FF) : 0xFFFE);
+  hm_wr16(ram, 0xC9, at); ram[0xCB] = 0x7F;
+  ram[0x10000 + at + 1] = (uint8_t)(rnd() % 0x75);
+}
+/* the routines that load the map's palettes from the table need valid
+ * entries; the others get any map (some have $FF for a part of the day) */
+static void prep_palette(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  palette_inputs(ram, r, rnd, true);
+}
+static void prep_palette_any(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  palette_inputs(ram, r, rnd, false);
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1335,6 +1409,34 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/scroll.c", 0x80A11C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
   { "SUB_80A152", hm_SUB_80A152, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/scroll.c", 0x80A152, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
+  { "SetTimeofDayPalette", hm_SetTimeofDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x808FC7, 1, 0, 0, 0x0074, { { 0 } }, 0, prep_palette_any },
+  { "TransitionTimeofDayPalettes", hm_TransitionTimeofDayPalettes, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/palette.c", 0x80900C, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
+  { "ClearsTimeofDayPaletteIndexandSetsNext", hm_ClearsTimeofDayPaletteIndexandSetsNext, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/palette.c", 0x809157, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
+  { "ClearsTimeofDayPalette", hm_ClearsTimeofDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x809166, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
+  { "SUB_80916F", hm_SUB_80916F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x80916F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
+  { "SUB_80919D", hm_SUB_80919D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x80919D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
+  { "LoadFirstHalfPaletteToWRAM", hm_LoadFirstHalfPaletteToWRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x8091CF, 0, 0, 0, 0x0074, { { 0 } }, 0, prep_palette_any },
+  { "LoadSecondHalfPaletteToWRAM", hm_LoadSecondHalfPaletteToWRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x809208, 0, 0, 0, 0x0074, { { 0 } }, 0, prep_palette_any },
+  { "CustomiseSpritePalette", hm_CustomiseSpritePalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x8093A4, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
+  { "UNK_CustomisePalette", hm_UNK_CustomisePalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x809241, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette },
+  { "ChangePalettebyTime", hm_ChangePalettebyTime, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x8092E2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette },
+  { "PrepareSpritePalette", hm_PrepareSpritePalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x809329, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette },
+  { "SetPaletteToLoad", hm_SetPaletteToLoad, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/palette.c", 0x809501, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
+  { "Event_TimeofDayPalette", hm_Event_TimeofDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/palette.c", 0x849356, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

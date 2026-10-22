@@ -255,6 +255,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/save.c` | the saved games |
 | `src/menus.c` | buttons in menus |
 | `src/scroll.c` | scrolling the map |
+| `src/palette.c` | the colours of the day |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -808,6 +809,64 @@ view, a little before you see it.
 | $1E | the camera speed (pixels per frame) |
 | $20 / $21 | pixels inside the tile (0-7), across / down |
 
+### 5.19 The colours of the day
+
+The SNES has 256 colours on screen at a time (the **palette**, kept in the
+console's CGRAM): the first 128 for the backgrounds, the other 128 for the
+sprites. A colour is 15 bits: 5 of red, 5 of green, 5 of blue (0-31 each).
+The game keeps three copies in WRAM:
+
+| Where | What |
+|---|---|
+| `$7F:0900` | what is sent to the console |
+| `$7F:0B00` | a palette being prepared (the night one) |
+| `$7F:0D00` | the colours shown now |
+
+**Each map has a palette for each part of the day** (the table `$80:BB5C`,
+6 bytes per map): before 7:00, 7:00-14:59, 15:00-16:59, 17:00-17:59 and
+18:00 or later. $FF means "keep the one there is" (indoors, for example,
+the palette does not change).
+
+**The change is slow**:
+
+1. When the hour enters another part of the day, `SetPaletteToLoad` sees
+   the map has another palette and calls `SetTimeofDayPalette`, which
+   points `$04-$06` at it. From 18:00 the target is the night palette
+   already prepared in `$7F:0B00`.
+2. `TransitionTimeofDayPalettes` runs every frame while time runs. Every
+   **32 frames** it moves each colour **one step** in red, in green and in
+   blue towards the target, and sends the palette to the console by DMA.
+   Since a component can be 31 steps away, a full change can take
+   31 × 32 frames, about 16 seconds.
+3. When no colour changed, the change is over: the target is dropped and
+   the new palette is noted as loaded (`$017B`).
+
+Before 18:00 only the backgrounds' half changes; from 18:00 the sprites'
+half too. Colours 1-11 (1-15 when bit 2 of $0196 is clear; HM-Decomp calls
+that bit "sunny") are never touched: they are probably the ones of the text
+box and the window, which must not darken.
+
+**The night palette** is prepared by `UNK_CustomisePalette` when entering a
+map: the backgrounds from the map's "18:00" palette and the sprites from its
+night sprite palette (table `UNK_Table11`, $80:BE44, two per map: day and
+night).
+
+**Some sprite colours are made to measure** (`CustomiseSpritePalette`):
+
+- Three colours of the last sprite palette (row 15, colours 10-12) change
+  with the **season** (on the mountain maps $10-$13, with the map instead)
+  and with the night.
+- If the wife is pregnant or there is a child, three colours of row 11
+  (8-10) change with the **stage** (the first bit set of $7F1F66, bits 0-4)
+  and with the night: the baby's sprite.
+- "Night" for these colours means: from 18:00 on an outdoor map (below $15,
+  or $31 and above). Indoors the sprites keep their day colours.
+
+*Note:* HM-Decomp puts `CustomiseSpritePalette` at $80:93A3, but that byte
+is the `RTL` of the routine before it; the game calls $80:93A4.
+`CustomiseSpritePalette` also reads the byte $81 without setting it; in the
+game it is always 0, so it changes nothing.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -905,6 +964,8 @@ Things the game does wrong or oddly, found while decompiling:
 | BG3 | the third background layer; the game uses it for text |
 | port | a byte shared by two processors (the CPU and the sound chip) |
 | handshake | the "ready / here it is / done" exchange over the ports |
+| palette | the 256 colours the screen can use at a time |
+| CGRAM | the console's memory where the palette is kept |
 
 ## 9. Progress
 
@@ -931,3 +992,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 28.16 % | the buttons in the menus |
 | 22-Oct-2026 | 28.72 % | the buttons while a text box is open |
 | 22-Oct-2026 | 30.61 % | scrolling the map (checked live: about 1,200 calls in a new game) |
+| 22-Oct-2026 | 32.17 % | the colours of the day (checked live: about 13,000 calls) |

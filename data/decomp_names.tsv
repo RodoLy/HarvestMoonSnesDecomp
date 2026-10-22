@@ -57,6 +57,8 @@
 8092E2	ChangePalettebyTime
 0092E2	ChangePalettebyTime_lo
 809329	PrepareSpritePalette
+8093A4	CustomiseSpritePalette
+0093A4	CustomiseSpritePalette_lo
 809501	SetPaletteToLoad
 809553	CallIndexedSubrutines
 009553	CallIndexedSubrutines_lo

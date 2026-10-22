@@ -256,6 +256,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/save.c` | las partidas guardadas |
 | `src/menus.c` | botones en los menús |
 | `src/scroll.c` | desplazar el mapa |
+| `src/palette.c` | los colores del día |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -827,6 +828,67 @@ izquierda):
 | $1E | la velocidad de la cámara (píxeles por cuadro) |
 | $20 / $21 | píxeles dentro de la baldosa (0-7), horizontal / vertical |
 
+### 5.19 Los colores del día
+
+El SNES tiene 256 colores en pantalla a la vez (la **paleta**, guardada en
+la CGRAM de la consola): los primeros 128 para los fondos y los otros 128
+para los sprites. Un color son 15 bits: 5 de rojo, 5 de verde y 5 de azul
+(de 0 a 31 cada uno). El juego guarda tres copias en la WRAM:
+
+| Dónde | Qué |
+|---|---|
+| `$7F:0900` | lo que se manda a la consola |
+| `$7F:0B00` | una paleta que se está preparando (la de la noche) |
+| `$7F:0D00` | los colores que se ven ahora |
+
+**Cada mapa tiene una paleta para cada parte del día** (la tabla
+`$80:BB5C`, 6 bytes por mapa): antes de las 7:00, de 7:00 a 14:59, de
+15:00 a 16:59, de 17:00 a 17:59 y de las 18:00 en adelante. $FF quiere
+decir "deja la que hay" (dentro de las casas, por ejemplo, la paleta no
+cambia).
+
+**El cambio es lento**:
+
+1. Cuando la hora entra en otra parte del día, `SetPaletteToLoad` ve que el
+   mapa tiene otra paleta y llama a `SetTimeofDayPalette`, que apunta
+   `$04-$06` a ella. Desde las 18:00 el destino es la paleta de noche ya
+   preparada en `$7F:0B00`.
+2. `TransitionTimeofDayPalettes` corre cada cuadro mientras el tiempo
+   corre. Cada **32 cuadros** mueve cada color **un paso** en rojo, en verde
+   y en azul hacia el destino, y manda la paleta a la consola por DMA.
+   Como un componente puede estar a 31 pasos, un cambio completo puede
+   tardar 31 × 32 cuadros, unos 16 segundos.
+3. Cuando ningún color cambió, el cambio terminó: se suelta el destino y
+   la paleta nueva queda anotada como cargada (`$017B`).
+
+Antes de las 18:00 solo cambia la mitad de los fondos; desde las 18:00
+también la de los sprites. Los colores 1-11 (1-15 cuando el bit 2 de $0196
+está apagado; HM-Decomp llama a ese bit "soleado") nunca se tocan:
+probablemente son los del cuadro de texto y la ventana, que no deben
+oscurecerse.
+
+**La paleta de noche** la prepara `UNK_CustomisePalette` al entrar a un
+mapa: los fondos de la paleta "18:00" del mapa y los sprites de su paleta
+de sprites de noche (tabla `UNK_Table11`, $80:BE44, dos por mapa: día y
+noche).
+
+**Algunos colores de sprites se hacen a medida** (`CustomiseSpritePalette`):
+
+- Tres colores de la última paleta de sprites (fila 15, colores 10-12)
+  cambian con la **estación** (en los mapas de la montaña, $10-$13, con el
+  mapa) y con la noche.
+- Si la esposa está embarazada o hay un hijo, tres colores de la fila 11
+  (8-10) cambian con la **etapa** (el primer bit prendido de $7F1F66, bits
+  0-4) y con la noche: el sprite del bebé.
+- "Noche" para estos colores es: desde las 18:00 en un mapa de afuera
+  (menor que $15, o $31 en adelante). Dentro, los sprites mantienen sus
+  colores de día.
+
+*Nota:* HM-Decomp pone `CustomiseSpritePalette` en $80:93A3, pero ese byte
+es el `RTL` de la rutina anterior; el juego llama a $80:93A4.
+`CustomiseSpritePalette` además lee el byte $81 sin haberlo puesto; en el
+juego siempre vale 0, así que no cambia nada.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -927,6 +989,8 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | BG3 | la tercera capa de fondo; el juego la usa para el texto |
 | puerto | un byte que comparten dos procesadores (la CPU y el chip de sonido) |
 | apretón de manos | el intercambio "listo / ahí va / hecho" por los puertos |
+| paleta | los 256 colores que la pantalla puede usar a la vez |
+| CGRAM | la memoria de la consola donde se guarda la paleta |
 
 ## 9. Avance
 
@@ -953,3 +1017,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 28,16 % | los botones en los menús |
 | 22-oct-2026 | 28,72 % | los botones con un cuadro de texto abierto |
 | 22-oct-2026 | 30,61 % | desplazar el mapa (probado en vivo: unas 1.200 llamadas en una partida nueva) |
+| 22-oct-2026 | 32,17 % | los colores del día (probado en vivo: unas 13.000 llamadas) |

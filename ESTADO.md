@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **184 rutinas reescritas y verificadas** (0 diferencias):
+- **198 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -80,6 +80,10 @@ en el README (`tools/progress.py`).
 | ImmobileInputs | $84:CF05 | src/menus.c |
 | SUB_80A18D, SUB_80A308, SUB_80A481, SUB_80A617 (fila/columna nueva) | $80:A18D-$80:A617 | src/scroll.c |
 | UpdateBGOffset, SUB_80A0E1, UNK_StaticMapScroling, SUB_80A152 (la cámara) | $80:A0AB-$80:A152 | src/scroll.c |
+| SetTimeofDayPalette, TransitionTimeofDayPalettes (+ ClearsTimeofDayPaletteIndexandSetsNext), ClearsTimeofDayPalette | $80:8FC7-$80:9166 | src/palette.c |
+| SUB_80916F, SUB_80919D, LoadFirstHalfPaletteToWRAM, LoadSecondHalfPaletteToWRAM | $80:916F-$80:9208 | src/palette.c |
+| UNK_CustomisePalette, ChangePalettebyTime, PrepareSpritePalette, CustomiseSpritePalette, SetPaletteToLoad | $80:9241-$80:9501 | src/palette.c |
+| Event_TimeofDayPalette | $84:9356 | src/palette.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |
@@ -400,6 +404,18 @@ sistema de texto).
 - Fuzz 3 semillas × 2000 y en vivo (newgame.txt, ~1.200 llamadas): 0
   diferencias. Sabotajes detectados (el de `<` por `<=` en el tope de
   velocidad es equivalente: no cambia nada).
+
+## Los colores del día (hecho el 22-oct-2026)
+
+- `src/palette.c`: las 14 rutinas de paletas ($80:8FC7-$80:9501 y el
+  comando de evento $84:9356).
+- `CustomiseSpritePalette` está en $80:93A4 (HM-Decomp dice 93A3, que es el
+  RTL anterior): entrada en MANUAL (import_decomp_names.py) y en LOCAL
+  (progress.py).
+- Dos preparaciones: prep_palette (mapas con paletas válidas en la tabla,
+  para las que cargan de la tabla) y prep_palette_any (cualquier mapa).
+- Fuzz 3 semillas × 2000 y en vivo (newgame + nights, unas 13.000
+  llamadas): 0 diferencias. 15 sabotajes detectados.
 
 ## Lo siguiente
 

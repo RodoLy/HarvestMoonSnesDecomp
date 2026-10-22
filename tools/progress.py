@@ -73,6 +73,7 @@ LOCAL = {
     0x84C458: ("CODE_84C458", "TitleMenuInputs", "CODE_84C540"),
     0x84C540: ("CODE_84C540", "ListInputs", "PlayerMovementInputs"),
     0x84CF05: ("ImmobileInputs", "ImmobileInputs", "<end of file>"),
+    0x8093A4: ("CustomiseSpritePalette", "CustomiseSpritePalette"),  # HM-Decomp says 8093A3
     0x829999: ("ToolUsedCornSeeds", "ToolUsedCornSeeds"),   # ";82A9999" in HM-Decomp
 }
 
