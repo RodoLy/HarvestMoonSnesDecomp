@@ -21,6 +21,10 @@ uint8_t dma_read(Dma *dma, uint16_t adr);
 void dma_write(Dma *dma, uint16_t adr, uint8_t val);
 
 uint8_t *g_hm_dma_regs;
+uint8_t *g_hm_sram;
+uint32_t g_hm_sram_size;
+extern uint8_t *g_sram;                                           /* common_rtl.h */
+extern int g_sram_size;
 
 /* ── The sound chip's ports (see g_hm_apu in hm_decomp.h) ─────────────── */
 typedef int (*ApuWriteObserver)(uint16_t reg, uint8_t value);
@@ -603,6 +607,31 @@ static void prep_chicken_slot(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x0091D] = (uint8_t)((rnd() % 2) ? 0 : rnd());                   /* in hands */
   hm_wr16(ram, 0x0093B + 2 * n, (uint16_t)((rnd() % 3) ? 0x0200 - rnd() % 3 : rnd()));
   ram[0xDE] = (uint8_t)rnd();
+}
+
+/* save.c: the saved games. Both SRAM slots random, often valid ("FARM",
+ * the right checksum, a day), sometimes broken. */
+static void prep_sram(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  r->a = (uint16_t)((rnd() % 4) ? rnd() % 2 : rnd());
+  for (uint32_t a = 0x11F00; a < 0x11F80; a++) ram[a] = (uint8_t)rnd();
+  for (uint32_t a = 0x0881; a < 0x08A1; a++) ram[a] = (uint8_t)rnd();
+  if (!g_sram || g_sram_size < 0x2000) return;
+  for (unsigned s = 0; s < 2; s++) {
+    uint8_t *slot = g_sram + 0x1000 * s;
+    if (rnd() % 2) for (unsigned i = 0; i < 0x1000; i++) slot[i] = (uint8_t)rnd();
+    if (rnd() % 4) memcpy(slot + 0x3C, "FARM", 4);
+    if (rnd() % 4 == 0) slot[0x3C + rnd() % 4] ^= (uint8_t)(1 + rnd() % 255);
+    slot[0x03] = (uint8_t)((rnd() % 4) ? 1 + rnd() % 30 : 0);       /* the day */
+    slot[0x2E] = (uint8_t)((rnd() % 4) ? rnd() % 2 : rnd());
+    if (rnd() % 4) {                                                /* a right checksum */
+      uint8_t keep = slot[0x2E];
+      slot[0x2E] = slot[0x2F] = slot[0x30] = 0;
+      uint16_t sum = 0;
+      for (unsigned i = 0; i < 0x1000; i += 2) sum = (uint16_t)(sum + (slot[i] | slot[i + 1] << 8));
+      slot[0x2E] = keep; slot[0x2F] = (uint8_t)sum; slot[0x30] = (uint8_t)(sum >> 8);
+    }
+  }
 }
 
 /* eventcmds.c: a cow's slot ($18 + n) and its record ($7E:C1C6 + 16 n) */
@@ -1215,6 +1244,12 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "Event_UNKCowRelated", hm_Event_UNKCowRelated,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849AD4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_cow_slot },
+  { "SaveGameSlot", hm_SaveGameSlot, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/save.c", 0x83B68E, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_sram },
+  { "LoadGameSlotResume", hm_LoadGameSlotResume, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/save.c", 0x83BA45, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_sram },
+  { "CheckSRAMIntegrity", hm_CheckSRAMIntegrity, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/save.c", 0x83BAD4, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_sram },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
@@ -1224,6 +1259,7 @@ typedef struct Snapshot {
   CpuState cpu;
   uint8_t ram[0x20000];
   uint8_t dma[0x80];       /* $4300-$437F before the call */
+  uint8_t *sram;           /* the battery RAM before the call (or NULL) */
   int apu_from;            /* where its sound-port traffic starts in s_apu_log */
 } Snapshot;
 
@@ -1277,6 +1313,9 @@ void *hm_decomp_check_begin(const CpuState *cpu)
   s->cpu = *cpu;
   memcpy(s->ram, cpu->ram, sizeof s->ram);
   dma_regs_save(s->dma);
+  s->sram = NULL;
+  if (g_sram && g_sram_size > 0 && (s->sram = malloc((size_t)g_sram_size)) != NULL)
+    memcpy(s->sram, g_sram, (size_t)g_sram_size);
   return s;
 }
 
@@ -1289,7 +1328,7 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   if (s_check_depth == 0) s_apu_recording = 0;
   HmApuReplay apu = { s_apu_log + s->apu_from, s_apu_n - s->apu_from, 0, 0, "" };
   const HmDecompFn *f = find(name, &index);
-  if (!f) { free(s); return; }
+  if (!f) { free(s->sram); free(s); return; }
   Stats *st = &s_stats[index];
   st->calls++;
   /* A routine interrupted mid-way (the frame deadline yielded), handed to
@@ -1297,18 +1336,21 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
    * once and the interpreter runs it, e.g. the sprite routines of bank $85)
    * or run in decimal mode is not comparable here; the rewrites assume
    * binary mode. The fuzzer still checks them. */
-  if (!completed || s->cpu._flag_D) { st->skipped++; free(s); return; }
+  if (!completed || s->cpu._flag_D) { st->skipped++; free(s->sram); free(s); return; }
 
   HmRegs in = { s->cpu.A, s->cpu.X, s->cpu.Y, s->cpu._flag_C, s->cpu._flag_N, s->cpu.DB, s->cpu.D,
                 s->cpu.S, s->cpu.PB };
   HmRegs out = in;
   uint8_t dma_after[0x80];
   dma_regs_save(dma_after);
-  if (s_apu_overflow) { st->skipped++; free(s); return; }
+  if (s_apu_overflow) { st->skipped++; free(s->sram); free(s); return; }
   g_hm_dma_regs = s->dma;
+  g_hm_sram = s->sram;
+  g_hm_sram_size = (uint32_t)g_sram_size;
   g_hm_apu = &apu;
   if (!setjmp(s_apu_abort)) f->fn(s->ram, &out);
   g_hm_apu = NULL;
+  g_hm_sram = NULL;
   g_hm_dma_regs = NULL;
   if (!apu.bad && apu.pos != apu.n)
     snprintf(apu.why, sizeof apu.why, "APU: rewrite did %d port accesses, rom %d", apu.pos, apu.n), apu.bad = 1;
@@ -1329,6 +1371,14 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
         break;
       }
     }
+  }
+  if (!bad && s->sram) {
+    for (int i = 0; i < g_sram_size; i++)
+      if (s->sram[i] != g_sram[i]) {
+        bad = 1;
+        snprintf(why, sizeof why, "SRAM %04X = %02X, rom wrote %02X", i, s->sram[i], g_sram[i]);
+        break;
+      }
   }
   if (!bad) {
     for (size_t i = 0; i < sizeof s->ram; i++)
@@ -1355,7 +1405,7 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   } else {
     st->ok++;
   }
-  free(s);
+  free(s->sram); free(s);
 }
 
 /* ── Fuzzing (HM_DECOMP_FUZZ=<frame>:<iterations>) ─────────────────── */
@@ -1411,6 +1461,9 @@ static void fuzz_at(unsigned frame)
   static uint8_t saved_ram[0x20000], saved_dma[0x80];
   saved_cpu = g_cpu;
   memcpy(saved_ram, g_cpu.ram, sizeof saved_ram);
+  static uint8_t *saved_sram;                    /* the saved games: put back too */
+  if (g_sram && g_sram_size > 0 && !saved_sram) saved_sram = malloc((size_t)g_sram_size);
+  if (saved_sram) memcpy(saved_sram, g_sram, (size_t)g_sram_size);
   dma_regs_save(saved_dma);
   int prev = g_hm_decomp_check;
   if (!s_stats) { s_stats = calloc((size_t)g_hm_decomp_count, sizeof *s_stats); atexit(report); }
@@ -1460,6 +1513,7 @@ static void fuzz_at(unsigned frame)
     for (int n = 0; n < n_calls; n++) {
       g_cpu = saved_cpu;
       memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
+      if (saved_sram) memcpy(g_sram, saved_sram, (size_t)g_sram_size);
       dma_regs_restore(saved_dma);
       /* Every call starts with a fresh frame budget: long routines (the
        * 4096-tile farm loop) would otherwise hit the frame deadline, yield
@@ -1526,6 +1580,7 @@ static void fuzz_at(unsigned frame)
   }
   g_cpu = saved_cpu;
   memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
+  if (saved_sram) memcpy(g_sram, saved_sram, (size_t)g_sram_size);
   dma_regs_restore(saved_dma);
   g_hm_decomp_check = prev;
   s_fuzzing = 0;

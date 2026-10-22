@@ -188,6 +188,9 @@ Some tricks that were needed:
 
 ### 3.4 What the checker cannot see
 
+- **The saved games (SRAM)** are compared too: the checker copies the
+  cartridge's battery RAM before the call and checks that the rewrite
+  leaves it exactly as the original did.
 - **The video hardware**: its registers are not memory. What the game
   writes there is not compared, except the DMA registers.
 - **The sound chip, solved by recording.** Its answers come from another
@@ -249,6 +252,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/ending.c` | the ending's score |
 | `src/text.c` | the dialogue box |
 | `src/audio.c` | talking to the sound chip |
+| `src/save.c` | the saved games |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -697,6 +701,36 @@ is busy (port 0, bit 4) and, if it is, simply skips the sound.
 In a new game, the text alone sends 248 sound effects: all of them were
 checked live, with the recording of 3.4.
 
+### 5.16 The saved games
+
+The cartridge has a battery RAM (SRAM) with **two slots of 4 KB**. What
+is saved (`SaveGameSlot`), at the start of the slot:
+
+| Offset | What |
+|---|---|
+| +00-+03 | year, season, weekday, day |
+| +04-+0A | seed bags and feed |
+| +0B, +0C | number of cows and chickens |
+| +0D-+1A | tomorrow's weather, max stamina, item in hand, water, more flags |
+| +2E | 1 = this slot was saved last |
+| +2F | checksum (16 bits) |
+| +31-+38 | crops shipped (corn, tomatoes, turnips, potatoes) |
+| +39-+3B | money (24 bits) |
+| +3C-+3F | the letters "FARM": the slot is valid |
+| +40-+7E | wood, fodder, the girls' hearts, event flags, the dog, happiness, the family |
+| +80-+97 | names: player, dog, horse, children (and the shed's items) |
+| +98 | the 13 chickens (8 bytes each) |
+| +100 | the 12 cows (16 bytes each) |
+| +1C0 | the farm's tiles, to the end of the slot |
+
+- The **checksum** is the sum of the slot's 2,048 words (16 bits),
+  counted with +2E and +2F-+30 at zero.
+- At power-on, `CheckSRAMIntegrity` checks both slots: "FARM" and the
+  checksum. A slot that fails is **cleared** (its first 2 KB) and gets
+  "FARM" back, so it shows as empty.
+- The title screen reads only the date and the name of each slot
+  (`LoadGameSlotResume`); a slot with day 0 is empty.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -747,6 +781,9 @@ Things the game does wrong or oddly, found while decompiling:
     The table of barn places has x and y for each cow, but this code reads
     the same word twice (it forgets to move to the next one), so the
     position written for the cow is (x, x).
+18. **The flag "a save was reset"** ($7F1F60 bit $0800) is only set when
+    *both* slots fail the check, not when one does (the code looks at slot
+    1's result only on slot 2's failure path).
 
 ## 7. Differences found in the recompilation
 
@@ -803,3 +840,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 21-Oct-2026 | 21.91 % | the routine that picks the tool's routine |
 | 22-Oct-2026 | 22.49 % | the text printer (checked live: 2,424 frames of text in a new game) |
 | 22-Oct-2026 | 25.96 % | the cow's every frame (1,567 instructions) |
+| 22-Oct-2026 | 27.28 % | the saved games (the checker now compares the SRAM) |

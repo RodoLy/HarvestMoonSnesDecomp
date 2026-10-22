@@ -189,6 +189,9 @@ Algunos trucos que fueron necesarios:
 
 ### 3.4 Lo que el comprobador no puede ver
 
+- **Las partidas guardadas (SRAM)** también se comparan: el comprobador
+  copia la RAM con batería del cartucho antes de la llamada y revisa que
+  la reescritura la deje exactamente igual que el original.
 - **El hardware de video**: sus registros no son memoria. Lo que el juego
   escribe ahí no se compara, salvo los registros de DMA.
 - **El chip de sonido, resuelto grabando.** Sus respuestas vienen de otro
@@ -250,6 +253,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/objects.c` | objetos con sprite |
 | `src/text.c` | el cuadro de diálogo |
 | `src/audio.c` | hablar con el chip de sonido |
+| `src/save.c` | las partidas guardadas |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -711,6 +715,36 @@ el sonido.
 En una partida nueva, solo el texto manda 248 efectos de sonido: todos se
 comprobaron en vivo, con la grabación de 3.4.
 
+### 5.16 Las partidas guardadas
+
+El cartucho tiene una RAM con batería (SRAM) con **dos ranuras de 4 KB**.
+Lo que se guarda (`SaveGameSlot`), al principio de la ranura:
+
+| Posición | Qué |
+|---|---|
+| +00-+03 | año, estación, día de la semana, día |
+| +04-+0A | bolsas de semillas y comida |
+| +0B, +0C | cantidad de vacas y gallinas |
+| +0D-+1A | clima de mañana, energía máxima, objeto en la mano, agua, más banderas |
+| +2E | 1 = esta ranura se guardó al último |
+| +2F | suma de comprobación (16 bits) |
+| +31-+38 | cosechas enviadas (maíz, tomates, nabos, papas) |
+| +39-+3B | dinero (24 bits) |
+| +3C-+3F | las letras "FARM": la ranura es válida |
+| +40-+7E | madera, pasto, corazones de las chicas, banderas de eventos, el perro, felicidad, la familia |
+| +80-+97 | nombres: jugador, perro, caballo, hijos (y los objetos de la bodega) |
+| +98 | las 13 gallinas (8 bytes cada una) |
+| +100 | las 12 vacas (16 bytes cada una) |
+| +1C0 | las casillas de la granja, hasta el final de la ranura |
+
+- La **suma de comprobación** es la suma de las 2.048 palabras (16 bits)
+  de la ranura, contadas con +2E y +2F-+30 en cero.
+- Al encender, `CheckSRAMIntegrity` revisa las dos ranuras: "FARM" y la
+  suma. Una ranura que falla se **borra** (sus primeros 2 KB) y recibe
+  "FARM" de nuevo, así que aparece vacía.
+- La pantalla de título lee solo la fecha y el nombre de cada ranura
+  (`LoadGameSlotResume`); una ranura con día 0 está vacía.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -763,6 +797,9 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     equivocada.** La tabla de lugares del establo tiene x e y para cada
     vaca, pero este código lee dos veces la misma palabra (se olvida de
     pasar a la siguiente), así que la posición que se le escribe es (x, x).
+18. **La bandera "se reinició una partida"** ($7F1F60 bit $0800) solo se
+    pone cuando fallan *las dos* ranuras, no cuando falla una (el código
+    mira el resultado de la ranura 1 solo en el camino de fallo de la 2).
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -819,3 +856,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 21-oct-2026 | 21,91 % | la rutina que elige la rutina de cada herramienta |
 | 22-oct-2026 | 22,49 % | la impresora de texto (comprobada en vivo: 2.424 cuadros de texto en una partida nueva) |
 | 22-oct-2026 | 25,96 % | cada cuadro de la vaca (1.567 instrucciones) |
+| 22-oct-2026 | 27,28 % | las partidas guardadas (el comprobador ya compara la SRAM) |
