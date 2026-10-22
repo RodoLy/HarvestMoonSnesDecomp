@@ -901,6 +901,21 @@ izquierda):
 | $1E | la velocidad de la cámara (píxeles por cuadro) |
 | $20 / $21 | píxeles dentro de la baldosa (0-7), horizontal / vertical |
 
+**Al entrar a un mapa** (`SUB_809EBC`): la cámara se pone de modo que el
+jugador quede en el centro de la pantalla (128 píxeles), salvo que así se
+viera más allá de un límite; entonces se queda en el límite y el jugador
+queda corrido. $090B / $090D dicen dónde está el jugador en la pantalla.
+
+**El segundo fondo, BG2** (`SUB_809F61`, cada cuadro):
+
+- en el cobertizo de herramientas (mapa $26), nada;
+- en los mapas desde $31 (la cima de la montaña y otros) un paralaje: a
+  lo ancho, BG2 sigue a la cámara; arriba y abajo se mueve a la mitad de
+  velocidad. Además duplica la velocidad de la cámara;
+- en los otros mapas depende de $0196: bit 1 o bit 3, BG2 queda fijo a la
+  cámara; bit 2, **las nubes**: se mueven con la cámara y cada 10 cuadros
+  se corren un píxel a la derecha y uno hacia arriba.
+
 ### 5.19 Los colores del día
 
 El SNES tiene 256 colores en pantalla a la vez (la **paleta**, guardada en
@@ -1220,3 +1235,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 39,25 % | el comando de evento 37: el objeto del grupo $17 que se carga (probablemente el hijo) |
 | 22-oct-2026 | 39,37 % | la división con signo (sin uso) |
 | 22-oct-2026 | 39,59 % | el descompresor (LZSS); el comprobador ahora también conoce todas las banderas de la entrada, para `PHP` |
+| 22-oct-2026 | 40,09 % | poner la cámara al entrar a un mapa, y el segundo fondo (nubes, paralaje) |

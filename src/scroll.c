@@ -303,3 +303,147 @@ void hm_SUB_80A152(uint8_t *ram, HmRegs *r)
     hm_rtl(ram, r);
   }
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * SUB_809EBC ($80:9EBC, JSL, RTL): place the camera on entering a map: the
+ * player in the middle of the screen (128 pixels), unless that would show
+ * past a limit; then the camera stays at the limit and the player is off
+ * centre. $090B / $090D = where the player is on the screen; the sub-tile
+ * offset ($20 / $21) is 0 at the low limit, 8 at the high one.
+ * ═════════════════════════════════════════════════════════════════════════ */
+static void place_axis(uint8_t *ram, HmRegs *r, unsigned pos, unsigned low, unsigned high,
+                       uint16_t on_screen, unsigned sub, unsigned cam)
+{
+  uint16_t want = (uint16_t)(dp16(ram, r, pos) - 0x80);   /* SEC; SBC #$80 */
+  uint16_t lo = dp16(ram, r, low);
+  uint16_t diff = (uint16_t)(want - lo);                  /* CMP $low */
+  bool below = (diff & 0x8000) || diff == 0 || want < lo; /* BMI / BEQ / not BCS */
+  if (below) {
+    uint16_t a = (uint16_t)(want + 0x80);                 /* CLC; ADC #$80 */
+    r->c = (uint32_t)want + 0x80 > 0xFFFF;
+    r->c = a >= lo;                                       /* SEC; SBC */
+    hm_bus_wr16(ram, db_addr(r, on_screen), (uint16_t)(a - lo));
+    *hm_dp(ram, r, sub) = 0;
+    r->a = lo;
+    set16(ram, r, cam, lo);
+    return;
+  }
+  uint16_t hi = dp16(ram, r, high);
+  r->c = want >= hi;                                      /* CMP $high */
+  if (!r->c) {
+    set16(ram, r, cam, want);
+    r->a = 0x0080;
+    hm_bus_wr16(ram, db_addr(r, on_screen), 0x0080);
+    return;
+  }
+  uint16_t a = (uint16_t)(want + 0x80);
+  r->c = a >= hi;
+  hm_bus_wr16(ram, db_addr(r, on_screen), (uint16_t)(a - hi));
+  *hm_dp(ram, r, sub) = 8;
+  r->a = hi;
+  set16(ram, r, cam, hi);
+}
+void hm_SUB_809EBC(uint8_t *ram, HmRegs *r)
+{
+  place_axis(ram, r, 0xD6, 0xED, 0xF1, 0x090B, 0x20, 0xF5);
+  place_axis(ram, r, 0xD8, 0xEF, 0xF3, 0x090D, 0x21, 0xF7);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * SUB_809F61 ($80:9F61, JSL, RTL): the second background (BG2: $0140 /
+ * $0142), every frame.
+ *  - In the tool shed (map $26): nothing.
+ *  - Maps $31 and up: BG2 follows the camera across; up and down it moves
+ *    at half speed, 128 pixels lower (parallax). It also doubles the
+ *    camera speed $1E (unless the camera is at a vertical limit).
+ *  - Other maps, by $0196: bit 1: BG2 = the camera; bit 2: the clouds:
+ *    BG2 moves with the camera (when the camera moves) and every 10 frames
+ *    ($091C) drifts one pixel right and one up; bit 3: BG2 = the camera.
+ * ═════════════════════════════════════════════════════════════════════════ */
+#define BG2_X 0x0140
+#define BG2_Y 0x0142
+
+static uint16_t rdw(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_rd16(ram, db_addr(r, a)); }
+static void wrw(uint8_t *ram, const HmRegs *r, uint16_t a, uint16_t v) { hm_bus_wr16(ram, db_addr(r, a), v); }
+/* CMP $a; BEQ / CMP $b; BEQ: at a limit */
+static bool at_limit(uint8_t *ram, HmRegs *r, uint16_t v, unsigned a, unsigned b)
+{
+  r->c = v >= dp16(ram, r, a);
+  if (v == dp16(ram, r, a)) return true;
+  r->c = v >= dp16(ram, r, b);
+  return v == dp16(ram, r, b);
+}
+static void drift(uint8_t *ram, HmRegs *r)
+{
+  uint8_t t = (uint8_t)(hm_bus_rd8(ram, db_addr(r, 0x091C)) + 1);
+  r->a = (uint16_t)((r->a & 0xFF00) | t);
+  hm_bus_wr8(ram, db_addr(r, 0x091C), t);
+  r->c = t >= 0x0A;
+  if (t != 0x0A) return;
+  hm_bus_wr8(ram, db_addr(r, 0x091C), 0);
+  uint16_t x = rdw(ram, r, BG2_X);
+  wrw(ram, r, BG2_X, (uint16_t)(x + 1));
+  uint16_t y = rdw(ram, r, BG2_Y);
+  r->c = y >= 1;
+  r->a = (uint16_t)(y - 1);
+  wrw(ram, r, BG2_Y, r->a);
+}
+static void follow_bg2(uint8_t *ram, HmRegs *r)
+{
+  wrw(ram, r, BG2_X, dp16(ram, r, 0xF5));
+  r->a = dp16(ram, r, 0xF7);
+  wrw(ram, r, BG2_Y, r->a);
+}
+void hm_SUB_809F61(uint8_t *ram, HmRegs *r)
+{
+  uint8_t map = *hm_dp(ram, r, 0x22);
+  r->a = (uint16_t)((r->a & 0xFF00) | map);
+  r->c = map >= 0x26;
+  if (map == 0x26) return;
+  r->c = map >= 0x31;
+  if (r->c) {                                             /* parallax maps */
+    r->a = dp16(ram, r, 0xF7);
+    if (at_limit(ram, r, r->a, 0xEF, 0xF3)) return;
+    r->a = dp16(ram, r, 0xF5);
+    wrw(ram, r, BG2_X, r->a);
+    uint16_t speed = dp16(ram, r, 0x1E);
+    r->c = speed >> 15;
+    r->a = (uint16_t)(speed << 1);
+    set16(ram, r, 0x1E, r->a);
+    r->a = dp16(ram, r, 0xDA);
+    r->c = r->a >= 2;
+    if (r->a == 2) return;
+    r->c = r->a >= 3;
+    if (r->a == 3) return;
+    uint16_t y = dp16(ram, r, 0xF7);
+    r->a = (uint16_t)((y >> 1) + 0x80);                   /* LSR; CLC; ADC #$80 */
+    r->c = (uint32_t)(y >> 1) + 0x80 > 0xFFFF;
+    wrw(ram, r, BG2_Y, r->a);
+    return;
+  }
+  if ((r->a = rdw(ram, r, 0x0196) & 0x0002)) { follow_bg2(ram, r); return; }
+  if (!(r->a = rdw(ram, r, 0x0196) & 0x0004)) {
+    if ((r->a = rdw(ram, r, 0x0196) & 0x0008)) follow_bg2(ram, r);
+    return;
+  }
+  /* the clouds: with the camera, then the drift */
+  uint16_t dir = dp16(ram, r, 0xDA);
+  r->a = dir;
+  unsigned d = 4;
+  for (unsigned k = 0; k < 4; k++) {
+    r->c = dir >= k;
+    if (dir == k) { d = k; break; }
+  }
+  if (d < 4) {
+    bool vertical = d < 2;
+    r->a = dp16(ram, r, vertical ? 0xF7 : 0xF5);
+    if (!at_limit(ram, r, r->a, vertical ? 0xEF : 0xED, vertical ? 0xF3 : 0xF1)) {
+      uint16_t at = vertical ? BG2_Y : BG2_X;
+      uint16_t v = rdw(ram, r, at), s = dp16(ram, r, 0x1E);
+      if (d == 0 || d == 2) { r->a = (uint16_t)(v + s); r->c = (uint32_t)v + s > 0xFFFF; }
+      else { r->a = (uint16_t)(v - s); r->c = v >= s; }
+      wrw(ram, r, at, r->a);
+    }
+  }
+  drift(ram, r);
+}

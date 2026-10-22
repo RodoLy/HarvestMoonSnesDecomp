@@ -408,6 +408,8 @@ void hm_UpdateBGOffset(uint8_t *ram, HmRegs *r);
 void hm_SUB_80A0E1(uint8_t *ram, HmRegs *r);
 void hm_UNK_StaticMapScroling(uint8_t *ram, HmRegs *r);
 void hm_SUB_80A152(uint8_t *ram, HmRegs *r);
+void hm_SUB_809EBC(uint8_t *ram, HmRegs *r);
+void hm_SUB_809F61(uint8_t *ram, HmRegs *r);
 void hm_SetTimeofDayPalette(uint8_t *ram, HmRegs *r);   /* palette.c */
 void hm_TransitionTimeofDayPalettes(uint8_t *ram, HmRegs *r);
 void hm_ClearsTimeofDayPaletteIndexandSetsNext(uint8_t *ram, HmRegs *r);

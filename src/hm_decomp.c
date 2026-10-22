@@ -1222,6 +1222,28 @@ static void prep_decompress(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x75] = 0x00; ram[0x76] = 0xC0; ram[0x77] = 0x7F;
 }
 
+/* scroll.c: SUB_809EBC / SUB_809F61. The player and the camera, the
+ * camera's limits (sometimes the camera at one), the map (the shed $26,
+ * $31 and up), $0196's background bits, the facing, the cloud timer. */
+static void prep_camera(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  uint16_t lx = (uint16_t)(rnd() % 0x100), ly = (uint16_t)(rnd() % 0x100);
+  hm_wr16(ram, 0xED, lx); hm_wr16(ram, 0xEF, ly);
+  hm_wr16(ram, 0xF1, (uint16_t)(lx + rnd() % 0x300)); hm_wr16(ram, 0xF3, (uint16_t)(ly + rnd() % 0x300));
+  hm_wr16(ram, 0xD6, (uint16_t)((rnd() % 8) ? rnd() % 0x400 : rnd()));
+  hm_wr16(ram, 0xD8, (uint16_t)((rnd() % 8) ? rnd() % 0x400 : rnd()));
+  hm_wr16(ram, 0xF5, (uint16_t)((rnd() % 4) ? lx + rnd() % 0x300 : hm_rd16(ram, (rnd() % 2) ? 0xED : 0xF1)));
+  hm_wr16(ram, 0xF7, (uint16_t)((rnd() % 4) ? ly + rnd() % 0x300 : hm_rd16(ram, (rnd() % 2) ? 0xEF : 0xF3)));
+  static const uint8_t maps[] = { 0, 1, 4, 0x10, 0x26, 0x31, 0x33, 0x3C };
+  ram[0x22] = (uint8_t)((rnd() % 4) ? maps[rnd() % 8] : rnd());
+  hm_wr16(ram, 0x0196, (uint16_t)((rnd() % 2) ? (2u << (rnd() % 3)) : rnd()));
+  hm_wr16(ram, 0xDA, (uint16_t)((rnd() % 8) ? rnd() % 4 : rnd() % 8));
+  ram[0x091C] = (uint8_t)((rnd() % 2) ? 9 : rnd() % 10);
+  hm_wr16(ram, 0x1E, (uint16_t)((rnd() % 4) ? 1 + rnd() % 4 : rnd()));
+  hm_wr16(ram, 0x0140, (uint16_t)rnd()); hm_wr16(ram, 0x0142, (uint16_t)rnd());
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1918,6 +1940,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/math.c", 0x8380D0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_division_signed },
   { "DecompressTileMap", hm_DecompressTileMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/decompress.c", 0x8381F8, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_decompress },
+  { "SUB_809EBC", hm_SUB_809EBC, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/scroll.c", 0x809EBC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_camera },
+  { "SUB_809F61", hm_SUB_809F61, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/scroll.c", 0x809F61, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_camera },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

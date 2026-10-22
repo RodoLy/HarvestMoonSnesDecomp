@@ -882,6 +882,21 @@ view, a little before you see it.
 | $1E | the camera speed (pixels per frame) |
 | $20 / $21 | pixels inside the tile (0-7), across / down |
 
+**Entering a map** (`SUB_809EBC`): the camera is placed so the player is
+in the middle of the screen (128 pixels), unless that would show past a
+limit; then it stays at the limit and the player is off centre. $090B /
+$090D say where the player is on the screen.
+
+**The second background, BG2** (`SUB_809F61`, every frame):
+
+- in the tool shed (map $26), nothing;
+- on the maps from $31 (the mountain top and others) a parallax: across,
+  BG2 follows the camera; up and down it moves at half speed. It also
+  doubles the camera speed;
+- on the other maps it depends on $0196: bit 1 or bit 3, BG2 is fixed to
+  the camera; bit 2, **the clouds**: they move with the camera and every
+  10 frames drift one pixel to the right and one up.
+
 ### 5.19 The colours of the day
 
 The SNES has 256 colours on screen at a time (the **palette**, kept in the
@@ -1192,3 +1207,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 39.25 % | event command 37: the carried object of group $17 (probably the child) |
 | 22-Oct-2026 | 39.37 % | the signed division (unused) |
 | 22-Oct-2026 | 39.59 % | the decompressor (LZSS); the checker now also knows all the flags at the entry, for `PHP` |
+| 22-Oct-2026 | 40.09 % | placing the camera on entering a map, and the second background (clouds, parallax) |
