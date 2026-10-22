@@ -753,6 +753,16 @@ arrow. Up and down move inside the first column and wrap around (they do
 nothing in the second); right and left jump to the other column. They use
 the button's **auto-repeat**, so holding it keeps moving. A closes the list.
 
+**While a text box is open** (mode 2, `ImmobileInputs`):
+
+- While letters are being printed, **holding A** makes the next letter
+  come at once: that is how you speed up the text.
+- When the text waits for a button, A wipes the box and goes on.
+- At the end of the text, A closes the box and you can walk again.
+- In a **choice**, the options are laid out in two columns of three; up
+  and down move inside a column, left and right jump to the other one,
+  and A closes the box with the chosen option in $018F.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -864,3 +874,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 25.96 % | the cow's every frame (1,567 instructions) |
 | 22-Oct-2026 | 27.28 % | the saved games (the checker now compares the SRAM) |
 | 22-Oct-2026 | 28.16 % | the buttons in the menus |
+| 22-Oct-2026 | 28.72 % | the buttons while a text box is open |

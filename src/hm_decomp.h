@@ -397,3 +397,4 @@ void hm_LoadSlotMenuInputs(uint8_t *ram, HmRegs *r);
 void hm_StartMenuInputs(uint8_t *ram, HmRegs *r);
 void hm_TitleMenuInputs(uint8_t *ram, HmRegs *r);
 void hm_ListInputs(uint8_t *ram, HmRegs *r);
+void hm_ImmobileInputs(uint8_t *ram, HmRegs *r);

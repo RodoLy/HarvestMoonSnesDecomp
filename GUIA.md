@@ -769,6 +769,16 @@ la vuelta (en la segunda no hacen nada); derecha e izquierda saltan a la
 otra columna. Usan la **repetición automática** del botón, así que al
 mantenerlo sigue moviéndose. A cierra la lista.
 
+**Mientras hay un cuadro de texto abierto** (modo 2, `ImmobileInputs`):
+
+- Mientras se imprimen las letras, **mantener A** hace que la siguiente
+  salga enseguida: así se acelera el texto.
+- Cuando el texto espera un botón, A borra el cuadro y sigue.
+- Al final del texto, A cierra el cuadro y puedes volver a caminar.
+- En una **elección**, las opciones están en dos columnas de tres; arriba
+  y abajo mueven dentro de una columna, izquierda y derecha saltan a la
+  otra, y A cierra el cuadro con la opción elegida en $018F.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -882,3 +892,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 25,96 % | cada cuadro de la vaca (1.567 instrucciones) |
 | 22-oct-2026 | 27,28 % | las partidas guardadas (el comprobador ya compara la SRAM) |
 | 22-oct-2026 | 28,16 % | los botones en los menús |
+| 22-oct-2026 | 28,72 % | los botones con un cuadro de texto abierto |

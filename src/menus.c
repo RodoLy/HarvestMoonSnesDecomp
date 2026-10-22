@@ -225,3 +225,156 @@ void hm_ListInputs(uint8_t *ram, HmRegs *r)
     hm_bus_wr16(ram, db_addr(r, 0x0142), 0x0100);
   }
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * ImmobileInputs ($84:CF05, RTL; input mode 2): the buttons while a text
+ * box is open ($019B says in which state):
+ *   bit 1, printing: holding A ($0124, "held") makes the next letter come
+ *          at once ($0189 = 4);
+ *   bit 2 (the end) or bit 5 (the arrow): A closes the box and the player
+ *          can walk again (mode 1); the A press is used up ($0128 bit 7
+ *          cleared);
+ *   bit 3, waiting: A wipes the box and goes on with the next code (the
+ *          cursor back to VRAM $5010, bit 3 cleared);
+ *   bit 4, a choice: $018F = the option, $018E = the last one. The options
+ *          are in two columns of three (0-2, 3-5); down / up move in the
+ *          column, right / left jump to the other one; A closes the box.
+ *          Before moving, the cursor is erased (letter $B1 at $0185).
+ * ═════════════════════════════════════════════════════════════════════════ */
+#define JOY_HELD     0x0124
+
+static void erase_cursor(uint8_t *ram, HmRegs *r, uint16_t ret)
+{
+  r->x = 1;
+  r->a = 0x00B1;
+  jsl83(ram, r, ret, hm_DrawLetter);
+}
+static void choose(uint8_t *ram, HmRegs *r, uint8_t option)
+{
+  wr8(ram, r, 0x018F, option);
+  set_a8(r, option);
+}
+
+static void choice_down(uint8_t *ram, HmRegs *r)
+{
+  beep(ram, r, 3, 0xCFFB);
+  erase_cursor(ram, r, 0xD007);
+  uint8_t at = rd8(ram, r, 0x018F), last = rd8(ram, r, 0x018E);
+  set_a8(r, at);
+  r->c = at >= 3;
+  if (at >= 3) {
+    r->c = at >= last;
+    choose(ram, r, at == last ? (uint8_t)(at - 1) : (uint8_t)(at + 1));
+  } else {
+    r->c = at >= last;
+    if (at != last) r->c = at >= 2;
+    if (at == last || at == 2) wr8(ram, r, 0x018F, 0);
+    else choose(ram, r, (uint8_t)(at + 1));
+  }
+  wr8(ram, r, 0x018B, 0);
+}
+
+static void choice_up(uint8_t *ram, HmRegs *r)
+{
+  beep(ram, r, 3, 0xD04B);
+  erase_cursor(ram, r, 0xD057);
+  uint8_t at = rd8(ram, r, 0x018F), last = rd8(ram, r, 0x018E);
+  set_a8(r, at);
+  if (at == 0) {                                     /* to the bottom of the column */
+    set_a8(r, last);
+    r->c = last >= 3;
+    choose(ram, r, last >= 3 ? 2 : last);
+  } else if (at == 3) {
+    r->c = 1;
+    set_a8(r, last);
+    r->c = last >= 3;
+    if (last != 3) choose(ram, r, 4);                /* LDA $018F; INC */
+  } else {
+    r->c = at >= 3;
+    choose(ram, r, (uint8_t)(at - 1));
+  }
+  wr8(ram, r, 0x018B, 0);
+}
+
+static void choice_across(uint8_t *ram, HmRegs *r, uint16_t ret_beep, uint16_t ret_erase)
+{
+  beep(ram, r, 3, ret_beep);
+  uint8_t last = rd8(ram, r, 0x018E);
+  set_a8(r, last);
+  r->c = last >= 3;
+  if (last >= 3) {
+    uint8_t at = rd8(ram, r, 0x018F);
+    set_a8(r, at);
+    r->c = at >= 2;
+    if (at != 2) {
+      erase_cursor(ram, r, ret_erase);
+      at = rd8(ram, r, 0x018F);
+      set_a8(r, at);
+      r->c = at >= 2;
+      if (at >= 2) { r->c = at >= 3; choose(ram, r, (uint8_t)(at - 3)); }
+      else if (at == 1) {
+        r->c = 1;
+        set_a8(r, last);
+        r->c = last >= 3;
+        if (last != 3) { r->c = 0; choose(ram, r, 4); }
+      } else {
+        r->c = 0;
+        choose(ram, r, 3);
+      }
+    }
+  }
+  wr8(ram, r, 0x018B, 0);
+}
+
+void hm_ImmobileInputs(uint8_t *ram, HmRegs *r)
+{
+  uint8_t box = rd8(ram, r, 0x019B);
+  set_a8(r, box & 0x02);
+  if (box & 0x02) {                                   /* printing: A held = faster */
+    if (!pressed(ram, r, JOY_HELD, BTN_A)) return;
+    set_a8(r, 4);
+    wr8(ram, r, 0x0189, 4);
+    return;
+  }
+  set_a8(r, box & 0x04);
+  bool close = box & 0x04;
+  if (!close) {
+    set_a8(r, box & 0x08);
+    if (box & 0x08) {                                 /* waiting: A = go on */
+      if (!pressed(ram, r, JOY_NEW, BTN_A)) return;
+      jsl83(ram, r, 0xCF70, hm_SUB_83932D);
+      hm_bus_wr16(ram, db_addr(r, 0x0187), (uint16_t)(rd16(ram, r, 0x0187) + 1));
+      hm_bus_wr16(ram, db_addr(r, 0x0185), 0x5010);
+      r->c = 0;                                       /* CLC; ADC #$10 */
+      wr8(ram, r, 0x018B, 0);
+      uint8_t flags = (uint8_t)(rd8(ram, r, 0x019B) & 0xF7);
+      wr8(ram, r, 0x019B, flags);
+      r->a = (uint16_t)(0x5000 | flags);
+      wr8(ram, r, 0x0189, 0);
+      return;
+    }
+    set_a8(r, box & 0x10);
+    if (box & 0x10) {                                 /* a choice */
+      if (pressed(ram, r, JOY_NEW, BTN_DOWN))       choice_down(ram, r);
+      else if (pressed(ram, r, JOY_NEW, BTN_UP))    choice_up(ram, r);
+      else if (pressed(ram, r, JOY_NEW, BTN_RIGHT)) choice_across(ram, r, 0xD09F, 0xD0BB);
+      else if (pressed(ram, r, JOY_NEW, BTN_LEFT))  choice_across(ram, r, 0xD105, 0xD121);
+      else if (pressed(ram, r, JOY_NEW, BTN_A)) {
+        beep(ram, r, 1, 0xCFDD);
+        jsl83(ram, r, 0xCFE1, hm_CloseTextBox);
+        set_a8(r, 1);
+        wr8(ram, r, 0x019A, 1);
+      }
+      return;
+    }
+    set_a8(r, box & 0x20);
+    close = box & 0x20;
+    if (!close) return;
+  }
+  if (!pressed(ram, r, JOY_NEW, BTN_A)) return;       /* the end: A closes */
+  jsl83(ram, r, 0xCF4E, hm_CloseTextBox);
+  set_a8(r, 1);
+  wr8(ram, r, 0x019A, 1);
+  r->a = (uint16_t)(rd16(ram, r, JOY_NEW) & 0xFF7F);
+  hm_bus_wr16(ram, db_addr(r, JOY_NEW), r->a);
+}

@@ -859,6 +859,16 @@ static void prep_menu(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x94] = (uint8_t)rnd(); ram[0x95] = (uint8_t)rnd(); ram[0x97] = (uint8_t)rnd();
   hm_wr16(ram, 0x90, (uint16_t)rnd());
   if (rnd() % 2) hm_wr16(ram, 0x11F5A, (uint16_t)(hm_rd16(ram, 0x11F5A) | 0x8000));
+  hm_wr16(ram, 0x0124, (rnd() % 2) ? buttons[rnd() % 8] : (uint16_t)rnd());     /* held */
+  ram[0x018E] = (uint8_t)((rnd() % 4) ? rnd() % 6 : rnd());        /* a choice: options */
+  ram[0x018F] = (uint8_t)((rnd() % 4) ? rnd() % 6 : rnd());
+  static const uint8_t box[] = { 0x01, 0x03, 0x05, 0x09, 0x11, 0x21, 0x00, 0x13 };
+  if (rnd() % 2) ram[0x019B] = box[rnd() % 8];
+  if (rnd() % 3 == 0) {                                             /* a choice open */
+    static const uint16_t moves[] = { 0x0400, 0x0800, 0x0100, 0x0200, 0x0080 };
+    ram[0x019B] = 0x11;
+    hm_wr16(ram, 0x0128, moves[rnd() % 5]);
+  }
 }
 
 static void prep_letter_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -1279,6 +1289,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/menus.c", 0x84C458, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_menu },
   { "ListInputs", hm_ListInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/menus.c", 0x84C540, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_menu },
+  { "ImmobileInputs", hm_ImmobileInputs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/menus.c", 0x84CF05, 1, 0, 0, 0xFFFF, { { 0 } }, 400, prep_menu },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
