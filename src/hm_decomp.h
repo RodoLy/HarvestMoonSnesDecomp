@@ -482,3 +482,4 @@ void hm_Event_Cmd57(uint8_t *ram, HmRegs *r);
 void hm_Event_Cmd58(uint8_t *ram, HmRegs *r);
 void hm_Event_Cmd59(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKPlayerPos(uint8_t *ram, HmRegs *r);
+void hm_DivisionSigned(uint8_t *ram, HmRegs *r);   /* math.c */

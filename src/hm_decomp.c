@@ -1187,6 +1187,22 @@ static void prep_player_pos(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   }
 }
 
+/* math.c: DivisionSigned. Dividend and divisor of either sign; divisors
+ * mostly small (both paths, 0, and the edges $00FE / $00FF, $8000). */
+static void prep_division_signed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  hm_wr16(ram, 0x7E, (uint16_t)rnd());
+  static const uint16_t edges[] = { 0, 0x00FE, 0x00FF, 0x8000, 0xFF01, 0xFF02, 1, 0xFFFF };
+  uint16_t d;
+  switch (rnd() % 4) {
+  case 0: d = edges[rnd() % 8]; break;
+  case 1: d = (uint16_t)rnd(); break;
+  default: d = (uint16_t)(rnd() % 600); if (rnd() % 2) d = (uint16_t)(-d); break;
+  }
+  hm_wr16(ram, 0x80, d);
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1879,6 +1895,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x84C000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
   { "Event_UNKPlayerPos", hm_Event_UNKPlayerPos, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84AB27, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_pos },
+  { "DivisionSigned", hm_DivisionSigned, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/math.c", 0x8380D0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_division_signed },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

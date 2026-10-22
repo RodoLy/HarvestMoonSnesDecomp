@@ -61,3 +61,55 @@ void hm_DivisionUnsigned(uint8_t *ram, HmRegs *r)
   }
   r->c = 0;                              /* TYA / PLA of 0, then LSR */
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * DivisionSigned ($83:80D0, JSL, RTL): the same with signs. Dividend and
+ * divisor are made positive first (Y counts how many were negative), the
+ * division is as above, and the quotient is negated when Y is odd. The
+ * remainder in $7E stays positive. Leftovers: Y = that count on the
+ * hardware path, 0 on the hand path (its loop counter); C = Y & 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_DivisionSigned(uint8_t *ram, HmRegs *r)
+{
+  uint16_t negatives = 0;
+  uint16_t dividend = hm_dp_r16(ram, r, DIVIDEND);
+  if (dividend & 0x8000) {
+    dividend = (uint16_t)(~dividend + 1);
+    hm_dp_w16(ram, r, DIVIDEND, dividend);
+    negatives++;
+  }
+  uint16_t divisor = hm_dp_r16(ram, r, DIVISOR);
+  if (divisor & 0x8000) {
+    divisor = (uint16_t)(~divisor + 1);
+    hm_dp_w16(ram, r, DIVISOR, divisor);
+    negatives++;
+  }
+  uint16_t quotient;
+  if (divisor < 0xFF) {
+    uint8_t d = (uint8_t)divisor;
+    quotient = d ? (uint16_t)(dividend / d) : 0xFFFF;
+    hm_dp_w16(ram, r, DIVIDEND, d ? (uint16_t)(dividend % d) : dividend);
+    r->y = negatives;
+  } else {
+    hm_push8(ram, r, (uint8_t)(negatives >> 8));        /* PHY */
+    hm_push8(ram, r, (uint8_t)negatives);
+    uint16_t remainder = 0, bits = dividend;
+    quotient = 0;
+    for (int i = 0; i < 16; i++) {
+      quotient = (uint16_t)(quotient << 1);
+      remainder = (uint16_t)(remainder << 1 | bits >> 15);
+      bits = (uint16_t)(bits << 1);
+      if (remainder >= divisor) {
+        remainder = (uint16_t)(remainder - divisor);
+        quotient++;
+      }
+    }
+    hm_dp_w16(ram, r, QUOTIENT, quotient);
+    hm_dp_w16(ram, r, DIVIDEND, remainder);
+    hm_pull8(ram, r);                                   /* PLA */
+    hm_pull8(ram, r);
+    r->y = 0;
+  }
+  r->c = negatives & 1;                                 /* TYA / PLA; LSR */
+  r->a = r->c ? (uint16_t)(~quotient + 1) : quotient;
+}

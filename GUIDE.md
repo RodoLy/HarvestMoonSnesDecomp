@@ -1100,6 +1100,10 @@ Things the game does wrong or oddly, found while decompiling:
     left) it is capped by the distance to the *bottom* limit. Since the
     camera moves one or two pixels per frame, it only shows in the first
     pixel or two of a map.
+20. **A signed division nobody uses.** `DivisionSigned` ($83:80D0) divides
+    with signs (the quotient negative when one of the two is; the remainder
+    always positive), but nothing in the game calls it. It is rewritten all
+    the same.
 
 ## 7. Differences found in the recompilation
 
@@ -1175,3 +1179,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 37.26 % | drawing the whole map, with fences joining their neighbours |
 | 22-Oct-2026 | 38.35 % | event commands 50-59 (the 9 without a label in HM-Decomp now count by their address) |
 | 22-Oct-2026 | 39.25 % | event command 37: the carried object of group $17 (probably the child) |
+| 22-Oct-2026 | 39.37 % | the signed division (unused) |

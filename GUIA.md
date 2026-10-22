@@ -1127,6 +1127,10 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     abajo; al subir (o ir a la izquierda) se recorta con la distancia al
     límite de *abajo*. Como la cámara se mueve uno o dos píxeles por
     cuadro, solo se nota en el primer píxel o dos de un mapa.
+20. **Una división con signo que nadie usa.** `DivisionSigned` ($83:80D0)
+    divide con signos (el cociente negativo cuando uno de los dos lo es; el
+    residuo siempre positivo), pero nada en el juego la llama. Se reescribió
+    igual.
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -1203,3 +1207,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 37,26 % | dibujar el mapa entero, con las cercas unidas a sus vecinas |
 | 22-oct-2026 | 38,35 % | los comandos de evento 50-59 (los 9 sin etiqueta en HM-Decomp ahora cuentan por su dirección) |
 | 22-oct-2026 | 39,25 % | el comando de evento 37: el objeto del grupo $17 que se carga (probablemente el hijo) |
+| 22-oct-2026 | 39,37 % | la división con signo (sin uso) |
