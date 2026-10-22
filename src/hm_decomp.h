@@ -453,3 +453,4 @@ void hm_ToolAnimationBlueFeather(uint8_t *ram, HmRegs *r);
 void hm_ToolAnimationChickenFeed(uint8_t *ram, HmRegs *r);
 void hm_ToolAnimationCowFeed(uint8_t *ram, HmRegs *r);
 void hm_ToolAnimationUNK(uint8_t *ram, HmRegs *r);
+void hm_SUB_82AD0E(uint8_t *ram, HmRegs *r);       /* interact.c */

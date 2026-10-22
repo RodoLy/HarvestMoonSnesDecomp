@@ -1,0 +1,438 @@
+# --- actions.txt: a new game, then walking out and using the buttons (live checks of the player inputs) ---
+turbo on
+wait 700
+press start 2
+wait 347
+press up 2
+wait 27
+press a 2
+wait 317
+press a 2
+wait 597
+press a 2
+wait 57
+press a 2
+wait 57
+press a 2
+wait 327
+press a 2
+wait 47
+press a 2
+wait 47
+press a 2
+wait 47
+press a 2
+wait 97
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press down 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press right 2
+wait 12
+press down 2
+wait 27
+press a 2
+wait 57
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 37
+press a 2
+wait 97
+press down 150
+wait 49
+press down 150
+wait 49
+press left 100
+wait 49
+press down 200
+wait 49
+press left 200
+wait 99
+poke 0921 01
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+poke 0921 02
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+poke 0921 03
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+poke 0921 04
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+poke 0921 05
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+poke 0921 0B
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+poke 0921 0C
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+poke 0921 10
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+poke 0921 13
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+poke 0921 1A
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+poke 0921 00
+poke 11F61 00
+press y 2
+wait 90
+press a 2
+wait 40
+press right 20
+wait 10
+press a 2
+wait 40
+press up 30
+wait 10
+press y 2
+wait 90
+press b 40
+wait 20
+press down 30
+wait 10
+press x 2
+wait 30
+press l 2
+wait 30
+press r 2
+wait 30
+press select 2
+wait 60
+press left 25
+wait 10
+quit

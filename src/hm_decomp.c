@@ -964,6 +964,46 @@ static void prep_tool_animation(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (ram[0x00921] >= 0x1C) ram[0x00921] = (uint8_t)(rnd() % 0x1C);
 }
 
+/* interact.c: SUB_82AD0E. The tile type in front (doors, signs, doors
+ * with opening hours, things to pick up, the rest), a property table of our
+ * own ($7F:F000; sign texts below $500 so StartTextBox reads its pointer
+ * in the ROM), the date, and objects around (prep_collision). */
+static void prep_interact(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  HmRegs t = *r;
+  prep_text_box(ram, &t, rnd);
+  prep_collision(ram, r, rnd);
+  for (unsigned i = 0; i < 256; i++) {
+    uint8_t *e = &ram[0x1F000 + 4 * i];
+    e[0] = (uint8_t)rnd();
+    e[1] = (uint8_t)((i >= 0xD0 && i < 0xE0) ? rnd() % 5 : (rnd() % 2) ? (rnd() & 0x81) : rnd());
+    e[2] = (uint8_t)rnd();
+    e[3] = (uint8_t)rnd();
+  }
+  /* the doors with opening hours: mostly rules that have some (Unk_Table13
+   * byte 3: $81, $22, $02, $32, $24, $05, $03, $B9) */
+  static const uint8_t rules[] = { 9, 18, 19, 20, 21, 59, 60, 62 };
+  for (unsigned i = 0xC0; i < 0xD0; i++)
+    if (rnd() % 4) {
+      ram[0x1F000 + 4 * i] = rules[rnd() % 8];
+      ram[0x1F000 + 4 * i + 1] = (uint8_t)(1 + rnd() % 0xFF);  /* a text */
+    }
+  hm_wr16(ram, 0x0D, 0xF000);
+  ram[0x0F] = 0x7F;
+  static const uint8_t bare[] = { 0x38, 0x39, 0x52, 0x53, 0x60, 0x61, 0x6E, 0x6F };
+  switch (rnd() % 6) {
+  case 0: r->x = (uint16_t)(0xC0 + rnd() % 0x40); break;   /* doors, signs, nothing */
+  case 2: r->x = (uint16_t)(0xC0 + rnd() % 0x10); break;   /* opening hours */
+  case 1: r->x = bare[rnd() % 8]; break;
+  default: r->x = (uint16_t)(rnd() % 0x100); break;
+  }
+  ram[0x11F19] = (uint8_t)((rnd() % 8) ? rnd() % 4 : rnd());   /* season */
+  ram[0x11F1A] = (uint8_t)((rnd() % 2) ? rnd() % 7 : 6 * (rnd() % 2));  /* weekday */
+  ram[0x11F1C] = (uint8_t)((rnd() % 2) ? rnd() % 24 : 16 + rnd() % 3);  /* hour */
+  hm_wr16(ram, 0x0196, (uint16_t)rnd());
+  hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1560,6 +1600,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/toolanim.c", 0x82924B, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
   { "ToolAnimationUNK", hm_ToolAnimationUNK, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/toolanim.c", 0x829257, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
+  { "SUB_82AD0E", hm_SUB_82AD0E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/interact.c", 0x82AD0E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_interact },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

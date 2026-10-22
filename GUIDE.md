@@ -258,6 +258,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/palette.c` | the colours of the day |
 | `src/collision.c` | bumping into the map, objects and the player |
 | `src/toolanim.c` | the tool's animation when pressing Y |
+| `src/interact.c` | pressing A in front of something |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -911,6 +912,46 @@ Right and $0200 Left, so its `PlayerActionLeft` is really "right".
 - **The player** (`CDDDD`): the same 12-pixel test against the player's
   position; it is what the animals and people use.
 
+### 5.21 Pressing A
+
+When the player presses A facing something, `SUB_82AD0E` looks at the type
+of the tile in front (0 if the tile does not face the player's side) and at
+its 4 bytes in the map's property table:
+
+| Tile type | What A does |
+|---|---|
+| $F0-$FF | a door: if byte +1 bit 0, go to place [+0] ($096E; $D2 bit 6 starts the change of map) |
+| $E0-$EF | nothing |
+| $D0-$DF | a sign: shows text [+0] (a word) |
+| $C0-$CF | a door with opening hours: shows text [+1] when the place is closed (see below) |
+| the rest | picks the thing up if byte +1 bit 7; otherwise talks to whoever is in front |
+
+**Opening hours.** Byte +0 picks a rule in the entrances table
+(`Unk_Table13`, $80:B6F5, 8 bytes each; byte 3 is the rule). Each bit
+closes the place at one time:
+
+| Bit | Closed |
+|---|---|
+| $02 | from 17:00 |
+| $04 | before 17:00 |
+| $08 | Monday to Friday |
+| $10 | Saturday |
+| $20 | Sunday |
+| $80 | when $0196 bit 4 is set |
+
+For example the shops have $32: closed on Saturday, on Sunday and from
+17:00.
+
+**Picking things up:** the item in hand becomes
+`DATA8_82CFB4[type × 4 + season]` (the same tile gives a different thing
+each season), the tile's byte +0 goes to $091F and the player's action
+becomes 4 (holding it). In autumn and winter the tiles $38, $39, $52, $53,
+$60, $61, $6E and $6F give nothing.
+
+**Talking:** with none of that, the routine asks `CBBBB` (5.20) whether an
+event object is 16 pixels ahead; the object found gets its byte +$0C = 1,
+and its own script (a person, an animal) reacts to it.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1039,3 +1080,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 32.17 % | the colours of the day (checked live: about 13,000 calls) |
 | 22-Oct-2026 | 33.34 % | bumping into things (checked live: about 2,900 calls) |
 | 22-Oct-2026 | 33.80 % | the tools' animations (29 routines) |
+| 22-Oct-2026 | 34.31 % | pressing A; a new script (`scripts/actions.txt`) checks the tools live |

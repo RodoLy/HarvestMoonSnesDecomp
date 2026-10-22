@@ -259,6 +259,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/palette.c` | los colores del día |
 | `src/collision.c` | chocar con el mapa, los objetos y el jugador |
 | `src/toolanim.c` | la animación de la herramienta al apretar Y |
+| `src/interact.c` | apretar A frente a algo |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -934,6 +935,46 @@ Izquierda, así que su `PlayerActionLeft` en realidad es "derecha".
 - **El jugador** (`CDDDD`): la misma prueba de 12 píxeles contra la
   posición del jugador; es la que usan los animales y las personas.
 
+### 5.21 Apretar A
+
+Cuando el jugador aprieta A frente a algo, `SUB_82AD0E` mira el tipo de la
+baldosa de enfrente (0 si la baldosa no da al lado del jugador) y sus 4
+bytes en la tabla de propiedades del mapa:
+
+| Tipo de baldosa | Qué hace A |
+|---|---|
+| $F0-$FF | una puerta: si el byte +1 tiene el bit 0, va al lugar [+0] ($096E; $D2 bit 6 empieza el cambio de mapa) |
+| $E0-$EF | nada |
+| $D0-$DF | un letrero: muestra el texto [+0] (una palabra) |
+| $C0-$CF | una puerta con horario: muestra el texto [+1] cuando el lugar está cerrado (ver abajo) |
+| las demás | levanta la cosa si el byte +1 tiene el bit 7; si no, habla con quien esté enfrente |
+
+**Horarios.** El byte +0 elige una regla en la tabla de entradas
+(`Unk_Table13`, $80:B6F5, 8 bytes cada una; el byte 3 es la regla). Cada
+bit cierra el lugar en un momento:
+
+| Bit | Cerrado |
+|---|---|
+| $02 | desde las 17:00 |
+| $04 | antes de las 17:00 |
+| $08 | de lunes a viernes |
+| $10 | sábado |
+| $20 | domingo |
+| $80 | cuando $0196 tiene el bit 4 |
+
+Por ejemplo las tiendas tienen $32: cerradas el sábado, el domingo y desde
+las 17:00.
+
+**Levantar cosas:** el objeto en la mano pasa a ser
+`DATA8_82CFB4[tipo × 4 + estación]` (la misma baldosa da algo distinto en
+cada estación), el byte +0 de la baldosa va a $091F y la acción del jugador
+pasa a 4 (cargándolo). En otoño e invierno las baldosas $38, $39, $52, $53,
+$60, $61, $6E y $6F no dan nada.
+
+**Hablar:** si no es nada de eso, la rutina le pregunta a `CBBBB` (5.20) si
+hay un objeto de evento 16 píxeles adelante; el objeto encontrado queda con
+su byte +$0C = 1, y su propio guion (una persona, un animal) reacciona.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1065,3 +1106,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 32,17 % | los colores del día (probado en vivo: unas 13.000 llamadas) |
 | 22-oct-2026 | 33,34 % | chocar con las cosas (probado en vivo: unas 2.900 llamadas) |
 | 22-oct-2026 | 33,80 % | las animaciones de las herramientas (29 rutinas) |
+| 22-oct-2026 | 34,31 % | apretar A; un guion nuevo (`scripts/actions.txt`) prueba las herramientas en vivo |
