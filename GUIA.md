@@ -616,6 +616,12 @@ revisa las condiciones en un orden un poco distinto:
   dibujo nuevo en ese mapa en memoria, deja en la cola de DMA la copia a
   la memoria de video y, si hace falta, cambia el tipo de casilla. Lo que
   hay que poner sale de la tabla `$81:B363`.
+- **Dibujar el mapa entero** (`UNK_PartialMap`): para cada una de las 64 ×
+  64 baldosas toma el dibujo del byte +0 de la propiedad de su tipo (0:
+  nada). Los tipos $73-$79 se unen con sus vecinos de la misma clase
+  (cercas y parecidos, "autotiling"): los cuatro vecinos forman una máscara
+  (izquierda 8, derecha 2, arriba 4, abajo 1) y la tabla `$82:B02A` dice
+  cuál de los dibujos sumar. Es larga: no termina en un cuadro.
 
 ### 5.12 Objetos con sprite
 
@@ -1166,3 +1172,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 34,31 % | apretar A; un guion nuevo (`scripts/actions.txt`) prueba las herramientas en vivo |
 | 22-oct-2026 | 36,10 % | los botones al caminar (las 15 etiquetas de ese bloque ahora cuentan como una rutina: 519 rutinas en total) |
 | 22-oct-2026 | 36,92 % | `InputTypeSelector`, la pantalla del nombre, el menú 1, el modo 6: todos los modos de entrada reescritos; probados en vivo cada cuadro (unas 21.000 llamadas) |
+| 22-oct-2026 | 37,26 % | dibujar el mapa entero, con las cercas unidas a sus vecinas |

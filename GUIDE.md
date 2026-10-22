@@ -1144,4 +1144,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 34.31 % | pressing A; a new script (`scripts/actions.txt`) checks the tools live |
 | 22-Oct-2026 | 36.10 % | the buttons while walking (the 15 labels of that block now count as one routine: 519 routines in all) |
 | 22-Oct-2026 | 36.92 % | `InputTypeSelector`, the name screen, menu 1, mode 6: every input mode is rewritten; checked live every frame (about 21,000 calls) |
-| 22-Oct-2026 | 37.27 % | drawing the whole map, with fences joining their neighbours |
+| 22-Oct-2026 | 37.26 % | drawing the whole map, with fences joining their neighbours |

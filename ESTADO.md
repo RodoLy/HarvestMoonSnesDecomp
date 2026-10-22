@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **248 rutinas reescritas y verificadas** (0 diferencias):
+- **249 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -91,6 +91,7 @@ en el README (`tools/progress.py`).
 | CODE_84C7D6 (el control de los eventos) | $84:C7D6 | src/playerinput.c |
 | InputTypeSelector, MenuInputs, CODE_84C2B4, CODE_84C2D8, CODE_84CED2 | $84:C034-$84:CF04 | src/menus.c |
 | NameMenuInputs y sus 6 teclas, NameCursorPharse, Unk_OutOfMenu | $84:C066-$84:C286, $82:EBAC, $82:EA60 | src/menus.c |
+| UNK_PartialMap (dibujar el mapa, autotiling) | $82:AF00 | src/mapedit.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |
