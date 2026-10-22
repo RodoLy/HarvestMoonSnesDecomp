@@ -260,6 +260,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/toolanim.c` | the tool's animation when pressing Y |
 | `src/interact.c` | pressing A in front of something |
 | `src/playerinput.c` | the buttons while walking |
+| `src/decompress.c` | the compressed data (LZSS) |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -643,6 +644,15 @@ down, script $17/$14 starts). Its requests are bits of $7F1F5C:
   (fences and the like, "autotiling"): the four neighbours make a mask
   (left 8, right 2, up 4, down 1) and the table `$82:B02A` says which of
   the drawings to add. It is long: it does not finish in one frame.
+- **Compressed data** (`DecompressTileMap`, LZSS). The data begins with its
+  size and then comes in groups: one control byte and 8 items. Each bit of
+  the control byte (lowest first) says what the next item is: 1 a byte to
+  copy as it is; 0 two bytes meaning "copy 3 to 34 bytes from this place of
+  what was already written" (an 11-bit place and a 5-bit length + 3). What
+  was written is remembered in a 2 KB window at $7F:0000, which starts
+  cleared and is written from $07DE (2048 - 34, the usual LZSS layout).
+  Repeated runs (a row of the same tile, the same pattern again) take two
+  bytes instead of many.
 
 ### 5.12 Objects with a sprite
 
@@ -1144,6 +1154,7 @@ Things the game does wrong or oddly, found while decompiling:
 | handshake | the "ready / here it is / done" exchange over the ports |
 | palette | the 256 colours the screen can use at a time |
 | CGRAM | the console's memory where the palette is kept |
+| LZSS | a way to compress: "copy this byte" or "copy that many bytes from what you already wrote" |
 
 ## 9. Progress
 
@@ -1180,3 +1191,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 38.35 % | event commands 50-59 (the 9 without a label in HM-Decomp now count by their address) |
 | 22-Oct-2026 | 39.25 % | event command 37: the carried object of group $17 (probably the child) |
 | 22-Oct-2026 | 39.37 % | the signed division (unused) |
+| 22-Oct-2026 | 39.59 % | the decompressor (LZSS); the checker now also knows all the flags at the entry, for `PHP` |

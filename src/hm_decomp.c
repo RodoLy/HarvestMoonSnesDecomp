@@ -1203,6 +1203,25 @@ static void prep_division_signed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x80, d);
 }
 
+/* decompress.c: a compressed stream of our own at $7F:F000 (a size of
+ * 1-$400, then random control bytes and items), written to $7F:C000;
+ * size 0 would run 65536 bytes. */
+static void prep_decompress(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  uint16_t size = (uint16_t)(1 + rnd() % 0x400);
+  ram[0x1F000] = (uint8_t)size; ram[0x1F001] = (uint8_t)(size >> 8);
+  ram[0x1F002] = 0; ram[0x1F003] = 0;
+  for (unsigned i = 4; i < 0xA00; i++) ram[0x1F000 + i] = (uint8_t)rnd();
+  if (rnd() % 2)                                           /* mostly literals */
+    for (unsigned i = 4; i < 0xA00; i += 9) ram[0x1F000 + i] |= (uint8_t)rnd();
+  hm_wr16(ram, 0x72, 0xF000); ram[0x74] = 0x7F;
+  hm_wr16(ram, 0x75, 0xC000); ram[0x77] = 0x7F;
+  for (unsigned i = 0; i < 0x80; i++) ram[0x80 + i] = (uint8_t)rnd();   /* leftovers */
+  ram[0x72] = 0x00; ram[0x73] = 0xF0; ram[0x74] = 0x7F;
+  ram[0x75] = 0x00; ram[0x76] = 0xC0; ram[0x77] = 0x7F;
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1897,6 +1916,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x84AB27, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_pos },
   { "DivisionSigned", hm_DivisionSigned, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/math.c", 0x8380D0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_division_signed },
+  { "DecompressTileMap", hm_DecompressTileMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/decompress.c", 0x8381F8, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_decompress },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
@@ -1987,6 +2008,7 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
 
   HmRegs in = { s->cpu.A, s->cpu.X, s->cpu.Y, s->cpu._flag_C, s->cpu._flag_N, s->cpu.DB, s->cpu.D,
                 s->cpu.S, s->cpu.PB };
+  { CpuState flags = s->cpu; cpu_mirrors_to_p(&flags); in.p = flags.P; }
   HmRegs out = in;
   uint8_t dma_after[0x80];
   dma_regs_save(dma_after);

@@ -33,6 +33,8 @@ typedef struct HmRegs {
   uint16_t s;         /* stack pointer (bank $00) */
   uint8_t pb;         /* program bank: $80-$87, or $00-$07 when the game runs
                        * the same code from the slow mirror */
+  uint8_t p;          /* all the flags at the entry (for PHP: its byte goes on
+                       * the stack); c and n above are the live ones */
 } HmRegs;
 
 /* The stack lives in WRAM, so what a routine pushes stays there after it
@@ -483,3 +485,4 @@ void hm_Event_Cmd58(uint8_t *ram, HmRegs *r);
 void hm_Event_Cmd59(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKPlayerPos(uint8_t *ram, HmRegs *r);
 void hm_DivisionSigned(uint8_t *ram, HmRegs *r);   /* math.c */
+void hm_DecompressTileMap(uint8_t *ram, HmRegs *r); /* decompress.c */

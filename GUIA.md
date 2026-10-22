@@ -261,6 +261,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/toolanim.c` | la animación de la herramienta al apretar Y |
 | `src/interact.c` | apretar A frente a algo |
 | `src/playerinput.c` | los botones al caminar |
+| `src/decompress.c` | los datos comprimidos (LZSS) |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -650,6 +651,15 @@ $7F1F5C:
   (cercas y parecidos, "autotiling"): los cuatro vecinos forman una máscara
   (izquierda 8, derecha 2, arriba 4, abajo 1) y la tabla `$82:B02A` dice
   cuál de los dibujos sumar. Es larga: no termina en un cuadro.
+- **Datos comprimidos** (`DecompressTileMap`, LZSS). Los datos empiezan con
+  su tamaño y siguen en grupos: un byte de control y 8 elementos. Cada bit
+  del byte de control (el más bajo primero) dice qué es el siguiente
+  elemento: 1 un byte que se copia tal cual; 0 dos bytes que significan
+  "copia de 3 a 34 bytes desde este lugar de lo ya escrito" (un lugar de 11
+  bits y un largo de 5 bits + 3). Lo escrito se recuerda en una ventana de
+  2 KB en $7F:0000, que empieza en ceros y se escribe desde $07DE (2048 -
+  34, la disposición usual de LZSS). Las repeticiones (una fila de la misma
+  baldosa, el mismo dibujo otra vez) ocupan dos bytes en vez de muchos.
 
 ### 5.12 Objetos con sprite
 
@@ -1172,6 +1182,7 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | apretón de manos | el intercambio "listo / ahí va / hecho" por los puertos |
 | paleta | los 256 colores que la pantalla puede usar a la vez |
 | CGRAM | la memoria de la consola donde se guarda la paleta |
+| LZSS | una forma de comprimir: "copia este byte" o "copia tantos bytes de lo que ya escribiste" |
 
 ## 9. Avance
 
@@ -1208,3 +1219,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 38,35 % | los comandos de evento 50-59 (los 9 sin etiqueta en HM-Decomp ahora cuentan por su dirección) |
 | 22-oct-2026 | 39,25 % | el comando de evento 37: el objeto del grupo $17 que se carga (probablemente el hijo) |
 | 22-oct-2026 | 39,37 % | la división con signo (sin uso) |
+| 22-oct-2026 | 39,59 % | el descompresor (LZSS); el comprobador ahora también conoce todas las banderas de la entrada, para `PHP` |
