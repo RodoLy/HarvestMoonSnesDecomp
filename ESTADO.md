@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **259 rutinas reescritas y verificadas** (0 diferencias):
+- **260 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -93,6 +93,7 @@ en el README (`tools/progress.py`).
 | NameMenuInputs y sus 6 teclas, NameCursorPharse, Unk_OutOfMenu | $84:C066-$84:C286, $82:EBAC, $82:EA60 | src/menus.c |
 | UNK_PartialMap (dibujar el mapa, autotiling) | $82:AF00 | src/mapedit.c |
 | Event_UNKChickenRelated2, Event_Cmd51-59 (comandos 50-59) | $84:BBDA-$84:C013 | src/eventcmds.c |
+| Event_UNKPlayerPos (comando 37, el hijo) | $84:AB27 | src/eventcmds.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |

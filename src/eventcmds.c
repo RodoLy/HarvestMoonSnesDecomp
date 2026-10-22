@@ -1848,3 +1848,198 @@ void hm_Event_Cmd59(uint8_t *ram, HmRegs *r)
   r->a = 0x001C;
   hm_dp_w16(ram, r, 0xD4, 0x001C);
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * Event_UNKPlayerPos ($84:AB27, command 37), every frame, for an object of
+ * group $17 that the player can carry (probably the child: putting it down
+ * starts script $17/$14). $7F1F5C holds its requests: bit 4 "the player
+ * touches it", 6 face the way of +2, 10 walk towards the player, 11 / 5
+ * see below. $0939 counts 120 frames between idle animations, chosen by
+ * the random byte $DE. With $7F1F32 = $15 the idle and face scripts differ.
+ * ═════════════════════════════════════════════════════════════════════════ */
+static void group17(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t ret)
+{
+  r->a = 0x0017; r->x = 0; r->y = script;
+  hm_jsl(ram, r, ret, 0x84);
+  hm_UNK_LoadCCDataShort(ram, r);
+  hm_rtl(ram, r);
+}
+static void request(uint8_t *ram, HmRegs *r, uint16_t and_mask, uint16_t or_mask)
+{
+  r->a = (uint16_t)((hm_bus_rd16(ram, 0x7F1F5C) & and_mask) | or_mask);
+  hm_bus_wr16(ram, 0x7F1F5C, r->a);
+}
+static bool asked(uint8_t *ram, HmRegs *r, uint16_t bit)
+{
+  r->a = hm_bus_rd16(ram, 0x7F1F5C) & bit;
+  return r->a != 0;
+}
+/* LDA $0939; CMP #$78; ... : true when the 120 frames are up (reset) */
+static bool idle_time(uint8_t *ram, HmRegs *r)
+{
+  uint8_t t = lda8(r, hm_bus_rd8(ram, dbw(r, 0x0939)));
+  r->c = t >= 0x78;
+  if (t != 0x78) {
+    lda8(r, (uint8_t)(t + 1));
+    hm_bus_wr8(ram, dbw(r, 0x0939), (uint8_t)(t + 1));
+    return false;
+  }
+  hm_bus_wr8(ram, dbw(r, 0x0939), 0);
+  return true;
+}
+/* walk towards the player, along the longer axis (as the dog does) */
+static void towards_player(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t ret)
+{
+  hm_bus_wr8(ram, dbw(r, 0x0939), 0);
+  uint8_t f = (uint8_t)(slot8(ram, r, 0x01) | 0x28);
+  lda8(r, f);
+  slot_w8(ram, r, 0x01, f);
+  r->a = slot8(ram, r, 0x3F);                              /* XBA; LDA #0; XBA */
+  r->x = 0; r->y = script;
+  hm_jsl(ram, r, ret, 0x84);
+  hm_UNK_LoadCCDataShort(ram, r);
+  hm_rtl(ram, r);
+  hm_dp_w16(ram, r, 0x82, 0);
+  hm_dp_w16(ram, r, 0x84, 0);
+  static const struct { uint16_t y; unsigned pos, out, neg; } A[2] = {
+    { 0x1A, 0xD6, 0x7E, 0x82 }, { 0x1C, 0xD8, 0x80, 0x84 } };
+  for (unsigned k = 0; k < 2; k++) {
+    uint16_t v = slot16(ram, r, A[k].y);
+    uint16_t p = hm_dp_r16(ram, r, A[k].pos);
+    r->c = v >= p;
+    uint16_t d = (uint16_t)(v - p);
+    r->a = d;
+    hm_dp_w16(ram, r, A[k].out, d);
+    if (d & 0x8000) {
+      r->a = (uint16_t)(~d + 1);
+      hm_dp_w16(ram, r, A[k].out, r->a);
+      r->a = 1;
+      hm_dp_w16(ram, r, A[k].neg, 1);
+    }
+  }
+  lda8(r, 0x20);
+  slot_w8(ram, r, 0x08, 0x20);                             /* speed */
+  r->a = hm_dp_r16(ram, r, 0x80);
+  r->c = r->a >= hm_dp_r16(ram, r, 0x7E);
+  uint8_t dir;
+  if (r->c) { r->a = hm_dp_r16(ram, r, 0x84); dir = r->a ? 1 : 2; }
+  else { r->a = hm_dp_r16(ram, r, 0x82); dir = r->a ? 4 : 8; }
+  lda8(r, dir);
+  slot_w8(ram, r, 0x0F, dir);
+}
+
+void hm_Event_UNKPlayerPos(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  request(ram, r, 0xFFEF, 0);                              /* not touched (yet) */
+  uint8_t place = lda8(r, hm_bus_rd8(ram, 0x7F1F32));
+  r->c = place >= 0x15;
+  if (place != 0x15) {
+    if (idle_time(ram, r)) group17(ram, r, 0x0080, 0xAB6F);
+    goto end;
+  }
+  if (asked(ram, r, 0x0040)) {                             /* face the way of +2 */
+    static const uint16_t face[4] = { 0x28, 0x29, 0x2A, 0x2B };
+    uint8_t w = lda8(r, slot8(ram, r, 0x02));
+    uint16_t script = 0x28;
+    for (uint8_t k = 0; k < 4; k++) {
+      r->c = w >= k;
+      if (w == k) { script = face[k]; break; }
+    }
+    group17(ram, r, script, 0xABD1);
+    request(ram, r, 0xFFBF, 0);
+  }
+  if (!asked(ram, r, 0x0800)) {
+    if (asked(ram, r, 0x0020)) {                           /* taken in the arms */
+      r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0010);
+      hm_dp_w16(ram, r, 0xD2, r->a);
+      request(ram, r, 0xFFDF, 0);
+      lda8(r, 0);
+      slot_w8(ram, r, 0x00, 0);
+      uint8_t f = (uint8_t)(slot8(ram, r, 0x01) | 0x40);
+      lda8(r, f);
+      slot_w8(ram, r, 0x01, f);
+      lda8(r, 0);
+      slot_w8(ram, r, 0x0C, 0);
+      count_frame(ram, r);
+      return;
+    }
+    /* pressed A on it? (the same tests as picking up an animal) */
+    bool ok = lda8(r, slot8(ram, r, 0x0C)) != 0;
+    r->c = 1;
+    static const uint16_t busy[] = { 0x0A, 0x0C, 0x0D, 0x1B };
+    for (unsigned i = 0; ok && i < 4; i++) {
+      r->a = hm_dp_r16(ram, r, 0xD4);
+      r->c = r->a >= busy[i];
+      if (r->a == busy[i]) ok = false;
+    }
+    if (ok) { r->a = hm_dp_r16(ram, r, 0xD2) & 0x0004; ok = !r->a; }
+    if (ok) { r->a = hm_bus_rd16(ram, 0x7F1F60) & 0x0006; ok = !r->a; }
+    if (ok) {
+      request(ram, r, 0xFFFF, 0x0010);                     /* touched */
+      r->a = hm_bus_rd16(ram, dbw(r, 0x0128));
+      ok = (r->a & 0x0080) != 0;
+    }
+    if (ok) {                                              /* room in front? */
+      hm_dp_w16(ram, r, 0xE3, r->a = 0x000D);
+      hm_dp_w16(ram, r, 0xDF, hm_dp_r16(ram, r, 0xD6));
+      hm_dp_w16(ram, r, 0xE1, hm_dp_r16(ram, r, 0xD8));
+      hm_dp_w16(ram, r, 0xE5, 0);
+      hm_dp_w16(ram, r, 0xE7, 0);
+      r->a = hm_bus_rd16(ram, dbw(r, 0x0913));
+      hm_jsl(ram, r, 0xAC84, 0x83);
+      hm_CEEEE(ram, r);
+      hm_rtl(ram, r);
+      ok = r->a == 0;
+      for (unsigned at = 0xE9; ok && at <= 0xEB; at += 2) {
+        uint16_t v = hm_dp_r16(ram, r, at);
+        r->a = (uint16_t)(v - 0xC0);
+        r->c = r->a >= 0x10;
+        ok = r->c;
+      }
+    }
+    if (ok) {
+      hm_dp_w16(ram, r, 0xE3, r->a = 0x0020);
+      r->a = hm_bus_rd16(ram, dbw(r, 0x0913));
+      hm_jsl(ram, r, 0xACB5, 0x83);
+      hm_CBBBB(ram, r);
+      hm_rtl(ram, r);
+      r->c = 1;                                            /* CMP #0 */
+      ok = r->a == 0;
+    }
+    if (ok) {
+      if ((r->a = hm_dp_r16(ram, r, 0xD2) & 0x0002)) goto end;
+      if ((r->a = hm_dp_r16(ram, r, 0xD2) & 0x0800)) goto end;
+      r->a = hm_dp_r16(ram, r, 0xD4);
+      r->c = r->a >= 4;
+      if (r->a == 4) goto end;
+      r->a = 0x0017;
+      hm_dp_w16(ram, r, 0xD4, 0x0017);                     /* pick it up */
+      goto end;
+    }
+  }
+  /* idle: every 120 frames an animation chosen by $DE */
+  request(ram, r, 0xF7FF, 0);
+  if (idle_time(ram, r)) {
+    static const struct { uint8_t below; uint16_t script, ret; } I[] = {
+      { 0x24, 0x4B, 0xAD3C }, { 0x48, 0x4B, 0xAD3C }, { 0x6C, 0x4D, 0xAD4E },
+      { 0x90, 0x4E, 0xAD60 }, { 0xB4, 0x4F, 0xAD72 }, { 0xD8, 0x4F, 0xAD72 },
+    };
+    uint8_t de = lda8(r, *hm_dp(ram, r, 0xDE));
+    unsigned i = 0;
+    for (; i < 6; i++) {
+      r->c = de >= I[i].below;
+      if (!r->c) break;
+    }
+    if (i < 6) group17(ram, r, I[i].script, I[i].ret);
+    else group17(ram, r, 0x50, 0xAD84);
+  }
+end:
+  if (asked(ram, r, 0x0400)) {                             /* walk to the player */
+    uint8_t p = lda8(r, hm_bus_rd8(ram, 0x7F1F32));
+    r->c = p >= 0x15;
+    if (p == 0x15) towards_player(ram, r, 0x4C, 0xAE32);
+    else towards_player(ram, r, 0x4A, 0xAE66);
+  }
+  count_frame(ram, r);
+}

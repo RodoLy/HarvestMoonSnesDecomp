@@ -599,6 +599,19 @@ here they are `Event_Cmd51`...`Event_Cmd59`:
 | 58 | `<tile> <x> <y>`: put that tile type on the farm |
 | 59 | the player's action $1C |
 
+**Command 37, `UNKPlayerPos`** ($84:AB27), every frame for an object of
+group $17 the player can carry (probably the child: when the player puts it
+down, script $17/$14 starts). Its requests are bits of $7F1F5C:
+
+- every 120 frames ($0939) an idle animation chosen by the random byte $DE
+  (scripts $4B-$50; away from place $15 of $7F1F32, script $80 instead);
+- bit 6: face the way written in its byte +2 (scripts $28-$2B);
+- bit 10: walk towards the player along the longer axis (like the dog);
+- bit 5: it is taken in the arms ($D2 bit 4: carrying; the object goes
+  away);
+- A pressed on it with free hands and room in front: the player picks it
+  up (action $17); bit 4 says "touched this frame".
+
 ### 5.11 Maps
 
 - `$22` is the **current map**:
@@ -1161,3 +1174,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 36.92 % | `InputTypeSelector`, the name screen, menu 1, mode 6: every input mode is rewritten; checked live every frame (about 21,000 calls) |
 | 22-Oct-2026 | 37.26 % | drawing the whole map, with fences joining their neighbours |
 | 22-Oct-2026 | 38.35 % | event commands 50-59 (the 9 without a label in HM-Decomp now count by their address) |
+| 22-Oct-2026 | 39.25 % | event command 37: the carried object of group $17 (probably the child) |

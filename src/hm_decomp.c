@@ -1146,6 +1146,47 @@ static void prep_event_tool(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 4 == 0) ram[0x00921] = 0;
 }
 
+/* eventcmds.c: Event_UNKPlayerPos. The script and slot (prep_event_cmd),
+ * the requests in $7F1F5C, $7F1F32 = $15 or not, the idle timer near 120,
+ * the random byte, and for "pressed A on it" what prep_collision gives
+ * (room in front, objects around). */
+static void prep_player_pos(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  HmRegs keep = *r;
+  prep_collision(ram, r, rnd);
+  *r = keep;
+  prep_event_cmd(ram, r, rnd);
+  uint16_t req = 0;
+  static const uint16_t bits[] = { 0x0010, 0x0020, 0x0040, 0x0400, 0x0800 };
+  for (unsigned i = 0; i < 5; i++) if (rnd() % 3 == 0) req |= bits[i];
+  hm_wr16(ram, 0x11F5C, (uint16_t)((rnd() % 2) ? req : rnd()));
+  ram[0x11F32] = (uint8_t)((rnd() % 4) ? 0x15 : rnd());
+  ram[0x00939] = (uint8_t)((rnd() % 2) ? 0x78 : rnd() % 0x79);
+  ram[0xDE] = (uint8_t)rnd();
+  uint16_t slot = hm_rd16(ram, 0xCC);
+  ram[slot + 0x02] = (uint8_t)((rnd() % 4) ? rnd() % 4 : rnd());
+  ram[slot + 0x0C] = (uint8_t)((rnd() % 2) ? 1 : 0);
+  ram[slot + 0x3F] = (uint8_t)(rnd() % 0x18);
+  hm_wr16(ram, slot + 0x1A, (uint16_t)rnd()); hm_wr16(ram, slot + 0x1C, (uint16_t)rnd());
+  static const uint16_t actions[] = { 0, 1, 2, 4, 0x0A, 0x0C, 0x0D, 0x1B };
+  hm_wr16(ram, 0xD4, actions[rnd() % 8]);
+  hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 2) ? 0 : rnd()));
+  hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 2) ? rnd() & ~0x0006u : rnd()));
+  hm_wr16(ram, 0x0128, (uint16_t)((rnd() % 2) ? 0x0080 : rnd()));
+  hm_wr16(ram, 0x0913, (uint16_t)(rnd() % 4));            /* a direction: CEEEE's table */
+  if (rnd() % 3 == 0) {                 /* a free floor of type $C0-$CF, hands empty */
+    uint8_t ty = (uint8_t)(0xC0 + rnd() % 0x10);
+    for (unsigned i = 0; i < 1024; i++) ram[0x1F000 + i] = (uint8_t)rnd();
+    ram[0x1F000 + 4 * ty + 2] = 0; ram[0x1F000 + 4 * ty + 3] = 0xFF;
+    hm_wr16(ram, 0x0D, 0xF000); ram[0x0F] = 0x7F;
+    memset(&ram[0x009B6], ty, 4096);
+    hm_wr16(ram, 0x11F5C, (uint16_t)(hm_rd16(ram, 0x11F5C) & ~0x0808u));
+    hm_wr16(ram, 0xD2, (uint16_t)(hm_rd16(ram, 0xD2) & ~0x0016u));
+    ram[slot + 0x0C] = 1;
+    hm_wr16(ram, 0x0128, 0x0080);
+  }
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -1836,6 +1877,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x84BFBF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_58 },
   { "Event_Cmd59", hm_Event_Cmd59, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84C000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
+  { "Event_UNKPlayerPos", hm_Event_UNKPlayerPos, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84AB27, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_pos },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

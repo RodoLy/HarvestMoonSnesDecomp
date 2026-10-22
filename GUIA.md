@@ -605,6 +605,19 @@ al primero; aquí son `Event_Cmd51`...`Event_Cmd59`:
 | 58 | `<baldosa> <x> <y>`: pone ese tipo de baldosa en la granja |
 | 59 | la acción del jugador $1C |
 
+**El comando 37, `UNKPlayerPos`** ($84:AB27), cada cuadro, para un objeto
+del grupo $17 que el jugador puede cargar (probablemente el hijo: cuando el
+jugador lo deja, empieza el guion $17/$14). Sus pedidos son bits de
+$7F1F5C:
+
+- cada 120 cuadros ($0939) una animación de espera elegida por el byte al
+  azar $DE (guiones $4B-$50; fuera del lugar $15 de $7F1F32, el guion $80);
+- bit 6: mirar hacia donde dice su byte +2 (guiones $28-$2B);
+- bit 10: caminar hacia el jugador por el eje más largo (como el perro);
+- bit 5: lo toman en brazos ($D2 bit 4: cargando; el objeto se va);
+- A sobre él con las manos libres y lugar enfrente: el jugador lo levanta
+  (acción $17); el bit 4 dice "tocado en este cuadro".
+
 ### 5.11 Los mapas
 
 - `$22` es el **mapa actual**:
@@ -1189,3 +1202,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 36,92 % | `InputTypeSelector`, la pantalla del nombre, el menú 1, el modo 6: todos los modos de entrada reescritos; probados en vivo cada cuadro (unas 21.000 llamadas) |
 | 22-oct-2026 | 37,26 % | dibujar el mapa entero, con las cercas unidas a sus vecinas |
 | 22-oct-2026 | 38,35 % | los comandos de evento 50-59 (los 9 sin etiqueta en HM-Decomp ahora cuentan por su dirección) |
+| 22-oct-2026 | 39,25 % | el comando de evento 37: el objeto del grupo $17 que se carga (probablemente el hijo) |
