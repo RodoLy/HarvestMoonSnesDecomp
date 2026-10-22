@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **159 rutinas reescritas y verificadas** (0 diferencias):
+- **163 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -66,7 +66,7 @@ en el README (`tools/progress.py`).
 | LoadGameObjectComponents (CODE_858AE5) | $85:8AE5 | src/objects.c |
 | LoadSpriteComponent (CODE_858C30) | $85:8C30 | src/objects.c |
 | StartMapAnimation (CODE_81A5E1) | $81:A5E1 | src/mapedit.c |
-| 26 ToolUsed* (todas menos regadera y aspersor) | $82:931E-$82:A570 | src/toolused.c |
+| Las 28 ToolUsed* | $82:931E-$82:A570 | src/toolused.c |
 | RanchMasteryCalculator | $83:F26D | src/ending.c |
 | AddNewChicken, AddNewCow | $83:C807, $83:C8DC | src/animals.c |
 | PlaceAnimalsOnMap (CODE_83C296) | $83:C296 | src/animals.c |
@@ -75,6 +75,7 @@ en el README (`tools/progress.py`).
 | StartTextBox, SUB_83932D, CloseTextBox (CODE_8393F9) | $83:935F, $83:932D, $83:93F9 | src/text.c |
 | DrawTextBoxArrow, BlinkTextBoxArrow, TextBoxArrow | $83:94D7, $83:9495, $83:9447 | src/text.c |
 | UNK_SetDMA1 | $83:8166 | src/dma.c |
+| EditTileonMap, EditTileonMapandsets0181 | $82:B03A, $82:B049 | src/mapedit.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |
 | BlinkTextCursor, PrintDigit (CODE_83975F, CODE_8397A6) | $83:975F, $83:97A6 | src/text.c |
@@ -304,8 +305,8 @@ sistema de texto).
 - En vivo no se ven: todo el uso de herramientas corre en el intérprete
   de la recompilación (se pulsa X en el guion, pero el envoltorio no ve la
   llamada). Las verifica la prueba al azar.
-- Faltan la regadera y el aspersor: UNK_Audio19 → UNK_Audio15 espera al
-  chip de sonido (puertos $2140-$2143), que el comprobador no modela.
+- La regadera y el aspersor se hicieron después, cuando el comprobador
+  aprendió a grabar el chip de sonido (ver "El chip de sonido").
 
 ## Animales en el mapa y el final (hecho el 21-oct-2026)
 
@@ -327,8 +328,7 @@ sistema de texto).
   (hacía falta para las que corren por el intérprete).
 - `tools/candidates.py`: lista las rutinas que faltan, su tamaño, qué
   llaman que aún no está hecho y si tocan hardware.
-- Pendiente: la regadera y el aspersor necesitan grabar las lecturas del
-  chip de sonido (UNK_Audio17 lee $2140) para poder compararse.
+- (La regadera y el aspersor ya están: ver "El chip de sonido".)
 
 ## Comandos de los guiones de evento (hecho el 21-oct-2026)
 
@@ -372,12 +372,21 @@ sistema de texto).
   Event_UNKChickenRelated2, Event_UNKPlayerPos, y los que usan
   SUB_848895.
 
+## El chip de sonido (hecho el 21-oct-2026)
+
+- El comprobador graba en orden lo que el original lee y escribe en los
+  puertos $2140-$217F y se lo reproduce a la reescritura; cualquier
+  diferencia (puerto, valor u orden) es un MISMATCH. Ver GUIDE.md 3.4.
+- src/audio.c: UNK_Audio17, 7, 8, 15, 19, 16, 2. En vivo: 248 efectos de
+  sonido del texto de una partida nueva, todos iguales.
+- Con eso: ToolUsedWateringCan y ToolUsedSprinkler (src/toolused.c) y
+  EditTileonMap / EditTileonMapandsets0181 (src/mapedit.c).
+
 ## Lo siguiente
 
 Más comandos de evento (`python3 tools/candidates.py | grep Event_`);
-SUB_829260 (el despachador) cuando estén la regadera y el aspersor; el
-impresor de texto (ADDDDFFFF, $83:951C: todas sus ayudantes ya están; falta
-él, que llama a UNK_Audio19 → UNK_Audio15, el chip de sonido) para
+SUB_829260 (el despachador de herramientas: ya están todas); el
+impresor de texto (ADDDDFFFF, $83:951C: todas sus ayudantes ya están) para
 ShippingScene y UpdateTime; el resto
 de los eventos de animales (`Event_UNKCowRelated`, $84:9AD4).
 

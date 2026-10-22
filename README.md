@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 21.59%](https://img.shields.io/badge/decompiled-21.59%25-2f855a)
+![Decompiled: 21.86%](https://img.shields.io/badge/decompiled-21.86%25-2f855a)
 
-**21.59%** of the game's code decompiled and verified: 9755 of 45176 instructions, 159 of 529 routines (30.1%).
+**21.86%** of the game's code decompiled and verified: 9874 of 45176 instructions, 163 of 529 routines (30.8%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -49,13 +49,13 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Ending | RanchMasteryCalculator (the final ranch score) | `src/ending.c` |
 | Event script commands | 56 of the 90 (all but those that need text, sound or the screen): the chicken's and the dog's every frame (Event_UNKChickenRelated, Event_UNKDogRelated), jumps and tests (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), clock (TimeRunning / Stopped, SetHour), player (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) and flags | `src/eventcmds.c` |
 | Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (start an event script) | `src/events.c` |
-| Map edits | ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
+| Map edits | EditTileonMap / EditTileonMapandsets0181, ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | Video DMA | AddProgrammedDMA (queue a copy to VRAM / CGRAM for the next NMI), RemoveProgrammedDMA, UNK_SetDMA2 (a 2x2 block of BG3 tiles), UNK_SetDMA1 (one letter) | `src/dma.c` |
 | Sound | UNK_Audio17 / 7 (wait for "ready"), UNK_Audio8, UNK_Audio15 / 19 (sound effects), UNK_Audio16, UNK_Audio2 (commands to the sound chip, checked by recording its answers) | `src/audio.c` |
 | Text box | StartTextBox, CloseTextBox (CODE_8393F9), SUB_83932D (wipe the box), BlinkTextBoxArrow / TextBoxArrow / DrawTextBoxArrow (the "more text" arrow), FindLetterGraphics / DrawLetter / AdvanceLetterCursor / BlinkTextCursor (letters), PrintDigit (numbers) | `src/text.c` |
 | Objects | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites and the objects the tools leave on the map) | `src/objects.c` |
 | Tools | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square | `src/tools.c` |
-| Using the tools | 26 of the 28 ToolUsed* routines: sickle, hoe, hammer, axe, their gold versions, the five seeds, paint, feed, medicine, potion, bell, milker, brush, beans, gem seed, blue feather (not yet: watering can and sprinkler, which talk to the sound chip) | `src/toolused.c` |
+| Using the tools | All 28 ToolUsed* routines: sickle, hoe, hammer, axe, their gold versions, the five seeds, paint, feed, medicine, potion, bell, milker, brush, beans, gem seed, blue feather, watering can, sprinkler | `src/toolused.c` |
 
 A few things found along the way (details in each file's comments):
 

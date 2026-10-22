@@ -224,6 +224,8 @@ void hm_RNGReturn0toA(uint8_t *ram, HmRegs *r);       /* rng.c */
 void hm_SetWeatherFlags(uint8_t *ram, HmRegs *r);     /* weather.c */
 void hm_WeatherTomorrow(uint8_t *ram, HmRegs *r);
 void hm_GetTileIndex(uint8_t *ram, HmRegs *r);        /* farm.c */
+void hm_EditTileonMap(uint8_t *ram, HmRegs *r);       /* mapedit.c */
+void hm_EditTileonMapandsets0181(uint8_t *ram, HmRegs *r);
 void hm_LoadsDamageProbabilities(uint8_t *ram, HmRegs *r);
 void hm_ClimateFarmDamageCheck(uint8_t *ram, HmRegs *r);
 void hm_ClimateFarmDamagePrep(uint8_t *ram, HmRegs *r);
@@ -371,3 +373,5 @@ void hm_UNK_Audio15(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio19(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio16(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio2(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedWateringCan(uint8_t *ram, HmRegs *r); /* toolused.c */
+void hm_ToolUsedSprinkler(uint8_t *ram, HmRegs *r);

@@ -349,6 +349,7 @@ refilled.
 | Paint | Paints one of the 4 parts of the house wall: +10 happiness each. |
 | Feed | In the coop or the barn it fills the trough in front; otherwise it spills on the floor. |
 | Medicine, potion | Used up, they leave a flag the cow code reads. |
+| Watering can | Waters the tile in front: its type becomes the next code (dry → watered). One water less each use; with the can empty, or facing water (answer 2), nothing. It asks `PreCheckToolSuccess` twice. Sound effect 0, 7. |
 
 The hammer's and the axe's hit counter is the same one, `$096D`.
 
@@ -370,6 +371,7 @@ Out of season the tile ends up as a dead sprout.
 | Hoe | tills up to 6 tiles in a line and stops at the first it can't |
 | Hammer | breaks the big rock in one hit (costs 4 stamina) |
 | Axe | cuts the stump in one hit (costs 8) |
+| Sprinkler | waters the 9 tiles around, one per call, and never runs out of water (costs 8) |
 
 **Finds.** None happens while `$7F:1F60` bit 3 is set:
 
@@ -741,3 +743,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 21-Oct-2026 | 20.85 % | the text box: open, close, the arrow; two DMA helpers |
 | 21-Oct-2026 | 21.31 % | the letters: font, drawing, cursor, numbers |
 | 21-Oct-2026 | 21.59 % | the checker records the sound chip; 7 sound routines |
+| 21-Oct-2026 | 21.86 % | the watering can and the sprinkler: all 28 tools done |

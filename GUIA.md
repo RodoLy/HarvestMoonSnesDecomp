@@ -354,6 +354,7 @@ regadera.
 | Pintura | Pinta una de las 4 partes de la pared de la casa: +10 de felicidad cada una. |
 | Comida | En el gallinero o el establo llena el comedero de enfrente; si no, se cae al suelo. |
 | Medicina, poción | Se gastan y dejan una bandera que lee el código de las vacas. |
+| Regadera | Riega la casilla de enfrente: su tipo pasa al código siguiente (seco → regado). Un agua menos por uso; con la regadera vacía, o frente al agua (respuesta 2), nada. Le pregunta dos veces a `PreCheckToolSuccess`. Efecto de sonido 0, 7. |
 
 El contador de golpes del martillo y el hacha es el mismo, `$096D`.
 
@@ -375,6 +376,7 @@ Fuera de su estación, la casilla queda como brote muerto.
 | Azada | ara hasta 6 casillas en línea y se detiene en la primera que no puede |
 | Martillo | rompe la roca grande de un golpe (gasta 4 de energía) |
 | Hacha | corta el tocón de un golpe (gasta 8) |
+| Aspersor | riega las 9 casillas de alrededor, una por llamada, y nunca se queda sin agua (gasta 8) |
 
 **Hallazgos.** Ninguno ocurre si `$7F:1F60` bit 3 está puesto:
 
@@ -754,3 +756,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 21-oct-2026 | 20,85 % | el cuadro de texto: abrir, cerrar, la flecha; dos ayudantes de DMA |
 | 21-oct-2026 | 21,31 % | las letras: fuente, dibujo, cursor, números |
 | 21-oct-2026 | 21,59 % | el comprobador graba el chip de sonido; 7 rutinas de sonido |
+| 21-oct-2026 | 21,86 % | la regadera y el aspersor: las 28 herramientas listas |

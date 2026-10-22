@@ -468,6 +468,17 @@ static void prep_gold_hoe(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 TOOL_PREP(gold_hammer, 0x13, 0x06, 0x04, 0x10, 0x0F, 0x0E, 0x0D, 0xF8)
 TOOL_PREP(gold_axe, 0x14, 0x09, 0x0A, 0x0B, 0x0C, 0x11, 0x12, 0x13, 0x14, 0xF4)
 TOOL_PREP(feather, 0x18)
+/* watering: dry tilled soil (07) and some crops */
+TOOL_PREP(watering_can, 0x10, 0x07, 0x1D, 0x21, 0x40)
+TOOL_PREP(sprinkler, 0x15, 0x07, 0x1D, 0x21, 0x40)
+/* mapedit.c: EditTileonMap. A position anywhere, any map width. */
+static void prep_edit_tile(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  static const uint8_t widths[] = { 1, 2, 4, 3 };
+  ram[0x0181] = widths[rnd() % 4];
+  r->x = (uint16_t)(rnd() % 0x400); r->y = (uint16_t)(rnd() % 0x400);
+  r->a = (uint16_t)rnd();
+}
 TOOL_PREP(tool_unk, 0x1B)
 /* beans / gem seed: before 17:00 on their map (often) */
 static void prep_beans_gem(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), uint8_t tool,
@@ -1080,6 +1091,16 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/audio.c", 0x838E7F, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
   { "UNK_Audio2", hm_UNK_Audio2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/audio.c", 0x838E32, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
+  { "EditTileonMap", hm_EditTileonMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/mapedit.c", 0x82B03A, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_edit_tile },
+  { "EditTileonMapandsets0181", hm_EditTileonMapandsets0181, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/mapedit.c", 0x82B049, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_edit_tile },
+  { "ToolUsedWateringCan", hm_ToolUsedWateringCan,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_JSR,
+    "src/toolused.c", 0x829CD8, 1, 0, 0, 0xFF, { { 0 } }, 200, prep_watering_can },
+  { "ToolUsedSprinkler", hm_ToolUsedSprinkler,
+    HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_JSR,
+    "src/toolused.c", 0x82A307, 1, 0, 0, 0xFF, { { 0 } }, 120, prep_sprinkler },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

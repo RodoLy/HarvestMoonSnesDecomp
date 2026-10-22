@@ -785,3 +785,60 @@ void hm_ToolUsedCowFeed(uint8_t *ram, HmRegs *r)
                              0xA4DA, 0xA4E9, 0xA51E, 0xA551, 0xA56E, false };
   feed(ram, r, &f);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * The watering can and the sprinkler. Both first make their sound (effect
+ * 0, 7, $0A: UNK_Audio19). A tile that can be watered (PreCheckToolSuccess
+ * leaves its type in X) becomes type + 1 in the map (EditTileonMap) and
+ * gets the picture of entry 4 (type + 1) of the tile table [$0D] (the
+ * byte there is the ChangeMapTile change).
+ * ───────────────────────────────────────────────────────────────────────── */
+#define HM_WATER           0x00926  /* 8b: water left in the can */
+
+static void make_sound(uint8_t *ram, HmRegs *r, uint16_t ret)
+{
+  load8(r, 0x07);
+  ram[0x0114] = 0x00;
+  ram[0x0115] = 0x07;
+  jsl(ram, r, ret, 0x83, hm_UNK_Audio19);
+}
+static void water_tile(uint8_t *ram, HmRegs *r, uint16_t ret_edit, uint16_t ret_change)
+{
+  uint16_t watered = (uint16_t)(r->x + 1);               /* TXA; INC A; PHA */
+  push16(ram, r, watered);
+  r->a = watered;
+  r->x = tile_x(ram); r->y = tile_y(ram);
+  jsl(ram, r, ret_edit, 0x82, hm_EditTileonMap);
+  hm_pull8(ram, r); hm_pull8(ram, r);                    /* PLA */
+  r->y = (uint16_t)(watered << 2);
+  r->c = (watered << 1) & 0x8000 ? 1 : 0;                /* ASL; ASL */
+  uint8_t change = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0D, r->y));
+  change_tile_in_front(ram, r, change, ret_change);
+}
+
+/* ToolUsedWateringCan ($82:9CD8): nothing if PreCheckToolSuccess says 2
+ * (it is asked twice: once for that, once for real) or the can is empty;
+ * otherwise one water less and the tile in front is watered if it can be.
+ * Idle, 2 stamina. */
+void hm_ToolUsedWateringCan(uint8_t *ram, HmRegs *r)
+{
+  make_sound(ram, r, 0x9CED);
+  jsr(ram, r, 0x9CF0, hm_PreCheckToolSuccess);
+  if (!is(r, (uint8_t)r->a, 0x02) && load8(r, ram[HM_WATER]) != 0) {
+    load8(r, --ram[HM_WATER]);
+    if (tool_works(ram, r, 0x9D02, hm_PreCheckToolSuccess))
+      water_tile(ram, r, 0x9D18, 0x9D31);
+  }
+  tool_finished(ram, r, 0xFE, 0x9D40);
+}
+
+/* ToolUsedSprinkler ($82:A307): one of the 9 tiles of the 3x3 square in
+ * front per call (PreCheckToolSuccessSquare, step $096B); after the 9th,
+ * idle and 8 stamina. It never runs out of water. */
+void hm_ToolUsedSprinkler(uint8_t *ram, HmRegs *r)
+{
+  make_sound(ram, r, 0xA31C);
+  if (tool_works_at_step(ram, r, 0xA327, hm_PreCheckToolSuccessSquare))
+    water_tile(ram, r, 0xA33D, 0xA356);
+  gold_step(ram, r, 9, 0xA375);
+}
