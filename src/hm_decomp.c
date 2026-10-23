@@ -1706,6 +1706,36 @@ static void prep_slot_sprite(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[slot + 0x01] = (uint8_t)((ram[slot + 0x01] & ~0x46) | does[rnd() % 7]);
 }
 
+/* eventcmds.c: the talking commands (5, 9): as the animation commands,
+ * with the player's action (often 5, holding something up, or a busy
+ * one), carrying ($D2 bit 2), $7F1F60, A just pressed ($0128 bit 7) and
+ * an item in hand ($091D) sometimes; StartMapAnimation's number for
+ * Event_UNKCFD1; the music for Event_AudioRelated2. */
+static void prep_talk_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_anim_cmd(ram, r, rnd);
+  uint16_t slot = hm_rd16(ram, 0xCC);
+  ram[slot + 0x0C] = (uint8_t)((rnd() % 4) ? 1 + rnd() % 0xFF : 0);
+  static const uint16_t actions[] = { 0, 1, 5, 5, 5, 0x0A, 0x0C, 0x0D, 0x1B, 0x0E };
+  hm_wr16(ram, 0xD4, actions[rnd() % 10]);
+  uint16_t d2 = hm_rd16(ram, 0xD2), f60 = (uint16_t)rnd(), pad = (uint16_t)rnd();
+  hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 4) ? d2 & ~0x0004u : d2 | 0x0004));
+  hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 4) ? f60 & ~0x0006u : f60));
+  hm_wr16(ram, 0x00128, (uint16_t)((rnd() % 4) ? pad | 0x0080 : pad & ~0x0080u));
+  ram[0x0091D] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+}
+static void prep_map_animation_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_cmd(ram, r, rnd);
+  uint16_t at = hm_rd16(ram, 0xC9);
+  hm_wr16(ram, 0x10000u + at + 1, (uint16_t)(rnd() % 0x60));
+}
+static void prep_music_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_cmd(ram, r, rnd);
+  prep_music(ram, r, rnd);
+}
+
 /* objects.c: InvertIfFliped: an offset and the flip bits. */
 static void prep_flip(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -2666,6 +2696,14 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x848F0A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
   { "Event_UNKCCchanges17", hm_Event_UNKCCchanges17, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BA72, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
+  { "Event_UNKCCchanges5", hm_Event_UNKCCchanges5, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849079, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_talk_cmd },
+  { "Event_UNKCCchanges9", hm_Event_UNKCCchanges9, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849633, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_talk_cmd },
+  { "Event_UNKCFD1", hm_Event_UNKCFD1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849553, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_animation_cmd },
+  { "Event_AudioRelated2", hm_Event_AudioRelated2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_APU,
+    "src/eventcmds.c", 0x848CA8, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music_cmd },
   { "CODE_8580B9", hm_CODE_8580B9, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x8580B9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
   { "CODE_858100", hm_CODE_858100, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,

@@ -2275,6 +2275,37 @@ void hm_Event_UNKCCchanges3(uint8_t *ram, HmRegs *r)
   set_animation(ram, r, 0x8F8C);
 }
 
+/* the slot turns to face the player (+02 = the player's direction with
+ * bit 0 flipped: the opposite one), stops (+03 / +04 / +0C = 0, +08 =
+ * +07), takes the animation of that side and gets +01 bits 2 and 4 */
+static void turn_to_player(uint8_t *ram, HmRegs *r, uint16_t ret)
+{
+  r->y = 0x07;
+  uint8_t b = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x07)));
+  r->y = 0x08;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x08), b);
+  static const uint8_t cleared[3] = { 0x03, 0x04, 0x0C };
+  for (int i = 0; i < 3; i++) {
+    r->y = cleared[i];
+    lda8(r, 0);
+    hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, cleared[i]), 0);
+  }
+  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xDA) ^ 0x0001);
+  r->y = 2;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x02), (uint8_t)r->a);
+  r->y = 0x33;
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x33));
+  hm_dp_w16(ram, r, 0x72, r->a);
+  lda8(r, 0xB3);
+  *hm_dp(ram, r, 0x74) = 0xB3;
+  hm_jsl(ram, r, ret, 0x84);
+  hm_SUB_848895(ram, r);
+  hm_rtl(ram, r);
+  r->y = 1;
+  uint8_t flags = lda8(r, (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x01)) | 0x14));
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x01), flags);
+}
+
 /* Event_UNKCCchanges17 ($84:BA72): <address>: if the player talked to the
  * slot (+0C, see SUB_82AD0E), is not in action $0A and $7F1F5E bit 6 is set,
  * the slot turns to face the player (+02 = the player's direction with bit 0
@@ -2299,33 +2330,93 @@ void hm_Event_UNKCCchanges17(uint8_t *ram, HmRegs *r)
   }
   if (!turn) { advance(ram, r, 2); return; }
   jump(ram, r);
-  r->y = 0x07;
-  uint8_t b = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x07)));
-  r->y = 0x08;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x08), b);
-  static const uint8_t cleared[3] = { 0x03, 0x04, 0x0C };
-  for (int i = 0; i < 3; i++) {
-    r->y = cleared[i];
-    lda8(r, 0);
-    hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, cleared[i]), 0);
-  }
-  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xDA) ^ 0x0001);
-  r->y = 2;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x02), (uint8_t)r->a);
-  r->y = 0x33;
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x33));
-  hm_dp_w16(ram, r, 0x72, r->a);
-  lda8(r, 0xB3);
-  *hm_dp(ram, r, 0x74) = 0xB3;
-  hm_jsl(ram, r, 0xBB03, 0x84);
-  hm_SUB_848895(ram, r);
-  hm_rtl(ram, r);
-  r->y = 1;
-  uint8_t flags = lda8(r, (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x01)) | 0x14));
-  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x01), flags);
+  turn_to_player(ram, r, 0xBB03);
   r->y = 0x10;
   uint16_t frames = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x10));
   r->c = frames == 0xFFFF;
   r->a = (uint16_t)(frames + 1);
   hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x10), r->a);
 }
+
+/* Event_AudioRelated2 ($84:8CA8): <byte, unused>: the music changes to the
+ * one asked for in $0110, if it is not the one playing (UNK_Audio25). */
+void hm_Event_AudioRelated2(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 2);
+  hm_jsl(ram, r, 0x8CB7, 0x83);
+  hm_UNK_Audio25(ram, r);
+  hm_rtl(ram, r);
+}
+
+/* Event_UNKCFD1 ($84:9553): <word>: starts the map animation of that
+ * number (StartMapAnimation), one frame. */
+void hm_Event_UNKCFD1(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  arg16(ram, r);
+  hm_jsl(ram, r, 0x9564, 0x81);
+  hm_StartMapAnimation(ram, r);
+  hm_rtl(ram, r);
+  advance(ram, r, 2);
+  count_frame(ram, r);
+}
+
+/* Event_UNKCCchanges5 ($84:9079, commands $1E and $1F) and
+ * Event_UNKCCchanges9 ($84:9633, command $2D): talking to someone. If the
+ * player talked to the slot (+0C), is not using or showing a tool nor
+ * whistling (actions $0A, $0C, $0D, $1B), carries nothing ($D2 bit 2),
+ * $7F1F60 bits 1-2 are clear and A was just pressed: the slot faces the
+ * player, $096E-$0970 = $56, 0, 0, $D2 |= $40, the player stops (action
+ * 0) and the script jumps to <address>. Command $2D has two addresses:
+ * the second one when the player holds something up (action 5 with an
+ * item: that item also goes to $091E). Otherwise the addresses are
+ * skipped. Either way, one frame. */
+/* LDA.W / STA.W: the data bank's address */
+static uint32_t abs_db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
+
+static void talk_to_slot(uint8_t *ram, HmRegs *r, unsigned addresses, uint16_t ret)
+{
+  advance(ram, r, 1);
+  r->y = 0x0C;
+  uint8_t talked = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x0C)));
+  r->c = 1;                                                /* CMP #0 */
+  bool go = talked != 0;
+  static const uint16_t busy[4] = { 0x0A, 0x0C, 0x0D, 0x1B };
+  for (int i = 0; go && i < 4; i++) {
+    r->a = hm_dp_r16(ram, r, 0xD4);
+    r->c = r->a >= busy[i];
+    go = r->a != busy[i];
+  }
+  if (go) { r->a = hm_dp_r16(ram, r, 0xD2) & 0x0004; go = !r->a; }
+  if (go) { r->a = hm_bus_rd16(ram, 0x7F1F60) & 0x0006; go = !r->a; }
+  if (go) { r->a = hm_bus_rd16(ram, abs_db(r, 0x0128)); go = (r->a & 0x0080) != 0; }   /* BIT #$80 */
+  if (!go) {
+    advance(ram, r, (uint16_t)(2 * addresses));
+    count_frame(ram, r);
+    return;
+  }
+  if (addresses == 2) {
+    r->a = hm_dp_r16(ram, r, 0xD4);
+    r->c = r->a >= 5;
+    if (r->a == 5) {
+      uint8_t item = lda8(r, hm_bus_rd8(ram, abs_db(r, 0x091D)));   /* in hand */
+      if (item) {
+        hm_bus_wr8(ram, abs_db(r, 0x091E), item);
+        advance(ram, r, 2);
+      }
+    }
+  }
+  jump(ram, r);
+  turn_to_player(ram, r, ret);
+  lda8(r, 0x56);
+  hm_bus_wr8(ram, abs_db(r, 0x096E), 0x56);
+  hm_bus_wr8(ram, abs_db(r, 0x096F), 0);
+  hm_bus_wr8(ram, abs_db(r, 0x0970), 0);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0040);
+  hm_dp_w16(ram, r, 0xD2, r->a);
+  r->a = 0;
+  hm_dp_w16(ram, r, 0xD4, 0);
+  count_frame(ram, r);
+}
+void hm_Event_UNKCCchanges5(uint8_t *ram, HmRegs *r) { talk_to_slot(ram, r, 1, 0x9145); }
+void hm_Event_UNKCCchanges9(uint8_t *ram, HmRegs *r) { talk_to_slot(ram, r, 2, 0x971F); }

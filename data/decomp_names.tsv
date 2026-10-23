@@ -498,6 +498,8 @@
 048FEF	Event_StartTextBox_lo
 849034	Event_StartTextBoxCopy
 049034	Event_StartTextBoxCopy_lo
+849079	Event_UNKCCchanges5
+049079	Event_UNKCCchanges5_lo
 84919D	Event_UNKJumpif018F
 04919D	Event_UNKJumpif018F_lo
 8491D2	Event_UNKTextrelated
@@ -514,8 +516,12 @@
 0493C9	Event_ResetFlag_lo
 849513	Event_MapScrolling
 049513	Event_MapScrolling_lo
+849553	Event_UNKCFD1
+049553	Event_UNKCFD1_lo
 84957D	Event_UNKCCchanges8
 04957D	Event_UNKCCchanges8_lo
+849633	Event_UNKCCchanges9
+049633	Event_UNKCCchanges9_lo
 849777	Event_UNKCCchanges10
 049777	Event_UNKCCchanges10_lo
 849810	Event_UNKCCchanges11

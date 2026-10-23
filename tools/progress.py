@@ -56,6 +56,12 @@ LOCAL = {
     0x83F26D: ("RanchMasteryCalculator", "RanchMasteryCalculator"),
     0x83C296: ("CODE_83C296", "PlaceAnimalsOnMap"),
     0x848A0D: ("Event_TimeStopped", "Event_TimeStopped"),     # ";808A0D" in HM-Decomp
+    # the same mistake (bank $80 in the comment); Event_UNKCFD1 was being
+    # counted with CallIndexedSubrutines, the real $80:9553
+    0x849079: ("Event_UNKCCchanges5", "Event_UNKCCchanges5", "Event_UNKJumpif018F"),  # two RTS
+    0x849553: ("Event_UNKCFD1", "Event_UNKCFD1"),
+    0x8495E8: ("Event_AudioRelated3", "Event_AudioRelated3"),
+    0x849633: ("Event_UNKCCchanges9", "Event_UNKCCchanges9", "Event_UNKCCchanges10"),
     0x8491D2: ("Event_UNKTextrelated", "Event_UNKTextrelated"),
     0x849513: ("Event_MapScrolling", "Event_MapScrolling"),
     0x84A90F: ("Event_StoreValue", "Event_StoreValue"),

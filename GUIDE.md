@@ -231,6 +231,10 @@ A second correction came later: HM-Decomp sometimes writes several
 routines one after the other under a single name. Now a label that is
 called from outside its block counts as a routine of its own, so the
 instructions are credited to the right one (20.45 % → 20.33 %).
+A third one on October 23: four script commands have an address comment
+in HM-Decomp with the wrong bank ($80 instead of $84), and one of them
+landed on a real routine of bank $80 (`CallIndexedSubrutines`, $80:9553),
+whose count included it (56.14 % → 56.10 %).
 
 ---
 
@@ -616,6 +620,15 @@ at where it is. Some commands:
 | `UNKCCchanges4`, `6`, `10` | set up a walk for the slot: speed, destination, starting point |
 | `UNKCCchanges8`, `15`, `3` | choose the slot's animation: a table in bank $B3 and an entry (given, or the player's direction); 3 also places the slot |
 | `UNKCCchanges17` | if the player talked to the slot, it turns to face the player, stops, and the script jumps |
+| `UNKCCchanges5` (1E, 1F), `UNKCCchanges9` (2D) | **talking to someone**: if the player talked to the slot (+0C), is not using or showing a tool nor whistling, carries nothing, `$7F1F60` bits 1-2 are clear and A was just pressed: the slot faces the player, the player stops (action 0, `$D2` bit `$40`, `$096E` = `$56`) and the script jumps. 2D has a second address, for when the player holds something up (action 5 with an item: that item also goes to `$091E`) |
+| `UNKCFD1` (2A) | starts a map animation (`StartMapAnimation`, the number in the argument) |
+| `AudioRelated2` (0E) | changes the music to the one asked for in `$0110` (`UNK_Audio25`) |
+
+Of the 90 commands only three are left in the original: the two screen
+fades (0A, 0F) and `AudioRelated3` (2C, a sound effect). All three wait
+whole frames (`WaitForNMI`), and a routine that waits for the next frame
+cannot be checked call by call. So the command interpreter and the slot
+loop (`IterateCCStructures`) stay in the original too.
 | `UNK1`, `UNKCCchanges7` | destroy the slot's own object, or another slot and its object |
 
 **Things you pick up.** Several commands use the same "free hands" test:
@@ -1495,3 +1508,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 54.80 % | footprints in the snow, the map animation player |
 | 23-Oct-2026 | 55.98 % | the slots that wander on their own (the town's people, the animals) |
 | 23-Oct-2026 | 56.14 % | each slot's sprite, every frame |
+| 23-Oct-2026 | 56.76 % | talking to people (commands 1E, 1F, 2D), a map animation and the music from a script; count corrected (−0.04) |

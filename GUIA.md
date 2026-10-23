@@ -234,6 +234,10 @@ Después vino una segunda corrección: HM-Decomp a veces escribe varias
 rutinas una detrás de otra bajo un solo nombre. Ahora una etiqueta a la
 que se llama desde fuera de su bloque cuenta como rutina aparte, y las
 instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
+Una tercera el 23 de octubre: cuatro comandos de guion tienen en HM-Decomp
+la dirección anotada con el banco equivocado ($80 en vez de $84), y uno de
+ellos caía sobre una rutina real del banco $80 (`CallIndexedSubrutines`,
+$80:9553), cuya cuenta lo incluía (56,14 % → 56,10 %).
 
 ---
 
@@ -624,6 +628,16 @@ va. Algunos comandos:
 | `UNKCCchanges4`, `6`, `10` | preparan una caminata del slot: velocidad, destino, punto de partida |
 | `UNKCCchanges8`, `15`, `3` | eligen la animación del slot: una tabla del banco $B3 y una entrada (dada, o la dirección del jugador); el 3 además coloca el slot |
 | `UNKCCchanges17` | si el jugador le habló al slot, este se gira hacia el jugador, se para y el guion salta |
+| `UNKCCchanges5` (1E, 1F), `UNKCCchanges9` (2D) | **hablar con alguien**: si el jugador le habló al slot (+0C), no está usando ni mostrando una herramienta ni silbando, no carga nada, los bits 1-2 de `$7F1F60` están apagados y acaba de apretar A: el slot se gira hacia el jugador, el jugador se para (acción 0, bit `$40` de `$D2`, `$096E` = `$56`) y el guion salta. 2D tiene una segunda dirección, para cuando el jugador muestra algo en alto (acción 5 con un objeto: ese objeto también va a `$091E`) |
+| `UNKCFD1` (2A) | empieza una animación de mapa (`StartMapAnimation`, el número del argumento) |
+| `AudioRelated2` (0E) | cambia la música a la pedida en `$0110` (`UNK_Audio25`) |
+
+De los 90 comandos solo quedan tres en el original: los dos fundidos de
+pantalla (0A, 0F) y `AudioRelated3` (2C, un efecto de sonido). Los tres
+esperan cuadros enteros (`WaitForNMI`), y una rutina que espera al cuadro
+siguiente no se puede comprobar llamada por llamada. Por eso el
+intérprete de comandos y el bucle de los slots (`IterateCCStructures`)
+también se quedan en el original.
 | `UNK1`, `UNKCCchanges7` | destruyen el objeto del propio slot, o otro slot con su objeto |
 
 **Cosas que se levantan.** Varios comandos usan la misma prueba de "manos
@@ -1532,3 +1546,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 54,80 % | huellas en la nieve, el reproductor de animaciones de mapa |
 | 23-oct-2026 | 55,98 % | los slots que pasean solos (la gente del pueblo, los animales) |
 | 23-oct-2026 | 56,14 % | el sprite de cada slot, cada cuadro |
+| 23-oct-2026 | 56,76 % | hablar con la gente (comandos 1E, 1F, 2D), animación de mapa y música desde un guion; corrección de la cuenta (−0,04) |
