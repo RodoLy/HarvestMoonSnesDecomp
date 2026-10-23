@@ -512,6 +512,7 @@ void hm_UnusedBarnCheck(uint8_t *ram, HmRegs *r);
 void hm_ToolUsedSound1(uint8_t *ram, HmRegs *r);     /* toolsound.c */
 void hm_CopyCurrentMaptoFarmMap(uint8_t *ram, HmRegs *r);  /* farm.c */
 void hm_LoadDefaultFarmMap(uint8_t *ram, HmRegs *r);
+void hm_LoadMap(uint8_t *ram, HmRegs *r);
 void hm_ClearsofAllCCStructs(uint8_t *ram, HmRegs *r);     /* events.c */
 void hm_MultiplicationUnsigned(uint8_t *ram, HmRegs *r);   /* math.c */
 void hm_SUB_81A7CE(uint8_t *ram, HmRegs *r); /* maptiles.c */
@@ -541,6 +542,7 @@ void hm_UNK_Audio10(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio21(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio22(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio25(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio5(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio12(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio11(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio9(uint8_t *ram, HmRegs *r);

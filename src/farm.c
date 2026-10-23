@@ -482,3 +482,54 @@ void hm_LoadDefaultFarmMap(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)((source & 0xFF00) | bank);
   copy_to_farm_map(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * LoadMap ($82:A5FB, JSL, RTL): the tiles of map $22 into the current map
+ * ($09B6, 4096 bytes, data bank). The farm (maps 0-3) comes from the
+ * farm's own copy ($7E:A4E6, so the field is kept), any other from its
+ * entry in MapPointerTable. $0D-$0F = the map's tile property table
+ * (UNK_PointersTable, $82:B294, same index; maps 0-3 use the first).
+ * Quirk: the index (map x 3) is computed in 8 bits, so a map from $56 on
+ * would wrap to the start of the tables (no such map has tiles).
+ * Leftovers: $72-$74 = the source, A = (high byte of the table entry :
+ * the last tile), X = $FFF, Y = $1000, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define TILE_PROPERTY_TABLES 0x82B294   /* UNK_PointersTable */
+#define CURRENT_MAP          0x09B6     /* DB: */
+#define HM_TILEMAP_TO_LOAD_DP 0x22      /* the map being loaded */
+
+void hm_LoadMap(uint8_t *ram, HmRegs *r)
+{
+  uint8_t map = *hm_dp(ram, r, HM_TILEMAP_TO_LOAD_DP);
+  r->a = map;                                         /* LDA #0; XBA; LDA */
+  r->c = map >= 4;
+  uint16_t index;
+  if (!r->c) {
+    hm_dp_w16(ram, r, 0x72, 0xA4E6);                  /* the farm's copy */
+    *hm_dp(ram, r, 0x74) = 0x7E;
+    r->a = 0xA47E;
+    index = 0;
+  } else {
+    uint16_t sum = (uint16_t)(((map << 1) & 0xFF) + map);   /* 8 bits: ASL; CLC; ADC */
+    r->c = sum > 0xFF;
+    index = (uint8_t)sum;
+    hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, MAP_POINTER_TABLE + index));
+    uint8_t bank = hm_bus_rd8(ram, MAP_POINTER_TABLE + index + 2);
+    r->a = (uint16_t)((hm_bus_rd16(ram, MAP_POINTER_TABLE + index) & 0xFF00) | bank);
+    *hm_dp(ram, r, 0x74) = bank;
+  }
+  push16(ram, r, index); pull16(ram, r);              /* PHX ... PLX */
+  uint16_t table = hm_bus_rd16(ram, TILE_PROPERTY_TABLES + index);
+  hm_dp_w16(ram, r, 0x0D, table);
+  uint8_t bank = hm_bus_rd8(ram, TILE_PROPERTY_TABLES + index + 2);
+  *hm_dp(ram, r, 0x0F) = bank;
+  r->a = (uint16_t)((table & 0xFF00) | bank);
+  for (uint16_t y = 0; y < 0x1000; y++) {
+    uint8_t b = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, y));
+    r->a = (uint16_t)((r->a & 0xFF00) | b);
+    hm_bus_wr8(ram, ((uint32_t)r->db << 16 | CURRENT_MAP) + y, b);
+  }
+  r->x = 0x0FFF;
+  r->y = 0x1000;
+  r->c = 1;
+}

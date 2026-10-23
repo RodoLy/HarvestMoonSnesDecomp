@@ -581,3 +581,69 @@ void hm_UNK_Audio4(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)(count & 0xFF00);
   r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNK_Audio5 ($80:95DE, JSL, RTL): which music the map being entered ($22)
+ * asks for, into $0110:
+ *   - from 6 pm (hour 18) on, none ($FF), except on map $1E;
+ *   - $0196 bit 4: song $16; else $0196 bit 1: maps $57-$5A none (0),
+ *     $31-$56 song $13, $15-$30 song $14, below $15 song $13, and from $5B
+ *     on, as normal;
+ *   - normally the map's entry in Mayby_Table_AudioTracksbySeason
+ *     ($80:B8E7, one word per map: $FFFF = none, 0 stays in $0110), a list
+ *     of four songs, one per season (read with the data bank).
+ * Leftovers: A, X, Y and C as each way out leaves them (see the code).
+ * ───────────────────────────────────────────────────────────────────────── */
+#define TRACKS_BY_MAP 0x80B8E7
+
+void hm_UNK_Audio5(uint8_t *ram, HmRegs *r)
+{
+  uint8_t map = *hm_dp(ram, r, 0x22);
+  set_a8(r, map);
+  r->c = map >= 0x1E;
+  if (map != 0x1E) {
+    uint8_t hour = hm_bus_rd8(ram, 0x7F1F1C);
+    set_a8(r, hour);
+    r->c = hour >= 18;
+    if (r->c) {                                       /* Max7E0110 */
+      set_a8(r, 0xFF);
+      hm_bus_wr8(ram, db_addr(r, 0x0110), 0xFF);
+      return;
+    }
+  }
+  hm_bus_wr8(ram, db_addr(r, 0x0110), 0);
+  uint16_t flags = hm_bus_rd16(ram, db_addr(r, 0x0196));
+  if (flags & 0x0010) {
+    r->a = 0x0016;
+    hm_bus_wr8(ram, db_addr(r, 0x0110), 0x16);
+    return;
+  }
+  r->a = flags & 0x0002;
+  if (r->a) {
+    r->a = map;
+    r->c = map >= 0x5B;
+    if (!r->c) {
+      r->c = map >= 0x57;
+      if (r->c) return;
+      uint8_t song = 0x13;
+      r->c = map >= 0x31;
+      if (!r->c) { r->c = map >= 0x15; if (r->c) song = 0x14; }
+      r->a = song;
+      hm_bus_wr8(ram, db_addr(r, 0x0110), song);
+      return;
+    }
+  }
+  r->a = (uint16_t)(map << 1);                        /* LDA #0; XBA; LDA; ASL */
+  r->c = 0;
+  r->x = r->a;
+  uint16_t list = hm_bus_rd16(ram, TRACKS_BY_MAP + r->x);
+  r->a = list;
+  r->c = list == 0xFFFF;                              /* CMP #$FFFF */
+  if (list == 0xFFFF) return;
+  hm_dp_w16(ram, r, 0x7E, list);
+  uint8_t season = hm_bus_rd8(ram, 0x7F1F19);
+  r->y = season;
+  uint8_t song = hm_bus_rd8(ram, (db_addr(r, list) + season) & 0xFFFFFF);   /* LDA ($7E),Y */
+  r->a = song;
+  hm_bus_wr8(ram, db_addr(r, 0x0110), song);
+}

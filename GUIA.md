@@ -707,6 +707,14 @@ $7F1F5C:
   | 31-34 | cima de la montaña |
 
 - **El mapa $30 cuelga el juego.**
+- **Cargar las casillas de un mapa** (`LoadMap`): los 4.096 tipos de
+  casilla del mapa `$22` al mapa actual (`$09B6`). La granja (mapas 0-3)
+  sale de su propia copia (`$7E:A4E6`, así se conserva el campo); los
+  demás, de su entrada en `MapPointerTable` ($82:B174, 3 bytes cada una).
+  `$0D-$0F` recibe la tabla de propiedades de las casillas del mapa
+  (`UNK_PointersTable`, $82:B294, mismo índice).
+  Rareza: el índice (mapa x 3) se calcula en 8 bits, así que un mapa desde
+  el $56 daría la vuelta (ninguno así tiene casillas).
 - **El dibujo del mapa** está completo en la WRAM (`$7E:2000`); la memoria
   de video solo tiene una ventana de 64 × 64 que se va rellenando desde
   ahí.
@@ -956,6 +964,12 @@ instrumento necesita cada uno de los 50 efectos de sonido (`$83:927F`).
 
 $0110 es la canción que se quiere y $0117 la que suena; cuando difieren,
 `UNK_Audio21`, `UNK_Audio22` y `UNK_Audio25` mandan el cambio.
+**Qué canción pide un mapa** (`UNK_Audio5`, al entrar): desde las 6 de la
+tarde ninguna ($FF), salvo en el mapa $1E; con el bit 4 de `$0196` la
+canción $16; con el bit 1 de `$0196` los mapas por debajo del $57 tienen
+la $13 o la $14 (según el rango) y los $57-$5A ninguna; si no, cada mapa
+tiene una lista de cuatro canciones, una por estación, en la tabla
+`$80:B8E7` ($FFFF: ninguna).
 `Unk_Audio23` no tiene nada que ver con el sonido: multiplica dos números
 de 16 bits con el multiplicador de 8 x 8 de la consola.
 
@@ -1587,3 +1601,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 56,76 % | hablar con la gente (comandos 1E, 1F, 2D), animación de mapa y música desde un guion; corrección de la cuenta (−0,04) |
 | 23-oct-2026 | 57,86 % | animar los objetos con sprite, el orden de dibujo, vaciar la tabla de sprites |
 | 23-oct-2026 | 59,10 % | cargar una partida guardada y empezar una nueva |
+| 23-oct-2026 | 59,36 % | cargar las casillas de un mapa, la música de cada mapa |

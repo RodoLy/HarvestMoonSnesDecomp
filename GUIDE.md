@@ -698,6 +698,13 @@ down, script $17/$14 starts). Its requests are bits of $7F1F5C:
   | 31-34 | mountain top |
 
 - **Map $30 hangs the game.**
+- **Loading a map's tiles** (`LoadMap`): the 4,096 tile types of map
+  `$22` into the current map (`$09B6`). The farm (maps 0-3) comes from its
+  own copy (`$7E:A4E6`, so the field is kept); the others from their
+  entry in `MapPointerTable` ($82:B174, 3 bytes each). `$0D-$0F` gets the
+  map's tile property table (`UNK_PointersTable`, $82:B294, same index).
+  Quirk: the index (map x 3) is computed in 8 bits, so a map from $56 on
+  would wrap around (no such map has tiles).
 - **The map's picture** is kept whole in WRAM (`$7E:2000`); video memory
   only holds a 64 × 64 window that is refilled from there.
 - **Changing a tile** (`ChangeMapTile`) does three things: it writes the
@@ -936,6 +943,11 @@ at `$83:8EFF`), and which instrument each of the 50 sound effects needs
 
 $0110 is the song wanted and $0117 the one playing; when they differ,
 `UNK_Audio21`, `UNK_Audio22` and `UNK_Audio25` send the change.
+**Which song a map asks for** (`UNK_Audio5`, on entering it): from 6 pm on
+none ($FF), except on map $1E; with `$0196` bit 4 song $16; with `$0196`
+bit 1 the maps below $57 get song $13 or $14 (by range) and $57-$5A none;
+otherwise each map has a list of four songs, one per season, in the table
+`$80:B8E7` ($FFFF: none).
 `Unk_Audio23` is not about sound at all: it multiplies two 16-bit numbers
 with the console's 8 x 8 multiplier.
 
@@ -1546,3 +1558,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 56.76 % | talking to people (commands 1E, 1F, 2D), a map animation and the music from a script; count corrected (−0.04) |
 | 23-Oct-2026 | 57.86 % | animating the game objects, the drawing order, emptying the sprite table |
 | 23-Oct-2026 | 59.10 % | loading a saved game and starting a new one |
+| 23-Oct-2026 | 59.36 % | loading a map's tiles, each map's music |

@@ -1814,6 +1814,32 @@ static void prep_init_objs(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0xA1, (uint16_t)((rnd() % 2) ? 0x250 + rnd() % 0x20 : rnd()));
 }
 
+/* farm.c: LoadMap, any map with tiles (the farm's four, and those whose
+ * MapPointerTable entry is not $FFFFFF), sometimes a farm copy of noise. */
+static void prep_load_map(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  uint8_t map;
+  do map = (uint8_t)((rnd() % 4) ? rnd() % 0x56 : rnd() % 5);
+  while (map >= 4 && hm_bus_rd8(ram, 0x82B174u + 3u * map + 2) == 0xFF);
+  ram[0x22] = map;
+  for (unsigned i = 0; i < 3; i++) ram[0x0D + i] = (uint8_t)rnd();
+  if (rnd() % 2) for (unsigned i = 0; i < 0x1000; i++) ram[0xA4E6 + i] = (uint8_t)rnd();
+}
+
+/* audio.c: UNK_Audio5, the music of a map: any map (often $1E and the
+ * edges of the ranges), the hour (often 18), the season, $0196 bits 1/4. */
+static void prep_map_music(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  static const uint8_t maps[] = { 0x1E, 0x14, 0x15, 0x30, 0x31, 0x56, 0x57, 0x5A, 0x5B, 0 };
+  ram[0x22] = (uint8_t)((rnd() % 3) ? rnd() % 0x60 : maps[rnd() % 10]);
+  ram[0x11F1C] = (uint8_t)((rnd() % 4) ? 6 + rnd() % 13 : (rnd() % 2) ? 18 : 17);
+  ram[0x11F19] = (uint8_t)(rnd() % 4);
+  hm_wr16(ram, 0x0196, (uint16_t)rnd());
+  ram[0x0110] = (uint8_t)rnd();
+}
+
 /* objects.c: InvertIfFliped: an offset and the flip bits. */
 static void prep_flip(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -2604,6 +2630,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/toolsound.c", 0x828FB1, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_tool_sound },
   { "CopyCurrentMaptoFarmMap", hm_CopyCurrentMaptoFarmMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/farm.c", 0x82A682, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_map_copy },
+  { "LoadMap", hm_LoadMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/farm.c", 0x82A5FB, 1, 1, 0, 0xFFFF, { { 0 } }, 0, prep_load_map },
   { "LoadDefaultFarmMap", hm_LoadDefaultFarmMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/farm.c", 0x82A65A, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_map_copy },
   { "ClearsofAllCCStructs", hm_ClearsofAllCCStructs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
@@ -2702,6 +2730,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/audio.c", 0x83841F, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
   { "UNK_Audio22", hm_UNK_Audio22, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
     "src/audio.c", 0x838380, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
+  { "UNK_Audio5", hm_UNK_Audio5, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/audio.c", 0x8095DE, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_music },
   { "UNK_Audio25", hm_UNK_Audio25, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
     "src/audio.c", 0x838401, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
   { "UNK_Audio12", hm_UNK_Audio12, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
