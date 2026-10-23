@@ -34,7 +34,7 @@ typedef int (*ApuWriteObserver)(uint16_t reg, uint8_t value);
 typedef int (*ApuReadObserver)(uint16_t reg, uint8_t *value);
 int RtlAddApuPortObserver(ApuWriteObserver observer);        /* common_rtl.h */
 int RtlAddApuPortReadObserver(ApuReadObserver observer);
-enum { APU_LOG = 1 << 16 };
+enum { APU_LOG = 1 << 22 };   /* the uploads wait a long time: millions of reads */
 static HmApuEvent s_apu_log[APU_LOG];
 static int s_apu_n, s_apu_overflow, s_apu_recording;
 HmApuReplay *g_hm_apu;
@@ -1487,6 +1487,65 @@ static void prep_shop_item(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   r->y = (uint16_t)(rnd() % 4);
 }
 
+/* audio.c: the music. The song wanted and the one playing ($0110 / $0117:
+ * 0, the same, $FF or another), the arguments the game sends ($0111 /
+ * $0112 = 1, $0113 = $10 or $40), A = a channel for UNK_Audio10. */
+static void prep_music(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_audio(ram, r, rnd);
+  uint8_t song = (uint8_t)(1 + rnd() % 0x1F);
+  ram[0x0110] = (uint8_t)((rnd() % 5) ? song : (rnd() % 2) ? 0 : 0xFF);
+  ram[0x0117] = (uint8_t)((rnd() % 3) == 0 ? ram[0x0110] : (rnd() % 3) == 0 ? 0 : 1 + rnd() % 0x1F);
+  ram[0x0111] = 1;
+  ram[0x0112] = 1;
+  ram[0x0113] = (rnd() % 2) ? 0x10 : 0x40;
+  /* a channel 1-10: with 0 UNK_Audio10 first waits until the chip is not
+   * busy, which in the fuzzing frames it never is */
+  r->a = (uint16_t)((r->a & 0xFF00) | (1 + rnd() % 10));
+}
+/* math.c: Unk_Audio23, factors with 0 and non-0 high bytes */
+static void prep_multiply16(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  r->a = (uint16_t)((rnd() % 2) ? rnd() & 0xFF : rnd());
+  hm_wr16(ram, 0x7E, (uint16_t)((rnd() % 2) ? rnd() & 0xFF : rnd()));
+}
+
+/* audio.c: the uploads. A song 0-25 ($0110), a sound effect 0-49 ($0114),
+ * $0103 (instruments noted) 0-10. */
+static void prep_upload(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_audio(ram, r, rnd);
+  ram[0x0110] = (uint8_t)(rnd() % 26);
+  ram[0x0114] = (uint8_t)(rnd() % 50);
+  ram[0x0103] = (uint8_t)(rnd() % 11);
+}
+
+/* interact.c / people.c / maptiles.c / objects.c: wood in stock, the
+ * action bits, affection points (the ranges reach $03E7), the map and a
+ * byte of its graphics record. */
+static void prep_actions(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  hm_wr16(ram, HM_STORED_WOOD, (uint16_t)((rnd() % 4) ? rnd() % 1000 : rnd() % 3));
+  hm_wr16(ram, 0xD2, (uint16_t)rnd());
+  ram[0x22] = (uint8_t)(rnd() % 0x60);
+  r->a = (uint16_t)((rnd() % 2) ? rnd() % 0x400 : rnd());
+  r->y = (uint16_t)(rnd() % 0x18);
+}
+
+/* shipping.c: the text box's inputs (prep_text_box), the hour (often 17),
+ * the map (0-5), the scene's bits of $7F1F5A, $D2 bit 6, the money
+ * shipped (often 0). */
+static void prep_shipping(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_text_box(ram, r, rnd);
+  ram[0x11F1C] = (uint8_t)((rnd() % 2) ? 17 : 15 + rnd() % 4);
+  ram[0x22] = (uint8_t)(rnd() % 6);
+  hm_wr16(ram, 0x11F5A, (uint16_t)rnd());
+  hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 2) ? rnd() & ~0x0040 : rnd()));
+  hm_wr16(ram, 0x11F07, (uint16_t)((rnd() % 2) ? 0 : rnd()));
+  ram[0x11F09] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+}
+
 /* menus.c: the name screen, menu 1 and mode 6, and InputTypeSelector
  * (every input mode). The page and cell of the name grid, the letters
  * typed, the pad, the mode and the menu. */
@@ -2317,6 +2376,70 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/maptiles.c", 0x81AFBF, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
   { "ReplaceTilesWitchHouse", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/maptiles.c", 0x81B063, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "Unk_Audio23", hm_Unk_Audio23, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/math.c", 0x838000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_multiply16 },
+  { "UNK_Audio6", hm_UNK_Audio6, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x838D8B, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
+  { "UNK_Audio13", hm_UNK_Audio13, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/audio.c", 0x838CF3, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
+  { "UNK_Audio14", hm_UNK_Audio14, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x838D39, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
+  { "UNK_Audio10", hm_UNK_Audio10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x8389C7, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
+  { "UNK_Audio21", hm_UNK_Audio21, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x83841F, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
+  { "UNK_Audio22", hm_UNK_Audio22, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x838380, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
+  { "UNK_Audio25", hm_UNK_Audio25, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x838401, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
+  { "UNK_Audio12", hm_UNK_Audio12, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x838AFF, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_upload },
+  { "UNK_Audio11", hm_UNK_Audio11, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x838A26, 1, 0, 0, 0xFFFF, { { 0 } }, 20, prep_upload },
+  { "UNK_Audio9", hm_UNK_Audio9, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/audio.c", 0x83878C, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_upload },
+  { "UNK_Audio3", hm_UNK_Audio3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/audio.c", 0x838598, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_upload },
+  { "UNK_Audio4", hm_UNK_Audio4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/audio.c", 0x8384D3, 1, 0, 0, 0xFFFF, { { 0 } }, 20, prep_upload },
+  { "GetFenceFromStack", hm_GetFenceFromStack, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/interact.c", 0x81D644, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "CODE_81D6E2", hm_CODE_81D6E2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/interact.c", 0x81D6E2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "CODE_81D6F8", hm_CODE_81D6F8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/interact.c", 0x81D6F8, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "CODE_81D1C5", hm_CODE_81D1C5, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/people.c", 0x81D1C5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "GetBackgroundData", hm_GetBackgroundData, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/maptiles.c", 0x80A7AE, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "UNK_PresetsMemory3", hm_UNK_PresetsMemory3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/objects.c", 0x81A4C7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused01", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/interact.c", 0x81D643, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused02", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/interact.c", 0x81D66F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused03", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/interact.c", 0x81D6E1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused04", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/interact.c", 0x81D70E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused05", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/interact.c", 0x81D70F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused06", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/interact.c", 0x81D710, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused07", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/interact.c", 0x81D711, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused08", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/interact.c", 0x81D712, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused09", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/interact.c", 0x81D713, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused10", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/interact.c", 0x81D714, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "Unused11", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/interact.c", 0x81D715, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_actions },
+  { "ShippingScene", hm_ShippingScene, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/shipping.c", 0x828131, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_shipping },
+  { "ShippingSceneDialogue", hm_ShippingSceneDialogue, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/shipping.c", 0x828165, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_shipping },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
@@ -2361,12 +2484,26 @@ __attribute__((constructor)) static void hm_decomp_init(void)
   }
   RtlAddApuPortObserver(apu_wrote);
   RtlAddApuPortReadObserver(apu_read);
+  /* The interpreter gives up on a routine after 2 million steps; the sound
+   * uploads run by it (UNK_Audio3) take far more while the chip answers.
+   * While fuzzing, allow them (a constructor runs before anything is
+   * interpreted, and an explicit setting wins). */
+  const char *fz = getenv("HM_DECOMP_FUZZ");
+  if (fz && *fz) setenv("SNESRECOMP_INTERP_STEP_CAP", "400000000", 0);
 }
 
 /* While fuzzing, only the routine being fuzzed is compared: the calls it
  * makes have their own fuzz entries, and checking thousands of nested calls
  * (each one copies 128 KB) is too slow for the 4096-tile farm loops. */
 static int s_fuzzing, s_check_depth;
+
+/* HM_DECOMP_SKIP_WHY=1: say why a call was skipped (debugging). */
+static void skip_why(const char *name, const char *why)
+{
+  static int on = -1;
+  if (on < 0) on = getenv("HM_DECOMP_SKIP_WHY") != NULL;
+  if (on) fprintf(stderr, "[decomp-check] skipped %s: %s\n", name, why);
+}
 
 void *hm_decomp_check_begin(const CpuState *cpu)
 {
@@ -2403,7 +2540,7 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
    * once and the interpreter runs it, e.g. the sprite routines of bank $85)
    * or run in decimal mode is not comparable here; the rewrites assume
    * binary mode. The fuzzer still checks them. */
-  if (!completed || s->cpu._flag_D) { st->skipped++; free(s->sram); free(s); return; }
+  if (!completed || s->cpu._flag_D) { skip_why(name, completed ? "decimal mode" : "interrupted"); st->skipped++; free(s->sram); free(s); return; }
 
   HmRegs in = { s->cpu.A, s->cpu.X, s->cpu.Y, s->cpu._flag_C, s->cpu._flag_N, s->cpu.DB, s->cpu.D,
                 s->cpu.S, s->cpu.PB };
@@ -2411,7 +2548,7 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   HmRegs out = in;
   uint8_t dma_after[0x80];
   dma_regs_save(dma_after);
-  if (s_apu_overflow) { st->skipped++; free(s->sram); free(s); return; }
+  if (s_apu_overflow) { skip_why(name, "sound-port log full"); st->skipped++; free(s->sram); free(s); return; }
   g_hm_dma_regs = s->dma;
   g_hm_sram = s->sram;
   g_hm_sram_size = (uint32_t)g_sram_size;
@@ -2580,6 +2717,12 @@ static void fuzz_at(unsigned frame)
     int apu = (f->out_mask & HM_APU) != 0;
     uint64_t apu_clock = saved_cpu.master_cycles;
     for (int n = 0; n < n_calls; n++) {
+      /* Between frames nothing is being checked: a check left open by a
+       * call that never came back (a sound routine waiting for the chip
+       * when the frame was cut) would make every later call look nested,
+       * and unchecked. */
+      s_check_depth = 0;
+      s_apu_recording = 0;
       g_cpu = saved_cpu;
       memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
       if (saved_sram) memcpy(g_sram, saved_sram, (size_t)g_sram_size);
@@ -2595,7 +2738,7 @@ static void fuzz_at(unsigned frame)
           ready = ReadReg(0x2143) == 1;
         }
         apu_clock = g_cpu.master_cycles;
-        if (!ready) { s_stats[i].skipped++; continue; }
+        if (!ready) { skip_why(f->name, "sound chip not ready"); s_stats[i].skipped++; continue; }
       }
       for (int v = 0; v < HM_FUZZ_MAX_VARS && f->vars[v].size; v++) {
         uint16_t x = rnd_in(f->vars[v].lo, f->vars[v].hi);
@@ -2648,8 +2791,12 @@ static void fuzz_at(unsigned frame)
         void *snap = hm_decomp_check_begin(&g_cpu);
         /* No compiled body: run the original in the recompiler's
          * interpreter, as the game itself does. */
+        uint16_t s_in = g_cpu.S;
         RecompReturn rr = interp_tier_dispatch(&g_cpu, f->pc24);
-        hm_decomp_check_end(f->name, snap, &g_cpu, rr == RECOMP_RETURN_NORMAL);
+        /* The interpreter gives up on very long runs and still answers
+         * NORMAL: only a run that returned (its frame popped) is complete. */
+        hm_decomp_check_end(f->name, snap, &g_cpu,
+                            rr == RECOMP_RETURN_NORMAL && g_cpu.S == (uint16_t)(s_in + frame_size));
       } else {
         cpu_dispatch_pc_paired(&g_cpu, f->pc24, frame_size);
       }

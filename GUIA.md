@@ -266,6 +266,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/joypad.c` | leer el mando |
 | `src/toolsound.c` | el ruido de cada herramienta |
 | `src/maptiles.c` | lo que recibe un mapa al cargarse |
+| `src/shipping.c` | el envío de las 5 de la tarde |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -297,6 +298,14 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
   Año Nuevo (invierno 30).
 - **El sufijo de la fecha** es "st/nd/rd" solo para los días 1-3, así que
   el juego escribe "21th", "22th", "23th".
+
+**El envío de las 5 de la tarde** (`src/shipping.c`). Cada hora del juego
+`UpdateTime` llama a `ShippingScene`: a las 17:00 y en la granja apaga los
+controles, marca la escena ($7F1F5A bit 10) y arranca su guion ($26, en el
+slot de evento 6). Cuando el guion termina (pone el bit 11), y no hay un
+cambio de mapa en marcha, `ShippingSceneDialogue` muestra el texto del día:
+lo enviado (texto $031A), o "nada" ($031B) cuando el dinero enviado
+($7F1F07-$7F1F09) es 0; luego el guion $27, y se borra la marca.
 
 ### 5.3 El clima
 
@@ -547,6 +556,11 @@ cruzada), mapa, días de preñez, **felicidad**, veces golpeada y posición.
   María, Ann, Nina, Ellen, Eve. Hablarles suma +8.
 - **La favorita** (`FindMostLovedName`): en caso de empate gana la
   última.
+- **De puntos a corazones** (`CODE_81D1C5`): los puntos (0-999) se
+  convierten en un nivel de corazones, 0-9, según estos rangos (tabla $81:D1E8): 0-49,
+  50-119, 120-199, 200-249, 250-299, 300-399, 400-499, 500-599, 600-799,
+  800-999. Los escalones no son iguales: los primeros corazones cuestan y
+  el último pide 200 puntos.
 - **Hijos.** El primero necesita 450 corazones con la esposa; el segundo,
   650 y que el primero tenga 90 días. Los dos necesitan la casa en nivel 2
   y 20 días de casados. Un hijo nace 60 días después de concebido.
@@ -809,6 +823,41 @@ el sonido.
 
 En una partida nueva, solo el texto manda 248 efectos de sonido: todos se
 comprobaron en vivo, con la grabación de 3.4.
+
+**La música y las subidas** (`src/audio.c`). El chip tiene su propia
+memoria de 64 KB, así que hay que mandarle los instrumentos (muestras de
+sonido) y las canciones. Todas las órdenes:
+
+| Orden | Rutina | Qué es |
+|---|---|---|
+| $01 | `UNK_Audio4` | los datos del programa de sonido ($3F2 bytes desde $B2:D120), al encender |
+| $02 | `UNK_Audio3` | los 10 instrumentos que están siempre |
+| $03 | `UNK_Audio9`, `UNK_Audio12` | los instrumentos de una canción (hasta 11), o de un efecto de sonido |
+| $04 | `UNK_Audio10` | parar un canal (y olvidar los instrumentos anotados desde él) |
+| $05 | `UNK_Audio11` | las notas de una canción |
+| $07 | `UNK_Audio13` | (sin argumento; el que recibe se guarda y nunca se manda) |
+| $08, $09 | `UNK_Audio14`, `UNK_Audio6` | órdenes de dos argumentos que se usan al cambiar de canción (1 y $10 o $40: quizá un fundido) |
+| $0A-$0C | ver arriba | efectos de sonido y dos pequeñas |
+
+Los datos grandes viajan **de 3 en 3 bytes**: el juego manda primero
+cuántos grupos de 3 (el tamaño entre 3, redondeado hacia arriba) y luego
+cada grupo, esperando "0", borrando el puerto 3 y esperando "1" otra vez
+después de cada uno. Las tablas: 26 canciones (`$83:8F83`, 14 bytes cada
+una: dónde están las notas y los 11 instrumentos), 40 instrumentos
+(`$83:90EF`, 10 bytes cada uno, y sus tamaños en `$83:8EFF`), y qué
+instrumento necesita cada uno de los 50 efectos de sonido (`$83:927F`).
+
+$0110 es la canción que se quiere y $0117 la que suena; cuando difieren,
+`UNK_Audio21`, `UNK_Audio22` y `UNK_Audio25` mandan el cambio.
+`Unk_Audio23` no tiene nada que ver con el sonido: multiplica dos números
+de 16 bits con el multiplicador de 8 x 8 de la consola.
+
+*Rarezas:* `UNK_Audio6` solo manda su orden cuando el chip dice que está
+ocupado (al revés que las demás). Después de los instrumentos de una canción,
+`UNK_Audio9` manda siempre también el instrumento 6: lo hace cuando la
+lista termina en huecos vacíos, y las listas de las 26 canciones terminan
+así. Y otra vez una dirección de HM-Decomp va un byte antes:
+`UNK_Audio14` empieza en $83:8D39, no en 8D38.
 
 ### 5.16 Las partidas guardadas
 
@@ -1080,6 +1129,14 @@ $60, $61, $6E y $6F no dan nada.
 hay un objeto de evento 16 píxeles adelante; el objeto encontrado queda con
 su byte +$0C = 1, y su propio guion (una persona, un animal) reacciona.
 
+**Acciones** ($096E). Una casilla tipo puerta puede llevar una acción en
+vez de un sitio; `PlayerInteractionSelector` la ejecuta desde la tabla
+$81:D593. De sus 14 entradas solo cuatro hacen algo: la 2 saca madera del
+montón (`GetFenceFromStack`: 2 piezas de madera, y llevas el objeto $57),
+la 4 es `CODE_81D670`, y la 6 / 7 arrancan las animaciones de mapa $11 /
+$12. Las demás son un RTS suelto (`Unused01`-`Unused11`). Cada una borra
+el bit 6 de $D2 al terminar.
+
 ### 5.22 Los botones al caminar
 
 En el modo de entrada 1 (5.17), `PlayerMovementInputs` ($84:C6B7) lee el
@@ -1309,6 +1366,15 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
   recompilación sale de `$7E:0000`. El juego nunca lo hace (solo apareció
   en las pruebas al azar de las rutinas de desplazamiento, que ahora lo
   evitan).
+- **El intérprete se rinde sin avisar.** Las rutinas sin cuerpo compilado
+  corren en el intérprete del recompilador, que detiene una rutina tras 2
+  millones de pasos (para salir de bucles infinitos) y aun así dice que
+  terminó. Las subidas de sonido tardan muchísimo más mientras el chip
+  contesta, así que ahora el comprobador solo da una ejecución por
+  terminada si la rutina volvió de verdad, y el fuzz sube ese límite.
+  También se agrandó 64 veces el registro del tráfico con el chip de
+  sonido (4 millones de lecturas y escrituras): cada espera lee el puerto
+  miles de veces.
 
 ## 8. Glosario
 
@@ -1383,3 +1449,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 48,04 % | el ruido de cada herramienta |
 | 22-oct-2026 | 48,18 % | la copia del campo de la granja, liberar todos los slots de guion, la multiplicación |
 | 22-oct-2026 | 50,23 % | lo que recibe cada mapa al cargarse (39 rutinas); ya pasa de la mitad del código |
+| 22-oct-2026 | 52,99 % | la música y las subidas al chip de sonido (13 rutinas), el envío de las 5, las acciones del jugador, de puntos a corazones |

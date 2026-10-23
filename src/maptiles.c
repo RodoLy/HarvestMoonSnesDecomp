@@ -560,3 +560,21 @@ void hm_UNK_ExecuteFromPointers(uint8_t *ram, HmRegs *r)
   }
   jsr(ram, r, RET_9E5_CALL, fn);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * GetBackgroundData ($80:A7AE, JSL, RTL): byte Y of the graphics record of
+ * map $22. Maps_Graphics_Table ($80:AA7C) has a word per map, pointing
+ * (through the data bank) at its record; $18 = that pointer.
+ * Leftovers: A = the pointer's high byte : the byte, X = 2 map, C = 0.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define MAPS_GRAPHICS 0x80AA7C
+
+void hm_GetBackgroundData(uint8_t *ram, HmRegs *r)
+{
+  r->x = (uint16_t)(*hm_dp(ram, r, 0x22) << 1);
+  r->c = 0;
+  uint16_t record = rd16(ram, MAPS_GRAPHICS + r->x);
+  hm_dp_w16(ram, r, 0x18, record);
+  uint8_t b = hm_bus_rd8(ram, (((uint32_t)r->db << 16) + record + r->y) & 0xFFFFFF);  /* (dp),Y */
+  r->a = (uint16_t)((record & 0xFF00) | b);
+}

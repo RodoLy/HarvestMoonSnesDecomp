@@ -269,3 +269,22 @@ void hm_SpawnMapObject(uint8_t *ram, HmRegs *r)
   r->a = hm_dp_r16(ram, r, 0xA5);
   hm_bus_wr16(ram, hm_dp_long(ram, r, 0x07, 4), r->a);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNK_PresetsMemory3 ($81:A4C7, JSL, RTL): clears the first byte of the
+ * 10 records of 16 bytes at $7E:B4E6 (right before the event slots).
+ * Leftovers: $07-$09 = $7E:B586, A = $B586, X = 10, Y = 0, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_UNK_PresetsMemory3(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0x07, 0xB4E6);
+  *hm_dp(ram, r, 0x09) = 0x7E;
+  for (uint16_t x = 0; x != 10; x++) {
+    hm_bus_wr8(ram, hm_dp_long(ram, r, 0x07, 0), 0);
+    hm_dp_w16(ram, r, 0x07, (uint16_t)(hm_dp_r16(ram, r, 0x07) + 0x10));
+  }
+  r->a = 0xB586;
+  r->x = 10;
+  r->y = 0;
+  r->c = 1;
+}

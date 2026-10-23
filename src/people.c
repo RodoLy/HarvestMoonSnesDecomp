@@ -157,3 +157,27 @@ void hm_WifePregnanacyandChilds(uint8_t *ram, HmRegs *r)
   r->a = hm_rd16(ram, FLAGS_6E) & CHILD2;
   if (r->a) child_day(ram, r, KID2_AGE, 100, 0x89AC, 0x89C3, 0x0200);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_81D1C5 ($81:D1C5, JSR, RTS): how many hearts A affection points
+ * are. The table $81:D1E8 has the range of each heart (from, to: words);
+ * the answer is the first range whose end is not below A (0-9), or 10.
+ * Its callers pass a girl's affection ($7F1F1F Maria...).
+ * Leftovers: $7E = A in, A = Y = the hearts, X = 4 hearts + 2 (of the last
+ * range looked at), C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define HEART_RANGES 0x81D1E8
+
+void hm_CODE_81D1C5(uint8_t *ram, HmRegs *r)
+{
+  uint16_t points = r->a;
+  hm_dp_w16(ram, r, 0x7E, points);
+  uint16_t y = 0;
+  do {
+    r->x = (uint16_t)((y << 2) + 2);
+    if (hm_bus_rd16(ram, HEART_RANGES + r->x) >= points) break;
+    y++;
+  } while (y != 10);
+  r->y = r->a = y;
+  r->c = 1;
+}

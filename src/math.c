@@ -126,3 +126,54 @@ void hm_MultiplicationUnsigned(uint8_t *ram, HmRegs *r)
   uint8_t b = hm_bus_rd8(ram, (uint32_t)r->db << 16 | 0x011B);
   r->a = (uint16_t)(a * b);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Unk_Audio23 ($83:8000, JSL, RTL; a multiplication, despite its name):
+ * A = A x $7E (16-bit, the high part lost), with three 8 x 8 products of
+ * MultiplicationUnsigned: low x low, plus (high x low) << 8 and
+ * (low x high) << 8 (only the low byte of each counts). Each is skipped
+ * when its high byte is 0. Leftovers: $011C = A in, $011E / $0120 / $0122 =
+ * the three parts, $011A / $011B = the last factors; X, Y and the flags
+ * as they were (PHP / PLP).
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_23_LOW   0x801B
+#define RET_23_HIGHA 0x8031
+#define RET_23_HIGHB 0x8050
+
+static uint32_t m_db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
+static void m_wr16(uint8_t *ram, const HmRegs *r, uint16_t a, uint16_t v) { hm_bus_wr16(ram, m_db(r, a), v); }
+static uint16_t m_rd16(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_rd16(ram, m_db(r, a)); }
+static void m_wr8(uint8_t *ram, const HmRegs *r, uint16_t a, uint8_t v) { hm_bus_wr8(ram, m_db(r, a), v); }
+/* JSR MultiplicationUnsigned: A = $011A x $011B */
+static uint16_t times(uint8_t *ram, HmRegs *r, uint16_t ret)
+{
+  hm_push8(ram, r, (uint8_t)(ret >> 8));
+  hm_push8(ram, r, (uint8_t)ret);
+  hm_MultiplicationUnsigned(ram, r);
+  hm_pull8(ram, r); hm_pull8(ram, r);
+  return r->a;
+}
+
+void hm_Unk_Audio23(uint8_t *ram, HmRegs *r)
+{
+  hm_push8(ram, r, r->p);                                     /* PHP */
+  uint16_t a = r->a, b = hm_dp_r16(ram, r, 0x7E);
+  m_wr16(ram, r, 0x011C, a);
+  m_wr16(ram, r, 0x011E, 0);
+  m_wr16(ram, r, 0x0120, 0);
+  m_wr16(ram, r, 0x0122, 0);
+  m_wr8(ram, r, 0x011A, (uint8_t)a);
+  m_wr8(ram, r, 0x011B, (uint8_t)b);
+  m_wr16(ram, r, 0x011E, times(ram, r, RET_23_LOW));
+  if (a & 0xFF00) {
+    m_wr8(ram, r, 0x011A, (uint8_t)(a >> 8));
+    m_wr16(ram, r, 0x0120, (uint16_t)((times(ram, r, RET_23_HIGHA) & 0xFF) << 8));
+  }
+  if (b & 0xFF00) {
+    m_wr8(ram, r, 0x011B, (uint8_t)(b >> 8));
+    m_wr8(ram, r, 0x011A, (uint8_t)a);
+    m_wr16(ram, r, 0x0122, (uint16_t)((times(ram, r, RET_23_HIGHB) & 0xFF) << 8));
+  }
+  r->a = (uint16_t)(m_rd16(ram, r, 0x011E) + m_rd16(ram, r, 0x0120) + m_rd16(ram, r, 0x0122));
+  hm_pull8(ram, r);                                           /* PLP */
+}

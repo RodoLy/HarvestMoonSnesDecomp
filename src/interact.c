@@ -182,3 +182,51 @@ void hm_SUB_82AD0E(uint8_t *ram, HmRegs *r)
   hm_CBBBB(ram, r);
   hm_rtl(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * The player's actions ($096E, set by pressing A on a door-like tile: see
+ * SUB_82AD0E), run by PlayerInteractionSelector through the table $81:D593
+ * (JSR, RTS each). Most entries are a lone RTS (Unused01-11). The others
+ * end by clearing $D2 bit 6 (the "an action is pending" bit):
+ *   2 GetFenceFromStack ($81:D644): take lumber from the stack (AddWood
+ *     with -2): if there was enough, you hold item $57 and $D4 = 4 (the
+ *     "carrying" action);
+ *   6 / 7 CODE_81D6E2 / CODE_81D6F8: start map animation $11 / $12.
+ * Leftovers: A = the new $D2, C from the last compare.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define GAME_STATE    0xD2
+#define PLAYER_ACTION 0xD4
+
+static void action_done(uint8_t *ram, HmRegs *r)
+{
+  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) & ~0x0040);
+  hm_dp_w16(ram, r, GAME_STATE, r->a);
+}
+
+void hm_GetFenceFromStack(uint8_t *ram, HmRegs *r)
+{
+  r->a = 0xFFFE;
+  hm_jsl(ram, r, 0xD64C, 0x83);
+  hm_AddWood(ram, r);
+  hm_rtl(ram, r);
+  r->c = r->a >= 1;                                         /* CMP #1 */
+  if (r->a != 1) {                                          /* 1 = none left */
+    hm_bus_wr8(ram, (uint32_t)r->db << 16 | 0x091D, 0x57);
+    hm_dp_w16(ram, r, PLAYER_ACTION, 0x0004);
+  }
+  action_done(ram, r);
+}
+
+static void map_animation_action(uint8_t *ram, HmRegs *r, uint16_t animation, uint16_t ret)
+{
+  r->a = animation;
+  hm_jsl(ram, r, ret, 0x81);
+  hm_StartMapAnimation(ram, r);
+  hm_rtl(ram, r);
+  action_done(ram, r);
+}
+void hm_CODE_81D6E2(uint8_t *ram, HmRegs *r) { map_animation_action(ram, r, 0x11, 0xD6EA); }
+void hm_CODE_81D6F8(uint8_t *ram, HmRegs *r) { map_animation_action(ram, r, 0x12, 0xD700); }
+
+/* the actions that do nothing: a lone RTS */
+void hm_ActionNothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }

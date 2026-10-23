@@ -116,6 +116,10 @@ MANUAL = {
     0x81AE6E: "ReplaceTilesRestaurantRooms",  # maptiles.c, a lone RTS
     0x81AFBF: "ReplaceTilesGeneralStoreRooms",  # maptiles.c, a lone RTS
     0x81B063: "ReplaceTilesWitchHouse",  # maptiles.c, a lone RTS
+    0x838D39: "UNK_Audio14",  # HM-Decomp says 838D38 (the RTL of UNK_Audio13)
+    0x81D6E2: "CODE_81D6E2",  # interact.c (CODE_ labels are not imported)
+    0x81D6F8: "CODE_81D6F8",
+    0x81D1C5: "CODE_81D1C5",  # people.c
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

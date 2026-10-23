@@ -531,6 +531,28 @@ void hm_ReplaceTilesMountainCave(uint8_t *ram, HmRegs *r);
 void hm_ReplaceTilesElfTunnel(uint8_t *ram, HmRegs *r);
 void hm_ReplaceTilesMap37(uint8_t *ram, HmRegs *r);
 void hm_ReplaceTilesNothing(uint8_t *ram, HmRegs *r);
+void hm_Unk_Audio23(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio6(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio13(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio14(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio10(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio21(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio22(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio25(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio12(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio11(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio9(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio3(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio4(uint8_t *ram, HmRegs *r);
+void hm_GetFenceFromStack(uint8_t *ram, HmRegs *r);
+void hm_CODE_81D6E2(uint8_t *ram, HmRegs *r);
+void hm_CODE_81D6F8(uint8_t *ram, HmRegs *r);
+void hm_CODE_81D1C5(uint8_t *ram, HmRegs *r);
+void hm_GetBackgroundData(uint8_t *ram, HmRegs *r);
+void hm_UNK_PresetsMemory3(uint8_t *ram, HmRegs *r);
+void hm_ActionNothing(uint8_t *ram, HmRegs *r);
+void hm_ShippingScene(uint8_t *ram, HmRegs *r);       /* shipping.c */
+void hm_ShippingSceneDialogue(uint8_t *ram, HmRegs *r);
 void hm_UNK_SetPointer42(uint8_t *ram, HmRegs *r); /* coloranim.c */
 void hm_UNK_BigLoop(uint8_t *ram, HmRegs *r);
 void hm_Zeroes42Pointers(uint8_t *ram, HmRegs *r);

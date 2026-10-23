@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **373 rutinas reescritas y verificadas** (0 diferencias):
+- **407 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -106,6 +106,9 @@ en el README (`tools/progress.py`).
 | ClearsofAllCCStructs | $84:8000 | src/events.c |
 | MultiplicationUnsigned | $83:8067 | src/math.c |
 | UNK_ExecuteFromPointers, los ReplaceTiles* de cada mapa (y 4 que HM-Decomp toma por datos: gallinero, cueva, túnel, mapa $37), SUB_81A7CE, SUB_82B0A7, SUB_81B2BB | $81:A7CE, $81:A9E5-$81:B362, $82:B0A7 | src/maptiles.c |
+| UNK_Audio3/4/6/9/10/11/12/13/14/21/22/25 (la música y las subidas al chip), Unk_Audio23 (multiplicación de 16 bits) | banco $83 | src/audio.c, src/math.c |
+| ShippingScene, ShippingSceneDialogue | $82:8131, $82:8165 | src/shipping.c |
+| GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |

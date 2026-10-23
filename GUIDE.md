@@ -265,6 +265,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/joypad.c` | reading the controller |
 | `src/toolsound.c` | the noise of each tool |
 | `src/maptiles.c` | what a map gets when it loads |
+| `src/shipping.c` | the shipping at 5 pm |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -293,6 +294,14 @@ instructions are credited to the right one (20.45 % → 20.33 %).
   Thanksgiving (winter 10), Star Night (winter 24), New Year (winter 30).
 - **The date suffix** is "st/nd/rd" only for days 1-3, so the game writes
   "21th", "22th", "23th".
+
+**The shipping at 5 pm** (`src/shipping.c`). Every in-game hour
+`UpdateTime` calls `ShippingScene`: at 17:00 and on the farm it switches
+the input off, marks the scene ($7F1F5A bit 10) and starts its script ($26,
+in event slot 6). When the script is done (it sets bit 11), and no change
+of map is under way, `ShippingSceneDialogue` shows the day's text: what was
+shipped (text $031A), or "nothing" ($031B) when the money shipped
+($7F1F07-$7F1F09) is 0; then script $27 and the scene mark is cleared.
 
 ### 5.3 The weather
 
@@ -541,6 +550,10 @@ pregnant, **happiness**, times hit and position.
 - **Hearts** of the five girls: `$7F:1F1F + 2·n` (0-999), in the order
   Maria, Ann, Nina, Ellen, Eve. Talking to them adds +8.
 - **The favourite** (`FindMostLovedName`): on a tie the last one wins.
+- **Points into hearts** (`CODE_81D1C5`): the points (0-999) become a
+  heart level, 0-9, by these ranges (table $81:D1E8): 0-49, 50-119, 120-199, 200-249,
+  250-299, 300-399, 400-499, 500-599, 600-799, 800-999. The steps are not
+  even: the first hearts come slowly, and the last one takes 200 points.
 - **Children.** The first needs 450 hearts with the wife; the second, 650
   and the first child 90 days old. Both need the house at level 2 and 20
   days of marriage. A child is born 60 days after it is conceived.
@@ -795,6 +808,41 @@ is busy (port 0, bit 4) and, if it is, simply skips the sound.
 
 In a new game, the text alone sends 248 sound effects: all of them were
 checked live, with the recording of 3.4.
+
+**The music and the uploads** (`src/audio.c`). The chip has its own 64 KB
+of memory, so instruments (sound samples) and songs must be sent to it. All
+the commands:
+
+| Command | Routine | What it is |
+|---|---|---|
+| $01 | `UNK_Audio4` | the sound program's data ($3F2 bytes from $B2:D120), at power-on |
+| $02 | `UNK_Audio3` | the 10 instruments that are always there |
+| $03 | `UNK_Audio9`, `UNK_Audio12` | the instruments of a song (up to 11), or of a sound effect |
+| $04 | `UNK_Audio10` | stop a channel (and forget the instruments noted from it on) |
+| $05 | `UNK_Audio11` | a song's notes |
+| $07 | `UNK_Audio13` | (no argument; the one it is given is kept and never sent) |
+| $08, $09 | `UNK_Audio14`, `UNK_Audio6` | two-argument commands used when the song changes (1 and $10 or $40: maybe a fade) |
+| $0A-$0C | see above | sound effects and two small ones |
+
+Big data travels **3 bytes at a time**: the game first sends how many
+groups of 3 (the size divided by 3, rounded up), then each group, waiting
+for "0", clearing port 3 and waiting for "1" again after every one. The
+tables: 26 songs (`$83:8F83`, 14 bytes each: where the notes are and the 11
+instruments), 40 instruments (`$83:90EF`, 10 bytes each, and their sizes
+at `$83:8EFF`), and which instrument each of the 50 sound effects needs
+(`$83:927F`).
+
+$0110 is the song wanted and $0117 the one playing; when they differ,
+`UNK_Audio21`, `UNK_Audio22` and `UNK_Audio25` send the change.
+`Unk_Audio23` is not about sound at all: it multiplies two 16-bit numbers
+with the console's 8 x 8 multiplier.
+
+*Quirks:* `UNK_Audio6` only sends its command when the chip says it is
+busy (the opposite of the others). After a song's instruments, `UNK_Audio9`
+always sends instrument 6 as well: it does so when the list ends in empty
+places, and every one of the 26 songs' lists does. And again an
+address of HM-Decomp is one byte early: `UNK_Audio14` starts at $83:8D39,
+not 8D38.
 
 ### 5.16 The saved games
 
@@ -1057,6 +1105,13 @@ $60, $61, $6E and $6F give nothing.
 event object is 16 pixels ahead; the object found gets its byte +$0C = 1,
 and its own script (a person, an animal) reacts to it.
 
+**Actions** ($096E). A door-like tile can carry an action instead of a
+place; `PlayerInteractionSelector` runs it from the table $81:D593. Of its
+14 entries only four do something: 2 takes lumber from the wood stack
+(`GetFenceFromStack`: 2 pieces of wood, and you carry item $57), 4 is
+`CODE_81D670`, and 6 / 7 start map animations $11 / $12. The rest are a
+lone RTS (`Unused01`-`Unused11`). Each clears $D2 bit 6 when done.
+
 ### 5.22 The buttons while walking
 
 In input mode 1 (5.17), `PlayerMovementInputs` ($84:C6B7) reads the pad
@@ -1278,6 +1333,14 @@ Things the game does wrong or oddly, found while decompiling:
   bytes at `$7E:FFFF` takes the second from `$7F:0000`; in the
   recompilation it comes from `$7E:0000`. The game never does it (it was
   found only by random tests of the scroll routines, which then avoid it).
+- **The interpreter gives up quietly.** Routines with no compiled body run
+  in the recompiler's interpreter, which stops a routine after 2 million
+  steps (to escape endless loops) and still reports it as finished. The
+  sound uploads take far more while the chip answers, so the checker now
+  counts a run as finished only if the routine really returned, and the
+  fuzzer raises that limit. The log of the sound chip's traffic was also
+  made 64 times bigger (4 million reads and writes): every wait reads the
+  port thousands of times.
 
 ## 8. Glossary
 
@@ -1352,3 +1415,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 48.04 % | the noise of each tool |
 | 22-Oct-2026 | 48.18 % | the farm's copy of the field, freeing all the script slots, the multiplication |
 | 22-Oct-2026 | 50.23 % | what each map gets when it loads (39 routines); past half of the code |
+| 22-Oct-2026 | 52.99 % | the music and the uploads to the sound chip (13 routines), the shipping at 5 pm, the player's actions, points into hearts |
