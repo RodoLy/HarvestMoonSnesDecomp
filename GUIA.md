@@ -1452,6 +1452,7 @@ bloque; acá cada una es `MapEvent_xxxx` (su dirección). Hechas hasta ahora:
 | `DE9B` | mapa $27: con el bit 3 de $7F1F64 una escena que detiene al jugador |
 | `E407` | mapas $0C-$0F (el cruce): la primera vez (grupo $0A); desde el primer invierno una visita del grupo $0D, en dos partes |
 | `D2E0` | el pueblo (mapas 4-7): el 20 de otoño antes de las 3 el festival (los números 0-5 mezclados en $09A4, grupo $28), el 23 de primavera y el 12 de otoño antes de las 3 y el 10 de invierno antes de las 5 sus grupos ($0E, $26, $27), si no el día normal del guion 0 (nadie en los días especiales ni con lluvia); error 24 |
+| `E76D` | mapa $3C, la introducción: el jugador se despierta a las 7:00 con la energía llena y las manos vacías; el paso `$7F1F49` (0-$1C) elige el guion del grupo $47 (paso + 1) y sube uno; los pasos 7 y $0D además llenan el galpón. HM-Decomp tiene los primeros $140 bytes de esta rutina como datos; se desensamblaron desde la ROM |
 | `E4CB` | mapa $29: un guion en una casilla hasta el bit 6 de $7F1F6A; al entrar desde abajo con el bit 11 de $D2 el perro vuelve a la granja (120, 424) |
 
 Qué mapa usa cada rutina: $00-$03 `CB69`, $04-$07 `D2E0`, $08-$0B
@@ -1673,3 +1674,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 62,32 % | quién aparece en cada mapa: las casas (16 rutinas más) |
 | 23-oct-2026 | 62,68 % | quién aparece en cada mapa: el cruce, los mapas $27 y $29 |
 | 23-oct-2026 | 63,12 % | quién aparece en el pueblo |
+| 23-oct-2026 | 63,74 % | la introducción (mapa $3C) |

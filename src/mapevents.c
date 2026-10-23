@@ -582,3 +582,56 @@ void hm_MapEvent_D2E0(uint8_t *ram, HmRegs *r)
   if (wd == 6) { spawn(ram, r, 0, 2, 0, 0xD4D2); return; }
   spawn(ram, r, 0, 1, 0, 0xD4B2);
 }
+
+/* ── E76D, map $3C: the days of the introduction ────────────────────────
+ * (HM-Decomp has its first $140 bytes as data; disassembled from the ROM.)
+ * The player wakes up: 7:00 ($7F1F1C-$7F1F1E = 7, 0, 0), $0915 = 0, the
+ * state $D2 = 1 (bit 1 off), action 0, facing 0, $0911 = $0901 = 0, the
+ * clock stopped ($0973 = 0), nothing in hand ($091D), stamina full ($0918
+ * = $0917), $0925 = 0. Then the step $7F1F49 (0-$1C) says which script of
+ * group $47 runs (the step + 1), and the step goes one up; from $1D on,
+ * nothing. Steps 7 and $0D also fill the shed ($3D, 0, $12, 0 and $0D, $64,
+ * $12, 0) and empty the hands of tools.
+ * ───────────────────────────────────────────────────────────────────── */
+#define INTRO_STEP 0x7F1F49
+
+void hm_MapEvent_E76D(uint8_t *ram, HmRegs *r)
+{
+  static const uint8_t clock[3] = { 7, 0, 0 };
+  for (int i = 0; i < 3; i++) hm_bus_wr8(ram, 0x7F1F1C + i, clock[i]);
+  hm_bus_wr16(ram, db(r, 0x0915), 0);
+  hm_dp_w16(ram, r, 0xD2, 0);
+  hm_dp_w16(ram, r, 0xD4, 0);
+  uint8_t max = hm_bus_rd8(ram, db(r, 0x0917));
+  hm_bus_wr8(ram, db(r, 0x0918), max);
+  hm_bus_wr8(ram, db(r, 0x0925), 0);
+  hm_dp_w16(ram, r, 0xD2, 0x0001);                         /* LDA $D2; ORA #1 */
+  hm_dp_w16(ram, r, 0xD4, 0);
+  hm_dp_w16(ram, r, 0xDA, 0);
+  hm_bus_wr16(ram, db(r, 0x0911), 0);
+  hm_bus_wr16(ram, db(r, 0x0901), 0);
+  hm_bus_wr8(ram, db(r, 0x0973), 0);
+  hm_bus_wr8(ram, db(r, 0x091D), 0);
+  r->a = (uint16_t)(0xFFFD & hm_dp_r16(ram, r, 0xD2));
+  hm_dp_w16(ram, r, 0xD2, r->a);
+
+  uint8_t step = byte_of(ram, r, INTRO_STEP);
+  if (step) r->c = 1;                         /* the CMP chain ends on an equal or above */
+  if (step >= 0x1D) return;
+  /* each step's code: 24 bytes from $E8AD, 56 for steps 7 and $0D */
+  uint16_t at = (uint16_t)(0xE8AD + 0x18 * step);
+  if (step > 7) at = (uint16_t)(at + 0x20);
+  if (step > 0x0D) at = (uint16_t)(at + 0x20);
+  if (step == 7 || step == 0x0D) {
+    static const uint8_t shed[2][4] = { { 0x3D, 0x00, 0x12, 0x00 }, { 0x0D, 0x64, 0x12, 0x00 } };
+    const uint8_t *s = shed[step == 0x0D];
+    for (int i = 0; i < 4; i++) hm_bus_wr8(ram, 0x7F1F00 + i, s[i]);
+    r->a = (uint16_t)((r->a & 0xFF00) | s[3]);
+    hm_bus_wr8(ram, db(r, 0x0921), 0);
+    hm_bus_wr8(ram, db(r, 0x0923), 0);
+    at = (uint16_t)(at + 0x20);
+  }
+  spawn(ram, r, 0, 0x47, (uint16_t)(step + 1), (uint16_t)(at + 0x0B));
+  r->a = (uint16_t)((r->a & 0xFF00) | (uint8_t)(step + 1));
+  hm_bus_wr8(ram, INTRO_STEP, (uint8_t)(step + 1));
+}

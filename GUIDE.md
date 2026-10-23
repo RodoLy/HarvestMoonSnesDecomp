@@ -1415,6 +1415,7 @@ address). Done so far:
 | `DE9B` | map $27: with $7F1F64 bit 3 a scene that stops the player |
 | `E407` | maps $0C-$0F (the crossroads): the first time (group $0A); from the first winter on a visit of group $0D, in two parts |
 | `D2E0` | the town (maps 4-7): fall 20 before 3 pm the festival (the numbers 0-5 shuffled at $09A4, group $28), spring 23 and fall 12 before 3 pm and winter 10 before 5 pm their groups ($0E, $26, $27), otherwise the usual day of script 0 (nobody on the special days and with rain); bug 24 |
+| `E76D` | map $3C, the introduction: the player wakes at 7:00 with full stamina and empty hands; the step `$7F1F49` (0-$1C) picks the script of group $47 (step + 1) and goes one up; steps 7 and $0D also fill the shed. HM-Decomp has the first $140 bytes of this routine as data; they were disassembled from the ROM |
 | `E4CB` | map $29: a script at a tile until $7F1F6A bit 6; coming from below with $D2 bit 11 the dog goes back to the farm (120, 424) |
 
 Which map uses which routine: $00-$03 `CB69`, $04-$07 `D2E0`, $08-$0B
@@ -1629,3 +1630,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 62.32 % | who appears on each map: the houses (16 more routines) |
 | 23-Oct-2026 | 62.68 % | who appears on each map: the crossroads, maps $27 and $29 |
 | 23-Oct-2026 | 63.12 % | who appears in the town |
+| 23-Oct-2026 | 63.74 % | the introduction (map $3C) |

@@ -1026,8 +1026,6 @@ static void prep_interact(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x11F1C] = (uint8_t)((rnd() % 2) ? rnd() % 24 : 16 + rnd() % 3);  /* hour */
   hm_wr16(ram, 0x0196, (uint16_t)rnd());
   hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
-  for (unsigned i = 0; i < 3; i++) ram[HM_RNG_STATE + i] = (uint8_t)rnd();
-  if (rnd() % 2) ram[0x11F61] &= (uint8_t)~0x04;                    /* $7F1F60 bit 10 */
 }
 
 /* playerinput.c: the buttons while walking. The pad (held, new, and the
@@ -1934,6 +1932,11 @@ static void prep_map_event(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0xD8, (uint16_t)((rnd() % 2) ? 0x1F8 + rnd() % 0x10 : rnd() % 0x400));
   hm_wr16(ram, 0xD2, (uint16_t)rnd());
   hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
+  for (unsigned i = 0; i < 3; i++) ram[HM_RNG_STATE + i] = (uint8_t)rnd();
+  if (rnd() % 2) ram[0x11F61] &= (uint8_t)~0x04;                    /* $7F1F60 bit 10 */
+  ram[0x11F49] = (uint8_t)((rnd() % 8) ? rnd() % 0x1F : rnd());     /* the introduction's step */
+  for (unsigned i = 0; i < 4; i++) ram[0x11F00 + i] = (uint8_t)rnd();
+  ram[0x0917] = (uint8_t)rnd();
 }
 
 /* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
@@ -2153,6 +2156,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/mapevents.c", 0x83E4CB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "MapEvent_D2E0", hm_MapEvent_D2E0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83D2E0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_E76D", hm_MapEvent_E76D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83E76D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "CODE_83F4D8", hm_CODE_83F4D8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/animals.c", 0x83F4D8, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_cow_festival },
   { "Sub_82A9A0", hm_Sub_82A9A0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
