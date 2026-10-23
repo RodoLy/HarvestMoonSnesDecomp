@@ -119,6 +119,16 @@ typedef struct HmApuReplay {
 } HmApuReplay;
 extern HmApuReplay *g_hm_apu;
 uint8_t hm_apu_read(uint16_t reg);
+/* The console's own registers that a rewrite reads: $4212 (the beam and the
+ * automatic pad reading) and $4214-$421F (the results of the multiplier and
+ * divider, the pads). Asked to the emulator; reading them changes nothing in
+ * WRAM ($4212 only moves the emulated beam a little). */
+uint8_t hm_io_read(uint16_t reg);
+static inline int hm_is_io_reg(uint32_t addr)
+{
+  uint16_t a = (uint16_t)addr;
+  return ((addr >> 16) & 0x7F) < 0x40 && (a == 0x4212 || (a >= 0x4214 && a < 0x4220));
+}
 void hm_apu_write(uint16_t reg, uint8_t v);
 static inline int hm_is_apu_port(uint32_t addr)
 {
@@ -148,6 +158,7 @@ static inline uint8_t hm_bus_rd8(uint8_t *ram, uint32_t addr)
   if (a >= 0x8000 && (bank & 0x7F) < 0x7E)
     return g_rom[(uint32_t)(bank & 0x3F) << 15 | (a & 0x7FFF)];
   if (hm_is_apu_port(addr)) return hm_apu_read(a);
+  if (hm_is_io_reg(addr)) return hm_io_read(a);
   return 0;
 }
 static inline uint16_t hm_bus_rd16(uint8_t *ram, uint32_t addr)
@@ -493,6 +504,7 @@ void hm_Event_EditTileonMap(uint8_t *ram, HmRegs *r);
 void hm_Event_StartTextBox(uint8_t *ram, HmRegs *r);
 void hm_Event_StartTextBoxCopy(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKTools(uint8_t *ram, HmRegs *r);
+void hm_ReadJoypad(uint8_t *ram, HmRegs *r);         /* joypad.c */
 void hm_UNK_SetPointer42(uint8_t *ram, HmRegs *r); /* coloranim.c */
 void hm_UNK_BigLoop(uint8_t *ram, HmRegs *r);
 void hm_Zeroes42Pointers(uint8_t *ram, HmRegs *r);

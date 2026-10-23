@@ -263,6 +263,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/playerinput.c` | los botones al caminar |
 | `src/decompress.c` | los datos comprimidos (LZSS) |
 | `src/coloranim.c` | colores que se mueven (ciclo de paleta) |
+| `src/joypad.c` | leer el mando |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -1126,6 +1127,32 @@ pero el mismo cuadro sigue y todavía escribe el color $FFFF y mueve el
 puntero borrado a $00:0003. Como todas las listas terminan en un salto
 ($FFFE), nunca pasa.
 
+### 5.24 Leer el mando
+
+Cada cuadro `ReadJoypad` ($80:872B, `src/joypad.c`) lee los dos mandos y
+deja en la WRAM todo lo que el resto del juego pregunta sobre los botones:
+
+| Dirección | Qué guarda (mando 1) |
+|---|---|
+| $0124 | los botones apretados ahora |
+| $0126 | los que estaban apretados el cuadro anterior |
+| $0128 | los que se apretaron en este cuadro (apretados ahora, antes no) |
+| $012A | los que se soltaron en este cuadro |
+| $012C | "autorrepetición": los recién apretados, y de vez en cuando otra vez todos los que se mantienen |
+| $23 | cuántos cuadros lleva apretado algún botón |
+
+La autorrepetición es lo que hace que el cursor de un menú siga moviéndose
+si mantienes la cruceta: tras 30 cuadros (medio segundo) apretados, los
+botones mantenidos cuentan como apretados otra vez, y el contador vuelve a
+25, así que desde ahí se repite cada 5 cuadros. El mando 2 tiene las mismas
+palabras ($0130-$0138), pero nada las lee: Harvest Moon es de un jugador.
+
+Antes de leer, espera a que la consola termine de leer los mandos por su
+cuenta ($4212 bit 0). Para la comprobación, la reescritura le pide esos
+registros al emulador ($4212, $4218, $421A); el fuzzer además aprieta
+botones al azar en los dos mandos en cada llamada y después devuelve los de
+verdad.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1191,6 +1218,11 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     divide con signos (el cociente negativo cuando uno de los dos lo es; el
     residuo siempre positivo), pero nada en el juego la llama. Se reescribió
     igual.
+21. **El mando 2, leído con el mando 1.** `ReadJoypad` calcula los botones
+    "soltados" del mando 2 ($0136) con el registro del mando 1 ($4218) en vez
+    del suyo: una errata. No importa, el mando 2 nunca se usa. La misma
+    rutina tiene además una rama que nunca corre (cuando $00 no es 0) que
+    leería solo los bytes bajos de los mandos.
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -1273,3 +1305,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 40,09 % | poner la cámara al entrar a un mapa, y el segundo fondo (nubes, paralaje) |
 | 22-oct-2026 | 40,54 % | cinco comandos de evento más (textos, apagar un bit, una baldosa, el cobertizo); ya está más de la mitad de las rutinas |
 | 22-oct-2026 | 47,73 % | las animaciones de colores: 57 rutinas (51 de ellas, pequeñas, de una tabla) |
+| 22-oct-2026 | 47,87 % | leer el mando (los botones apretados, soltados, y la autorrepetición de los menús) |

@@ -262,6 +262,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/playerinput.c` | the buttons while walking |
 | `src/decompress.c` | the compressed data (LZSS) |
 | `src/coloranim.c` | colours that move (palette cycling) |
+| `src/joypad.c` | reading the controller |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -1101,6 +1102,31 @@ same frame goes on and still writes colour $FFFF and moves the cleared
 pointer to $00:0003. Since all the lists end in a loop ($FFFE), it never
 happens.
 
+### 5.24 Reading the controller
+
+Every frame `ReadJoypad` ($80:872B, `src/joypad.c`) reads the two pads and
+leaves in WRAM everything the rest of the game asks about the buttons:
+
+| Address | What it holds (pad 1) |
+|---|---|
+| $0124 | the buttons held now |
+| $0126 | the ones held last frame |
+| $0128 | the ones pressed this frame (held now, not before) |
+| $012A | the ones let go this frame |
+| $012C | "autorepeat": the new presses, plus every held button again once in a while |
+| $23 | how many frames some button has been held |
+
+The autorepeat is what makes a menu cursor keep moving when you hold the
+D-pad: after 30 frames (half a second) held, the held buttons count as
+pressed again, and the counter goes back to 25, so from then on it repeats
+every 5 frames. Pad 2 gets the same words ($0130-$0138), but nothing reads
+them: Harvest Moon is for one player.
+
+Before reading, it waits until the console has finished reading the pads
+by itself ($4212 bit 0). For the check, the rewrite asks the emulator for
+those registers ($4212, $4218, $421A); the fuzzer also presses random
+buttons on both pads for each call and puts the real ones back after.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1164,6 +1190,11 @@ Things the game does wrong or oddly, found while decompiling:
     with signs (the quotient negative when one of the two is; the remainder
     always positive), but nothing in the game calls it. It is rewritten all
     the same.
+21. **Pad 2, read with pad 1.** `ReadJoypad` works out pad 2's "let go"
+    buttons ($0136) from pad 1's register ($4218) instead of pad 2's: a typo.
+    It does not matter, pad 2 is never used. The same routine also has a
+    branch that never runs (when $00 is not 0) that would read only the low
+    bytes of the pads.
 
 ## 7. Differences found in the recompilation
 
@@ -1245,3 +1276,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 40.09 % | placing the camera on entering a map, and the second background (clouds, parallax) |
 | 22-Oct-2026 | 40.54 % | five more event commands (texts, clearing a bit, a tile, the shed); more than half of the routines are done |
 | 22-Oct-2026 | 47.73 % | the colour animations: 57 routines (51 of them, small, read from a table) |
+| 22-Oct-2026 | 47.87 % | reading the controller (the buttons pressed, let go, and the menus' autorepeat) |

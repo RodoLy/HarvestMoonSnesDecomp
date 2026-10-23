@@ -14,6 +14,9 @@
 
 void interp_bridge_set_master_deadline(uint64_t master_clock);  /* snes/interp_bridge.h */
 uint8_t ReadReg(uint16_t reg);                                    /* common_rtl.h */
+void RtlSetPadState(int slot, uint16_t buttons);
+uint16_t RtlGetPadState(int slot);
+uint16_t joypad_auto_read_word(uint16_t state);                  /* snes/joypad.h */
 /* The emulated DMA unit (snes/dma.h): reading $43xx has no side effects. */
 typedef struct Dma Dma;
 extern Dma *g_dma;
@@ -63,6 +66,8 @@ static void apu_mismatch(HmApuReplay *p, const char *what, uint16_t reg, uint8_t
   }
   longjmp(s_apu_abort, 1);
 }
+uint8_t hm_io_read(uint16_t reg) { return ReadReg(reg); }
+
 uint8_t hm_apu_read(uint16_t reg)
 {
   HmApuReplay *p = g_hm_apu;
@@ -1303,6 +1308,25 @@ static void prep_colour_anim(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   r->y = (uint16_t)(rnd() % 16);
 }
 
+/* joypad.c: ReadJoypad. Random buttons on both pads (a held one, often the
+ * same as last frame's), last frame's and the extra words, the hold counter
+ * near 30, $00 sometimes not 0. */
+static void prep_joypad(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  for (int pad = 0; pad < 2; pad++) {
+    uint16_t now = (uint16_t)(rnd() & 0x0FFF);
+    RtlSetPadState(pad, now);
+    now = RtlGetPadState(pad);
+    unsigned base = pad ? 0x0130 : 0x0124;               /* the buttons kept */
+    hm_wr16(ram, base, (uint16_t)((rnd() % 3) ? joypad_auto_read_word(now) : rnd()));
+    hm_wr16(ram, base + 0x0A, (uint16_t)((rnd() % 4) ? 0 : rnd()));
+  }
+  ram[0x23] = (uint8_t)((rnd() % 2) ? 24 + rnd() % 8 : rnd());
+  ram[0x24] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+  ram[0x00] = (uint8_t)((rnd() % 8) ? 0 : rnd());
+}
+
 /* text.c: PrintTextFrame. A text of our own at $7F:E000 (restored after
  * the fuzz): letters, spaces, waits, choices, names, 8-digit numbers (as
  * the game prints them: fewer digits than the number has would loop for a
@@ -2127,6 +2151,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/coloranim.c", 0x80DC30, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
   { "SUB_80DD09", hm_SUB_80DD09, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/coloranim.c", 0x80DD09, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
+  { "ReadJoypad", hm_ReadJoypad, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/joypad.c", 0x80872B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_joypad },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
@@ -2343,6 +2369,7 @@ static void fuzz_at(unsigned frame)
   if (g_sram && g_sram_size > 0 && !saved_sram) saved_sram = malloc((size_t)g_sram_size);
   if (saved_sram) memcpy(saved_sram, g_sram, (size_t)g_sram_size);
   dma_regs_save(saved_dma);
+  uint16_t saved_pad[2] = { RtlGetPadState(0), RtlGetPadState(1) };  /* prep_joypad */
   int prev = g_hm_decomp_check;
   if (!s_stats) { s_stats = calloc((size_t)g_hm_decomp_count, sizeof *s_stats); atexit(report); }
   g_hm_decomp_check = 1;
@@ -2472,6 +2499,8 @@ static void fuzz_at(unsigned frame)
   memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
   if (saved_sram) memcpy(g_sram, saved_sram, (size_t)g_sram_size);
   dma_regs_restore(saved_dma);
+  RtlSetPadState(0, saved_pad[0]);
+  RtlSetPadState(1, saved_pad[1]);
   g_hm_decomp_check = prev;
   s_fuzzing = 0;
   if (only == g_hm_decomp_count - 1)
