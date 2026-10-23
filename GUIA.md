@@ -1428,6 +1428,24 @@ HM-Decomp. Además, `ReplaceTilesMoutain` empieza en $81:AC80, no en
 $81:AC7F (ese byte es el RTS de `ReplaceTilesForkWinter`), y
 `MapPointerTable` está en $82:B174.
 
+### 5.26 Quién aparece en cada mapa
+
+Al entrar a un mapa, `RunsFunctionbyIndex` ($83:CA98) llama a su rutina de
+`UNK_TableFunctionSelect` ($83:CAA9, una palabra por mapa). Cada una
+arranca los guiones de evento de la gente y las cosas de ese lugar, según
+la fecha, la hora y las banderas de la historia, con `UNK_LoadCCDataLong`
+(slot, grupo de guiones, guion). HM-Decomp las tiene todas como un solo
+bloque; acá cada una es `MapEvent_xxxx` (su dirección). Hechas hasta ahora:
+
+| Rutina | Qué arranca |
+|---|---|
+| `E5A2`, `E5CD`, `E5DF`, `E5F1`, `E6B2` | siempre un guion |
+| `E586`, `E5B4` | un guion si hay una bandera ($7F1F68 bit 9, $7F1F6A bit 14) |
+| `E603`, `E632`, `E661` | el 24 de invierno (la Noche de las Estrellas), según los bits 0 / 3 / 4 de $7F1F74 |
+| `E690` | el 1 de primavera |
+| `E6C4` | la familia: la esposa (Ann o Eve, según $7F1F66, salvo con el bit 1 de $7F1F6E) y cada hijo (bits 2 / 3) desde los 60 días |
+| `E74C` | nada (la mayoría de los mapas desde el $3B) |
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1618,3 +1636,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 59,36 % | cargar las casillas de un mapa, la música de cada mapa |
 | 23-oct-2026 | 59,66 % | el objeto con sprite del jugador, el cursor de la pantalla del nombre |
 | 23-oct-2026 | 59,85 % | el comienzo del final: la vaca preferida y el porcentaje de desarrollo del rancho |
+| 23-oct-2026 | 60,23 % | quién aparece en cada mapa: las 13 primeras rutinas |

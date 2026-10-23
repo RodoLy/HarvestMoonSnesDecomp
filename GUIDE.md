@@ -1391,6 +1391,24 @@ in the percentage, which measures HM-Decomp's own code. Also,
 `ReplaceTilesMoutain` starts at $81:AC80, not $81:AC7F (that byte is the
 RTS of `ReplaceTilesForkWinter`), and `MapPointerTable` is at $82:B174.
 
+### 5.26 Who appears on each map
+
+When a map is entered, `RunsFunctionbyIndex` ($83:CA98) calls its routine
+from `UNK_TableFunctionSelect` ($83:CAA9, one word per map). Each one
+starts the event scripts of the people and things there, by date, time and
+story flags, with `UNK_LoadCCDataLong` (slot, script group, script).
+HM-Decomp has them all as one block; here each is `MapEvent_xxxx` (its
+address). Done so far:
+
+| Routine | What it starts |
+|---|---|
+| `E5A2`, `E5CD`, `E5DF`, `E5F1`, `E6B2` | always one script |
+| `E586`, `E5B4` | one script if a flag is set ($7F1F68 bit 9, $7F1F6A bit 14) |
+| `E603`, `E632`, `E661` | on winter 24 (the Starry Night), by $7F1F74 bits 0 / 3 / 4 |
+| `E690` | on spring 1 |
+| `E6C4` | the family: the wife (Ann or Eve, by $7F1F66, unless $7F1F6E bit 1), and each child (bits 2 / 3) once 60 days old |
+| `E74C` | nothing (most maps from $3B on) |
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1575,3 +1593,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 59.36 % | loading a map's tiles, each map's music |
 | 23-Oct-2026 | 59.66 % | the player's game object, the name screen's cursor |
 | 23-Oct-2026 | 59.85 % | the start of the ending: the favourite cow and the ranch development percentage |
+| 23-Oct-2026 | 60.23 % | who appears on each map: the first 13 routines |

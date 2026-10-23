@@ -136,7 +136,21 @@ MANUAL = {
     0x81CFE6: "CODE_81CFE6",  # the player's object each frame
     0x81D03D: "CODE_81D03D",  # reading it back
     0x82EB57: "SUB_82EB57",   # the name screen's cursor
-    0x83F4D8: "CODE_83F4D8",  # the cow festival
+    0x83F4D8: "CODE_83F4D8",  # the start of the ending
+    # UNK_TableFunctionSelect's routines: who appears on entering each map
+    0x83E586: "MapEvent_E586",
+    0x83E5A2: "MapEvent_E5A2",
+    0x83E5B4: "MapEvent_E5B4",
+    0x83E5CD: "MapEvent_E5CD",
+    0x83E5DF: "MapEvent_E5DF",
+    0x83E5F1: "MapEvent_E5F1",
+    0x83E603: "MapEvent_E603",
+    0x83E632: "MapEvent_E632",
+    0x83E661: "MapEvent_E661",
+    0x83E690: "MapEvent_E690",
+    0x83E6B2: "MapEvent_E6B2",
+    0x83E6C4: "MapEvent_E6C4",
+    0x83E74C: "MapEvent_E74C",
     0x858BB0: "InvertIfFlipedX",  # no address in HM-Decomp
     0x858BBC: "InvertIfFlipedY",
     0x81A58F: "CODE_81A58F",  # mapedit.c: footprints in the snow
