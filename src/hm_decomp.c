@@ -1621,6 +1621,39 @@ static void prep_flip(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x9F, (uint16_t)rnd());
 }
 
+/* mapedit.c: footprints (winter often, the farm or the mountain, a
+ * position, the tiles) and the map animation player (a script of steps in
+ * WRAM at $7F:E000 with real tile changes, ends and jumps, the wait). */
+static void prep_footprints(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_tile_in_front(ram, r, rnd);
+  prep_tile_dma(ram, r, rnd);
+  ram[0x11F19] = (uint8_t)((rnd() % 4) ? 3 : rnd() % 4);
+  static const uint8_t maps[] = { 0, 1, 2, 3, 0x10, 0x12, 0x14, 0x15, 0x08, 0x26 };
+  ram[0x22] = maps[rnd() % sizeof maps];
+  hm_wr16(ram, 0x0907, (uint16_t)(rnd() & 0x3FF));
+  hm_wr16(ram, 0x0909, (uint16_t)(rnd() & 0x3FF));
+}
+static void prep_animation_player(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_tile_dma(ram, r, rnd);
+  for (unsigned i = 0; i < 16; i++) {
+    uint8_t *s = &ram[0x1E000 + 7 * i];
+    unsigned kind = i < 4 ? 2 : rnd() % 8;     /* the first 4: plain steps, the jumps' targets
+                                                * (a jump's target is done unchecked) */
+    HmRegs t = *r;
+    prep_map_change(ram, &t, rnd);
+    hm_wr16(ram, 0x1E000 + 7 * i, kind == 0 ? 0xFFFF : kind == 1 ? 0xFFFE : t.a);
+    if (kind == 1) { s[2] = (uint8_t)(rnd() % 4 * 7); s[3] = 0xE0; s[4] = 0x7F; }
+    else { hm_wr16(ram, 0x1E002 + 7 * i, t.x); hm_wr16(ram, 0x1E004 + 7 * i, t.y); }
+    s[6] = (uint8_t)(rnd() % 4);
+  }
+  uint16_t at = (uint16_t)(0xE000 + 7 * (rnd() % 12));
+  int none = rnd() % 8 == 0;
+  hm_wr16(ram, 0xCF, none ? 0 : at); ram[0xD1] = none ? 0 : 0x7F;
+  ram[0x0989] = (uint8_t)((rnd() % 2) ? 0 : rnd() % 4);
+}
+
 /* menus.c: the name screen, menu 1 and mode 6, and InputTypeSelector
  * (every input mode). The page and cell of the name grid, the letters
  * typed, the pad, the mode and the menu. */
@@ -2555,6 +2588,12 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/objects.c", 0x858BBC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_flip },
   { "ClearSpriteDataTables", hm_ClearSpriteDataTables, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x858ED7, 1, 0, 0, 0xFFFF, { { 0 } }, 200, NULL },
+  { "CODE_81A58F", hm_CODE_81A58F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/mapedit.c", 0x81A58F, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_footprints },
+  { "CODE_81A600", hm_CODE_81A600, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/mapedit.c", 0x81A600, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_animation_player },
+  { "CODE_81A4F1", hm_CODE_81A4F1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/mapedit.c", 0x81A4F1, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_tiles },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

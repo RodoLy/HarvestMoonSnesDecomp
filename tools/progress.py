@@ -118,6 +118,7 @@ LOCAL = {
     0x8581CB: ("CODE_8581CB", "CODE_8581CB"),
     0x858BB0: ("InvertIfFlipedX", "InvertIfFlipedX", "InvertIfFlipedY"),
     0x858BBC: ("InvertIfFlipedY", "InvertIfFlipedY", "Table_HighOAMXbit"),
+    0x81A4F1: ("CODE_81A4F1", "CODE_81A4F1"),
     0x80C3D9: ("SUB_80C3D9", "SUB_80C3D9"),
     0x80C446: ("SUB_80C446", "SUB_80C446"),
     0x80C4B3: ("SUB_80C4B3", "SUB_80C4B3"),

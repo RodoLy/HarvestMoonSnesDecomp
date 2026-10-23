@@ -573,6 +573,9 @@ void hm_CODE_8581CB(uint8_t *ram, HmRegs *r);
 void hm_InvertIfFlipedX(uint8_t *ram, HmRegs *r);
 void hm_InvertIfFlipedY(uint8_t *ram, HmRegs *r);
 void hm_ClearSpriteDataTables(uint8_t *ram, HmRegs *r);
+void hm_CODE_81A58F(uint8_t *ram, HmRegs *r);
+void hm_CODE_81A600(uint8_t *ram, HmRegs *r);
+void hm_CODE_81A4F1(uint8_t *ram, HmRegs *r);
 void hm_UNK_SetPointer42(uint8_t *ram, HmRegs *r); /* coloranim.c */
 void hm_UNK_BigLoop(uint8_t *ram, HmRegs *r);
 void hm_Zeroes42Pointers(uint8_t *ram, HmRegs *r);

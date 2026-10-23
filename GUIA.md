@@ -710,6 +710,17 @@ $7F1F5C:
   34, la disposición usual de LZSS). Las repeticiones (una fila de la misma
   baldosa, el mismo dibujo otra vez) ocupan dos bytes en vez de muchos.
 
+**Huellas en la nieve** (`CODE_81A58F`). Cada 8 pasos el juego recuerda
+dónde está el jugador ($0907 / $0909); en invierno, en la granja o en la
+montaña, el sitio recordado 8 pasos antes recibe una huella si su casilla
+es nieve (tipos 1, 2, $A8, $F6). Solo cambia el dibujo en la memoria de
+video, no el mapa: las huellas desaparecen al volver a cargar el mapa.
+
+**Animaciones de mapa** (`CODE_81A600`, cada cuadro, tras
+`StartMapAnimation`). Un guion de pasos de 7 bytes: un cambio de casillas,
+su X y su Y, y cuántos cuadros esperar; `$FFFF` lo termina y `$FFFE` salta
+a otro guion. Las judías mágicas creciendo son una.
+
 ### 5.12 Objetos con sprite
 
 - **Objetos del juego** (`$019C`, 40 de 36 bytes): todo lo que tiene
@@ -1481,3 +1492,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 54,03 % | cuatro comandos de guion que eligen animaciones y hacen que una persona te mire |
 | 23-oct-2026 | 54,42 % | mover un objeto con sprite, cambiarle el sprite, el paso de un slot que camina |
 | 23-oct-2026 | 54,60 % | sprites volteados, vaciar las tablas de sprites, releer un objeto |
+| 23-oct-2026 | 54,80 % | huellas en la nieve, el reproductor de animaciones de mapa |

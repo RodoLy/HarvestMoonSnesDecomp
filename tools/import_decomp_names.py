@@ -129,6 +129,9 @@ MANUAL = {
     0x8581CB: "CODE_8581CB",  # reading a game object back
     0x858BB0: "InvertIfFlipedX",  # no address in HM-Decomp
     0x858BBC: "InvertIfFlipedY",
+    0x81A58F: "CODE_81A58F",  # mapedit.c: footprints in the snow
+    0x81A600: "CODE_81A600",  # the map animation player
+    0x81A4F1: "CODE_81A4F1",
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

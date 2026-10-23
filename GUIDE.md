@@ -702,6 +702,17 @@ down, script $17/$14 starts). Its requests are bits of $7F1F5C:
   Repeated runs (a row of the same tile, the same pattern again) take two
   bytes instead of many.
 
+**Footprints in the snow** (`CODE_81A58F`). Every 8 steps the game
+remembers where the player is ($0907 / $0909); in winter, on the farm or
+the mountain, the place remembered 8 steps before gets a footprint if its
+tile is snow (types 1, 2, $A8, $F6). Only the picture in video memory
+changes, not the map: the prints vanish when the map is loaded again.
+
+**Map animations** (`CODE_81A600`, every frame, after `StartMapAnimation`).
+A script of 7-byte steps: a tile change, its X and Y, and how many frames
+to wait; `$FFFF` ends it and `$FFFE` jumps to another script. The magic
+beans growing are one.
+
 ### 5.12 Objects with a sprite
 
 - **Game objects** (`$019C`, 40 of 36 bytes): everything with a sprite on
@@ -1444,3 +1455,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 54.03 % | four script commands that choose animations and make a person face you |
 | 23-Oct-2026 | 54.42 % | moving a game object, changing its sprite, a slot's walking step |
 | 23-Oct-2026 | 54.60 % | flipped sprites, emptying the sprite tables, reading an object back |
+| 23-Oct-2026 | 54.80 % | footprints in the snow, the map animation player |

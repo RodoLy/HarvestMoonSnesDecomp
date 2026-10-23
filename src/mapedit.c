@@ -475,3 +475,123 @@ void hm_UNK_PartialMap(uint8_t *ram, HmRegs *r)
     r->y = y;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_81A58F ($81:A58F, JSL, RTL): footprints in the snow. Called every 8
+ * steps of the player with $0907 / $0909 = where the player was 8 steps
+ * before. In winter, on the farm (maps 0-3) or the mountain ($10-$14), if
+ * that tile's type is 1, 2, $A8 or $F6 (snow), the picture of change $11
+ * is queued for the VRAM there (QueueTileGraphicsDMA): only the screen
+ * changes, not the map, so the prints are gone when the map is loaded
+ * again. Leftovers: A, X, Y, C from the last compare or call.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define SEASON_LONG   0x7F1F19
+#define PRINT_X       0x0907    /* DB: */
+#define PRINT_Y       0x0909
+
+void hm_CODE_81A58F(uint8_t *ram, HmRegs *r)
+{
+  uint8_t season = hm_bus_rd8(ram, SEASON_LONG);
+  r->a = (uint16_t)((r->a & 0xFF00) | season);
+  r->c = season >= 3;
+  if (season != 3) return;                                 /* not winter */
+  uint8_t map = *hm_dp(ram, r, 0x22);
+  r->a = (uint16_t)((r->a & 0xFF00) | map);
+  r->c = map >= 4;
+  if (map >= 4) {
+    r->c = map >= 0x10;
+    if (map < 0x10) return;
+    r->c = map >= 0x15;
+    if (map >= 0x15) return;
+  }
+  uint32_t db = (uint32_t)r->db << 16;
+  r->a = 0;
+  r->x = hm_bus_rd16(ram, db | PRINT_X);
+  r->y = hm_bus_rd16(ram, db | PRINT_Y);
+  hm_jsl(ram, r, 0xA5B7, 0x82);
+  hm_UNK_CheckTileProperty(ram, r);
+  hm_rtl(ram, r);
+  r->a = r->x;                                             /* TXA */
+  static const uint16_t snow[4] = { 0x0001, 0x0002, 0x00A8, 0x00F6 };
+  bool on_snow = false;
+  for (int i = 0; i < 4 && !on_snow; i++) {
+    r->c = r->a >= snow[i];
+    on_snow = r->a == snow[i];
+  }
+  if (!on_snow) return;
+  r->a = 0x0011;
+  r->x = hm_bus_rd16(ram, db | PRINT_X);
+  r->y = hm_bus_rd16(ram, db | PRINT_Y);
+  hm_jsl(ram, r, 0xA5DF, 0x81);
+  hm_QueueTileGraphicsDMA(ram, r);
+  hm_rtl(ram, r);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_81A600 ($81:A600, JSL, RTL): plays the map animation started by
+ * StartMapAnimation, one step per call: [$CF-$D1] points at 7-byte steps
+ * (tile change, X, Y words, then frames to wait); each is done with
+ * ChangeMapTile and $0989 counts the wait down. $FFFF ends it ($CF-$D1 =
+ * 0), $FFFE jumps to the long pointer that follows (whose first step is
+ * done at once, unchecked).
+ * Leftovers: A, X, Y from the last step, C from its add (or a compare).
+ * ───────────────────────────────────────────────────────────────────────── */
+#define ANIMATION_WAIT 0x0989    /* DB: */
+
+void hm_CODE_81A600(uint8_t *ram, HmRegs *r)
+{
+  uint32_t wait = (uint32_t)r->db << 16 | ANIMATION_WAIT;
+  r->a = hm_dp_r16(ram, r, 0xCF);
+  if (!r->a) {
+    r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, 0xD1));
+    if (!(r->a & 0xFF)) return;                            /* no animation */
+  }
+  uint8_t w = hm_bus_rd8(ram, wait);
+  r->a = (uint16_t)((r->a & 0xFF00) | w);
+  if (w) { hm_bus_wr8(ram, wait, (uint8_t)(w - 1)); return; }
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCF, 0));
+  r->c = r->a >= 0xFFFF;
+  if (r->a == 0xFFFF) {                                    /* the end */
+    hm_dp_w16(ram, r, 0xCF, 0);
+    *hm_dp(ram, r, 0xD1) = 0;
+    return;
+  }
+  r->c = r->a >= 0xFFFE;
+  if (r->a == 0xFFFE) {                                    /* jump */
+    r->y = 2;
+    hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCF, 2)));
+    r->y = 4;
+    uint8_t bank = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCF, 4));
+    *hm_dp(ram, r, 0x74) = bank;
+    r->a = hm_dp_r16(ram, r, 0x72);
+    hm_dp_w16(ram, r, 0xCF, r->a);
+    r->a = (uint16_t)((r->a & 0xFF00) | bank);
+    *hm_dp(ram, r, 0xD1) = bank;
+  }
+  uint16_t change = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCF, 0));
+  push16(ram, r, change);
+  uint16_t x = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCF, 2));
+  push16(ram, r, x);
+  uint16_t y = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCF, 4));
+  push16(ram, r, y);
+  uint8_t frames = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCF, 6));
+  hm_bus_wr8(ram, wait, frames);
+  r->y = pull16(ram, r); r->x = pull16(ram, r); r->a = pull16(ram, r);
+  hm_jsl(ram, r, 0xA64C, 0x81);
+  hm_ChangeMapTile(ram, r);
+  hm_rtl(ram, r);
+  uint32_t next = (uint32_t)hm_dp_r16(ram, r, 0xCF) + 7;
+  r->c = next > 0xFFFF;
+  r->a = (uint16_t)next;
+  hm_dp_w16(ram, r, 0xCF, r->a);
+}
+
+/* CODE_81A4F1 ($81:A4F1, JSL, RTL): frees the map object at [$07] (its
+ * flags = 0) and clears $0974 (its flags' copy). A's low byte = 0. */
+void hm_CODE_81A4F1(uint8_t *ram, HmRegs *r)
+{
+  r->y = 0;
+  r->a &= 0xFF00;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0x07, 0), 0);
+  hm_bus_wr8(ram, (uint32_t)r->db << 16 | 0x0974, 0);
+}
