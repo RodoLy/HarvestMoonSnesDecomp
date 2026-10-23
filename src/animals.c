@@ -885,3 +885,75 @@ static void count_animals(uint8_t *ram, HmRegs *r, uint16_t slots, uint16_t ret,
 }
 void hm_UnusedBarnCoopCheck(uint8_t *ram, HmRegs *r) { count_animals(ram, r, 13, 0xC9C8, hm_GetChickenPointer); }
 void hm_UnusedBarnCheck(uint8_t *ram, HmRegs *r)     { count_animals(ram, r, 12, 0xC9F3, hm_GetsCowPointer); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_83F4D8 ($83:F4D8, JSR, RTS; reached with a JMP on summer 30 of year
+ * 3, the last day): the start of the ending. Starts event script $2E in
+ * slot 0 (UNK_LoadCCDataLong), clears $0196 and $7F1F47 and sets
+ * $7F1F5E bit 1. The cow the ending shows is the one with the highest
+ * byte +04 (affection), the last one on a tie; its name (+0C-+0F) goes to
+ * $0889-$088F, one letter per word (all $B1, blank, if there is no cow),
+ * and $09B5 = its +04. Then the ranch's development: the farm count
+ * (CalculateFarmDevelopment) x 10 / $127 (295 developed tiles = 10 %),
+ * at most 100 (%), in $7F1F56.
+ * Leftovers: $7E / $80 of the division, A = the percentage, C from the
+ * last compare; X = 12, Y and $72-$74 of the last cow and the math.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define FESTIVAL_COW_NAME 0x0889   /* DB: 4 words */
+#define FESTIVAL_BEST     0x09B5   /* DB: the best +04 so far */
+#define DEVELOPMENT       0x7F1F56
+
+void hm_CODE_83F4D8(uint8_t *ram, HmRegs *r)
+{
+  r->a = 0; r->x = 0x002E; r->y = 0;
+  call(ram, r, 0xF4E6, 0x84, hm_UNK_LoadCCDataLong);
+  hm_bus_wr16(ram, (uint32_t)r->db << 16 | 0x0196, 0);
+  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5E) | 0x0002);
+  hm_bus_wr16(ram, 0x7F1F5E, r->a);
+  r->a &= 0xFF00;
+  hm_bus_wr8(ram, 0x7F1F47, 0);
+  hm_bus_wr8(ram, (uint32_t)r->db << 16 | FESTIVAL_BEST, 0);
+  r->a = 0x00B1;
+  for (uint16_t i = 0; i < 4; i++)
+    hm_bus_wr16(ram, ((uint32_t)r->db << 16 | FESTIVAL_COW_NAME) + 2u * i, 0x00B1);
+  for (uint16_t cow = 0; cow != 12; cow++) {
+    hm_push8(ram, r, (uint8_t)(cow >> 8)); hm_push8(ram, r, (uint8_t)cow);   /* PHX */
+    r->a = cow;
+    call(ram, r, 0xF521, 0x83, hm_GetsCowPointer);
+    r->a = (uint16_t)((r->a & 0xFF00) | (*field(ram, r, 0x00) & 0x01));
+    if (r->a & 0xFF) {
+      uint8_t love = *field(ram, r, 0x04);
+      uint8_t best = hm_bus_rd8(ram, (uint32_t)r->db << 16 | FESTIVAL_BEST);
+      r->a = (uint16_t)((r->a & 0xFF00) | love);
+      r->c = love >= best;
+      if (r->c) {
+        hm_bus_wr8(ram, (uint32_t)r->db << 16 | FESTIVAL_BEST, love);
+        for (uint16_t i = 0; i < 4; i++) {
+          r->a = *field(ram, r, (uint8_t)(0x0C + i));      /* LDA #0; XBA; LDA */
+          hm_bus_wr16(ram, ((uint32_t)r->db << 16 | FESTIVAL_COW_NAME) + 2u * i, r->a);
+        }
+      }
+    }
+    uint8_t lo = hm_pull8(ram, r);                           /* PLX */
+    r->x = (uint16_t)(lo | hm_pull8(ram, r) << 8);
+    r->x = (uint16_t)(cow + 1);
+    r->c = 1;
+  }
+  call(ram, r, 0xF57F, 0x82, hm_CalculateFarmDevelopment);
+  hm_dp_w16(ram, r, 0x7E, hm_bus_rd16(ram, DEVELOPMENT));
+  r->a = 0x000A;
+  /* the flags Unk_Audio23 saves (PHP): 16-bit, N = Z = V = 0 (the last
+   * ADC of CalculateFarmDevelopment cannot overflow), C = 1 (its last
+   * CPY), D and I as on entry */
+  uint8_t keep_p = r->p;
+  r->p = (uint8_t)((r->p & 0x0C) | 0x01);
+  call(ram, r, 0xF58E, 0x83, hm_Unk_Audio23);
+  r->p = keep_p;
+  hm_dp_w16(ram, r, 0x7E, r->a);
+  r->a = 0x0127;
+  hm_dp_w16(ram, r, 0x80, 0x0127);
+  call(ram, r, 0xF59B, 0x83, hm_DivisionUnsigned);
+  hm_bus_wr16(ram, DEVELOPMENT, r->a);
+  r->c = r->a >= 0x0064;
+  if (r->c) { r->a = 0x0064; hm_bus_wr16(ram, DEVELOPMENT, 0x0064); }
+}

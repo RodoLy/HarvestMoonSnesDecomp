@@ -136,6 +136,7 @@ MANUAL = {
     0x81CFE6: "CODE_81CFE6",  # the player's object each frame
     0x81D03D: "CODE_81D03D",  # reading it back
     0x82EB57: "SUB_82EB57",   # the name screen's cursor
+    0x83F4D8: "CODE_83F4D8",  # the cow festival
     0x858BB0: "InvertIfFlipedX",  # no address in HM-Decomp
     0x858BBC: "InvertIfFlipedY",
     0x81A58F: "CODE_81A58F",  # mapedit.c: footprints in the snow

@@ -127,6 +127,7 @@ LOCAL = {
     0x81CFE6: ("CODE_81CFE6", "CODE_81CFE6"),
     0x81D03D: ("CODE_81D03D", "CODE_81D03D"),
     0x82EB57: ("SUB_82EB57", "SUB_82EB57"),
+    0x83F4D8: ("CODE_83F4D8", "CODE_83F4D8"),
     0x858BB0: ("InvertIfFlipedX", "InvertIfFlipedX", "InvertIfFlipedY"),
     0x858BBC: ("InvertIfFlipedY", "InvertIfFlipedY", "Table_HighOAMXbit"),
     0x81A4F1: ("CODE_81A4F1", "CODE_81A4F1"),

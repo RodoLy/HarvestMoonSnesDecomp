@@ -369,6 +369,11 @@ código en `$098C`:
   cultivos (1/32).
 - **El "desarrollo del rancho"** (`CalculateFarmDevelopment`) es contar
   las casillas con cerca, cultivo o pasto.
+  En porcentaje, para el final (`CODE_83F4D8`, el 30 de verano del año
+  3, el último día): cuenta x 10 / 295, como mucho 100. Esa misma rutina
+  arranca el guion del final ($2E) y elige la vaca que muestra el final:
+  la de más cariño (+04; la última si hay empate), cuyo nombre va a
+  $0889-$088F (en blanco si no hay vacas).
 - **La granja se guarda aparte.** En la granja el juego trabaja sobre el
   mapa actual (`$7E:09B6`); `CopyCurrentMaptoFarmMap` lo guarda en la copia
   propia de la granja (`$7E:A4E6`), para que sobreviva al ir a otro sitio.
@@ -1612,3 +1617,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 59,10 % | cargar una partida guardada y empezar una nueva |
 | 23-oct-2026 | 59,36 % | cargar las casillas de un mapa, la música de cada mapa |
 | 23-oct-2026 | 59,66 % | el objeto con sprite del jugador, el cursor de la pantalla del nombre |
+| 23-oct-2026 | 59,85 % | el comienzo del final: la vaca preferida y el porcentaje de desarrollo del rancho |

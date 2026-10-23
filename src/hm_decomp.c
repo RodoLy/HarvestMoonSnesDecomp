@@ -1873,6 +1873,30 @@ static void prep_player_object(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 3 == 0) ram[0x019C + at + 0x12] = 0xFF;
 }
 
+/* animals.c: CODE_83F4D8, the start of the ending: a random farm, 12 cows in use
+ * or not with their affection (often equal), names, the development. */
+static void prep_cow_festival(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_random_farm(ram, r, rnd);
+  uint8_t love = (uint8_t)rnd();
+  for (unsigned c = 0; c < 12; c++) {
+    uint8_t *cow = &ram[0x0C1C6 + 16 * c];
+    for (unsigned i = 0; i < 16; i++) cow[i] = (uint8_t)rnd();
+    if (rnd() % 3 == 0) cow[0x04] = love;
+  }
+  for (unsigned i = 0; i < 8; i++) ram[0x0889 + i] = (uint8_t)rnd();
+  ram[0x09B5] = (uint8_t)rnd();
+  hm_wr16(ram, 0x11F56, (uint16_t)rnd());
+  ram[0x11F47] = (uint8_t)rnd();
+  /* a well developed farm sometimes: past 2,950 tiles the percentage is
+   * capped at 100 */
+  if (rnd() % 3 == 0) {
+    unsigned keep = 70 + rnd() % 30;
+    for (unsigned i = 0; i < 0x1000; i++)
+      ram[0xA4E6 + i] = (uint8_t)((rnd() % 100 < keep) ? 0x1D + rnd() % 0x83 : rnd() % 5);
+  }
+}
+
 /* objects.c: InvertIfFliped: an offset and the flip bits. */
 static void prep_flip(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -2007,6 +2031,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     40, prep_random_farm_and_date },
   { "CalculateFarmDevelopment", hm_CalculateFarmDevelopment, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/farm.c", 0x82AA0C, 0, 0, 0, 0xFFFF, { W16(0x11F56, 0, 0xFFFF) }, 40, prep_random_farm },
+  { "CODE_83F4D8", hm_CODE_83F4D8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/animals.c", 0x83F4D8, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_cow_festival },
   { "Sub_82A9A0", hm_Sub_82A9A0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/farm.c", 0x82A9A0, 0, 0, 0, 0xFFFF, { W16(0x0092E, 0, 0xFFFF) }, 40, prep_random_farm },
   { "AddCowHappiness", hm_AddCowHappiness, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,

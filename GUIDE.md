@@ -362,7 +362,12 @@ stored in `$098C`:
   grass (1/16) and crops (1/4); the new year wipes grass (1/64) and crops
   (1/32).
 - **The "ranch development"** (`CalculateFarmDevelopment`) is counting
-  the tiles with fences, crops or grass.
+  the tiles with fences, crops or grass. As a percentage, for the ending
+  (`CODE_83F4D8`, on summer 30 of year 3, the last day): count x 10 /
+  295, at most 100. That same routine starts the ending's script ($2E)
+  and picks the cow the ending shows: the one with the highest affection
+  (+04; the last one on a tie), whose name goes to $0889-$088F (blank if
+  there is no cow).
 - **The farm is kept apart.** On the farm the game works on the current
   map (`$7E:09B6`); `CopyCurrentMaptoFarmMap` saves it into the farm's own
   copy (`$7E:A4E6`), so it survives going elsewhere. A new game starts
@@ -1569,3 +1574,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 59.10 % | loading a saved game and starting a new one |
 | 23-Oct-2026 | 59.36 % | loading a map's tiles, each map's music |
 | 23-Oct-2026 | 59.66 % | the player's game object, the name screen's cursor |
+| 23-Oct-2026 | 59.85 % | the start of the ending: the favourite cow and the ranch development percentage |
