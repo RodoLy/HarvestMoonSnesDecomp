@@ -745,6 +745,29 @@ beans growing are one.
   and frees every graphics slot (when a map loads).
 - **A slot walking** (`SUB_848331`): with +01 bit 5 set, every +05 frames
   the slot moves by (+03, +04), signed bytes, added to its position.
+- **A slot wandering on its own** (`SUB_8483CC`, 531 instructions; the
+  town's people, the animals in the barn): with +01 bit 3 set, right
+  after each step (+05 = +06):
+  - with no steps left (+08 = 0) it picks a new walk of +07 steps: the
+    direction +0F if the script forced one (1 down, 2 up, 4 right,
+    8 left), else the random one in $DE (0 down, 1 up, 2 right, 3 left;
+    any other value: stand still);
+  - otherwise it goes on, one step less.
+  - Without +01 bit 7 the slot never leaves its area: its home (+1E, +20)
+    plus or minus the range (+09 across, +0A down). A step that would go
+    past it makes it stand still (no step, +08 = 0, the standing animation
+    from the table at +33).
+  - Starting a walk: direction +02, step (+03, +04) = (0, 1), (0, -1),
+    (1, 0) or (-1, 0), the pause +0B into +05/+06 and the walking
+    animation from the table at +36; either way +01 |= 4 (the animation
+    changed).
+  - Then it looks ahead (CEEEE against the map, only with bit 7; the first
+    corner's tile type goes to +0E): it stops if blocked, if the tile ahead
+    is $FF or $C0-$CF, or if the player is in the way (CDDDD). Tile $E1
+    only lets the slots $18-$23 (+3F) through. Stopping: no step, +05/+06
+    = +0B and the forced direction is cleared.
+  - Quirk: without bit 7 it still looks at the second corner's tile
+    ($EB), which is whatever the last check of anyone left there.
 
 ### 5.13 The ending
 
@@ -1461,3 +1484,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 54.42 % | moving a game object, changing its sprite, a slot's walking step |
 | 23-Oct-2026 | 54.60 % | flipped sprites, emptying the sprite tables, reading an object back |
 | 23-Oct-2026 | 54.80 % | footprints in the snow, the map animation player |
+| 23-Oct-2026 | 55.98 % | the slots that wander on their own (the town's people, the animals) |

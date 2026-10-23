@@ -756,6 +756,28 @@ a otro guion. Las judías mágicas creciendo son una.
 - **Un slot que camina** (`SUB_848331`): con el bit 5 de +01, cada +05
   cuadros el slot se mueve (+03, +04), bytes con signo, sumados a su
   posición.
+- **Un slot que pasea solo** (`SUB_8483CC`, 531 instrucciones; la gente
+  del pueblo, los animales del establo): con el bit 3 de +01, justo
+  después de cada paso (+05 = +06):
+  - si no le quedan pasos (+08 = 0) elige un paseo nuevo de +07 pasos: la
+    dirección +0F si el guion la impuso (1 abajo, 2 arriba, 4 derecha,
+    8 izquierda) o si no la al azar de $DE (0 abajo, 1 arriba, 2 derecha,
+    3 izquierda; otro valor: quedarse quieto);
+  - si le quedan, sigue con un paso menos.
+  - Sin el bit 7 de +01 el slot no sale de su zona: su casa (+1E, +20) más
+    o menos el alcance (+09 de lado, +0A de alto). Un paso que se pasaría
+    lo deja quieto (sin paso, +08 = 0, la animación de estar parado de la
+    tabla de +33).
+  - Al empezar a andar: dirección +02, paso (+03, +04) = (0, 1), (0, -1),
+    (1, 0) o (-1, 0), la pausa +0B en +05/+06 y la animación de andar de la
+    tabla de +36; en los dos casos +01 |= 4 (cambió la animación).
+  - Luego mira adelante (CEEEE con el mapa, solo con el bit 7; el tipo de
+    la primera esquina queda en +0E): se para si choca, si delante hay un
+    tile $FF o $C0-$CF, o si el jugador está en medio (CDDDD). El tile
+    $E1 solo deja pasar a los slots $18-$23 (+3F). Pararse: sin paso,
+    +05/+06 = +0B y se borra la dirección impuesta.
+  - Rareza: sin el bit 7 igual mira el tile de la segunda esquina ($EB),
+    que es lo que dejó la última comprobación de cualquier otro.
 
 ### 5.13 El final
 
@@ -1499,3 +1521,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 54,42 % | mover un objeto con sprite, cambiarle el sprite, el paso de un slot que camina |
 | 23-oct-2026 | 54,60 % | sprites volteados, vaciar las tablas de sprites, releer un objeto |
 | 23-oct-2026 | 54,80 % | huellas en la nieve, el reproductor de animaciones de mapa |
+| 23-oct-2026 | 55,98 % | los slots que pasean solos (la gente del pueblo, los animales) |

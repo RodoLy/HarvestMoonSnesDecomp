@@ -279,3 +279,242 @@ void hm_SUB_848331(uint8_t *ram, HmRegs *r)
     hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, at[i]), r->a);
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_8483CC ($84:83CC, JSR, RTS): a slot that wanders on its own (+01
+ * bit 3: villagers in town, the animals in the barn...). Each time its
+ * step timers agree (+05 == +06, that is, right after a step):
+ *  - if no steps are left (+08 = 0) it picks a new walk of +07 steps: the
+ *    direction +0F if the script forced one (1 down, 2 up, 4 right,
+ *    8 left), else $DE (0 down, 1 up, 2 right, 3 left; others: stand
+ *    still);
+ *  - otherwise it keeps going one step less (+08 - 1).
+ * A slot without +01 bit 7 ("free") never leaves its area: the home
+ * position (+1E, +20) plus or minus the range (+09 across, +0A down); a
+ * step that would go past it makes the slot stand still instead (no step,
+ * +08 = 0, the standing animation from the table at +33).
+ * Starting a walk: direction +02, step (+03, +04) = (0, 1) down,
+ * (0, -1) up, (1, 0) right, (-1, 0) left, the step delay +0B to +05/+06,
+ * the walking animation from the table at +36. Either way +01 |= 4 (the
+ * animation changed).
+ * Then, when moving, it looks ahead ($DF/$E1 = the position, $E5/$E7 =
+ * the step size, $E3 = 0):
+ *  - with +01 bit 7, the map (CEEEE; the tile type of the first corner
+ *    goes to +0E): blocked, or a tile $FF or $C0-$CF ahead, stops it;
+ *  - the tile $EB of the second corner (also when CEEEE was not called:
+ *    then it is whatever the last check left there), the same way;
+ *  - the player in the way (CDDDD) stops it too.
+ * Tile $E1 (a door?) only lets the slots numbered $18-$23 (+3F) through.
+ * Stopping: no step, +05/+06 = +0B, and the forced direction is cleared.
+ * Leftovers: $92 = +06; $7E/$80 from the area check; $72-$74 = the
+ * animation table; A, Y and C as each way out leaves them.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_STAND_ANIM   0x86DC   /* JSL SUB_848895 at $84:86D9 */
+#define RET_WALK_ANIM    0x8706   /* JSL SUB_848895 at $84:8703 */
+#define RET_LOOK_MAP     0x87B1   /* JSL CEEEE at $84:87AE */
+#define RET_LOOK_PLAYER  0x8810   /* JSL CDDDD at $84:880D */
+#define ANIMATION_BANK   0xB3
+
+static void put8(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t v)
+{
+  r->y = at;
+  r->a = (uint16_t)((r->a & 0xFF00) | v);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, at), v);
+}
+static void store8(uint8_t *ram, HmRegs *r, uint16_t at)   /* STA [$CC],Y */
+{
+  r->y = at;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, at), (uint8_t)r->a);
+}
+static uint16_t slot16(uint8_t *ram, HmRegs *r, uint16_t at)
+{
+  r->y = at;
+  return r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, at));
+}
+/* A = 0; LDA (8 bits): the byte zero-extended */
+static uint16_t slot8_ext(uint8_t *ram, HmRegs *r, uint16_t at)
+{
+  r->a = 0;
+  return slot8(ram, r, at);
+}
+
+/* the area: true if the slot may go on. `across`: x (+1A against +1E,
+ * range +09), else y (+1C, +20, +0A); `ahead`: the side the step goes to
+ * (down / right). */
+static bool inside_area(uint8_t *ram, HmRegs *r, bool across, bool ahead)
+{
+  uint16_t range = slot8_ext(ram, r, across ? 0x09 : 0x0A);
+  hm_dp_w16(ram, r, 0x7E, range);
+  uint16_t pos = slot16(ram, r, across ? 0x1A : 0x1C);
+  hm_dp_w16(ram, r, 0x80, pos);
+  uint16_t home = slot16(ram, r, across ? 0x1E : 0x20);
+  uint32_t edge = ahead ? (uint32_t)home + range : (uint32_t)home - range + 0x10000;
+  r->a = (uint16_t)edge;                         /* CLC; ADC / SEC; SBC */
+  r->c = r->a >= pos;                            /* CMP $80 */
+  return ahead ? r->c : !r->c;
+}
+
+/* the slot's animation from the table at +33 (standing) or +36 (walking),
+ * then +01 |= 4 */
+static void set_slot_animation(uint8_t *ram, HmRegs *r, uint16_t table, uint16_t ret)
+{
+  hm_dp_w16(ram, r, 0x72, slot16(ram, r, table));
+  r->a = (uint16_t)((r->a & 0xFF00) | ANIMATION_BANK);
+  *hm_dp(ram, r, 0x74) = ANIMATION_BANK;
+  hm_jsl(ram, r, ret, 0x84);
+  hm_SUB_848895(ram, r);
+  hm_rtl(ram, r);
+  put8(ram, r, 0x01, slot8(ram, r, 0x01) | 0x04);
+}
+
+static void stand_still(uint8_t *ram, HmRegs *r)        /* .CODE_8486B3 */
+{
+  put8(ram, r, 0x03, 0);
+  put8(ram, r, 0x04, 0);
+  put8(ram, r, 0x08, 0);
+  set_slot_animation(ram, r, 0x33, RET_STAND_ANIM);
+}
+
+static void stop_here(uint8_t *ram, HmRegs *r)          /* .CODE_848817 */
+{
+  put8(ram, r, 0x03, 0);
+  put8(ram, r, 0x04, 0);
+  slot8(ram, r, 0x0B);
+  store8(ram, r, 0x05);
+  store8(ram, r, 0x06);
+  put8(ram, r, 0x0F, 0);
+}
+
+/* a tile type ahead: 0 = go on, 1 = stop, 2 = tile $E1 */
+static int tile_ahead(HmRegs *r, uint16_t tile)
+{
+  r->a = tile;
+  if (tile == 0x00FF) { r->c = 1; return 1; }
+  if (tile == 0x00E1) { r->c = 1; return 2; }
+  r->c = tile >= 0x00C0;
+  if (!r->c) return 0;
+  r->c = tile >= 0x00D0;
+  return r->c ? 0 : 1;
+}
+/* tile $E1: only the slots numbered $18-$23 go through */
+static bool may_pass_e1(uint8_t *ram, HmRegs *r)
+{
+  uint8_t self = slot8(ram, r, 0x3F);
+  r->c = self >= 0x24;
+  if (r->c) return false;
+  r->c = self >= 0x18;
+  return r->c;
+}
+
+void hm_SUB_8483CC(uint8_t *ram, HmRegs *r)
+{
+  uint8_t flags = slot8(ram, r, 0x01);
+  r->a = (uint16_t)((r->a & 0xFF00) | (flags & 0x08));
+  if (!(flags & 0x08)) return;
+  uint8_t timer = slot8(ram, r, 0x06);
+  *hm_dp(ram, r, 0x92) = timer;
+  uint8_t delay = slot8(ram, r, 0x05);
+  r->c = delay >= timer;
+  if (delay != timer) return;
+
+  /* the direction to start, or -1 to go on, -2 to stand still */
+  int dir;
+  if (slot8(ram, r, 0x08) == 0) {
+    slot8(ram, r, 0x07);
+    store8(ram, r, 0x08);
+    uint8_t forced = slot8(ram, r, 0x0F);
+    static const uint8_t forced_bit[4] = { 1, 2, 4, 8 };
+    dir = -2;
+    for (int i = 0; forced && i < 4; i++)
+      if (forced == forced_bit[i]) { dir = i; break; }
+    if (dir == -2) {
+      uint8_t random = *hm_dp(ram, r, 0xDE);
+      r->a = (uint16_t)((r->a & 0xFF00) | random);
+      if (random < 4) dir = random;
+    }
+  } else if (slot8(ram, r, 0x01) & 0x80) {
+    r->a &= 0xFF80;
+    dir = -1;
+  } else {
+    /* going on: the area, on the side of the current direction (0-3;
+     * anything else counts as down). (The carry of the comparisons here
+     * and in the choice above never survives: the area check or
+     * SUB_848895 sets it.) */
+    uint8_t now = slot8(ram, r, 0x02);
+    switch (now < 4 ? now : 0) {
+    case 0:  dir = inside_area(ram, r, false, true) ? -1 : -2; break;
+    case 1:  dir = inside_area(ram, r, false, false) ? -1 : -2; break;
+    case 2:  dir = inside_area(ram, r, true, true) ? -1 : -2; break;
+    default: dir = inside_area(ram, r, true, false) ? -1 : -2; break;
+    }
+  }
+
+  if (dir >= 0) {
+    if (slot8(ram, r, 0x01) & 0x80) {
+      r->a &= 0xFF80;
+    } else if (!inside_area(ram, r, dir >= 2, !(dir & 1))) {
+      dir = -2;
+    }
+  }
+  if (dir == -2) {
+    stand_still(ram, r);
+    return;
+  }
+  if (dir >= 0) {
+    static const int8_t step[4][2] = { { 0, 1 }, { 0, -1 }, { 1, 0 }, { -1, 0 } };
+    slot8(ram, r, 0x0B);
+    store8(ram, r, 0x05);
+    store8(ram, r, 0x06);
+    put8(ram, r, 0x03, (uint8_t)step[dir][0]);
+    put8(ram, r, 0x04, (uint8_t)step[dir][1]);
+    put8(ram, r, 0x02, (uint8_t)dir);
+    set_slot_animation(ram, r, 0x36, RET_WALK_ANIM);
+  } else {
+    slot8(ram, r, 0x08);
+    put8(ram, r, 0x08, (uint8_t)(r->a - 1));
+  }
+
+  /* looking ahead */
+  int8_t dx = (int8_t)slot8(ram, r, 0x03);
+  if (!dx && !slot8(ram, r, 0x04)) return;
+  hm_dp_w16(ram, r, 0xDF, slot16(ram, r, 0x1A));
+  hm_dp_w16(ram, r, 0xE1, slot16(ram, r, 0x1C));
+  int8_t sx = (int8_t)slot8_ext(ram, r, 0x03);
+  if (sx < 0) r->a = (uint8_t)-sx;               /* EOR #$FF; INC (8 bits) */
+  hm_dp_w16(ram, r, 0xE5, r->a);
+  int8_t sy = (int8_t)slot8_ext(ram, r, 0x04);
+  if (sy < 0) r->a = (uint8_t)-sy;
+  hm_dp_w16(ram, r, 0xE7, r->a);
+  hm_dp_w16(ram, r, 0xE3, 0);
+
+  int ahead;
+  if (slot8(ram, r, 0x01) & 0x80) {
+    r->a &= 0xFF80;
+    slot8_ext(ram, r, 0x02);
+    hm_jsl(ram, r, RET_LOOK_MAP, 0x83);
+    hm_CEEEE(ram, r);
+    hm_rtl(ram, r);
+    uint16_t blocked = r->a;
+    hm_push8(ram, r, (uint8_t)(blocked >> 8)); hm_push8(ram, r, (uint8_t)blocked);  /* PHA */
+    uint16_t first = hm_dp_r16(ram, r, 0xE9);
+    r->a = first;
+    store8(ram, r, 0x0E);
+    hm_pull8(ram, r); hm_pull8(ram, r);          /* PLA */
+    r->a = blocked;
+    r->c = 1;                                    /* CMP #0 */
+    if (blocked) { stop_here(ram, r); return; }
+    ahead = tile_ahead(r, first);
+    if (ahead == 2) ahead = may_pass_e1(ram, r) ? 0 : 1;
+    if (ahead) { stop_here(ram, r); return; }
+  }
+  ahead = tile_ahead(r, hm_dp_r16(ram, r, 0xEB));
+  if (ahead == 2) ahead = may_pass_e1(ram, r) ? 0 : 1;
+  if (ahead) { stop_here(ram, r); return; }
+
+  slot8_ext(ram, r, 0x02);
+  hm_jsl(ram, r, RET_LOOK_PLAYER, 0x83);
+  hm_CDDDD(ram, r);
+  hm_rtl(ram, r);
+  r->c = 1;                                      /* CMP #0 */
+  if (r->a) stop_here(ram, r);
+}

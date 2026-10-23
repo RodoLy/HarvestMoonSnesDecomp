@@ -1623,6 +1623,49 @@ static void prep_slot_walk(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[slot + 0x06] = (uint8_t)((rnd() % 4) ? 1 : rnd());
 }
 
+/* events.c: SUB_8483CC, a slot wandering (+01 bit 3, with or without
+ * bit 7) right after a step (+05 == +06), with or without steps left, a
+ * forced direction or the random one ($DE), its home and range around its
+ * position, the animation tables in the ROM, on a map of random tiles
+ * with the player nearby (prep_collision), the tiles ahead from the last
+ * look ($E9/$EB). */
+static void prep_slot_wander(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_collision(ram, r, rnd);
+  uint16_t x = hm_rd16(ram, 0xDF), y = hm_rd16(ram, 0xE1);
+  prep_cc_pointer(ram, r, rnd);
+  uint16_t slot = hm_rd16(ram, 0xCC);
+  for (unsigned i = 0; i < 64; i++) ram[slot + i] = (uint8_t)rnd();
+  ram[slot + 0x01] = (uint8_t)((rnd() % 8) ? ram[slot + 0x01] | 0x08 : ram[slot + 0x01]);
+  ram[slot + 0x02] = (uint8_t)((rnd() % 8) ? rnd() % 4 : rnd());
+  if (ram[slot + 0x01] & 0x80) ram[slot + 0x02] &= 3;      /* CEEEE: 0-3 */
+  static const int8_t steps[] = { 0, 0, 1, -1, 2, -2, 0x7F, -0x80 };
+  ram[slot + 0x03] = (uint8_t)steps[rnd() % 8];
+  ram[slot + 0x04] = (uint8_t)steps[rnd() % 8];
+  /* a direction past 3 (the area check takes it as "down") only without a
+   * step: CDDDD would get it too, and it was checked for 0-3 */
+  if (ram[slot + 0x02] >= 4) ram[slot + 0x03] = ram[slot + 0x04] = 0;
+  if (rnd() % 4) ram[slot + 0x05] = ram[slot + 0x06];
+  ram[slot + 0x07] = (uint8_t)((rnd() % 2) ? rnd() % 8 : rnd());
+  ram[slot + 0x08] = (uint8_t)((rnd() % 2) ? 0 : (rnd() % 2) ? 1 + rnd() % 3 : rnd());
+  static const uint8_t forced[] = { 0, 0, 0, 1, 2, 4, 8, 3, 0x10 };
+  ram[slot + 0x0F] = forced[rnd() % 9];
+  hm_wr16(ram, 0xDE, (uint16_t)((rnd() % 4) ? rnd() % 5 : rnd()));
+  ram[slot + 0x09] = (uint8_t)((rnd() % 2) ? rnd() % 0x30 : rnd());
+  ram[slot + 0x0A] = (uint8_t)((rnd() % 2) ? rnd() % 0x30 : rnd());
+  hm_wr16(ram, slot + 0x1A, x); hm_wr16(ram, slot + 0x1C, y);
+  hm_wr16(ram, slot + 0x1E, (uint16_t)((rnd() % 4) ? x - 0x20 + rnd() % 0x40 : rnd()));
+  hm_wr16(ram, slot + 0x20, (uint16_t)((rnd() % 4) ? y - 0x20 + rnd() % 0x40 : rnd()));
+  hm_wr16(ram, slot + 0x33, (uint16_t)(0x8000 + (rnd() & 0x7BFF)));   /* $B3:8000- */
+  hm_wr16(ram, slot + 0x36, (uint16_t)(0x8000 + (rnd() & 0x7BFF)));
+  ram[slot + 0x3F] = (uint8_t)((rnd() % 2) ? 0x14 + rnd() % 0x14 : rnd());
+  static const uint16_t tiles[] = { 0x00FF, 0x00E1, 0x00C0, 0x00C7, 0x00CF, 0x00D0, 0x00BF, 0x0001, 0x01E1 };
+  hm_wr16(ram, 0xE9, (rnd() % 2) ? tiles[rnd() % 9] : (uint16_t)rnd());
+  hm_wr16(ram, 0xEB, (rnd() % 2) ? tiles[rnd() % 9] : (uint16_t)rnd());
+  /* tile $E1 often in front, for the slots $18-$23 */
+  if (rnd() % 4 == 0) memset(&ram[0x009B6], 0xE1, 4096);
+}
+
 /* objects.c: InvertIfFliped: an offset and the flip bits. */
 static void prep_flip(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -2589,6 +2632,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/objects.c", 0x858100, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
   { "SUB_848331", hm_SUB_848331, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/events.c", 0x848331, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_slot_walk },
+  { "SUB_8483CC", hm_SUB_8483CC, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/events.c", 0x8483CC, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_slot_wander },
   { "CODE_8581CB", hm_CODE_8581CB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x8581CB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
   { "InvertIfFlipedX", hm_InvertIfFlipedX, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
