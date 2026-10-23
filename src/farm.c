@@ -438,3 +438,47 @@ void hm_Sub_82A9A0(uint8_t *ram, HmRegs *r)
   r->a = r->x = r->y = 0x0400;
   r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * The farm's own copy of the field. While you are on the farm the game
+ * works on the current map ($7E:09B6, 4096 bytes); the farm is kept apart in
+ * HM_FARM_MAP so it survives going elsewhere.
+ *
+ * CopyCurrentMaptoFarmMap ($82:A682, JSL, RTL): current map -> farm map
+ * (read through $80:09B6, the bank $80 mirror of low WRAM).
+ * LoadDefaultFarmMap ($82:A65A, JSL, RTL): the field of a new game, from
+ * the first pointer of MapPointerTable ($82:B174 -> $A7:8000) -> farm map.
+ * Both leave $72-$74 = the source, X = $0FFF, Y = $1000, C = 1, and A =
+ * the high byte of the source address : the last byte copied.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define MAP_POINTER_TABLE 0x82B174   /* HM-Decomp says $82:B173 */
+
+static void copy_to_farm_map(uint8_t *ram, HmRegs *r)
+{
+  for (uint16_t y = 0; y < 0x1000; y++) {
+    uint8_t b = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, y));
+    ram[HM_FARM_MAP + y] = b;
+    r->a = (uint16_t)((r->a & 0xFF00) | b);
+  }
+  r->x = 0x0FFF;
+  r->y = 0x1000;
+  r->c = 1;
+}
+
+void hm_CopyCurrentMaptoFarmMap(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0x72, 0x09B6);
+  *hm_dp(ram, r, 0x74) = 0x80;
+  r->a = 0x0980;
+  copy_to_farm_map(ram, r);
+}
+
+void hm_LoadDefaultFarmMap(uint8_t *ram, HmRegs *r)
+{
+  uint16_t source = hm_bus_rd16(ram, MAP_POINTER_TABLE);
+  uint8_t bank = hm_bus_rd8(ram, MAP_POINTER_TABLE + 2);
+  hm_dp_w16(ram, r, 0x72, source);
+  *hm_dp(ram, r, 0x74) = bank;
+  r->a = (uint16_t)((source & 0xFF00) | bank);
+  copy_to_farm_map(ram, r);
+}

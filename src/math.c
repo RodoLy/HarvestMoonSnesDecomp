@@ -113,3 +113,16 @@ void hm_DivisionSigned(uint8_t *ram, HmRegs *r)
   r->c = negatives & 1;                                 /* TYA / PLA; LSR */
   r->a = r->c ? (uint16_t)(~quotient + 1) : quotient;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * MultiplicationUnsigned ($83:8067, JSR, RTS): A = $011A x $011B (two
+ * bytes, a 16-bit product), with the console's multiplier ($4202/$4203,
+ * the answer in $4216 after a few cycles: the four NOPs). Nothing else
+ * changes.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_MultiplicationUnsigned(uint8_t *ram, HmRegs *r)
+{
+  uint8_t a = hm_bus_rd8(ram, (uint32_t)r->db << 16 | 0x011A);
+  uint8_t b = hm_bus_rd8(ram, (uint32_t)r->db << 16 | 0x011B);
+  r->a = (uint16_t)(a * b);
+}

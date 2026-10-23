@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **330 rutinas reescritas y verificadas** (0 diferencias):
+- **334 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -102,6 +102,9 @@ en el README (`tools/progress.py`).
 | ReadJoypad (los mandos; lee $4212/$4218/$421A del emulador con hm_io_read) | $80:872B | src/joypad.c |
 | UnusedBarnCoopCheck y UnusedBarnCheck (cuentan gallinas / vacas; sin usar) | $83:C9BA, $83:C9E5 | src/animals.c |
 | ToolUsedSound1 (el ruido de la herramienta; Sound2 espera a UNK_Audio18, que llama a WaitForNMI) | $82:8FB1 | src/toolsound.c |
+| CopyCurrentMaptoFarmMap, LoadDefaultFarmMap (MapPointerTable en $82:B174) | $82:A682, $82:A65A | src/farm.c |
+| ClearsofAllCCStructs | $84:8000 | src/events.c |
+| MultiplicationUnsigned | $83:8067 | src/math.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
 | FindLetterGraphics, DrawLetter, AdvanceLetterCursor (CODE_839862/23/38) | $83:9862, $83:9823, $83:9838 | src/text.c |

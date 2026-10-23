@@ -349,6 +349,12 @@ código en `$098C`:
   cultivos (1/32).
 - **El "desarrollo del rancho"** (`CalculateFarmDevelopment`) es contar
   las casillas con cerca, cultivo o pasto.
+- **La granja se guarda aparte.** En la granja el juego trabaja sobre el
+  mapa actual (`$7E:09B6`); `CopyCurrentMaptoFarmMap` lo guarda en la copia
+  propia de la granja (`$7E:A4E6`), para que sobreviva al ir a otro sitio.
+  Una partida nueva empieza con el campo del cartucho (`LoadDefaultFarmMap`,
+  desde `$A7:8000`, el primer puntero de `MapPointerTable`, que está en
+  $82:B174, no en B173 como dice HM-Decomp).
 
 ### 5.5 Las herramientas
 
@@ -569,7 +575,8 @@ estructuras de 64 bytes desde `$7E:B586`:
 | +3F | su propio número |
 
 **Números de slot:** perro $16, caballo $17, vacas $18 + n, gallinas $24 +
-n.
+n. Hay 49 ($31); `ClearsofAllCCStructs` ($84:8000) los libera todos (primer
+byte a 0), por ejemplo al entrar en un mapa.
 
 **El guion es un mini lenguaje.** Cada byte es un **comando** (hay 90, en
 la tabla `$84:9419`), seguido de sus argumentos. `$C9-$CB` señala por dónde
@@ -1322,3 +1329,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 47,87 % | leer el mando (los botones apretados, soltados, y la autorrepetición de los menús) |
 | 22-oct-2026 | 47,97 % | dos rutinas sin usar que cuentan las gallinas y las vacas |
 | 22-oct-2026 | 48,04 % | el ruido de cada herramienta |
+| 22-oct-2026 | 48,18 % | la copia del campo de la granja, liberar todos los slots de guion, la multiplicación |

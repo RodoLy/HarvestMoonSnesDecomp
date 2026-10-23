@@ -344,6 +344,12 @@ stored in `$098C`:
   (1/32).
 - **The "ranch development"** (`CalculateFarmDevelopment`) is counting
   the tiles with fences, crops or grass.
+- **The farm is kept apart.** On the farm the game works on the current
+  map (`$7E:09B6`); `CopyCurrentMaptoFarmMap` saves it into the farm's own
+  copy (`$7E:A4E6`), so it survives going elsewhere. A new game starts
+  from the field in the cartridge (`LoadDefaultFarmMap`, from `$A7:8000`,
+  the first pointer of `MapPointerTable`, which is at $82:B174, not B173 as
+  HM-Decomp says).
 
 ### 5.5 The tools
 
@@ -563,6 +569,8 @@ structures from `$7E:B586`:
 | +3F | its own number |
 
 **Slot numbers:** dog $16, horse $17, cows $18 + n, chickens $24 + n.
+There are 49 ($31); `ClearsofAllCCStructs` ($84:8000) frees them all
+(first byte 0), for example on entering a map.
 
 **The script is a small language.** Each byte is a **command** (there are
 90, in the table `$84:9419`), followed by its arguments. `$C9-$CB` points
@@ -1292,3 +1300,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 47.87 % | reading the controller (the buttons pressed, let go, and the menus' autorepeat) |
 | 22-Oct-2026 | 47.97 % | two unused routines that count the chickens and the cows |
 | 22-Oct-2026 | 48.04 % | the noise of each tool |
+| 22-Oct-2026 | 48.18 % | the farm's copy of the field, freeing all the script slots, the multiplication |

@@ -1424,6 +1424,15 @@ static void prep_tool_sound(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x0922] = (uint8_t)((rnd() % 8) ? rnd() % 3 : 3);
 }
 
+/* farm.c / events.c: a random current map and farm map; random first
+ * bytes in the 49 script slots. */
+static void prep_map_copy(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  for (int i = 0; i < 0x1000; i++) { ram[0x09B6 + i] = (uint8_t)rnd(); ram[0x0A4E6 + i] = (uint8_t)rnd(); }
+  for (int i = 0; i < 0x31; i++) ram[0x0B586 + 64 * i] = (uint8_t)rnd();
+}
+
 /* menus.c: the name screen, menu 1 and mode 6, and InputTypeSelector
  * (every input mode). The page and cell of the name grid, the letters
  * typed, the pad, the mode and the menu. */
@@ -2168,6 +2177,14 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/animals.c", 0x83C9E5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_animals },
   { "ToolUsedSound1", hm_ToolUsedSound1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
     "src/toolsound.c", 0x828FB1, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_tool_sound },
+  { "CopyCurrentMaptoFarmMap", hm_CopyCurrentMaptoFarmMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/farm.c", 0x82A682, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_map_copy },
+  { "LoadDefaultFarmMap", hm_LoadDefaultFarmMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/farm.c", 0x82A65A, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_map_copy },
+  { "ClearsofAllCCStructs", hm_ClearsofAllCCStructs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/events.c", 0x848000, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_copy },
+  { "MultiplicationUnsigned", hm_MultiplicationUnsigned, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/math.c", 0x838067, 1, 0, 0, 0xFFFF, { B8(0x011A, 0, 255), B8(0x011B, 0, 255) }, 0, NULL },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

@@ -508,6 +508,10 @@ void hm_ReadJoypad(uint8_t *ram, HmRegs *r);         /* joypad.c */
 void hm_UnusedBarnCoopCheck(uint8_t *ram, HmRegs *r); /* animals.c */
 void hm_UnusedBarnCheck(uint8_t *ram, HmRegs *r);
 void hm_ToolUsedSound1(uint8_t *ram, HmRegs *r);     /* toolsound.c */
+void hm_CopyCurrentMaptoFarmMap(uint8_t *ram, HmRegs *r);  /* farm.c */
+void hm_LoadDefaultFarmMap(uint8_t *ram, HmRegs *r);
+void hm_ClearsofAllCCStructs(uint8_t *ram, HmRegs *r);     /* events.c */
+void hm_MultiplicationUnsigned(uint8_t *ram, HmRegs *r);   /* math.c */
 void hm_UNK_SetPointer42(uint8_t *ram, HmRegs *r); /* coloranim.c */
 void hm_UNK_BigLoop(uint8_t *ram, HmRegs *r);
 void hm_Zeroes42Pointers(uint8_t *ram, HmRegs *r);

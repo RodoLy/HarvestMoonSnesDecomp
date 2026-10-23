@@ -171,3 +171,28 @@ void hm_SUB_8480F8(uint8_t *ram, HmRegs *r)
   hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x1C), r->a);
   r->y = 0x1C;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * ClearsofAllCCStructs ($84:8000, JSL, RTL): frees the 49 script slots
+ * (the first byte of each to 0), each through SetCCPoiner.
+ * Leftovers: $CC-$CE = the last slot, X = $31, Y = 0, C = 1, A = what
+ * SetCCPoiner left with its low byte 0.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_CLEAR_ALL 0x800A
+
+void hm_ClearsofAllCCStructs(uint8_t *ram, HmRegs *r)
+{
+  for (uint16_t x = 0; x != 0x31; x++) {
+    hm_push8(ram, r, (uint8_t)(x >> 8)); hm_push8(ram, r, (uint8_t)x);   /* PHX */
+    r->a = x;                                                            /* TXA */
+    hm_jsl(ram, r, RET_CLEAR_ALL, 0x84);
+    hm_SetCCPoiner(ram, r);
+    hm_rtl(ram, r);
+    r->y = 0;
+    r->a &= 0xFF00;
+    hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0), 0);
+    hm_pull8(ram, r); hm_pull8(ram, r);                                  /* PLX */
+  }
+  r->x = 0x31;
+  r->c = 1;
+}
