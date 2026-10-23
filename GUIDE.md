@@ -1539,6 +1539,10 @@ Things the game does wrong or oddly, found while decompiling:
     to the direct page ($60) instead of $7F1F60, so the bit stays set and
     the script starts every time the town is entered (until something else
     clears it).
+25. **The wrong bit.** On the farm, a fall event (group $18, on the
+    visitor days) checks `$7F1F6A` bit 8 to know whether it was seen, but
+    marks bit 7. So it comes back on every such day until something else
+    sets bit 8.
 
 ## 7. Differences found in the recompilation
 

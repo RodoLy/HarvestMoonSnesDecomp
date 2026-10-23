@@ -1582,6 +1582,10 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     directa ($60) en vez de a $7F1F60, así que el bit sigue puesto y el
     guion arranca cada vez que se entra al pueblo (hasta que otra cosa lo
     borre).
+25. **El bit equivocado.** En la granja, un evento de otoño (grupo $18,
+    en los días de visita) mira el bit 8 de `$7F1F6A` para saber si ya se
+    vio, pero marca el bit 7. Así que vuelve cada día así hasta que otra
+    cosa ponga el bit 8.
 
 ## 7. Diferencias encontradas en la recompilación
 
