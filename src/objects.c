@@ -403,3 +403,92 @@ void hm_CODE_8581A2(uint8_t *ram, HmRegs *r)
   hm_bus_wr16(ram, abs_x(r, GOBJ, r->x), 0);
   r->a = hm_bus_rd16(ram, abs_x(r, GOBJ + 0x0E, r->x));
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Changing a game object (both JSL, RTL; $A5 = the object, $A9 = its
+ * offset from Table_GameOBJIndexes; $77 / $7A = the bank of sprite $A1's
+ * table, $86 or $87).
+ *
+ * CODE_8580B9 ($85:80B9): moves it: flip $9F, X $9B, Y $9D. $A7 = 0 when
+ * done, 1 when the record is not in use (then nothing changes).
+ * CODE_858100 ($85:8100): gives it another sprite ($A1, with $9F, $A3,
+ * $9B, $9D as CreateGameObject): its pieces are freed (unless one is still
+ * queued: then nothing, as CODE_8581A2) and the new sprite's are loaded.
+ * Leftovers: A = 0 (or $FFFF / the record's first word), X = the offset,
+ * C from the last arithmetic.
+ * ───────────────────────────────────────────────────────────────────────── */
+static void sprite_bank(uint8_t *ram, HmRegs *r)
+{
+  uint16_t sprite = hm_dp_r16(ram, r, 0xA1);
+  uint8_t bank = sprite >= FIRST_SPRITE_87 ? 0x87 : 0x86;
+  r->c = sprite >= FIRST_SPRITE_87;                        /* CMP #$0262 */
+  r->a = (uint16_t)((sprite & 0xFF00) | bank);
+  *hm_dp(ram, r, 0x77) = bank;
+  *hm_dp(ram, r, 0x7A) = bank;
+}
+static uint16_t object_offset(uint8_t *ram, HmRegs *r)
+{
+  uint16_t n = hm_dp_r16(ram, r, 0xA5);
+  r->c = (n >> 15) & 1;                                    /* ASL */
+  r->x = (uint16_t)(n << 1);
+  r->a = hm_bus_rd16(ram, (GOBJ_OFFSETS + r->x) & 0xFFFFFF);
+  hm_dp_w16(ram, r, 0xA9, r->a);
+  return r->a;
+}
+
+void hm_CODE_8580B9(uint8_t *ram, HmRegs *r)
+{
+  sprite_bank(ram, r);
+  uint16_t x = object_offset(ram, r);
+  r->x = x;
+  r->a = 1;
+  hm_dp_w16(ram, r, 0xA7, 1);
+  r->a = hm_bus_rd16(ram, abs_x(r, GOBJ, x));
+  if (!r->a) return;                                       /* not in use */
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x04, x), hm_dp_r16(ram, r, 0x9F));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x08, x), hm_dp_r16(ram, r, 0x9B));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x0A, x), hm_dp_r16(ram, r, 0x9D));
+  r->a = 0;
+  hm_dp_w16(ram, r, 0xA7, 0);
+}
+
+#define RET_100_CHECK  0x812B
+#define RET_100_FREE   0x8132
+#define RET_100_PIECES 0x819B
+
+void hm_CODE_858100(uint8_t *ram, HmRegs *r)
+{
+  sprite_bank(ram, r);
+  object_offset(ram, r);
+  push16(ram, r, RET_100_CHECK);
+  hm_CODE_858B7B(ram, r);
+  pull16(ram, r);
+  r->a = hm_dp_r16(ram, r, 0xAF);
+  if (r->a) return;                                        /* a piece still queued */
+  push16(ram, r, RET_100_FREE);
+  hm_CODE_858B41(ram, r);
+  pull16(ram, r);
+  r->y = hm_dp_r16(ram, r, 0xA5);
+  uint16_t x = r->x = hm_dp_r16(ram, r, 0xA9);
+  uint16_t sprite = hm_dp_r16(ram, r, 0xA1);
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x02, x), sprite);
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x04, x), hm_dp_r16(ram, r, 0x9F));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x06, x), hm_dp_r16(ram, r, 0xA3));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x08, x), hm_dp_r16(ram, r, 0x9B));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x0A, x), hm_dp_r16(ram, r, 0x9D));
+  uint16_t number = hm_bus_rd16(ram, abs_x(r, GOBJ + 0x02, x));
+  uint32_t table = SPRITES_86;
+  if (sprite >= FIRST_SPRITE_87) { number = (uint16_t)(number - FIRST_SPRITE_87); table = SPRITES_87; }
+  uint16_t entry = hm_bus_rd16(ram, (table + (uint16_t)(number << 1)) & 0xFFFFFF);
+  hm_dp_w16(ram, r, 0x75, entry);
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x0C, x), entry);
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x0E, x), (uint16_t)(entry + 3));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x10, x), hm_bus_rd16(ram, hm_dp_long(ram, r, 0x75, 0)));
+  hm_bus_wr8(ram, abs_x(r, GOBJ + 0x12, x), hm_bus_rd8(ram, hm_dp_long(ram, r, 0x75, 2)));
+  r->x = x; r->y = 2;
+  push16(ram, r, RET_100_PIECES);
+  hm_LoadGameObjectComponents(ram, r);
+  pull16(ram, r);
+  r->a = 0;
+  hm_dp_w16(ram, r, 0xA7, 0);
+}

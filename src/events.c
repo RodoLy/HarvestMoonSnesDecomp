@@ -239,3 +239,43 @@ void hm_SUB_848020(uint8_t *ram, HmRegs *r)
   hm_CODE_8581A2(ram, r);
   hm_rtl(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_848331 ($84:8331, JSR, RTS): one step of a slot's walk. Only if +01
+ * bit 5 (walking): the step timer +06 goes down; at 0 it is reloaded from
+ * +05 and the slot moves by (+03, +04), signed bytes, added to its
+ * position (+1A, +1C).
+ * Leftovers: $7E / $80 = the step, A = the new Y (or the timer, or the
+ * flags), Y = the last field touched, C from the add.
+ * ───────────────────────────────────────────────────────────────────────── */
+static uint8_t slot8(uint8_t *ram, HmRegs *r, uint16_t at)
+{
+  r->y = at;
+  uint8_t v = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, at));
+  r->a = (uint16_t)((r->a & 0xFF00) | v);
+  return v;
+}
+
+void hm_SUB_848331(uint8_t *ram, HmRegs *r)
+{
+  if (!(slot8(ram, r, 0x01) & 0x20)) { r->a &= 0xFF20; return; }  /* AND #$20 */
+  uint8_t timer = (uint8_t)(slot8(ram, r, 0x06) - 1);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x06), timer);
+  if (slot8(ram, r, 0x06)) return;
+  uint8_t reload = slot8(ram, r, 0x05);
+  r->y = 0x06;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x06), reload);
+  int8_t dx = (int8_t)slot8(ram, r, 0x03);
+  hm_dp_w16(ram, r, 0x7E, (uint16_t)(int16_t)dx);
+  int8_t dy = (int8_t)slot8(ram, r, 0x04);
+  hm_dp_w16(ram, r, 0x80, (uint16_t)(int16_t)dy);
+  static const uint8_t at[2] = { 0x1A, 0x1C };
+  for (int i = 0; i < 2; i++) {
+    r->y = at[i];
+    uint16_t pos = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, at[i]));
+    uint32_t sum = (uint32_t)pos + hm_dp_r16(ram, r, i ? 0x80 : 0x7E);
+    r->c = sum > 0xFFFF;
+    r->a = (uint16_t)sum;
+    hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, at[i]), r->a);
+  }
+}

@@ -113,6 +113,8 @@ LOCAL = {
     0x81B063: ("ReplaceTilesWitchHouse", "ReplaceTilesWitchHouse"),
     0x838D39: ("UNK_Audio14", "UNK_Audio14", "UNK_Audio6"),  # HM-Decomp says 838D38
     0x858B7B: ("CODE_858B7B", "CODE_858B7B"),
+    0x8580B9: ("CODE_8580B9", "CODE_8580B9"),
+    0x858100: ("CODE_858100", "CODE_858100"),
     0x80C3D9: ("SUB_80C3D9", "SUB_80C3D9"),
     0x80C446: ("SUB_80C446", "SUB_80C446"),
     0x80C4B3: ("SUB_80C4B3", "SUB_80C4B3"),

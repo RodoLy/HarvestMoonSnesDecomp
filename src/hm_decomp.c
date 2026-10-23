@@ -1596,6 +1596,24 @@ static void prep_anim_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[slot + 0x34] |= 0x80;            /* command 17 uses the slot's own table, +33 */
 }
 
+/* objects.c: moving a game object or changing its sprite: a sprite to
+ * create (prep_create_gobj) and objects with pieces (prep_destroy). */
+static void prep_change_gobj(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_create_gobj(ram, r, rnd);
+  prep_destroy(ram, r, rnd);
+}
+
+/* events.c: SUB_848331, a slot walking (+01 bit 5) whose step timer +06
+ * is often about to run out, with steps both ways. */
+static void prep_slot_walk(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_cmd(ram, r, rnd);
+  uint16_t slot = hm_rd16(ram, 0xCC);
+  if (rnd() % 4) ram[slot + 0x01] |= 0x20;
+  ram[slot + 0x06] = (uint8_t)((rnd() % 4) ? 1 : rnd());
+}
+
 /* menus.c: the name screen, menu 1 and mode 6, and InputTypeSelector
  * (every input mode). The page and cell of the name grid, the letters
  * typed, the pad, the mode and the menu. */
@@ -2516,6 +2534,12 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x848F0A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
   { "Event_UNKCCchanges17", hm_Event_UNKCCchanges17, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BA72, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
+  { "CODE_8580B9", hm_CODE_8580B9, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/objects.c", 0x8580B9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
+  { "CODE_858100", hm_CODE_858100, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/objects.c", 0x858100, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
+  { "SUB_848331", hm_SUB_848331, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/events.c", 0x848331, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_slot_walk },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

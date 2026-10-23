@@ -719,6 +719,11 @@ down, script $17/$14 starts). Its requests are bits of $7F1F5C:
   refusal and the object simply stays. Scripts destroy objects with
   commands `Event_UNK1` (their own) and `Event_UNKCCchanges7` (another
   slot's).
+- **Moving and changing one:** `CODE_8580B9` moves an object (flip, X, Y);
+  `CODE_858100` gives it another sprite: the old pieces are freed (with
+  the same refusal as above) and the new ones loaded.
+- **A slot walking** (`SUB_848331`): with +01 bit 5 set, every +05 frames
+  the slot moves by (+03, +04), signed bytes, added to its position.
 
 ### 5.13 The ending
 
@@ -1432,3 +1437,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 52.99 % | the music and the uploads to the sound chip (13 routines), the shipping at 5 pm, the player's actions, points into hearts |
 | 23-Oct-2026 | 53.48 % | destroying a game object, and the script commands that do it |
 | 23-Oct-2026 | 54.03 % | four script commands that choose animations and make a person face you |
+| 23-Oct-2026 | 54.42 % | moving a game object, changing its sprite, a slot's walking step |
