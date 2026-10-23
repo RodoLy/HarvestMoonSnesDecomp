@@ -88,6 +88,34 @@ MANUAL = {
     0x8493C9: "Event_ResetFlag",   # HM-Decomp says 8093C9
     0x84BA10: "Event_EditTileonMap",  # no address in HM-Decomp
     0x83C9E5: "UnusedBarnCheck",  # after UnusedBarnCoopCheck's RTL, no label
+    0x81A7CE: "SUB_81A7CE",  # maptiles.c
+    0x81B2BB: "SUB_81B2BB",  # maptiles.c
+    0x81AC80: "ReplaceTilesMoutain",  # maptiles.c
+    0x81B121: "ReplaceTilesCoop",  # maptiles.c
+    0x81B1CF: "ReplaceTilesMountainCave",  # maptiles.c
+    0x81B21E: "ReplaceTilesElfTunnel",  # maptiles.c
+    0x81B26D: "ReplaceTilesMap37",  # maptiles.c
+    0x81AC71: "ReplaceTilesTown",  # maptiles.c, a lone RTS
+    0x81AC78: "ReplaceTilesFlowerFestival",  # maptiles.c, a lone RTS
+    0x81AC79: "ReplaceTilesHarvestFestival",  # maptiles.c, a lone RTS
+    0x81AC7A: "DATA8_00AC7A",  # maptiles.c, a lone RTS
+    0x81AC7B: "DATA8_00AC7B",  # maptiles.c, a lone RTS
+    0x81AC7C: "ReplaceTilesForkSpring",  # maptiles.c, a lone RTS
+    0x81AC7D: "ReplaceTilesForkSummer",  # maptiles.c, a lone RTS
+    0x81AC7E: "ReplaceTilesForkFall",  # maptiles.c, a lone RTS
+    0x81AC7F: "ReplaceTilesForkWinter",  # maptiles.c, a lone RTS
+    0x81ACCB: "DATA8_00ACCB",  # maptiles.c, a lone RTS
+    0x81ADD1: "ReplaceTilesMayorHouse",  # maptiles.c, a lone RTS
+    0x81ADD2: "ReplaceTilesMayorHouseHall",  # maptiles.c, a lone RTS
+    0x81ADD3: "ReplaceTilesMariasRoom",  # maptiles.c, a lone RTS
+    0x81ADD4: "ReplaceTilesChurch",  # maptiles.c, a lone RTS
+    0x81AE6A: "ReplaceTilesFlowerShopRooms",  # maptiles.c, a lone RTS
+    0x81AE6B: "ReplaceTilesBar",  # maptiles.c, a lone RTS
+    0x81AE6C: "ReplaceTilesBarRooms",  # maptiles.c, a lone RTS
+    0x81AE6D: "ReplaceTilesRestaurant",  # maptiles.c, a lone RTS
+    0x81AE6E: "ReplaceTilesRestaurantRooms",  # maptiles.c, a lone RTS
+    0x81AFBF: "ReplaceTilesGeneralStoreRooms",  # maptiles.c, a lone RTS
+    0x81B063: "ReplaceTilesWitchHouse",  # maptiles.c, a lone RTS
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

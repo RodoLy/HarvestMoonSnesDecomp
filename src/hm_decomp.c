@@ -1433,6 +1433,60 @@ static void prep_map_copy(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   for (int i = 0; i < 0x31; i++) ram[0x0B586 + 64 * i] = (uint8_t)rnd();
 }
 
+/* maptiles.c: the flags of what you built, bought and found, the
+ * weather, the date, the tools in hand and bag, the troughs, the eggs, the
+ * shed bytes, the map ($22, 0-$5F) and its width; the tile changes the map
+ * routines use (others can have 0 rows: SUB_81A83A would then loop 65536
+ * times), at positions inside a 64-tile map. */
+static const uint8_t k_map_changes[] = { 0x60, 0x5F, 0x54, 0x53, 0x16, 0x59, 0x58, 0x5A, 0x5C,
+  0xF5, 0xE1, 0xE2, 0xEE, 0xFD, 0xFE, 0x99, 0xF1, 0xE4, 0xEF, 0x9B, 0xF0 };
+static const uint8_t k_typed_changes[] = { 0x60, 0x5F, 0x54, 0x53, 0x16, 0x59, 0x58, 0x5A, 0x5C,
+  0xF5, 0xE1, 0xF0, 0xEF };
+static void prep_map_tiles(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  for (unsigned a = 0x11F5A; a < 0x11F70; a++) ram[a] = (uint8_t)rnd();
+  hm_wr16(ram, 0x0196, (uint16_t)(rnd() & 0x001F));
+  ram[0x11F36] = (uint8_t)(rnd() % 11);
+  ram[0x11F18] = (uint8_t)((rnd() % 2) ? 0 : rnd() % 3);                /* year */
+  ram[0x11F19] = (uint8_t)(rnd() % 4);                                   /* season */
+  ram[0x11F1B] = (uint8_t)((rnd() % 2) ? 0x12 + rnd() % 4 : rnd() % 30); /* day, often 18-21 */
+  ram[0x11F0A] = (uint8_t)((rnd() % 2) ? 10 + rnd() % 3 : rnd() % 13);  /* cows */
+  static const uint8_t tools[] = { 0x00, 0x09, 0x0A, 0x0D, 0x0E, 0x0F, 0x11, 0x12, 0x13, 0x14, 0x15, 0x19, 0x1A };
+  ram[0x0921] = tools[rnd() % sizeof tools];
+  ram[0x0923] = tools[rnd() % sizeof tools];
+  hm_wr16(ram, 0x0932, (uint16_t)rnd());
+  hm_wr16(ram, 0x0934, (uint16_t)rnd());
+  hm_wr16(ram, 0x11F45, (uint16_t)rnd());
+  for (unsigned a = 0x11F00; a < 0x11F0A; a++) ram[a] = (uint8_t)rnd();
+  static const uint8_t maps[] = { 0x00, 0x10, 0x15, 0x16, 0x17, 0x1C, 0x22, 0x24, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x37 };
+  ram[0x22] = (uint8_t)((rnd() % 2) ? maps[rnd() % sizeof maps] : rnd() % 0x60);
+  static const uint8_t widths[] = { 1, 2, 4 };
+  ram[0x0181] = widths[rnd() % 3];
+}
+static void prep_stamp(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_map_tiles(ram, r, rnd);
+  r->a = k_map_changes[rnd() % sizeof k_map_changes];
+  r->x = (uint16_t)(rnd() % 0x3C0);
+  r->y = (uint16_t)(rnd() % 0x3C0);
+}
+static void prep_stamp_typed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_stamp(ram, r, rnd);
+  r->a = k_typed_changes[rnd() % sizeof k_typed_changes];
+}
+/* the four lists have 26, 6, 8 and 4 items (item 0 and the shed's 27 are empty); X = 4 falls
+ * back to list 0 */
+static void prep_shop_item(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_map_tiles(ram, r, rnd);
+  static const uint8_t items[5] = { 26, 6, 8, 4, 26 };
+  r->x = (uint16_t)(rnd() % 5);
+  r->a = (uint16_t)(1 + rnd() % items[r->x]);
+  r->y = (uint16_t)(rnd() % 4);
+}
+
 /* menus.c: the name screen, menu 1 and mode 6, and InputTypeSelector
  * (every input mode). The page and cell of the name grid, the letters
  * typed, the pad, the mode and the menu. */
@@ -2185,6 +2239,84 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/events.c", 0x848000, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_copy },
   { "MultiplicationUnsigned", hm_MultiplicationUnsigned, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/math.c", 0x838067, 1, 0, 0, 0xFFFF, { B8(0x011A, 0, 255), B8(0x011B, 0, 255) }, 0, NULL },
+  { "SUB_81A7CE", hm_SUB_81A7CE, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/maptiles.c", 0x81A7CE, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_stamp },
+  { "SUB_82B0A7", hm_SUB_82B0A7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/maptiles.c", 0x82B0A7, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_stamp_typed },
+  { "SUB_81B2BB", hm_SUB_81B2BB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81B2BB, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_shop_item },
+  { "UNK_ExecuteFromPointers", hm_UNK_ExecuteFromPointers, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/maptiles.c", 0x81A9E5, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_map_tiles },
+  { "ReplaceTilesFarm", hm_ReplaceTilesFarm, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AAB6, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesMoutain", hm_ReplaceTilesMoutain, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AC80, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesHouse1", hm_ReplaceTilesHouse1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81ACCC, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesHouse2", hm_ReplaceTilesHouse2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AD23, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesHouse3", hm_ReplaceTilesHouse3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AD7A, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesFlowerShop", hm_ReplaceTilesFlowerShop, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81ADD5, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesGeneralStore", hm_ReplaceTilesGeneralStore, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AE6F, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesAnimalShop", hm_ReplaceTilesAnimalShop, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AFC0, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesToolshed", hm_ReplaceTilesToolshed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81B064, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_map_tiles },
+  { "ReplaceTilesBarn", hm_ReplaceTilesBarn, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81B0A8, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesCoop", hm_ReplaceTilesCoop, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81B121, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesMountainCave", hm_ReplaceTilesMountainCave, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81B1CF, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesElfTunnel", hm_ReplaceTilesElfTunnel, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81B21E, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesMap37", hm_ReplaceTilesMap37, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81B26D, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
+  { "ReplaceTilesTown", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AC71, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesFlowerFestival", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AC78, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesHarvestFestival", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AC79, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "DATA8_00AC7A", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AC7A, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "DATA8_00AC7B", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AC7B, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesForkSpring", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AC7C, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesForkSummer", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AC7D, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesForkFall", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AC7E, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesForkWinter", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AC7F, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "DATA8_00ACCB", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81ACCB, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesMayorHouse", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81ADD1, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesMayorHouseHall", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81ADD2, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesMariasRoom", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81ADD3, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesChurch", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81ADD4, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesFlowerShopRooms", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AE6A, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesBar", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AE6B, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesBarRooms", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AE6C, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesRestaurant", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AE6D, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesRestaurantRooms", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AE6E, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesGeneralStoreRooms", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81AFBF, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
+  { "ReplaceTilesWitchHouse", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/maptiles.c", 0x81B063, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

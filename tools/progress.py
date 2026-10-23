@@ -86,6 +86,31 @@ LOCAL = {
     0x8493C9: ("Event_ResetFlagDD", "Event_ResetFlag"),  # three labels on the same code
     0x84BA10: ("Event_EditTileonMap", "Event_EditTileonMap"),
     0x83C9E5: (".barncheck", "UnusedBarnCheck"),      # after UnusedBarnCoopCheck's RTL
+    0x81AC80: ("ReplaceTilesMoutain", "ReplaceTilesMoutain", "DATA8_00ACCB"),  # HM-Decomp says 81AC7F
+    0x81A7CE: ("SUB_81A7CE", "SUB_81A7CE"),
+    0x81B2BB: ("SUB_81B2BB", "SUB_81B2BB"),
+    0x81B26D: ("@81B26D", "ReplaceTilesMap37", "@81B293"),  # an indented label in the barn's block
+    0x81AC71: ("ReplaceTilesTown", "ReplaceTilesTown", "ReplaceTilesFlowerFestival"),  # 7 RTS, 6 never reached
+    0x81AC78: ("ReplaceTilesFlowerFestival", "ReplaceTilesFlowerFestival"),
+    0x81AC79: ("ReplaceTilesHarvestFestival", "ReplaceTilesHarvestFestival"),
+    0x81AC7A: ("DATA8_00AC7A", "DATA8_00AC7A"),
+    0x81AC7B: ("DATA8_00AC7B", "DATA8_00AC7B"),
+    0x81AC7C: ("ReplaceTilesForkSpring", "ReplaceTilesForkSpring"),
+    0x81AC7D: ("ReplaceTilesForkSummer", "ReplaceTilesForkSummer"),
+    0x81AC7E: ("ReplaceTilesForkFall", "ReplaceTilesForkFall"),
+    0x81AC7F: ("ReplaceTilesForkWinter", "ReplaceTilesForkWinter"),
+    0x81ACCB: ("DATA8_00ACCB", "DATA8_00ACCB"),
+    0x81ADD1: ("ReplaceTilesMayorHouse", "ReplaceTilesMayorHouse"),
+    0x81ADD2: ("ReplaceTilesMayorHouseHall", "ReplaceTilesMayorHouseHall"),
+    0x81ADD3: ("ReplaceTilesMariasRoom", "ReplaceTilesMariasRoom"),
+    0x81ADD4: ("ReplaceTilesChurch", "ReplaceTilesChurch"),
+    0x81AE6A: ("ReplaceTilesFlowerShopRooms", "ReplaceTilesFlowerShopRooms"),
+    0x81AE6B: ("ReplaceTilesBar", "ReplaceTilesBar"),
+    0x81AE6C: ("ReplaceTilesBarRooms", "ReplaceTilesBarRooms"),
+    0x81AE6D: ("ReplaceTilesRestaurant", "ReplaceTilesRestaurant"),
+    0x81AE6E: ("ReplaceTilesRestaurantRooms", "ReplaceTilesRestaurantRooms"),
+    0x81AFBF: ("ReplaceTilesGeneralStoreRooms", "ReplaceTilesGeneralStoreRooms"),
+    0x81B063: ("ReplaceTilesWitchHouse", "ReplaceTilesWitchHouse"),
     0x80C3D9: ("SUB_80C3D9", "SUB_80C3D9"),
     0x80C446: ("SUB_80C446", "SUB_80C446"),
     0x80C4B3: ("SUB_80C4B3", "SUB_80C4B3"),
@@ -280,10 +305,15 @@ def routines_of(decomp_dir):
 routines = routines_of
 
 
+# Routines HM-Decomp shows as data (`dw` lines): rewritten and verified, but
+# not counted, since the measure is HM-Decomp's own code.
+NOT_IN_DECOMP = {0x81B121, 0x81B1CF, 0x81B21E}   # ReplaceTilesCoop, MountainCave, ElfTunnel
+
+
 def registered(path):
     text = open(path, encoding="utf-8").read()
     names = re.findall(r'\{\s*"([A-Za-z_][A-Za-z0-9_]*)",\s*hm_\w+,[^{]*?0x([0-9A-Fa-f]{6})\b', text)
-    return {int(pc, 16): name for name, pc in names}
+    return {int(pc, 16): name for name, pc in names if int(pc, 16) not in NOT_IN_DECOMP}
 
 
 def main():

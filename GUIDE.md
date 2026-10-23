@@ -264,6 +264,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/coloranim.c` | colours that move (palette cycling) |
 | `src/joypad.c` | reading the controller |
 | `src/toolsound.c` | the noise of each tool |
+| `src/maptiles.c` | what a map gets when it loads |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -1148,6 +1149,51 @@ by itself ($4212 bit 0). For the check, the rewrite asks the emulator for
 those registers ($4212, $4218, $421A); the fuzzer also presses random
 buttons on both pads for each call and puts the real ones back after.
 
+### 5.25 What a map gets when it loads
+
+Each map's layout is stored once in the cartridge. What changes during the
+game (your house extensions, the tools you bought, the fodder you put
+out...) is added on top every time the map loads: `UNK_ExecuteFromPointers`
+($81:A9E5, `src/maptiles.c`) calls that map's routine from a table (one
+word per map, $00-$5F). Most maps have nothing to add and point at a lone
+RTS.
+
+| Map | What it adds |
+|---|---|
+| Farm ($00-$03) | the house's first or second extension, one power berry flower for each berry eaten (10 places), the painted house (4 parts, $7F1F66 bits 9-12) and three more things ($7F1F64 bits 0-1, $7F1F68 bit 12) |
+| Mountain ($10-$13) | one thing with rain or snow, and one more when $7F1F64 bit 1 is set |
+| House ($15-$17) | three things: $0196 bit 4, $7F1F6C bit 12 (HM-Decomp calls it the turtle shell) and the clock ($7F1F6E bit 14) |
+| Flower shop ($1C) | the seeds on the shelves: summer seeds in summer, spring seeds in spring, and two more in both |
+| General store ($22) | every tool for sale you have not bought and are not carrying: the paint (once the house has its second extension), the milker, the brush, the four gold tools (once they are on sale) and the sprinkler (from summer day 20 of the first year) |
+| Animal shop ($24) | the miracle potion (only with fewer than 12 cows and none pregnant), the medicine and the two fodders |
+| Tool shed ($26) | every tool you own, at its place on the wall (24 places) |
+| Barn ($27), coop ($28) | fodder in every trough you filled; in the coop also an egg by each hen that laid one |
+| Mountain cave ($29), elf tunnel ($2A), map $37 | small things behind flags; map $37's only the first time |
+
+The same flag, $7F1F64 bit 1, changes the farm, the mountain and the elf
+tunnel: something you do that shows in three places.
+
+Three pieces do the work:
+
+- `SUB_81A7CE` stamps a tile change (picture and tile type) at a position.
+  It is `ChangeMapTile` without sending anything to the VRAM: while a map
+  loads, the whole picture is sent afterwards.
+- `SUB_82B0A7` then writes the tile type of every tile of the change, from
+  a second sheet at $A7:F500 laid out like the graphics (for changes made
+  of different tiles, like an extension with its door).
+- `SUB_81B2BB` shows an item of a list (the shed, the flower shop, the
+  general store, the animal shop; 8 bytes each: position, change, and a
+  bit of $7F1F00-) always, only if its bit is set (you own it), or only if
+  it is not (still for sale).
+
+*About HM-Decomp:* four of these routines appear there as data (`dw`
+lines): the coop's ($81:B121), the cave's ($81:B1CF), the tunnel's
+($81:B21E) and, as an indented label, map $37's ($81:B26D). They were
+disassembled from the ROM. The first three are verified but do not count
+in the percentage, which measures HM-Decomp's own code. Also,
+`ReplaceTilesMoutain` starts at $81:AC80, not $81:AC7F (that byte is the
+RTS of `ReplaceTilesForkWinter`), and `MapPointerTable` is at $82:B174.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1216,6 +1262,10 @@ Things the game does wrong or oddly, found while decompiling:
     It does not matter, pad 2 is never used. The same routine also has a
     branch that never runs (when $00 is not 0) that would read only the low
     bytes of the pads.
+
+22. **A sum thrown away.** The flower shop's shelf loops do `TYA; CLC;
+    ADC #5` and then `TYA` again, so the sum is lost and the item is just
+    Y + 1. Maybe the shelves were meant to start at item 5 at first.
 
 ## 7. Differences found in the recompilation
 
@@ -1301,3 +1351,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 47.97 % | two unused routines that count the chickens and the cows |
 | 22-Oct-2026 | 48.04 % | the noise of each tool |
 | 22-Oct-2026 | 48.18 % | the farm's copy of the field, freeing all the script slots, the multiplication |
+| 22-Oct-2026 | 50.23 % | what each map gets when it loads (39 routines); past half of the code |

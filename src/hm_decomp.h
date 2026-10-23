@@ -512,6 +512,25 @@ void hm_CopyCurrentMaptoFarmMap(uint8_t *ram, HmRegs *r);  /* farm.c */
 void hm_LoadDefaultFarmMap(uint8_t *ram, HmRegs *r);
 void hm_ClearsofAllCCStructs(uint8_t *ram, HmRegs *r);     /* events.c */
 void hm_MultiplicationUnsigned(uint8_t *ram, HmRegs *r);   /* math.c */
+void hm_SUB_81A7CE(uint8_t *ram, HmRegs *r); /* maptiles.c */
+void hm_SUB_82B0A7(uint8_t *ram, HmRegs *r);
+void hm_SUB_81B2BB(uint8_t *ram, HmRegs *r);
+void hm_UNK_ExecuteFromPointers(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesFarm(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesMoutain(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesHouse1(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesHouse2(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesHouse3(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesFlowerShop(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesGeneralStore(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesAnimalShop(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesToolshed(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesBarn(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesCoop(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesMountainCave(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesElfTunnel(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesMap37(uint8_t *ram, HmRegs *r);
+void hm_ReplaceTilesNothing(uint8_t *ram, HmRegs *r);
 void hm_UNK_SetPointer42(uint8_t *ram, HmRegs *r); /* coloranim.c */
 void hm_UNK_BigLoop(uint8_t *ram, HmRegs *r);
 void hm_Zeroes42Pointers(uint8_t *ram, HmRegs *r);

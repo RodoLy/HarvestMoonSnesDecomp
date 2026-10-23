@@ -265,6 +265,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/coloranim.c` | colores que se mueven (ciclo de paleta) |
 | `src/joypad.c` | leer el mando |
 | `src/toolsound.c` | el ruido de cada herramienta |
+| `src/maptiles.c` | lo que recibe un mapa al cargarse |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -1174,6 +1175,52 @@ registros al emulador ($4212, $4218, $421A); el fuzzer además aprieta
 botones al azar en los dos mandos en cada llamada y después devuelve los de
 verdad.
 
+### 5.25 Lo que recibe un mapa al cargarse
+
+La forma de cada mapa está guardada una sola vez en el cartucho. Lo que
+cambia durante el juego (las ampliaciones de tu casa, las herramientas que
+compraste, el forraje que pusiste...) se añade encima cada vez que se carga
+el mapa: `UNK_ExecuteFromPointers` ($81:A9E5, `src/maptiles.c`) llama a la
+rutina de ese mapa desde una tabla (una palabra por mapa, $00-$5F). La
+mayoría de los mapas no tienen nada que añadir y apuntan a un RTS suelto.
+
+| Mapa | Qué añade |
+|---|---|
+| Granja ($00-$03) | la primera o la segunda ampliación de la casa, una flor de baya de poder por cada baya comida (10 sitios), la casa pintada (4 partes, $7F1F66 bits 9-12) y tres cosas más ($7F1F64 bits 0-1, $7F1F68 bit 12) |
+| Montaña ($10-$13) | una cosa con lluvia o nieve, y otra cuando está el bit 1 de $7F1F64 |
+| Casa ($15-$17) | tres cosas: $0196 bit 4, $7F1F6C bit 12 (HM-Decomp lo llama el caparazón de tortuga) y el reloj ($7F1F6E bit 14) |
+| Floristería ($1C) | las semillas de los estantes: las de verano en verano, las de primavera en primavera, y dos más en ambas |
+| Tienda general ($22) | cada herramienta a la venta que no has comprado y no llevas: la pintura (cuando la casa tiene su segunda ampliación), el ordeñador, el cepillo, las cuatro herramientas de oro (cuando ya se venden) y el aspersor (desde el día 20 del verano del primer año) |
+| Tienda de animales ($24) | la poción milagrosa (solo con menos de 12 vacas y ninguna preñada), la medicina y los dos forrajes |
+| Cobertizo ($26) | cada herramienta que tienes, en su sitio de la pared (24 sitios) |
+| Establo ($27), gallinero ($28) | forraje en cada comedero que llenaste; en el gallinero además un huevo junto a cada gallina que puso uno |
+| Cueva de la montaña ($29), túnel de los elfos ($2A), mapa $37 | cosas pequeñas detrás de banderas; la del mapa $37 solo la primera vez |
+
+La misma bandera, el bit 1 de $7F1F64, cambia la granja, la montaña y el
+túnel de los elfos: algo que haces y se nota en tres sitios.
+
+Tres piezas hacen el trabajo:
+
+- `SUB_81A7CE` estampa un cambio de casillas (dibujo y tipo de casilla) en
+  una posición. Es `ChangeMapTile` sin mandar nada a la VRAM: mientras se
+  carga un mapa, el dibujo entero se manda después.
+- `SUB_82B0A7` escribe luego el tipo de cada casilla del cambio, desde una
+  segunda hoja en $A7:F500 ordenada como los gráficos (para cambios hechos
+  de casillas distintas, como una ampliación con su puerta).
+- `SUB_81B2BB` muestra un objeto de una lista (el cobertizo, la
+  floristería, la tienda general, la de animales; 8 bytes cada uno:
+  posición, cambio y un bit de $7F1F00-) siempre, solo si su bit está
+  puesto (lo tienes), o solo si no lo está (todavía se vende).
+
+*Sobre HM-Decomp:* cuatro de estas rutinas aparecen allí como datos
+(líneas `dw`): la del gallinero ($81:B121), la de la cueva ($81:B1CF), la
+del túnel ($81:B21E) y, como etiqueta con sangría, la del mapa $37
+($81:B26D). Se desensamblaron desde la ROM. Las tres primeras están
+verificadas pero no cuentan en el porcentaje, que mide el código propio de
+HM-Decomp. Además, `ReplaceTilesMoutain` empieza en $81:AC80, no en
+$81:AC7F (ese byte es el RTS de `ReplaceTilesForkWinter`), y
+`MapPointerTable` está en $82:B174.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1244,6 +1291,11 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     del suyo: una errata. No importa, el mando 2 nunca se usa. La misma
     rutina tiene además una rama que nunca corre (cuando $00 no es 0) que
     leería solo los bytes bajos de los mandos.
+
+22. **Una suma que se tira.** Los bucles de los estantes de la floristería
+    hacen `TYA; CLC; ADC #5` y luego otra vez `TYA`, así que la suma se
+    pierde y el objeto es solo Y + 1. Quizá al principio los estantes
+    empezaban en el objeto 5.
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -1330,3 +1382,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 47,97 % | dos rutinas sin usar que cuentan las gallinas y las vacas |
 | 22-oct-2026 | 48,04 % | el ruido de cada herramienta |
 | 22-oct-2026 | 48,18 % | la copia del campo de la granja, liberar todos los slots de guion, la multiplicación |
+| 22-oct-2026 | 50,23 % | lo que recibe cada mapa al cargarse (39 rutinas); ya pasa de la mitad del código |
