@@ -403,6 +403,8 @@ void hm_SUB_829260(uint8_t *ram, HmRegs *r);
 void hm_SUB_82927D(uint8_t *ram, HmRegs *r);         /* tools.c */
 void hm_PrintTextFrame(uint8_t *ram, HmRegs *r);    /* text.c */
 void hm_SaveGameSlot(uint8_t *ram, HmRegs *r);       /* save.c */
+void hm_LoadGameSlot(uint8_t *ram, HmRegs *r);
+void hm_NewGameSetup(uint8_t *ram, HmRegs *r);
 void hm_LoadGameSlotResume(uint8_t *ram, HmRegs *r);
 void hm_CheckSRAMIntegrity(uint8_t *ram, HmRegs *r);
 void hm_SaveSlotMenuInputs(uint8_t *ram, HmRegs *r); /* menus.c */

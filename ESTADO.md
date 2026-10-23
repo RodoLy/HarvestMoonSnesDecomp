@@ -117,6 +117,7 @@ en el README (`tools/progress.py`).
 | SUB_848286 (el sprite de un slot cada cuadro: crear, destruir, mover, cambiar) | $84:8286 | src/events.c |
 | Event_UNKCCchanges5/9 (hablar con alguien), Event_UNKCFD1, Event_AudioRelated2 | $84:9079, $84:9633, $84:9553, $84:8CA8 | src/eventcmds.c |
 | CODE_8582C7 (animar objetos), GetOBJOrderToDraw, PresetsWRAMCopyofOAM / OAMCopy, InitializeOBJs | $85:82C7, $85:8377, $85:8647, $85:8896, $85:820F | src/objects.c |
+| LoadGameSlot, NewGameSetup | $83:B2B1, $83:A9BE | src/save.c |
 | GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |

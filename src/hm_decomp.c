@@ -649,6 +649,16 @@ static void prep_sram(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
     }
   }
 }
+/* NewGameSetup: everything it sets holds something else first */
+static void prep_new_game(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_sram(ram, r, rnd);
+  for (uint32_t a = 0x08A1; a < 0x0900; a++) ram[a] = (uint8_t)rnd();
+  static const uint16_t bytes[] = { 0x0917, 0x0921, 0x0923, 0x0926, 0x0927, 0x0928, 0x0929, 0x092A,
+                                    0x092B, 0x092C, 0x092D, 0x0937, 0x098C, 0x09A3 };
+  for (unsigned i = 0; i < sizeof bytes / sizeof bytes[0]; i++) ram[bytes[i]] = (uint8_t)rnd();
+  hm_wr16(ram, 0x0196, (uint16_t)rnd());
+}
 
 /* eventcmds.c: a cow's slot ($18 + n) and its record ($7E:C1C6 + 16 n) */
 static void prep_cow_slot(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -2264,6 +2274,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x849AD4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_cow_slot },
   { "SaveGameSlot", hm_SaveGameSlot, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/save.c", 0x83B68E, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_sram },
+  { "NewGameSetup", hm_NewGameSetup, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/save.c", 0x83A9BE, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_new_game },
+  { "LoadGameSlot", hm_LoadGameSlot, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/save.c", 0x83B2B1, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_sram },
   { "LoadGameSlotResume", hm_LoadGameSlotResume, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/save.c", 0x83BA45, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_sram },
   { "CheckSRAMIntegrity", hm_CheckSRAMIntegrity, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,

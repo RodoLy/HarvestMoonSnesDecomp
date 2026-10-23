@@ -975,6 +975,20 @@ is saved (`SaveGameSlot`), at the start of the slot:
   "FARM" back, so it shows as empty.
 - The title screen reads only the date and the name of each slot
   (`LoadGameSlotResume`); a slot with day 0 is empty.
+- **Loading** (`LoadGameSlot`) is the exact inverse of saving, in the same
+  order, and checks nothing (neither "FARM" nor the checksum: that was
+  done at power-on). Each letter of the five names also goes to a second,
+  16-bit copy ($08D5-$08FC, two bytes per letter). The farm is first
+  reset to the default one (`LoadDefaultFarmMap`) and then the saved part
+  is copied over it (tiles $C0 on).
+- **A new game** (`NewGameSetup`) gives the same variables their
+  starting values: year 1, spring, Monday the 1st, one bag of grass seeds,
+  100 of stamina, 300 G (money is kept in tens: 30), the shed with the
+  basic tools ($0F) plus the watering can and grass seeds ($88), every
+  name blank (character $B1), the rest 0, and the default farm. The cows,
+  the chickens and the children's 16-bit name copies are not touched.
+  Quirk: the horse's name is blanked twice (the code was surely meant to
+  do something else the second time).
 
 ### 5.17 Buttons and menus
 
@@ -1531,3 +1545,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 56.14 % | each slot's sprite, every frame |
 | 23-Oct-2026 | 56.76 % | talking to people (commands 1E, 1F, 2D), a map animation and the music from a script; count corrected (−0.04) |
 | 23-Oct-2026 | 57.86 % | animating the game objects, the drawing order, emptying the sprite table |
+| 23-Oct-2026 | 59.10 % | loading a saved game and starting a new one |

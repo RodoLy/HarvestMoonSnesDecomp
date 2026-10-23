@@ -266,3 +266,123 @@ void hm_CheckSRAMIntegrity(uint8_t *ram, HmRegs *r)
   }
   r->a = a;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * LoadGameSlot ($83:B2B1, JSL, RTL). A = the slot (0 or other). The
+ * inverse of SaveGameSlot: every field above back to its variable, in the
+ * same order; each letter of the five names (player, dog, horse,
+ * children) also as a 16-bit word in a second copy ($08D5, $08DD, $08E5,
+ * $08ED, $08F5: 2 bytes per letter, the high byte 0); the chickens and
+ * the cows; the default farm (LoadDefaultFarmMap) and over it the saved
+ * part of the farm map (tiles $C0-$EFF). It checks nothing: neither
+ * "FARM" nor the checksum (CheckSRAMIntegrity did that at power-on).
+ * Leftovers: $75-$77 = the slot, $72-$74 = the default farm map's
+ * pointer; A = (LoadDefaultFarmMap's high byte : the last tile), X = $F00,
+ * Y = $1000, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_LOAD_FARM 0xB677   /* JSL LoadDefaultFarmMap at $83:B674 */
+#define LONG_NAMES    0x08D5   /* DB: 16-bit copies of the names */
+
+void hm_LoadGameSlot(uint8_t *ram, HmRegs *r)
+{
+  uint16_t slot = r->a;
+  push16(ram, r, slot); pull16(ram, r);               /* PHA ... PLA */
+  r->a = point_at_slot(ram, r, slot);
+  r->c = 1;                                           /* CMP #0 */
+  /* where each name's letters start in the slot, and their 16-bit copies */
+  static const struct { uint16_t at, copy; } NAMES[5] = {
+    { 0x80, 0x08D5 }, { 0x88, 0x08DD }, { 0x8C, 0x08E5 }, { 0x90, 0x08ED }, { 0x94, 0x08F5 } };
+  for (unsigned i = 0; i < sizeof FIELDS / sizeof FIELDS[0]; i++) {
+    const Field *f = &FIELDS[i];
+    uint32_t to = f->data_bank ? db_addr(r, (uint16_t)f->from) : f->from;
+    r->y = f->at;
+    for (unsigned n = 0; n < 5; n++)
+      if (f->at == NAMES[n].at) r->a = (uint16_t)(r->a >> 8);   /* LDA #0; XBA */
+    if (f->size == 1) {
+      uint8_t v = sram8(ram, r, f->at);
+      r->a = (uint16_t)((r->a & 0xFF00) | v);
+      hm_bus_wr8(ram, to, v);
+      for (unsigned n = 0; n < 5; n++)
+        if (f->at >= NAMES[n].at && f->at < NAMES[n].at + 4)
+          hm_bus_wr16(ram, db_addr(r, (uint16_t)(NAMES[n].copy + 2 * (f->at - NAMES[n].at))), r->a);
+    } else {
+      r->a = sram16(ram, r, f->at);
+      hm_bus_wr16(ram, to, r->a);
+    }
+  }
+  uint16_t x;
+  for (x = 0; x < 0x68; x++) {
+    uint8_t v = sram8(ram, r, (uint16_t)(0x098 + x));
+    r->a = (uint16_t)((r->a & 0xFF00) | v);
+    hm_bus_wr8(ram, CHICKENS + x, v);
+  }
+  for (x = 0; x < 0xC0; x++) {
+    uint8_t v = sram8(ram, r, (uint16_t)(0x100 + x));
+    r->a = (uint16_t)((r->a & 0xFF00) | v);
+    hm_bus_wr8(ram, COWS + x, v);
+  }
+  r->x = 0xC0; r->y = 0x1C0;
+  r->a = hm_dp_r16(ram, r, 0x72);
+  hm_dp_w16(ram, r, 0x75, r->a);
+  uint8_t bank = *hm_dp(ram, r, 0x74);
+  r->a = (uint16_t)((r->a & 0xFF00) | bank);
+  *hm_dp(ram, r, 0x77) = bank;
+  hm_jsl(ram, r, RET_LOAD_FARM, 0x82);
+  hm_LoadDefaultFarmMap(ram, r);
+  hm_rtl(ram, r);
+  for (x = 0xC0; x < 0xF00; x++) {
+    uint8_t v = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x75, (uint16_t)(0x1C0 + x - 0xC0)));
+    r->a = (uint16_t)((r->a & 0xFF00) | v);
+    hm_bus_wr8(ram, FARM_TILES + x, v);
+  }
+  r->x = 0xF00;
+  r->y = 0x1000;
+  r->c = 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * NewGameSetup ($83:A9BE, JSL, RTL): a new game. The same fields as a
+ * saved game get their starting values: year 1 (0), spring, Monday the
+ * 1st, one bag of grass seeds, 100 of max stamina, 300 G (30, money is
+ * kept in tens), the shed with the basic tools ($0F) and the watering can
+ * and the grass seeds ($88); every name "    " (character $B1, also the
+ * 16-bit copies of the player's, the dog's and the horse's names), and
+ * everything else 0; then the default farm (LoadDefaultFarmMap). The
+ * chickens, the cows and the children's 16-bit name copies are left as
+ * they are.
+ * Quirk: the horse's name is written twice; the code was probably meant
+ * to write something else the second time.
+ * Leftovers: those of LoadDefaultFarmMap.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_NEW_FARM 0xABEE   /* JSL LoadDefaultFarmMap at $83:ABEB */
+
+static uint16_t new_game_value(uint16_t at)
+{
+  switch (at) {
+  case 0x02: case 0x03: case 0x04: return 1;          /* weekday, day, grass seeds */
+  case 0x0E: return 100;                              /* max stamina */
+  case 0x39: return 30;                               /* money: 300 G */
+  case 0x84: return 0x0F;                             /* the shed */
+  case 0x85: return 0x88;
+  default:
+    if (at >= 0x80 && at < 0x98 && (at < 0x84 || at >= 0x88)) return 0xB1;   /* names */
+    return 0;
+  }
+}
+
+void hm_NewGameSetup(uint8_t *ram, HmRegs *r)
+{
+  for (unsigned i = 0; i < sizeof FIELDS / sizeof FIELDS[0]; i++) {
+    const Field *f = &FIELDS[i];
+    uint32_t to = f->data_bank ? db_addr(r, (uint16_t)f->from) : f->from;
+    uint16_t v = new_game_value(f->at);
+    if (f->size == 1) hm_bus_wr8(ram, to, (uint8_t)v);
+    else              hm_bus_wr16(ram, to, v);
+  }
+  for (unsigned n = 0; n < 12; n++)                   /* player, dog, horse */
+    hm_bus_wr16(ram, db_addr(r, (uint16_t)(LONG_NAMES + 2 * n)), 0x00B1);
+  r->a = 0x00B1;
+  hm_jsl(ram, r, RET_NEW_FARM, 0x82);
+  hm_LoadDefaultFarmMap(ram, r);
+  hm_rtl(ram, r);
+}

@@ -995,6 +995,21 @@ Lo que se guarda (`SaveGameSlot`), al principio de la ranura:
   "FARM" de nuevo, así que aparece vacía.
 - La pantalla de título lee solo la fecha y el nombre de cada ranura
   (`LoadGameSlotResume`); una ranura con día 0 está vacía.
+- **Cargar** (`LoadGameSlot`) es exactamente lo inverso de guardar, en el
+  mismo orden, y no comprueba nada (ni "FARM" ni la suma: eso se hizo al
+  encender). Cada letra de los cinco nombres va también a una segunda
+  copia de 16 bits ($08D5-$08FC, dos bytes por letra). La granja primero
+  vuelve a la de fábrica (`LoadDefaultFarmMap`) y después se copia encima
+  la parte guardada (casillas desde la $C0).
+- **Una partida nueva** (`NewGameSetup`) da a esas mismas variables sus
+  valores iniciales: año 1, primavera, lunes 1, una bolsa de semillas de
+  pasto, 100 de energía, 300 G (el dinero se guarda en decenas: 30), el
+  galpón con las herramientas básicas ($0F) más la regadera y las
+  semillas de pasto ($88), todos los nombres en blanco (carácter $B1), lo
+  demás en 0, y la granja de fábrica. Las vacas, las gallinas y las
+  copias de 16 bits de los nombres de los hijos no se tocan.
+  Rareza: el nombre del caballo se borra dos veces (seguro que la segunda
+  vez el código tenía que hacer otra cosa).
 
 ### 5.17 Botones y menús
 
@@ -1571,3 +1586,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 56,14 % | el sprite de cada slot, cada cuadro |
 | 23-oct-2026 | 56,76 % | hablar con la gente (comandos 1E, 1F, 2D), animación de mapa y música desde un guion; corrección de la cuenta (−0,04) |
 | 23-oct-2026 | 57,86 % | animar los objetos con sprite, el orden de dibujo, vaciar la tabla de sprites |
+| 23-oct-2026 | 59,10 % | cargar una partida guardada y empezar una nueva |
