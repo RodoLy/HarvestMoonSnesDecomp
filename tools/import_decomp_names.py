@@ -137,6 +137,8 @@ MANUAL = {
     0x81D03D: "CODE_81D03D",  # reading it back
     0x82EB57: "SUB_82EB57",   # the name screen's cursor
     0x83F4D8: "CODE_83F4D8",  # the start of the ending
+    0x818000: "SUB_818000",   # putting an item down
+    0x8180B7: "SUB_8180B7",   # an item's sprite
     # UNK_TableFunctionSelect's routines: who appears on entering each map
     0x83CB69: "MapEvent_CB69",
     0x83EBA6: "MapEvent_EBA6",

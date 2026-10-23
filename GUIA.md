@@ -1486,6 +1486,19 @@ $15-$17 `DED3`, $18-$19 `D4D7`, $1A `D5E7`, $1B `D613`, $1C `D74E`, $1D
 `E586`, $39 `E632`, $3A `E690`, $3C `E76D`, $3D y $4B `EBA6`, el resto
 `E74C`.
 
+### 5.27 Las cosas que se dejan
+
+Cuando el jugador deja o tira lo que carga, eso se vuelve un **objeto del
+mapa** (ver 5.12). `SUB_818000` lo crea delante de él en el estado 0, con
+el sprite del objeto según hacia dónde mira (`SUB_8180B7`: `DATA8_8196AF`
+tiene, por objeto, una lista de 3 bytes por caso: el sprite y un byte que
+x 64 es el volteo), dos píxeles debajo de él. Si el objeto deja algo en el
+suelo (`DATA8_81A2AD`, por objeto) ese tipo de casilla, sacado de la tabla
+de propiedades del mapa, se dibuja delante; y si hace ruido
+(`DATA8_81A308`) suena el efecto 8 del banco 6. Después, cada cuadro,
+`SUB_81809A` corre la rutina propia del objeto (tabla `DATA8_8197C0`, 91
+objetos) según su estado (`$0976`).
+
 **El día normal.** Cada persona tiene un guion en cada uno de varios
 grupos, uno por tipo de día: $0B antes del primer evento de la historia
 (bit 0 de $7F1F68); $07 con el bit 3 de $0196; $01 cuando el clima de
@@ -1703,3 +1716,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 63,74 % | la introducción (mapa $3C) |
 | 23-oct-2026 | 65,20 % | la presentación del final |
 | 23-oct-2026 | 66,73 % | quién aparece en la granja |
+| 23-oct-2026 | 66,97 % | dejar en el suelo lo que se carga |

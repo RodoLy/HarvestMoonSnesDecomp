@@ -1448,6 +1448,19 @@ $15-$17 `DED3`, $18-$19 `D4D7`, $1A `D5E7`, $1B `D613`, $1C `D74E`, $1D
 `E586`, $39 `E632`, $3A `E690`, $3C `E76D`, $3D and $4B `EBA6`, the rest
 `E74C`.
 
+### 5.27 Things put down
+
+When the player puts down or throws what he carries, it becomes a **map
+object** (see 5.12). `SUB_818000` creates it in front of him in state 0,
+with the item's sprite for his facing (`SUB_8180B7`: `DATA8_8196AF` has,
+per item, a list of 3 bytes per case: the sprite and a byte that x 64 is
+the flip), two pixels below him. If the item leaves something on the
+ground (`DATA8_81A2AD`, per item) that tile type, taken from the map's
+property table, is drawn in front; and if it makes a sound
+(`DATA8_81A308`) sound effect 8 of bank 6 plays. Then every frame
+`SUB_81809A` runs the item's own routine (table `DATA8_8197C0`, 91
+items) by its state (`$0976`).
+
 **The usual day.** Each person has one script in each of several groups,
 one per kind of day: $0B before the first event of the story
 ($7F1F68 bit 0); $07 with $0196 bit 3; $01 when tomorrow's weather is 6 or
@@ -1658,3 +1671,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 63.74 % | the introduction (map $3C) |
 | 23-Oct-2026 | 65.20 % | the ending's slide show |
 | 23-Oct-2026 | 66.73 % | who appears on the farm |
+| 23-Oct-2026 | 66.97 % | putting down what is carried |

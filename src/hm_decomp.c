@@ -2063,6 +2063,34 @@ static void prep_map_event_farm(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   }
 }
 
+/* items.c: putting an item down: an item with a sprite list, the facing,
+ * the tile in front and its property table (prep_tile_dma), room for the
+ * map object and the item's sprite prepared (prep_spawn). */
+static void prep_put_down(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  HmRegs t = *r;
+  prep_map_change_dma(ram, &t, rnd);
+  prep_spawn(ram, r, rnd);
+  uint8_t item;
+  do item = (uint8_t)(1 + rnd() % 0x5A);
+  while (hm_bus_rd8(ram, 0x8196AFu + 3u * item + 2) == 0xFF);
+  ram[0x091D] = item;
+  ram[0x0984] = item;                                               /* SUB_8180B7's item */
+  uint16_t dir = (uint16_t)(rnd() % 4);
+  hm_wr16(ram, 0xDA, dir);
+  uint32_t list = (uint32_t)hm_bus_rd8(ram, 0x8196AFu + 3u * item + 2) << 16 | hm_bus_rd16(ram, 0x8196AFu + 3u * item);
+  uint16_t sprite = hm_bus_rd16(ram, (list + 3u * (2 + dir)) & 0xFFFFFF);
+  if (sprite < 0x450) prep_sprite(ram, sprite, rnd);
+  for (unsigned g = 0; g < 0x40; g++)
+    if (hm_rd16(ram, 0x0A320 + 4 * g) < 40) hm_wr16(ram, 0x0A320 + 4 * g, (uint16_t)(40 + rnd() % 200));
+  hm_wr16(ram, 0xD6, (uint16_t)(0x40 + rnd() % 0x380));
+  hm_wr16(ram, 0xD8, (uint16_t)(0x40 + rnd() % 0x380));
+  r->y = (uint16_t)(rnd() % 6);                                     /* SUB_8180B7: a case */
+  /* the farm's real tile property table (ChangeMapTile draws the tile it
+   * gives; a random one can make it loop for ever) */
+  hm_wr16(ram, 0x0D, hm_bus_rd16(ram, 0x82B294)); ram[0x0F] = hm_bus_rd8(ram, 0x82B296);
+}
+
 /* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
  * or winter, an ordinary weekday) */
 static void prep_map_event_dc4a(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -2369,6 +2397,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/objects.c", 0x858AE5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_gobj_pieces },
   { "CreateGameObject", hm_CreateGameObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x858000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_create_gobj },
+  { "SUB_8180B7", hm_SUB_8180B7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/items.c", 0x8180B7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_put_down },
+  { "SUB_818000", hm_SUB_818000, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
+    "src/items.c", 0x818000, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_put_down },
   { "SpawnMapObject", hm_SpawnMapObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x81A500, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_spawn },
   { "ToolUsedNoAction", hm_ToolUsedNoAction, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,

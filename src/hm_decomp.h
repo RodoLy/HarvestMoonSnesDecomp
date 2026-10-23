@@ -328,6 +328,8 @@ void hm_LoadSpriteComponent(uint8_t *ram, HmRegs *r); /* objects.c */
 void hm_LoadGameObjectComponents(uint8_t *ram, HmRegs *r);
 void hm_CreateGameObject(uint8_t *ram, HmRegs *r);
 void hm_SpawnMapObject(uint8_t *ram, HmRegs *r);
+void hm_SUB_8180B7(uint8_t *ram, HmRegs *r);   /* items.c */
+void hm_SUB_818000(uint8_t *ram, HmRegs *r);
 void hm_ToolUsedNoAction(uint8_t *ram, HmRegs *r);  /* toolused.c */
 void hm_ToolUsedSickle(uint8_t *ram, HmRegs *r);
 void hm_ToolUsedHoe(uint8_t *ram, HmRegs *r);
