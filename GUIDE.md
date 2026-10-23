@@ -1414,6 +1414,7 @@ address). Done so far:
 | `DD95`, `DE64` | maps $2B and $2A, with their first visits |
 | `DE9B` | map $27: with $7F1F64 bit 3 a scene that stops the player |
 | `E407` | maps $0C-$0F (the crossroads): the first time (group $0A); from the first winter on a visit of group $0D, in two parts |
+| `D2E0` | the town (maps 4-7): fall 20 before 3 pm the festival (the numbers 0-5 shuffled at $09A4, group $28), spring 23 and fall 12 before 3 pm and winter 10 before 5 pm their groups ($0E, $26, $27), otherwise the usual day of script 0 (nobody on the special days and with rain); bug 24 |
 | `E4CB` | map $29: a script at a tile until $7F1F6A bit 6; coming from below with $D2 bit 11 the dog goes back to the farm (120, 424) |
 
 Which map uses which routine: $00-$03 `CB69`, $04-$07 `D2E0`, $08-$0B
@@ -1510,6 +1511,12 @@ Things the game does wrong or oddly, found while decompiling:
     the game waits while the slot's counter is 0 before lowering it (`LDA;
     BEQ` to itself, `CODE_858C9F`). At 0 it would hang forever; it never
     happens because a slot being given back is always in use.
+24. **A flag that is never cleared.** On entering the town with
+    `$7F1F60` bit 10 set, `MapEvent_D2E0` starts a script and means to
+    clear the bit: `LDA.L $7F1F60; AND #$FBFF; STA.B $60`. The store goes
+    to the direct page ($60) instead of $7F1F60, so the bit stays set and
+    the script starts every time the town is entered (until something else
+    clears it).
 
 ## 7. Differences found in the recompilation
 
@@ -1621,3 +1628,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 60.23 % | who appears on each map: the first 13 routines |
 | 23-Oct-2026 | 62.32 % | who appears on each map: the houses (16 more routines) |
 | 23-Oct-2026 | 62.68 % | who appears on each map: the crossroads, maps $27 and $29 |
+| 23-Oct-2026 | 63.12 % | who appears in the town |

@@ -1451,6 +1451,7 @@ bloque; acá cada una es `MapEvent_xxxx` (su dirección). Hechas hasta ahora:
 | `DD95`, `DE64` | mapas $2B y $2A, con sus primeras visitas |
 | `DE9B` | mapa $27: con el bit 3 de $7F1F64 una escena que detiene al jugador |
 | `E407` | mapas $0C-$0F (el cruce): la primera vez (grupo $0A); desde el primer invierno una visita del grupo $0D, en dos partes |
+| `D2E0` | el pueblo (mapas 4-7): el 20 de otoño antes de las 3 el festival (los números 0-5 mezclados en $09A4, grupo $28), el 23 de primavera y el 12 de otoño antes de las 3 y el 10 de invierno antes de las 5 sus grupos ($0E, $26, $27), si no el día normal del guion 0 (nadie en los días especiales ni con lluvia); error 24 |
 | `E4CB` | mapa $29: un guion en una casilla hasta el bit 6 de $7F1F6A; al entrar desde abajo con el bit 11 de $D2 el perro vuelve a la granja (120, 424) |
 
 Qué mapa usa cada rutina: $00-$03 `CB69`, $04-$07 `D2E0`, $08-$0B
@@ -1552,6 +1553,12 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     de bajarlo (`LDA; BEQ` a sí mismo, `CODE_858C9F`). Con 0 se colgaría
     para siempre; no pasa porque un hueco que se devuelve siempre está en
     uso.
+24. **Una bandera que nunca se borra.** Al entrar al pueblo con el bit 10
+    de `$7F1F60`, `MapEvent_D2E0` arranca un guion y quiere borrar el bit:
+    `LDA.L $7F1F60; AND #$FBFF; STA.B $60`. La escritura va a la página
+    directa ($60) en vez de a $7F1F60, así que el bit sigue puesto y el
+    guion arranca cada vez que se entra al pueblo (hasta que otra cosa lo
+    borre).
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -1665,3 +1672,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 60,23 % | quién aparece en cada mapa: las 13 primeras rutinas |
 | 23-oct-2026 | 62,32 % | quién aparece en cada mapa: las casas (16 rutinas más) |
 | 23-oct-2026 | 62,68 % | quién aparece en cada mapa: el cruce, los mapas $27 y $29 |
+| 23-oct-2026 | 63,12 % | quién aparece en el pueblo |

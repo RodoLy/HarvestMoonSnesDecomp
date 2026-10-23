@@ -1026,6 +1026,8 @@ static void prep_interact(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x11F1C] = (uint8_t)((rnd() % 2) ? rnd() % 24 : 16 + rnd() % 3);  /* hour */
   hm_wr16(ram, 0x0196, (uint16_t)rnd());
   hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
+  for (unsigned i = 0; i < 3; i++) ram[HM_RNG_STATE + i] = (uint8_t)rnd();
+  if (rnd() % 2) ram[0x11F61] &= (uint8_t)~0x04;                    /* $7F1F60 bit 10 */
 }
 
 /* playerinput.c: the buttons while walking. The pad (held, new, and the
@@ -1907,8 +1909,8 @@ static void prep_map_event(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   static const uint8_t seasons[] = { 0, 1, 2, 3, 3, 1 };
   ram[0x11F19] = seasons[rnd() % 6];
   static const uint8_t days[] = { 1, 0x18, 0x18, 0x0A, 0x0A, 0x07, 0x08, 0x0C, 0x0D, 0x11, 0x12,
-                                  0x19, 0x1A, 0x1C, 0x1D, 0x1E };
-  ram[0x11F1B] = (uint8_t)((rnd() % 2) ? days[rnd() % 16] : 1 + rnd() % 30);
+                                  0x19, 0x1A, 0x1C, 0x1D, 0x1E, 0x14, 0x17, 0x0C, 0x14 };
+  ram[0x11F1B] = (uint8_t)((rnd() % 2) ? days[rnd() % 20] : 1 + rnd() % 30);
   ram[0x11F1A] = (uint8_t)((rnd() % 2) ? rnd() % 7 : (rnd() % 2) * 6);   /* weekday: Sunday, Saturday */
   ram[0x11F18] = (uint8_t)((rnd() % 2) ? 0 : rnd() % 4);           /* year */
   ram[0x11F1C] = (uint8_t)(6 + rnd() % 13);                         /* hour */
@@ -1916,7 +1918,7 @@ static void prep_map_event(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x11F39, (uint16_t)((rnd() % 2) ? 0x3B + rnd() % 3 : rnd() % 0x100));
   static const uint8_t weathers[] = { 0, 1, 2, 3, 3, 4, 5, 6, 7 };
   ram[0x0098C] = weathers[rnd() % 9];                               /* tomorrow's weather */
-  if (rnd() % 4 == 0) ram[0x11F1C] = (uint8_t)(16 + rnd() % 2);     /* around 5 pm */
+  if (rnd() % 4 == 0) ram[0x11F1C] = (uint8_t)(14 + rnd() % 4);     /* around 3 and 5 pm */
   hm_wr16(ram, 0x0196, (uint16_t)rnd());
   /* the usual day: past the first event, no special day, no rain */
   if (rnd() % 4) ram[0x11F68] |= 0x01;
@@ -2149,6 +2151,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/mapevents.c", 0x83E407, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "MapEvent_E4CB", hm_MapEvent_E4CB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E4CB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_D2E0", hm_MapEvent_D2E0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83D2E0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "CODE_83F4D8", hm_CODE_83F4D8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/animals.c", 0x83F4D8, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_cow_festival },
   { "Sub_82A9A0", hm_Sub_82A9A0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,

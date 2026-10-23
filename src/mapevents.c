@@ -492,3 +492,93 @@ void hm_MapEvent_E4CB(uint8_t *ram, HmRegs *r)
   if (flag(ram, r, 0x7F1F6C, 0x0001)) { spawn(ram, r, 0, 0x1B, 1, 0xE566); return; }
   if (byte_is(ram, r, WEEKDAY, 6)) spawn(ram, r, 0, 2, 4, 0xE580);
 }
+
+/* ── D2E0, the town (maps 4-7) ──────────────────────────────────────────
+ *   - with $7F1F60 bit 10, group $14 script 3 (and the bit was meant to be
+ *     cleared: see the bug);
+ *   - fall 20 before 3 pm: slot $15's script $7E, the numbers 0-5 (and two
+ *     0s) at $09A4-$09AB shuffled, $09A2 = 0, and group $28 script 2;
+ *   - spring 23 before 3 pm group $0E; fall 12 before 3 pm group $26;
+ *     winter 10 before 5 pm group $27;
+ *   - otherwise slot $15's script $7E until $7F1F6A bit 14, and the usual
+ *     day of script 0 (nobody on the special days of $0196 bits 1 / 3 / 9
+ *     and on rain).
+ * Bug: the code clears bit 10 of $7F1F60 into the direct page ($60, STA.B)
+ * instead of $7F1F60 (STA.L), so the flag stays set and this happens
+ * every time the town is entered.
+ * The shuffle: for each of the first 7 places, swap it with a random one
+ * of 9 (RNGReturn0toA(8): 0-7, so places $09AB too).
+ * ───────────────────────────────────────────────────────────────────── */
+#define SHUFFLE 0x09A4   /* DB: */
+
+static void festival_order(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0x7E, 0);
+  static const uint8_t start[8] = { 0, 1, 2, 3, 4, 5, 0, 0 };
+  for (int i = 0; i < 8; i++) hm_bus_wr8(ram, db(r, (uint16_t)(SHUFFLE + i)), start[i]);
+  r->a = (uint16_t)((r->a & 0xFF00) | 0);
+  for (uint16_t y = 0; y != 7; y++) {
+    hm_push8(ram, r, (uint8_t)(y >> 8)); hm_push8(ram, r, (uint8_t)y);   /* PHY */
+    hm_dp_w16(ram, r, 0x84, y);
+    uint8_t here = hm_bus_rd8(ram, db(r, (uint16_t)(SHUFFLE + y)));
+    *hm_dp(ram, r, 0x95) = here;
+    r->x = y;
+    r->a = (uint16_t)((r->a & 0xFF00) | 8);
+    hm_jsl(ram, r, 0xD37D, 0x80);
+    hm_RNGReturn0toA(ram, r);
+    hm_rtl(ram, r);
+    uint16_t other = (uint8_t)r->a;                       /* XBA; LDA #0; XBA */
+    r->x = other;
+    hm_dp_w16(ram, r, 0x86, other);
+    uint8_t there = hm_bus_rd8(ram, db(r, (uint16_t)(SHUFFLE + other)));
+    hm_bus_wr8(ram, db(r, (uint16_t)(SHUFFLE + y)), there);
+    hm_bus_wr8(ram, db(r, (uint16_t)(SHUFFLE + other)), here);
+    r->a = (uint16_t)((other & 0xFF00) | here);
+    uint8_t lo = hm_pull8(ram, r);                       /* PLY */
+    r->y = (uint16_t)(lo | hm_pull8(ram, r) << 8);
+    r->c = (uint16_t)(y + 1) >= 7;
+  }
+  r->y = 7;
+  hm_bus_wr8(ram, db(r, 0x09A2), 0);
+}
+
+/* SEP #$20; season, day, hour below: a festival morning */
+static bool date_before(uint8_t *ram, HmRegs *r, uint8_t season, uint8_t day, uint8_t hour)
+{
+  if (season == 0) {
+    uint8_t s = byte_of(ram, r, SEASON);                 /* LDA; BNE */
+    if (s) return false;
+  } else if (!byte_is(ram, r, SEASON, season)) return false;
+  return byte_is(ram, r, DAY, day) && byte_below(ram, r, HOUR, hour);
+}
+
+void hm_MapEvent_D2E0(uint8_t *ram, HmRegs *r)
+{
+  if (flag(ram, r, 0x7F1F60, 0x0400)) {
+    r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F60) & 0xFBFF);
+    hm_dp_w16(ram, r, 0x60, r->a);                       /* STA.B $60: the bug */
+    spawn(ram, r, 0, 0x14, 3, 0xD2FF);
+    return;
+  }
+  if (date_before(ram, r, 2, 0x14, 0x0F)) {
+    spawn(ram, r, 0x15, 0, 0x7E, 0xD334);
+    festival_order(ram, r);
+    spawn(ram, r, 0, 0x28, 2, 0xD3B3);
+    return;
+  }
+  if (date_before(ram, r, 0, 0x17, 0x0F)) { spawn(ram, r, 0, 0x0E, 0, 0xD3DD); return; }
+  if (date_before(ram, r, 2, 0x0C, 0x0F)) { spawn(ram, r, 0, 0x26, 0, 0xD409); return; }
+  if (date_before(ram, r, 3, 0x0A, 0x11)) { spawn(ram, r, 0, 0x27, 0, 0xD435); return; }
+  if (!flag(ram, r, 0x7F1F6A, 0x4000)) spawn(ram, r, 0x15, 0, 0x7E, 0xD44E);
+  if (!flag(ram, r, 0x7F1F68, 0x0001)) { spawn(ram, r, 0, 0x0B, 0, 0xD468); return; }
+  if (flag(ram, r, db(r, FLAGS_0196), 0x0008)) return;
+  if (byte_is(ram, r, db(r, WEATHER_TOMORROW), 3)) return;
+  if (flag(ram, r, 0x7F1F64, 0x0020)) return;
+  if (flag(ram, r, db(r, FLAGS_0196), 0x0200)) return;
+  if (flag(ram, r, db(r, FLAGS_0196), 0x0002)) return;
+  uint8_t wd = byte_of(ram, r, WEEKDAY);
+  if (wd == 0) { spawn(ram, r, 0, 3, 0, 0xD4C2); return; }
+  r->c = wd >= 6;
+  if (wd == 6) { spawn(ram, r, 0, 2, 0, 0xD4D2); return; }
+  spawn(ram, r, 0, 1, 0, 0xD4B2);
+}
