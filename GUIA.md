@@ -1445,6 +1445,20 @@ bloque; acá cada una es `MapEvent_xxxx` (su dirección). Hechas hasta ahora:
 | `E690` | el 1 de primavera |
 | `E6C4` | la familia: la esposa (Ann o Eve, según $7F1F66, salvo con el bit 1 de $7F1F6E) y cada hijo (bits 2 / 3) desde los 60 días |
 | `E74C` | nada (la mayoría de los mapas desde el $3B) |
+| `D4D7`/`D5E7`, `D74E`/`D818`, `D844`/`D929`, `D955`/`DA1F`, `DB8F`/`DC1E` | las casas de las cinco chicas (dos mapas cada una): la que se casó con el jugador (su bit de $7F1F66) aparece ahí sola (grupo $22) mientras esté el bit 1 de $7F1F6E; si no, el día normal de la familia |
+| `D613`, `DA4B`, `DAED` | más gente con su día normal |
+| `DC4A` | una casa con visita: algunos días de otoño e invierno desde el año 2 (2-7, 13-17, 25-28, días de semana comunes) viene una segunda persona (slot 9, grupo $21) |
+| `DD95`, `DE64` | dos casas más, con sus primeras visitas |
+
+**El día normal.** Cada persona tiene un guion en cada uno de varios
+grupos, uno por tipo de día: $0B antes del primer evento de la historia
+(bit 0 de $7F1F68); $07 con el bit 3 de $0196; $01 cuando el clima de
+mañana es 6 o más; $06 con lluvia (clima 3) o el bit 5 de $7F1F64; $08 con
+el bit 9 de $0196; $04 con el bit 1 de $0196; algunos tienen $02 / $03
+para sábado / domingo; y $01 cualquier otro día. El 10 de invierno antes
+de las 5 de la tarde algunos van al grupo $27, y el 24 de invierno al $0F.
+La primera visita de una persona (grupo $0B) marca su bit en $7F1F68 para
+que se vea una sola vez.
 
 ---
 
@@ -1637,3 +1651,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 59,66 % | el objeto con sprite del jugador, el cursor de la pantalla del nombre |
 | 23-oct-2026 | 59,85 % | el comienzo del final: la vaca preferida y el porcentaje de desarrollo del rancho |
 | 23-oct-2026 | 60,23 % | quién aparece en cada mapa: las 13 primeras rutinas |
+| 23-oct-2026 | 62,32 % | quién aparece en cada mapa: las casas (16 rutinas más) |

@@ -138,6 +138,22 @@ MANUAL = {
     0x82EB57: "SUB_82EB57",   # the name screen's cursor
     0x83F4D8: "CODE_83F4D8",  # the start of the ending
     # UNK_TableFunctionSelect's routines: who appears on entering each map
+    0x83D844: "MapEvent_D844",
+    0x83D929: "MapEvent_D929",
+    0x83D955: "MapEvent_D955",
+    0x83DA1F: "MapEvent_DA1F",
+    0x83DA4B: "MapEvent_DA4B",
+    0x83DAED: "MapEvent_DAED",
+    0x83DB8F: "MapEvent_DB8F",
+    0x83DC1E: "MapEvent_DC1E",
+    0x83DC4A: "MapEvent_DC4A",
+    0x83DD95: "MapEvent_DD95",
+    0x83DE64: "MapEvent_DE64",
+    0x83D4D7: "MapEvent_D4D7",
+    0x83D5E7: "MapEvent_D5E7",
+    0x83D613: "MapEvent_D613",
+    0x83D74E: "MapEvent_D74E",
+    0x83D818: "MapEvent_D818",
     0x83E586: "MapEvent_E586",
     0x83E5A2: "MapEvent_E5A2",
     0x83E5B4: "MapEvent_E5B4",

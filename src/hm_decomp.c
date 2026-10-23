@@ -1903,18 +1903,48 @@ static void prep_cow_festival(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 static void prep_map_event(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   (void)r;
-  for (uint32_t a = 0x11F64; a < 0x11F76; a++) ram[a] = (uint8_t)rnd();
-  static const uint8_t seasons[] = { 0, 1, 2, 3, 3, 0 };
+  for (uint32_t a = 0x11F5E; a < 0x11F76; a++) ram[a] = (uint8_t)rnd();
+  static const uint8_t seasons[] = { 0, 1, 2, 3, 3, 1 };
   ram[0x11F19] = seasons[rnd() % 6];
-  static const uint8_t days[] = { 1, 0x18, 0x18, 1, 0x0E, 0x1E, 0x14, 0x17 };
-  ram[0x11F1B] = (uint8_t)((rnd() % 2) ? days[rnd() % 8] : 1 + rnd() % 30);
-  ram[0x11F1A] = (uint8_t)(rnd() % 7);                              /* weekday */
-  ram[0x11F18] = (uint8_t)(rnd() % 4);                              /* year */
+  static const uint8_t days[] = { 1, 0x18, 0x18, 0x0A, 0x0A, 0x07, 0x08, 0x0C, 0x0D, 0x11, 0x12,
+                                  0x19, 0x1A, 0x1C, 0x1D, 0x1E };
+  ram[0x11F1B] = (uint8_t)((rnd() % 2) ? days[rnd() % 16] : 1 + rnd() % 30);
+  ram[0x11F1A] = (uint8_t)((rnd() % 2) ? rnd() % 7 : (rnd() % 2) * 6);   /* weekday: Sunday, Saturday */
+  ram[0x11F18] = (uint8_t)((rnd() % 2) ? 0 : rnd() % 4);           /* year */
   ram[0x11F1C] = (uint8_t)(6 + rnd() % 13);                         /* hour */
   hm_wr16(ram, 0x11F37, (uint16_t)((rnd() % 2) ? 0x3B + rnd() % 3 : rnd() % 0x100));
   hm_wr16(ram, 0x11F39, (uint16_t)((rnd() % 2) ? 0x3B + rnd() % 3 : rnd() % 0x100));
-  ram[0x0098C] = (uint8_t)(rnd() % 6);                              /* weather */
+  static const uint8_t weathers[] = { 0, 1, 2, 3, 3, 4, 5, 6, 7 };
+  ram[0x0098C] = weathers[rnd() % 9];                               /* tomorrow's weather */
+  if (rnd() % 4 == 0) ram[0x11F1C] = (uint8_t)(16 + rnd() % 2);     /* around 5 pm */
   hm_wr16(ram, 0x0196, (uint16_t)rnd());
+  /* the usual day: past the first event, no special day, no rain */
+  if (rnd() % 4) ram[0x11F68] |= 0x01;
+  static const uint16_t special[] = { 0x0002, 0x0008, 0x0200 };
+  for (unsigned i = 0; i < 3; i++)
+    if (rnd() % 4) hm_wr16(ram, 0x0196, (uint16_t)(hm_rd16(ram, 0x0196) & ~special[i]));
+  if (rnd() % 4) ram[0x11F64] &= (uint8_t)~0x20;
+  /* the other people's first visits, mostly seen */
+  if (rnd() % 4) ram[0x11F68] |= (uint8_t)((rnd() % 4) ? 0x0E : 0x06);
+  if (rnd() % 2) ram[0x11F69] |= 0x20;                              /* $7F1F68 bit 13 */
+  if (rnd() % 2) { ram[0x11F5E] &= (uint8_t)~0x30; ram[0x11F6C] &= (uint8_t)~0x14; }
+}
+
+/* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
+ * or winter, an ordinary weekday) */
+static void prep_map_event_dc4a(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_map_event(ram, r, rnd);
+  if (rnd() % 4 == 0) return;
+  ram[0x11F68] |= 0x04;
+  ram[0x11F5E] &= (uint8_t)~0x20;
+  ram[0x11F6C] &= (uint8_t)~0x14;
+  ram[0x11F18] = (uint8_t)(1 + rnd() % 3);
+  ram[0x11F19] = (uint8_t)(2 + rnd() % 2);
+  ram[0x11F1B] = (uint8_t)(1 + rnd() % 30);
+  hm_wr16(ram, 0x0196, (uint16_t)(hm_rd16(ram, 0x0196) & ~0x001Au));
+  ram[0x11F6B] &= (uint8_t)~0x02;
+  ram[0x11F1A] = (uint8_t)(1 + rnd() % 5);
 }
 
 /* objects.c: InvertIfFliped: an offset and the flip bits. */
@@ -2077,6 +2107,38 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/mapevents.c", 0x83E6C4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "MapEvent_E74C", hm_MapEvent_E74C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E74C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_D4D7", hm_MapEvent_D4D7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83D4D7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_D5E7", hm_MapEvent_D5E7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83D5E7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_D613", hm_MapEvent_D613, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83D613, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_D74E", hm_MapEvent_D74E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83D74E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_D818", hm_MapEvent_D818, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83D818, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_D844", hm_MapEvent_D844, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83D844, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_D929", hm_MapEvent_D929, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83D929, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_D955", hm_MapEvent_D955, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83D955, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_DA1F", hm_MapEvent_DA1F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83DA1F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_DA4B", hm_MapEvent_DA4B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83DA4B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_DAED", hm_MapEvent_DAED, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83DAED, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_DB8F", hm_MapEvent_DB8F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83DB8F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_DC1E", hm_MapEvent_DC1E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83DC1E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_DC4A", hm_MapEvent_DC4A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83DC4A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event_dc4a },
+  { "MapEvent_DD95", hm_MapEvent_DD95, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83DD95, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_DE64", hm_MapEvent_DE64, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83DE64, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "CODE_83F4D8", hm_CODE_83F4D8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/animals.c", 0x83F4D8, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_cow_festival },
   { "Sub_82A9A0", hm_Sub_82A9A0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,

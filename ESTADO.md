@@ -122,6 +122,7 @@ en el README (`tools/progress.py`).
 | CODE_81CFA0 / 81CFE6 / 81D03D (el objeto del jugador), SUB_82EB57 (cursor del nombre) | $81:CFA0-D060, $82:EB57 | src/objects.c, menus.c |
 | CODE_83F4D8 (comienzo del final: la vaca preferida, el % de desarrollo) | $83:F4D8 | src/animals.c |
 | MapEvent_E586 ... E74C (13 rutinas de quién aparece en cada mapa) | $83:E586-$83:E74C | src/mapevents.c |
+| MapEvent_D4D7 ... DE64 (16 rutinas: las casas) | $83:D4D7-$83:DE9A | src/mapevents.c |
 | GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |

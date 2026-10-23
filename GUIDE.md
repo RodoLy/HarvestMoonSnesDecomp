@@ -1408,6 +1408,19 @@ address). Done so far:
 | `E690` | on spring 1 |
 | `E6C4` | the family: the wife (Ann or Eve, by $7F1F66, unless $7F1F6E bit 1), and each child (bits 2 / 3) once 60 days old |
 | `E74C` | nothing (most maps from $3B on) |
+| `D4D7`/`D5E7`, `D74E`/`D818`, `D844`/`D929`, `D955`/`DA1F`, `DB8F`/`DC1E` | the five girls' houses (two maps each): the girl the player married ($7F1F66 bit) appears there alone (group $22) while $7F1F6E bit 1 is set; otherwise the family's usual day |
+| `D613`, `DA4B`, `DAED` | more people with a usual day |
+| `DC4A` | a house with a visitor: on some days of fall and winter from year 2 on (2-7, 13-17, 25-28, ordinary weekdays) a second person comes (slot 9, group $21) |
+| `DD95`, `DE64` | two more houses, with their first visits |
+
+**The usual day.** Each person has one script in each of several groups,
+one per kind of day: $0B before the first event of the story
+($7F1F68 bit 0); $07 with $0196 bit 3; $01 when tomorrow's weather is 6 or
+more; $06 with rain (weather 3) or $7F1F64 bit 5; $08 with $0196 bit 9;
+$04 with $0196 bit 1; some have $02 / $03 for Saturday / Sunday; and $01
+any other day. On winter 10 before 5 pm some go to group $27, on winter 24
+to group $0F. A person's first visit (group $0B) sets its bit in
+$7F1F68 so it is only seen once.
 
 ---
 
@@ -1594,3 +1607,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 59.66 % | the player's game object, the name screen's cursor |
 | 23-Oct-2026 | 59.85 % | the start of the ending: the favourite cow and the ranch development percentage |
 | 23-Oct-2026 | 60.23 % | who appears on each map: the first 13 routines |
+| 23-Oct-2026 | 62.32 % | who appears on each map: the houses (16 more routines) |
