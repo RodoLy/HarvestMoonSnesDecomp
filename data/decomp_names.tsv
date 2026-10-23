@@ -606,6 +606,7 @@
 04C7D6	CODE_84C7D6_lo
 858000	CreateGameObject
 058000	CreateGameObject_lo
+8581A2	CODE_8581A2
 85820F	InitializeOBJs
 05820F	InitializeOBJs_lo
 058377	GetOBJOrderToDraw_lo
@@ -614,7 +615,13 @@
 058647	PresetsWRAMCopyofOAM_lo
 858AE5	LoadGameObjectComponents
 058AE5	LoadGameObjectComponents_lo
+858B41	CODE_858B41
+058B41	CODE_858B41_lo
+858B7B	CODE_858B7B
+058B7B	CODE_858B7B_lo
 858C30	LoadSpriteComponent
 058C30	LoadSpriteComponent_lo
+858C9F	CODE_858C9F
+058C9F	CODE_858C9F_lo
 858ED7	ClearSpriteDataTables
 058ED7	ClearSpriteDataTables_lo

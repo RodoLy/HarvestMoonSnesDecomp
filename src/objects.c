@@ -288,3 +288,118 @@ void hm_UNK_PresetsMemory3(uint8_t *ram, HmRegs *r)
   r->y = 0;
   r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Destroying a game object.
+ *
+ * CODE_8581A2 ($85:81A2, JSL, RTL): object $A5 ($A9 = its offset, from
+ * Table_GameOBJIndexes at $85:8BE0). If one of its pieces is still waiting
+ * in the loader's queue (slot $FF), nothing can be freed yet: $0740 counts
+ * one more postponed destruction, $AF = A = $FFFF and it returns. Otherwise
+ * every piece gives its graphics slot back, the record is freed (+0 = 0)
+ * and A = its +0E. The callers do not retry: the object simply stays.
+ *
+ * CODE_858B7B ($85:8B7B, JSR, RTS): the check, $AF = 0 (all loaded) or
+ * $FFFF. CODE_858B41 ($85:8B41, JSR, RTS): the freeing; each piece's slot
+ * byte becomes $FF. CODE_858C9F ($85:8C9F, JSR, RTS): one user less for
+ * slot $B3 ($7E:A320 + 4 slot).
+ * Bug: CODE_858C9F waits while the slot's count is 0 ("LDA; BEQ" to
+ * itself), which would hang the game; a slot in use is never at 0, so it
+ * does not happen. The rewrite does not wait (the fuzz never gives 0).
+ * Leftovers: see each one; C = 1 at the end of the loops (CPY / CMP).
+ * ───────────────────────────────────────────────────────────────────────── */
+#define GOBJ_OFFSETS    0x858BE0
+#define POSTPONED_FREES 0x0740     /* DB: */
+
+void hm_CODE_858C9F(uint8_t *ram, HmRegs *r)
+{
+  uint16_t slot = hm_dp_r16(ram, r, 0xB3);
+  r->c = (slot >> 14) & 1;                                 /* the second ASL */
+  r->x = (uint16_t)(slot << 2);
+  uint32_t users = (SLOT_USERS + r->x) & 0xFFFFFF;
+  r->a = (uint16_t)(hm_bus_rd16(ram, users) - 1);
+  hm_bus_wr16(ram, users, r->a);
+}
+
+/* LDA #0; XBA; LDA +13,X (8-bit), TAY: the number of pieces */
+static uint16_t pieces_of(uint8_t *ram, HmRegs *r, uint16_t x)
+{
+  r->a = hm_bus_rd8(ram, abs_x(r, GOBJ + 0x13, x));
+  return r->a;
+}
+
+void hm_CODE_858B7B(uint8_t *ram, HmRegs *r)
+{
+  uint16_t x = hm_dp_r16(ram, r, 0xA9);
+  uint16_t y = pieces_of(ram, r, x);
+  for (;;) {
+    r->c = 1;                                              /* CPY #0 */
+    if (y == 0) {
+      r->a = 0;
+      hm_dp_w16(ram, r, 0xAF, 0);
+      break;
+    }
+    uint8_t slot = hm_bus_rd8(ram, abs_x(r, GOBJ + 0x14, x));
+    r->a = (uint16_t)((r->a & 0xFF00) | slot);
+    r->c = slot == 0xFF;                                   /* CMP #$FF */
+    if (slot == 0xFF) {                                    /* still queued */
+      uint32_t waits = abs_db(r, POSTPONED_FREES);
+      hm_bus_wr16(ram, waits, (uint16_t)(hm_bus_rd16(ram, waits) + 1));
+      r->a = 0xFFFF;
+      hm_dp_w16(ram, r, 0xAF, 0xFFFF);
+      break;
+    }
+    x++; y--;
+  }
+  r->x = x; r->y = y;
+}
+
+#define RET_B41_SLOT 0x8B6B   /* JSR CODE_858C9F at $85:8B69 */
+
+void hm_CODE_858B41(uint8_t *ram, HmRegs *r)
+{
+  uint16_t x = hm_dp_r16(ram, r, 0xA9);
+  uint16_t y = pieces_of(ram, r, x);
+  while (y != 0) {
+    uint8_t slot = hm_bus_rd8(ram, abs_x(r, GOBJ + 0x14, x));
+    r->a = (uint16_t)((r->a & 0xFF00) | slot);
+    if (slot != 0xFF) {
+      *hm_dp(ram, r, 0xB3) = slot;
+      *hm_dp(ram, r, 0xB4) = 0;
+      r->a = (uint16_t)((r->a & 0xFF00) | 0xFF);
+      hm_bus_wr8(ram, abs_x(r, GOBJ + 0x14, x), 0xFF);
+      push16(ram, r, y); push16(ram, r, x);                /* PHY; PHX */
+      push16(ram, r, RET_B41_SLOT);
+      hm_CODE_858C9F(ram, r);
+      pull16(ram, r);
+      x = pull16(ram, r); y = pull16(ram, r);              /* PLX; PLY */
+    }
+    x++; y--;
+  }
+  r->c = 1;                                                /* CPY #0 */
+  r->x = hm_dp_r16(ram, r, 0xA9);
+  r->y = 0;
+}
+
+#define RET_1A2_CHECK 0x81B0
+#define RET_1A2_FREE  0x81BA
+
+void hm_CODE_8581A2(uint8_t *ram, HmRegs *r)
+{
+  uint16_t n = hm_dp_r16(ram, r, 0xA5);
+  r->c = (n >> 15) & 1;                                    /* ASL */
+  r->x = (uint16_t)(n << 1);
+  uint16_t obj = hm_bus_rd16(ram, (GOBJ_OFFSETS + r->x) & 0xFFFFFF);
+  hm_dp_w16(ram, r, 0xA9, obj);
+  push16(ram, r, RET_1A2_CHECK);
+  hm_CODE_858B7B(ram, r);
+  pull16(ram, r);
+  r->a = hm_dp_r16(ram, r, 0xAF);
+  if (r->a) return;                                        /* JMP to an RTL */
+  push16(ram, r, RET_1A2_FREE);
+  hm_CODE_858B41(ram, r);
+  pull16(ram, r);
+  r->x = hm_dp_r16(ram, r, 0xA9);
+  hm_bus_wr16(ram, abs_x(r, GOBJ, r->x), 0);
+  r->a = hm_bus_rd16(ram, abs_x(r, GOBJ + 0x0E, r->x));
+}

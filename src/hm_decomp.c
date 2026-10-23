@@ -1546,6 +1546,40 @@ static void prep_shipping(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x11F09] = (uint8_t)((rnd() % 2) ? 0 : rnd());
 }
 
+/* objects.c / events.c: destroying game objects. 40 objects with 0-5
+ * pieces, each in a graphics slot 0-$3F or still queued ($FF, 1 in 6);
+ * every slot's count well above 0 (at 0 CODE_858C9F would wait forever); the
+ * object $A5 / $A9 and slot $B3 to work on; every event slot's +12 an
+ * object number, and the commands' arguments. */
+static void prep_destroy(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  for (unsigned i = 0; i < 40; i++) {
+    uint8_t *o = &ram[0x019C + 0x24 * i];
+    uint8_t pieces = (uint8_t)(rnd() % 6);
+    o[0x13] = pieces;
+    for (unsigned p = 0; p < pieces; p++) o[0x14 + p] = (uint8_t)((rnd() % 6) ? rnd() % 0x40 : 0xFF);
+  }
+  /* high enough for every piece that may share the slot */
+  for (unsigned s = 0; s < 0x40; s++) hm_wr16(ram, 0x0A320 + 4 * s, (uint16_t)(40 + rnd() % 200));
+  hm_wr16(ram, 0xA5, (uint16_t)(rnd() % 40));
+  hm_wr16(ram, 0xA9, (uint16_t)(0x24 * (rnd() % 40)));
+  hm_wr16(ram, 0xB3, (uint16_t)(rnd() % 0x40));
+  hm_wr16(ram, 0x0740, (uint16_t)rnd());
+  for (unsigned s = 0; s < 0x31; s++) hm_wr16(ram, 0x0B586 + 64 * s + 0x12, (uint16_t)(rnd() % 40));
+  r->a = (uint16_t)(rnd() % 0x31);                          /* SUB_848020: a slot */
+}
+static void prep_destroy_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_cmd(ram, r, rnd);
+  prep_destroy(ram, r, rnd);
+  uint16_t slot = hm_rd16(ram, 0xCC);
+  hm_wr16(ram, slot + 0x12, (uint16_t)(rnd() % 40));
+  uint16_t at = hm_rd16(ram, 0xC9);
+  ram[0x10000 + at + 1] = (uint8_t)(rnd() % 0x31);          /* Event_UNKCCchanges7 */
+  ram[0x10000 + at + 2] |= 0x80;     /* Event_UNKCCchanges11: <word> is a table in the ROM ($B3:8000-) */
+  hm_wr16(ram, 0x72, (uint16_t)(0x8000 + (rnd() & 0x7FFF))); ram[0x74] = 0xB3;   /* SUB_848895 */
+}
+
 /* menus.c: the name screen, menu 1 and mode 6, and InputTypeSelector
  * (every input mode). The page and cell of the name grid, the letters
  * typed, the pad, the mode and the menu. */
@@ -2440,6 +2474,24 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/shipping.c", 0x828131, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_shipping },
   { "ShippingSceneDialogue", hm_ShippingSceneDialogue, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/shipping.c", 0x828165, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_shipping },
+  { "CODE_858C9F", hm_CODE_858C9F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/objects.c", 0x858C9F, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy },
+  { "CODE_858B7B", hm_CODE_858B7B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/objects.c", 0x858B7B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy },
+  { "CODE_858B41", hm_CODE_858B41, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/objects.c", 0x858B41, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy },
+  { "CODE_8581A2", hm_CODE_8581A2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/objects.c", 0x8581A2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy },
+  { "SUB_848895", hm_SUB_848895, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/events.c", 0x848895, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy_cmd },
+  { "SUB_848020", hm_SUB_848020, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/events.c", 0x848020, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy },
+  { "Event_UNK1", hm_Event_UNK1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B34B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy_cmd },
+  { "Event_UNKCCchanges7", hm_Event_UNKCCchanges7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849375, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy_cmd },
+  { "Event_UNKCCchanges11", hm_Event_UNKCCchanges11, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x849810, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy_cmd },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

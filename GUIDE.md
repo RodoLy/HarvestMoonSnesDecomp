@@ -709,6 +709,13 @@ down, script $17/$14 starts). Its requests are bits of $7F1F5C:
   is reused; otherwise it goes to a queue the NMI empties.
 - **Map objects** (`$7E:B4E6`, 10): the effects tools leave, like cut grass
   or the hit on a rock.
+- **Destroying one** (`CODE_8581A2`, `src/objects.c`): each graphics slot
+  counts how many pieces use it ($7E:A320); destroying an object gives its
+  pieces' slots back and frees the record. But if one of its pieces is
+  still waiting in the queue, nothing is freed: $0740 counts one more
+  refusal and the object simply stays. Scripts destroy objects with
+  commands `Event_UNK1` (their own) and `Event_UNKCCchanges7` (another
+  slot's).
 
 ### 5.13 The ending
 
@@ -1321,6 +1328,10 @@ Things the game does wrong or oddly, found while decompiling:
 22. **A sum thrown away.** The flower shop's shelf loops do `TYA; CLC;
     ADC #5` and then `TYA` again, so the sum is lost and the item is just
     Y + 1. Maybe the shelves were meant to start at item 5 at first.
+23. **A loop that never ends.** When a piece gives its graphics slot back,
+    the game waits while the slot's counter is 0 before lowering it (`LDA;
+    BEQ` to itself, `CODE_858C9F`). At 0 it would hang forever; it never
+    happens because a slot being given back is always in use.
 
 ## 7. Differences found in the recompilation
 
@@ -1416,3 +1427,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 48.18 % | the farm's copy of the field, freeing all the script slots, the multiplication |
 | 22-Oct-2026 | 50.23 % | what each map gets when it loads (39 routines); past half of the code |
 | 22-Oct-2026 | 52.99 % | the music and the uploads to the sound chip (13 routines), the shipping at 5 pm, the player's actions, points into hearts |
+| 23-Oct-2026 | 53.48 % | destroying a game object, and the script commands that do it |

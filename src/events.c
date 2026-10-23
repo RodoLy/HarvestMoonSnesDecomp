@@ -196,3 +196,46 @@ void hm_ClearsofAllCCStructs(uint8_t *ram, HmRegs *r)
   r->x = 0x31;
   r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_848895 ($84:8895, JSL, RTL): the slot's animation from a table at
+ * [$72]: 3 bytes per entry, entry = the slot's +02. The word goes to +16,
+ * the byte (x 64) to +14.
+ * Leftovers: $7E = the entry, A = byte x 64, Y = $14, C = 0.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_SUB_848895(uint8_t *ram, HmRegs *r)
+{
+  uint16_t entry = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x02));
+  hm_dp_w16(ram, r, 0x7E, entry);
+  uint16_t y = (uint16_t)(entry * 3);
+  uint16_t word = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, y));
+  hm_push8(ram, r, (uint8_t)(y >> 8)); hm_push8(ram, r, (uint8_t)y);   /* PHY */
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x16), word);
+  hm_pull8(ram, r); hm_pull8(ram, r);                                  /* PLY */
+  r->a = (uint16_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, (uint16_t)(y + 2))) << 6);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x14), r->a);
+  r->y = 0x14;
+  r->c = 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_848020 ($84:8020, JSL, RTL): frees slot A (its +00 = 0, through
+ * SetCCPoiner: $CC-$CE then point at it) and destroys its game object (the
+ * slot's +12, CODE_8581A2).
+ * Leftovers: those of CODE_8581A2.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_SUB_848020(uint8_t *ram, HmRegs *r)
+{
+  hm_jsl(ram, r, 0x8025, 0x84);
+  hm_SetCCPoiner(ram, r);
+  hm_rtl(ram, r);
+  r->y = 0;
+  r->a &= 0xFF00;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0), 0);
+  r->y = 0x12;
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x12));
+  hm_dp_w16(ram, r, 0xA5, r->a);
+  hm_jsl(ram, r, 0x803D, 0x85);
+  hm_CODE_8581A2(ram, r);
+  hm_rtl(ram, r);
+}

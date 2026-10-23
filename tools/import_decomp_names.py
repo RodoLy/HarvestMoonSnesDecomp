@@ -120,6 +120,10 @@ MANUAL = {
     0x81D6E2: "CODE_81D6E2",  # interact.c (CODE_ labels are not imported)
     0x81D6F8: "CODE_81D6F8",
     0x81D1C5: "CODE_81D1C5",  # people.c
+    0x8581A2: "CODE_8581A2",  # objects.c: destroying a game object
+    0x858B7B: "CODE_858B7B",
+    0x858B41: "CODE_858B41",
+    0x858C9F: "CODE_858C9F",
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

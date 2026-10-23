@@ -553,6 +553,15 @@ void hm_UNK_PresetsMemory3(uint8_t *ram, HmRegs *r);
 void hm_ActionNothing(uint8_t *ram, HmRegs *r);
 void hm_ShippingScene(uint8_t *ram, HmRegs *r);       /* shipping.c */
 void hm_ShippingSceneDialogue(uint8_t *ram, HmRegs *r);
+void hm_CODE_858C9F(uint8_t *ram, HmRegs *r);
+void hm_CODE_858B7B(uint8_t *ram, HmRegs *r);
+void hm_CODE_858B41(uint8_t *ram, HmRegs *r);
+void hm_CODE_8581A2(uint8_t *ram, HmRegs *r);
+void hm_SUB_848895(uint8_t *ram, HmRegs *r);
+void hm_SUB_848020(uint8_t *ram, HmRegs *r);
+void hm_Event_UNK1(uint8_t *ram, HmRegs *r);
+void hm_Event_UNKCCchanges7(uint8_t *ram, HmRegs *r);
+void hm_Event_UNKCCchanges11(uint8_t *ram, HmRegs *r);
 void hm_UNK_SetPointer42(uint8_t *ram, HmRegs *r); /* coloranim.c */
 void hm_UNK_BigLoop(uint8_t *ram, HmRegs *r);
 void hm_Zeroes42Pointers(uint8_t *ram, HmRegs *r);

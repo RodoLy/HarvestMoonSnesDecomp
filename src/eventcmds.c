@@ -2137,3 +2137,69 @@ void hm_Event_UNKTools(uint8_t *ram, HmRegs *r)
   to_shed(ram, r, 0x0921);
   to_shed(ram, r, 0x0923);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Destroying objects from a script.
+ * Event_UNK1 ($84:B34B): the slot's own game object (+12).
+ * Event_UNKCCchanges7 ($84:9375): <slot>: frees that slot and destroys
+ * its object, then goes back to its own slot ($72-$74 keep it meanwhile).
+ * Event_UNKCCchanges11 ($84:9810): <word>: +33 = the word, then the
+ * animation from the table at $B3:<word> (SUB_848895), and +01 bit 2.
+ * (JSR, RTS each, like every command.)
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_Event_UNK1(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->y = 0x12;
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x12));
+  hm_dp_w16(ram, r, 0xA5, r->a);
+  hm_jsl(ram, r, 0xB363, 0x85);
+  hm_CODE_8581A2(ram, r);
+  hm_rtl(ram, r);
+}
+
+void hm_Event_UNKCCchanges7(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  hm_dp_w16(ram, r, 0x72, hm_dp_r16(ram, r, 0xCC));      /* keep our slot */
+  *hm_dp(ram, r, 0x74) = *hm_dp(ram, r, 0xCE);
+  arg8_word(ram, r);                                       /* the other slot */
+  hm_jsl(ram, r, 0x9397, 0x84);
+  hm_SetCCPoiner(ram, r);
+  hm_rtl(ram, r);
+  advance(ram, r, 1);
+  r->y = 0;
+  r->a &= 0xFF00;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0), 0);
+  r->y = 0x12;
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x12));
+  hm_dp_w16(ram, r, 0xA5, r->a);
+  hm_jsl(ram, r, 0x93BB, 0x85);
+  hm_CODE_8581A2(ram, r);
+  hm_rtl(ram, r);
+  r->a = hm_dp_r16(ram, r, 0x72);                          /* back to ours */
+  hm_dp_w16(ram, r, 0xCC, r->a);
+  r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, 0x74));
+  *hm_dp(ram, r, 0xCE) = (uint8_t)r->a;
+}
+
+void hm_Event_UNKCCchanges11(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  uint16_t word = arg16(ram, r);
+  r->y = 0x33;
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x33), word);
+  advance(ram, r, 2);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x33));
+  hm_dp_w16(ram, r, 0x72, r->a);
+  r->a = (uint16_t)((r->a & 0xFF00) | 0xB3);
+  *hm_dp(ram, r, 0x74) = 0xB3;
+  hm_jsl(ram, r, 0x9841, 0x84);
+  hm_SUB_848895(ram, r);
+  hm_rtl(ram, r);
+  r->y = 1;
+  uint8_t flags = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x01)) | 0x04);
+  r->a = (uint16_t)((r->a & 0xFF00) | flags);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x01), flags);
+}
+

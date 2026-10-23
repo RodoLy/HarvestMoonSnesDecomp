@@ -717,6 +717,13 @@ $7F1F5C:
   se reutiliza; si no, va a una cola que vacía el NMI.
 - **Objetos del mapa** (`$7E:B4E6`, 10): los efectos que dejan las
   herramientas, como la hierba cortada o el golpe en la piedra.
+- **Destruir uno** (`CODE_8581A2`, `src/objects.c`): cada hueco de
+  gráficos cuenta cuántas piezas lo usan ($7E:A320); destruir un objeto
+  devuelve los huecos de sus piezas y libera el registro. Pero si alguna
+  de sus piezas aún espera en la cola, no se libera nada: $0740 cuenta un
+  rechazo más y el objeto simplemente se queda. Los guiones destruyen
+  objetos con los comandos `Event_UNK1` (el suyo) y `Event_UNKCCchanges7`
+  (el de otro slot).
 
 ### 5.13 El final
 
@@ -1353,6 +1360,11 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     hacen `TYA; CLC; ADC #5` y luego otra vez `TYA`, así que la suma se
     pierde y el objeto es solo Y + 1. Quizá al principio los estantes
     empezaban en el objeto 5.
+23. **Un bucle que nunca termina.** Cuando una pieza devuelve su hueco
+    de gráficos, el juego espera mientras el contador del hueco sea 0 antes
+    de bajarlo (`LDA; BEQ` a sí mismo, `CODE_858C9F`). Con 0 se colgaría
+    para siempre; no pasa porque un hueco que se devuelve siempre está en
+    uso.
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -1450,3 +1462,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 48,18 % | la copia del campo de la granja, liberar todos los slots de guion, la multiplicación |
 | 22-oct-2026 | 50,23 % | lo que recibe cada mapa al cargarse (39 rutinas); ya pasa de la mitad del código |
 | 22-oct-2026 | 52,99 % | la música y las subidas al chip de sonido (13 rutinas), el envío de las 5, las acciones del jugador, de puntos a corazones |
+| 23-oct-2026 | 53,48 % | destruir un objeto con sprite, y los comandos de guion que lo hacen |
