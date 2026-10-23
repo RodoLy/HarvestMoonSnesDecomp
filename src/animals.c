@@ -855,3 +855,33 @@ void hm_PlaceAnimalsOnMap(uint8_t *ram, HmRegs *r)
     ram[0x0939] = 0;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UnusedBarnCoopCheck ($83:C9BA, JSL, RTL) and the routine right after its
+ * RTL ($83:C9E5): how many chickens (of 13) / cows (of 12) there are, the
+ * records whose bit 0 of the first byte is set. Nothing calls them (an early
+ * version of the count; the game counts elsewhere).
+ * Leftovers: A = Y = the count, X = 13 / 12, C = 1 (CPX).
+ * ───────────────────────────────────────────────────────────────────────── */
+static void count_animals(uint8_t *ram, HmRegs *r, uint16_t slots, uint16_t ret,
+                          void (*pointer)(uint8_t *, HmRegs *))
+{
+  uint16_t count = 0;
+  for (uint16_t x = 0; x != slots; x++) {
+    hm_push8(ram, r, (uint8_t)(count >> 8)); hm_push8(ram, r, (uint8_t)count);  /* PHY */
+    hm_push8(ram, r, (uint8_t)(x >> 8)); hm_push8(ram, r, (uint8_t)x);          /* PHX */
+    r->a = x;                                                                   /* TXA */
+    hm_jsl(ram, r, ret, 0x83);
+    pointer(ram, r);
+    hm_rtl(ram, r);
+    hm_pull8(ram, r); hm_pull8(ram, r);                                         /* PLX */
+    hm_pull8(ram, r); hm_pull8(ram, r);                                         /* PLY */
+    if (hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, 0)) & 1) count++;
+  }
+  r->x = slots;
+  r->y = count;
+  r->a = count;                                                                 /* TYA */
+  r->c = 1;
+}
+void hm_UnusedBarnCoopCheck(uint8_t *ram, HmRegs *r) { count_animals(ram, r, 13, 0xC9C8, hm_GetChickenPointer); }
+void hm_UnusedBarnCheck(uint8_t *ram, HmRegs *r)     { count_animals(ram, r, 12, 0xC9F3, hm_GetsCowPointer); }

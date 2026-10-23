@@ -87,6 +87,7 @@ MANUAL = {
     0x84C000: "Event_Cmd59",
     0x8493C9: "Event_ResetFlag",   # HM-Decomp says 8093C9
     0x84BA10: "Event_EditTileonMap",  # no address in HM-Decomp
+    0x83C9E5: "UnusedBarnCheck",  # after UnusedBarnCoopCheck's RTL, no label
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

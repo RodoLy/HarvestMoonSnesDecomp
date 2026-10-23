@@ -465,6 +465,12 @@ Fuera de su estación, la casilla queda como brote muerto.
 **Animales nuevos.** `AddNewCow` y `AddNewChicken` buscan el primer
 registro libre. Una vaca nacida en la granja te da +70 de felicidad.
 
+**Contarlos, sin usar.** Justo después de los punteros a los registros hay
+dos rutinas que cuentan los animales: `UnusedBarnCoopCheck` ($83:C9BA) las
+gallinas en uso (bit 0 del registro, de 13) y, justo después de su RTL y
+sin etiqueta propia, `UnusedBarnCheck` ($83:C9E5) las vacas (de 12). Nada
+las llama: parecen una primera versión, y el juego cuenta en otro sitio.
+
 **Al entrar a un mapa** (`PlaceAnimalsOnMap`), cada gallina, vaca, el perro
 y el caballo que esté ahí arranca su guion. "Está ahí" agrupa mapas:
 
@@ -1306,3 +1312,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 40,54 % | cinco comandos de evento más (textos, apagar un bit, una baldosa, el cobertizo); ya está más de la mitad de las rutinas |
 | 22-oct-2026 | 47,73 % | las animaciones de colores: 57 rutinas (51 de ellas, pequeñas, de una tabla) |
 | 22-oct-2026 | 47,87 % | leer el mando (los botones apretados, soltados, y la autorrepetición de los menús) |
+| 22-oct-2026 | 47,97 % | dos rutinas sin usar que cuentan las gallinas y las vacas |

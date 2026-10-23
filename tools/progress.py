@@ -85,6 +85,7 @@ LOCAL = {
     0x82EA60: ("Unk_OutOfMenu", "Unk_OutOfMenu"),
     0x8493C9: ("Event_ResetFlagDD", "Event_ResetFlag"),  # three labels on the same code
     0x84BA10: ("Event_EditTileonMap", "Event_EditTileonMap"),
+    0x83C9E5: (".barncheck", "UnusedBarnCheck"),      # after UnusedBarnCoopCheck's RTL
     0x80C3D9: ("SUB_80C3D9", "SUB_80C3D9"),
     0x80C446: ("SUB_80C446", "SUB_80C446"),
     0x80C4B3: ("SUB_80C4B3", "SUB_80C4B3"),

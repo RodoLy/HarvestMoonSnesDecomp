@@ -461,6 +461,12 @@ Out of season the tile ends up as a dead sprout.
 **New animals.** `AddNewCow` and `AddNewChicken` look for the first free
 record. A cow born on the farm gives you +70 happiness.
 
+**Counting them, unused.** Right after the slot pointers there are two
+routines that count the animals: `UnusedBarnCoopCheck` ($83:C9BA) the
+chickens in use (bit 0 of the record, of 13) and, right after its RTL with
+no label of its own, `UnusedBarnCheck` ($83:C9E5) the cows (of 12). Nothing
+calls them: they look like a first version, and the game counts elsewhere.
+
 **On entering a map** (`PlaceAnimalsOnMap`), every chicken, cow, the dog
 and the horse that is there starts its script. "Is there" groups maps:
 
@@ -1277,3 +1283,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 40.54 % | five more event commands (texts, clearing a bit, a tile, the shed); more than half of the routines are done |
 | 22-Oct-2026 | 47.73 % | the colour animations: 57 routines (51 of them, small, read from a table) |
 | 22-Oct-2026 | 47.87 % | reading the controller (the buttons pressed, let go, and the menus' autorepeat) |
+| 22-Oct-2026 | 47.97 % | two unused routines that count the chickens and the cows |

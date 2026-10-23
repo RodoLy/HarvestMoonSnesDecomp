@@ -2153,6 +2153,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/coloranim.c", 0x80DD09, 0, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
   { "ReadJoypad", hm_ReadJoypad, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/joypad.c", 0x80872B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_joypad },
+  { "UnusedBarnCoopCheck", hm_UnusedBarnCoopCheck, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/animals.c", 0x83C9BA, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_animals },
+  { "UnusedBarnCheck", hm_UnusedBarnCheck, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/animals.c", 0x83C9E5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_animals },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
