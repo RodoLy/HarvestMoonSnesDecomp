@@ -778,6 +778,15 @@ a otro guion. Las judías mágicas creciendo son una.
     +05/+06 = +0B y se borra la dirección impuesta.
   - Rareza: sin el bit 7 igual mira el tile de la segunda esquina ($EB),
     que es lo que dejó la última comprobación de cualquier otro.
+  - El "azar" de $DE: el bucle de los slots le suma $33 antes de cada slot
+    activo, así que cada uno recibe un valor distinto en el mismo cuadro.
+- **El sprite de un slot, cada cuadro** (`SUB_848286`): si no está
+  congelado (+01 bit 4), el slot pasea y da su paso (las dos de arriba).
+  Luego su objeto con sprite (+12) recibe la posición (+1A, +1C), la
+  animación (+14) y el sprite (+16), y según +01: bit 6 lo destruye, bit 1
+  lo crea (el objeto nuevo queda en +12), bit 2 le cambia el sprite si
+  +16 no es el de antes (+18), y si no, solo lo mueve. Al final +18 = +16
+  y se borran los bits de un solo uso 1, 2 y 4.
 
 ### 5.13 El final
 
@@ -1522,3 +1531,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 54,60 % | sprites volteados, vaciar las tablas de sprites, releer un objeto |
 | 23-oct-2026 | 54,80 % | huellas en la nieve, el reproductor de animaciones de mapa |
 | 23-oct-2026 | 55,98 % | los slots que pasean solos (la gente del pueblo, los animales) |
+| 23-oct-2026 | 56,14 % | el sprite de cada slot, cada cuadro |

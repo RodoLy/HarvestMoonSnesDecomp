@@ -1666,6 +1666,46 @@ static void prep_slot_wander(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 4 == 0) memset(&ram[0x009B6], 0xE1, 4096);
 }
 
+/* events.c: SUB_848286, a slot's sprite each frame: the wandering above
+ * (prep_slot_wander), then its game object (prep_change_gobj) with the
+ * slot's sprite. The walking and standing animations write the sprite
+ * (+16) from their tables, so these are tables of the ROM's bank $B3
+ * whose four entries are all real sprites, each one prepared. */
+static uint16_t s_sprite_tables[256];
+static int s_n_sprite_tables = -1;
+static void prep_slot_sprite(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  if (s_n_sprite_tables < 0) {
+    s_n_sprite_tables = 0;
+    for (uint32_t at = 0x8000; at < 0xFFF0 && s_n_sprite_tables < 256; at += 0x41) {
+      int ok = 1;
+      for (int e = 0; e < 4 && ok; e++) ok = hm_bus_rd16(ram, 0xB30000 + at + 3 * e) < 0x450;
+      if (ok) s_sprite_tables[s_n_sprite_tables++] = (uint16_t)at;
+    }
+  }
+  prep_slot_wander(ram, r, rnd);
+  uint16_t slot = hm_rd16(ram, 0xCC);
+  prep_change_gobj(ram, r, rnd);
+  uint16_t sprite = hm_rd16(ram, 0xA1);
+  if (s_n_sprite_tables > 0)
+    for (int t = 0; t < 2; t++) {
+      uint16_t table = s_sprite_tables[rnd() % (unsigned)s_n_sprite_tables];
+      hm_wr16(ram, slot + (t ? 0x36 : 0x33), table);
+      for (int e = 0; e < 4; e++) prep_sprite(ram, hm_bus_rd16(ram, 0xB30000u + table + 3 * e), rnd);
+    }
+  prep_sprite(ram, sprite, rnd);
+  /* prep_sprite gives the graphics slots low use counts; destroying an
+   * object hangs on a count of 0 (prep_destroy) */
+  for (unsigned g = 0; g < 0x40; g++)
+    if (hm_rd16(ram, 0x0A320 + 4 * g) < 40) hm_wr16(ram, 0x0A320 + 4 * g, (uint16_t)(40 + rnd() % 200));
+  hm_wr16(ram, slot + 0x12, hm_rd16(ram, 0xA5));
+  hm_wr16(ram, slot + 0x14, hm_rd16(ram, 0x9F));
+  hm_wr16(ram, slot + 0x16, sprite);
+  hm_wr16(ram, slot + 0x18, (uint16_t)((rnd() % 2) ? sprite : rnd() % 0x450));
+  static const uint8_t does[] = { 0x40, 0x02, 0x04, 0x00, 0x00, 0x04, 0x02 };
+  ram[slot + 0x01] = (uint8_t)((ram[slot + 0x01] & ~0x46) | does[rnd() % 7]);
+}
+
 /* objects.c: InvertIfFliped: an offset and the flip bits. */
 static void prep_flip(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -2634,6 +2674,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/events.c", 0x848331, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_slot_walk },
   { "SUB_8483CC", hm_SUB_8483CC, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/events.c", 0x8483CC, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_slot_wander },
+  { "SUB_848286", hm_SUB_848286, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/events.c", 0x848286, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_slot_sprite },
   { "CODE_8581CB", hm_CODE_8581CB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x8581CB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
   { "InvertIfFlipedX", hm_InvertIfFlipedX, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,

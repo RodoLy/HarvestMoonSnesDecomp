@@ -768,6 +768,15 @@ beans growing are one.
     = +0B and the forced direction is cleared.
   - Quirk: without bit 7 it still looks at the second corner's tile
     ($EB), which is whatever the last check of anyone left there.
+  - The "random" $DE: the slot loop adds $33 to it before each active
+    slot, so each one gets a different value in the same frame.
+- **A slot's sprite, each frame** (`SUB_848286`): unless frozen (+01
+  bit 4), the slot wanders and takes its step (the two above). Then its
+  game object (+12) gets the position (+1A, +1C), the animation (+14) and
+  the sprite (+16), and by +01: bit 6 destroys it, bit 1 creates it (the
+  new object goes to +12), bit 2 changes its sprite if +16 is not the
+  last one (+18), and otherwise it just moves. Finally +18 = +16 and the
+  one-time bits 1, 2 and 4 are cleared.
 
 ### 5.13 The ending
 
@@ -1485,3 +1494,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 54.60 % | flipped sprites, emptying the sprite tables, reading an object back |
 | 23-Oct-2026 | 54.80 % | footprints in the snow, the map animation player |
 | 23-Oct-2026 | 55.98 % | the slots that wander on their own (the town's people, the animals) |
+| 23-Oct-2026 | 56.14 % | each slot's sprite, every frame |

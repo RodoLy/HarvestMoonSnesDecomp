@@ -570,6 +570,7 @@ void hm_CODE_8580B9(uint8_t *ram, HmRegs *r);
 void hm_CODE_858100(uint8_t *ram, HmRegs *r);
 void hm_SUB_848331(uint8_t *ram, HmRegs *r);
 void hm_SUB_8483CC(uint8_t *ram, HmRegs *r);
+void hm_SUB_848286(uint8_t *ram, HmRegs *r);
 void hm_CODE_8581CB(uint8_t *ram, HmRegs *r);
 void hm_InvertIfFlipedX(uint8_t *ram, HmRegs *r);
 void hm_InvertIfFlipedY(uint8_t *ram, HmRegs *r);

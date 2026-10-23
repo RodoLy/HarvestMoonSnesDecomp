@@ -518,3 +518,71 @@ void hm_SUB_8483CC(uint8_t *ram, HmRegs *r)
   r->c = 1;                                      /* CMP #0 */
   if (r->a) stop_here(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_848286 ($84:8286, JSR, RTS): a slot's sprite, each frame. Unless
+ * +01 bit 4 (frozen), the slot first wanders (SUB_8483CC) and steps
+ * (SUB_848331). Then its game object (+12) gets the slot's position (+1A,
+ * +1C), animation (+14) and sprite (+16), through $A5, $9F, $9B, $9D, $A1;
+ * and by +01:
+ *   bit 6  destroy the object (CODE_8581A2);
+ *   bit 1  create it (CreateGameObject; the new object goes to +12);
+ *   bit 2  the sprite changed (+16 != +18, the last one): CODE_858100;
+ *   none   just move it (CODE_8580B9).
+ * Then +18 = +16 and the one-time bits 1, 2 and 4 of +01 are cleared
+ * (AND #$E9).
+ * Leftovers: A = the new +01, Y = 1; X and C from the object routine.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_WANDER       0x8297   /* JSR SUB_8483CC at $84:8295 */
+#define RET_STEP         0x829A   /* JSR SUB_848331 at $84:8298 */
+#define RET_MOVE_OBJECT  0x82DC   /* JSL CODE_8580B9 at $84:82D9 */
+#define RET_NEW_OBJECT   0x82E2   /* JSL CreateGameObject at $84:82DF */
+#define RET_NEW_SPRITE   0x8307   /* JSL CODE_858100 at $84:8304 */
+#define RET_DROP_OBJECT  0x830D   /* JSL CODE_8581A2 at $84:830A */
+
+static void object_call(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmRegs *))
+{
+  hm_jsl(ram, r, ret, 0x85);
+  fn(ram, r);
+  hm_rtl(ram, r);
+}
+
+void hm_SUB_848286(uint8_t *ram, HmRegs *r)
+{
+  uint8_t flags = slot8(ram, r, 0x01);
+  r->a = (uint16_t)((r->a & 0xFF00) | (flags & 0x10));
+  if (!(flags & 0x10)) {
+    jsr(ram, r, RET_WANDER, hm_SUB_8483CC);
+    jsr(ram, r, RET_STEP, hm_SUB_848331);
+  }
+  static const struct { uint8_t field, dp; } to_object[5] = {
+    { 0x12, 0xA5 }, { 0x14, 0x9F }, { 0x1A, 0x9B }, { 0x1C, 0x9D }, { 0x16, 0xA1 } };
+  for (int i = 0; i < 5; i++)
+    hm_dp_w16(ram, r, to_object[i].dp, slot16(ram, r, to_object[i].field));
+
+  flags = slot8(ram, r, 0x01);
+  if (flags & 0x40) {
+    r->a = (uint16_t)((r->a & 0xFF00) | 0x40);
+    object_call(ram, r, RET_DROP_OBJECT, hm_CODE_8581A2);
+  } else if (flags & 0x02) {
+    r->a = (uint16_t)((r->a & 0xFF00) | 0x02);
+    object_call(ram, r, RET_NEW_OBJECT, hm_CreateGameObject);
+    r->a = hm_dp_r16(ram, r, 0xA5);
+    r->y = 0x12;
+    hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x12), r->a);
+  } else if (flags & 0x04) {
+    r->a = (uint16_t)((r->a & 0xFF00) | 0x04);
+    uint16_t sprite = slot16(ram, r, 0x16);
+    hm_dp_w16(ram, r, 0x7E, sprite);
+    uint16_t last = slot16(ram, r, 0x18);
+    r->c = last >= sprite;                       /* CMP $7E */
+    if (last != sprite) object_call(ram, r, RET_NEW_SPRITE, hm_CODE_858100);
+  } else {
+    r->a &= 0xFF00;
+    object_call(ram, r, RET_MOVE_OBJECT, hm_CODE_8580B9);
+  }
+  slot16(ram, r, 0x16);
+  r->y = 0x18;
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x18), r->a);
+  put8(ram, r, 0x01, slot8(ram, r, 0x01) & 0xE9);
+}
