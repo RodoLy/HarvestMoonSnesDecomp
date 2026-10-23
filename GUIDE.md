@@ -1415,7 +1415,9 @@ from `UNK_TableFunctionSelect` ($83:CAA9, one word per map). Each one
 starts the event scripts of the people and things there, by date, time and
 story flags, with `UNK_LoadCCDataLong` (slot, script group, script).
 HM-Decomp has them all as one block; here each is `MapEvent_xxxx` (its
-address). Done so far:
+address). All are done except `DED3` (the player's house, maps $15-$17),
+which calls sound routines that wait for the next frame; so
+`RunsFunctionbyIndex` stays in the original too.
 
 | Routine | What it starts |
 |---|---|
@@ -1431,6 +1433,7 @@ address). Done so far:
 | `DD95`, `DE64` | maps $2B and $2A, with their first visits |
 | `DE9B` | map $27: with $7F1F64 bit 3 a scene that stops the player |
 | `E407` | maps $0C-$0F (the crossroads): the first time (group $0A); from the first winter on a visit of group $0D, in two parts |
+| `CB69` | the farm (maps 0-3): the wife and children at home; at 6:00:00 on a visitor day the first single girl with 200+ hearts comes to visit (once each); scenes by story flags; the first days; the morning visitors of rain days; one-time events (30,000 G from year 2, a Saturday from the first winter, 6+ chickens); one time in nine a visit that gives 2 of happiness. Bug: a fall event sets $7F1F6A bit 7 but tests bit 8, so it repeats on every such day |
 | `D2E0` | the town (maps 4-7): fall 20 before 3 pm the festival (the numbers 0-5 shuffled at $09A4, group $28), spring 23 and fall 12 before 3 pm and winter 10 before 5 pm their groups ($0E, $26, $27), otherwise the usual day of script 0 (nobody on the special days and with rain); bug 24 |
 | `E76D` | map $3C, the introduction: the player wakes at 7:00 with full stamina and empty hands; the step `$7F1F49` (0-$1C) picks the script of group $47 (step + 1) and goes one up; steps 7 and $0D also fill the shed. HM-Decomp has the first $140 bytes of this routine as data; they were disassembled from the ROM |
 | `EBA6` | maps $3D and $4B: the ending's slide show (see 5.13) |
@@ -1650,3 +1653,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 63.12 % | who appears in the town |
 | 23-Oct-2026 | 63.74 % | the introduction (map $3C) |
 | 23-Oct-2026 | 65.20 % | the ending's slide show |
+| 23-Oct-2026 | 66.73 % | who appears on the farm |

@@ -829,3 +829,233 @@ void hm_MapEvent_EBA6(uint8_t *ram, HmRegs *r)
   default: return;                                        /* $25 (CODE_83F4D7) and up */
   }
 }
+
+/* ── CB69, the farm (maps 0-3) ──────────────────────────────────────────
+ * In this order:
+ *   - the wife at home (Maria, Nina or Ellen: group $44, unless $7F1F6E
+ *     bit 1) and the children once 60 days old (as E6C4);
+ *   - at 6:00:00 on a visitor day (2-7, 13-17, 25-28; not on the special
+ *     days of $0196 bits 1 / 3 / 4) while still single, the first girl
+ *     with 200+ hearts whose visit was not seen comes (groups $19-$1D;
+ *     each marks her flag and blocks the later ones: Maria $7F1F6A bit
+ *     12, Ann bit 14, Nina $7F1F6C bit 0, Ellen bit 2, Eve bit 4);
+ *   - $7F1F5A bit 1: a scene (slot 7, script $20) that stops the player;
+ *   - the first days: group $0A until the first event ($7F1F68 bit 0),
+ *     then group $0C twice ($7F1F68 bits 5 and 7; the second also puts
+ *     the dog at (120, 424) on map 0);
+ *   - at 6:00:00 the morning visitors of group $24: rain or snow (weather
+ *     6+; at 6:00 with seconds not 0 the rest of these is skipped),
+ *     $7F1F70 bit 1, $7F1F64 bit 4, and in the first summer before the
+ *     20th the first time ($7F1F70 bit 0);
+ *   - $7F1F66 bit 6: a scene (slot 9, script $2C; the bit off);
+ *   - $7F1F66 bit 7 with some development: slot 0 script $2E;
+ *   - $7F1F66 bit 8: two scenes (slots 9 and $0A, scripts $36 / $37);
+ *   - $7F1F32 = $15 the first time ($7F1F64 bit 8): a scene (slot $0B,
+ *     script $1D);
+ *   - from year 2 at 6:00:00 on an ordinary day with 30,000 G or more,
+ *     once ($7F1F68 bit 10): group $13;
+ *   - from the first winter at 6:00:00 on a Saturday, with $7F1F64 bit 6
+ *     or 7, once ($7F1F68 bit 14): group $16;
+ *   - in fall on a visitor day with $7F1F64 bit 6 or 7 and $7F1F68 bit
+ *     13, until $7F1F6A bit 8: group $18 (and $7F1F6A bit 7 is set: it is
+ *     not the bit tested, so this happens every such day);
+ *   - $7F1F6E bit 10 with 6+ chickens at 6:00:00 on an ordinary day: group
+ *     $29, and from then on ($7F1F6A bit 10) every time the farm is
+ *     entered, until $7F1F6A bit 11;
+ *   - at 6:00:00 on an ordinary day, one time in nine: group $23, and 2 of
+ *     happiness.
+ * ───────────────────────────────────────────────────────────────────── */
+static bool six_sharp(uint8_t *ram, HmRegs *r)        /* hour 6, minutes 0, seconds 0 */
+{
+  return byte_is(ram, r, HOUR, 6) && !byte_of(ram, r, 0x7F1F1D) && !byte_of(ram, r, 0x7F1F1E);
+}
+/* CMP #1; BEQ no; CMP #8; BCC yes; CMP #$0D; BCC no; ... CMP #$1D */
+static bool visitor_day(uint8_t *ram, HmRegs *r)
+{
+  uint8_t day = byte_of(ram, r, DAY);
+  r->c = day >= 1;
+  if (day == 1) return false;
+  static const uint8_t bounds[] = { 0x08, 0x0D, 0x12, 0x19, 0x1D };
+  for (int i = 0; i < 5; i++) {
+    r->c = day >= bounds[i];
+    if (!r->c) return !(i & 1);
+  }
+  return false;
+}
+static void flag_on(uint8_t *ram, HmRegs *r, uint32_t addr, uint16_t bit)
+{
+  r->a = (uint16_t)(hm_bus_rd16(ram, addr) | bit);
+  hm_bus_wr16(ram, addr, r->a);
+}
+/* a scene that stops the player: $096E = code, $D2 |= $40, action 0 */
+static void stop_player(uint8_t *ram, HmRegs *r, uint8_t code)
+{
+  r->a = (uint16_t)((r->a & 0xFF00) | code);
+  hm_bus_wr8(ram, db(r, 0x096E), code);
+  hm_bus_wr8(ram, db(r, 0x096F), 0);
+  hm_bus_wr8(ram, db(r, 0x0970), 0);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0040);
+  hm_dp_w16(ram, r, 0xD2, r->a);
+  r->a = 0;
+  hm_dp_w16(ram, r, 0xD4, 0);
+}
+/* LDA.L moneyL; CLC; ADC #-n; SEP; LDA.L moneyH; ADC #$FF: true if not negative */
+static bool money_at_least(uint8_t *ram, HmRegs *r, uint16_t minus_n)
+{
+  uint32_t low = (uint32_t)hm_bus_rd16(ram, 0x7F1F04) + minus_n;
+  r->c = low > 0xFFFF;
+  uint32_t high = (uint32_t)hm_bus_rd8(ram, 0x7F1F06) + 0xFF + r->c;
+  r->c = high > 0xFF;
+  r->a = (uint16_t)((low & 0xFF00) | (uint8_t)high);
+  return !(high & 0x80);
+}
+/* a girl's visit: her flag, her group, $09A3 = 0 */
+static void girl_visit(uint8_t *ram, HmRegs *r, uint32_t addr, uint16_t bit, uint16_t x, uint16_t at)
+{
+  flag_on(ram, r, addr, bit);
+  spawn(ram, r, 0, x, 0, at);
+  r->a &= 0xFF00;
+  hm_bus_wr8(ram, db(r, 0x09A3), 0);
+}
+
+static bool girls_visit(uint8_t *ram, HmRegs *r)
+{
+  if (flag(ram, r, db(r, FLAGS_0196), 0x001A)) return false;
+  for (uint16_t g = 1; g <= 0x10; g <<= 1) if (flag(ram, r, 0x7F1F66, g)) return false;
+  if (!six_sharp(ram, r)) return false;
+  if (!visitor_day(ram, r)) return false;
+  const uint32_t A6 = 0x7F1F6A, C6 = 0x7F1F6C, W = 0x7F1F66;
+  if (!flag(ram, r, W, 0x0001) && !flag(ram, r, W, 0x0080) && !flag(ram, r, A6, 0x2000) &&
+      !flag(ram, r, A6, 0x1000) && word_at_least(ram, r, HEARTS, 200)) {
+    girl_visit(ram, r, A6, 0x1000, 0x19, 0xCCDF); return true;
+  }
+  if (!flag(ram, r, A6, 0x1000) && !flag(ram, r, W, 0x0002) && !flag(ram, r, A6, 0x8000) &&
+      !flag(ram, r, A6, 0x4000) && word_at_least(ram, r, HEARTS + 2, 200)) {
+    girl_visit(ram, r, A6, 0x4000, 0x1A, 0xCD2E); return true;
+  }
+  if (!flag(ram, r, A6, 0x1000) && !flag(ram, r, A6, 0x4000) && !flag(ram, r, W, 0x0004) &&
+      !flag(ram, r, C6, 0x0002) && !flag(ram, r, C6, 0x0001) && word_at_least(ram, r, HEARTS + 4, 200)) {
+    girl_visit(ram, r, C6, 0x0001, 0x1B, 0xCD86); return true;
+  }
+  if (!flag(ram, r, A6, 0x1000) && !flag(ram, r, A6, 0x4000) && !flag(ram, r, C6, 0x0001) &&
+      !flag(ram, r, W, 0x0008) && !flag(ram, r, C6, 0x0008) && !flag(ram, r, C6, 0x0004) &&
+      word_at_least(ram, r, HEARTS + 6, 200)) {
+    girl_visit(ram, r, C6, 0x0004, 0x1C, 0xCDE7); return true;
+  }
+  if (!flag(ram, r, A6, 0x1000) && !flag(ram, r, A6, 0x4000) && !flag(ram, r, C6, 0x0001) &&
+      !flag(ram, r, C6, 0x0004) && !flag(ram, r, W, 0x0010) && !flag(ram, r, C6, 0x0020) &&
+      !flag(ram, r, C6, 0x0010) && word_at_least(ram, r, HEARTS + 8, 200)) {
+    girl_visit(ram, r, C6, 0x0010, 0x1D, 0xCE51); return true;
+  }
+  return false;
+}
+
+void hm_MapEvent_CB69(uint8_t *ram, HmRegs *r)
+{
+  if (!flag(ram, r, 0x7F1F6E, 0x0002)) {
+    if (flag(ram, r, 0x7F1F66, 0x0001))      spawn(ram, r, 0x13, 0x44, 0, 0xCB9C);
+    else if (flag(ram, r, 0x7F1F66, 0x0004)) spawn(ram, r, 0x13, 0x44, 2, 0xCBAD);
+    else if (flag(ram, r, 0x7F1F66, 0x0008)) spawn(ram, r, 0x13, 0x44, 3, 0xCBBE);
+  }
+  if (flag(ram, r, 0x7F1F6E, 0x0004) && word_at_least(ram, r, KID1_AGE, 0x003C))
+    spawn(ram, r, 0x14, 0x45, 1, 0xCBE3);
+  if (flag(ram, r, 0x7F1F6E, 0x0008) && word_at_least(ram, r, KID2_AGE, 0x003C))
+    spawn(ram, r, 0x15, 0x45, 4, 0xCC06);
+  if (girls_visit(ram, r)) return;
+
+  if (flag(ram, r, 0x7F1F5A, 0x0002)) { spawn(ram, r, 7, 0, 0x20, 0xCE71); stop_player(ram, r, 0x42); return; }
+  if (!flag(ram, r, 0x7F1F68, 0x0001)) { spawn(ram, r, 0, 0x0A, 2, 0xCEA9); return; }
+  if (!flag(ram, r, 0x7F1F68, 0x0020)) {
+    spawn(ram, r, 0, 0x0C, 0, 0xCEC4);
+    seen(ram, r, 0x0020);
+    r->a = (uint16_t)((r->a & 0xFF00) | 3);
+    hm_bus_wr8(ram, db(r, 0x099F), 3);
+    return;
+  }
+  if (!flag(ram, r, 0x7F1F68, 0x0080)) {
+    spawn(ram, r, 0, 0x0C, 1, 0xCEF3);
+    hm_bus_wr16(ram, 0x7F1F2C, 0x0078);
+    r->a = 0x01A8;
+    hm_bus_wr16(ram, 0x7F1F2E, 0x01A8);
+    r->a = 0x0100;                                          /* SEP; LDA #0 */
+    hm_bus_wr8(ram, 0x7F1F30, 0);
+    return;
+  }
+  bool skip_mornings = false;
+  if (!byte_below(ram, r, db(r, WEATHER_TOMORROW), 6) && byte_is(ram, r, HOUR, 6) &&
+      !byte_of(ram, r, 0x7F1F1D)) {
+    if (!byte_of(ram, r, 0x7F1F1E)) { spawn(ram, r, 6, 0x24, 0, 0xCF3D); return; }
+    skip_mornings = true;
+  }
+  if (!skip_mornings) {
+    if (flag(ram, r, 0x7F1F70, 0x0002) && six_sharp(ram, r)) { spawn(ram, r, 6, 0x24, 2, 0xCF6E); return; }
+    if (flag(ram, r, 0x7F1F64, 0x0010) && six_sharp(ram, r)) { spawn(ram, r, 6, 0x24, 3, 0xCF9F); return; }
+    if (!flag(ram, r, 0x7F1F70, 0x0001) && !byte_of(ram, r, 0x7F1F18) && byte_is(ram, r, SEASON, 1) &&
+        byte_below(ram, r, DAY, 0x14) && six_sharp(ram, r)) {
+      flag_on(ram, r, 0x7F1F70, 0x0001);
+      spawn(ram, r, 0x0B, 0x24, 1, 0xCFF3);
+      return;
+    }
+  }
+  if (flag(ram, r, 0x7F1F66, 0x0040)) {
+    spawn(ram, r, 9, 0, 0x2C, 0xD00E);
+    stop_player(ram, r, 0x47);
+    r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F66) & 0xFFBF);
+    hm_bus_wr16(ram, 0x7F1F66, r->a);
+    return;
+  }
+  if (flag(ram, r, 0x7F1F66, 0x0080) && byte_of(ram, r, 0x7F1F35)) { spawn(ram, r, 0, 0, 0x2E, 0xD05B); return; }
+  if (flag(ram, r, 0x7F1F66, 0x0100)) {
+    r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F66) & 0xFEFF);
+    hm_bus_wr16(ram, 0x7F1F66, r->a);
+    spawn(ram, r, 9, 0, 0x36, 0xD081);
+    spawn(ram, r, 0x0A, 0, 0x37, 0xD090);
+    stop_player(ram, r, 0x48);
+    return;
+  }
+  if (!flag(ram, r, 0x7F1F64, 0x0100) && byte_is(ram, r, 0x7F1F32, 0x15)) {
+    flag_on(ram, r, 0x7F1F64, 0x0100);
+    spawn(ram, r, 0x0B, 0, 0x1D, 0xD0DD);
+    stop_player(ram, r, 0x49);
+    return;
+  }
+  if (byte_of(ram, r, 0x7F1F18) && six_sharp(ram, r) && !flag(ram, r, db(r, FLAGS_0196), 0x001A) &&
+      money_at_least(ram, r, 0xF448) && !flag(ram, r, 0x7F1F68, 0x0400)) {
+    spawn(ram, r, 0, 0x13, 0, 0xD151);
+    seen(ram, r, 0x0400);
+    return;
+  }
+  if ((byte_of(ram, r, 0x7F1F18) || byte_is(ram, r, SEASON, 3)) && six_sharp(ram, r) &&
+      byte_is(ram, r, WEEKDAY, 6) && !flag(ram, r, db(r, FLAGS_0196), 0x001A) &&
+      flag(ram, r, 0x7F1F64, 0x00C0) && !flag(ram, r, 0x7F1F68, 0x4000)) {
+    seen(ram, r, 0x4000);
+    spawn(ram, r, 0, 0x16, 0, 0xD1C9);
+    return;
+  }
+  if (byte_is(ram, r, SEASON, 2) && visitor_day(ram, r) && !flag(ram, r, db(r, FLAGS_0196), 0x001A) &&
+      flag(ram, r, 0x7F1F64, 0x00C0) && flag(ram, r, 0x7F1F68, 0x2000) && !flag(ram, r, 0x7F1F6A, 0x0100)) {
+    flag_on(ram, r, 0x7F1F6A, 0x0080);
+    spawn(ram, r, 0, 0x18, 0, 0xD239);
+    return;
+  }
+  if (!flag(ram, r, 0x7F1F6A, 0x0800)) {
+    if (flag(ram, r, 0x7F1F6A, 0x0400)) { spawn(ram, r, 0, 0x29, 0, 0xD299); return; }
+    if (!flag(ram, r, db(r, FLAGS_0196), 0x001E) && flag(ram, r, 0x7F1F6E, 0x0400) &&
+        !byte_below(ram, r, CHICKENS, 6) && six_sharp(ram, r)) {
+      flag_on(ram, r, 0x7F1F6A, 0x0400);
+      spawn(ram, r, 0, 0x29, 0, 0xD299);
+      return;
+    }
+  }
+  if (flag(ram, r, db(r, FLAGS_0196), 0x001A) || !six_sharp(ram, r)) return;
+  r->a = (uint16_t)((r->a & 0xFF00) | 8);
+  hm_jsl(ram, r, 0xD2C3, 0x80);
+  hm_RNGReturn0toA(ram, r);
+  hm_rtl(ram, r);
+  if ((uint8_t)r->a) return;                                /* BNE */
+  spawn(ram, r, 0, 0x23, 0, 0xD2D1);
+  r->a = 0x0002;
+  hm_jsl(ram, r, 0xD2DD, 0x83);
+  hm_AddPlayerHappiness(ram, r);
+  hm_rtl(ram, r);
+}

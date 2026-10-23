@@ -421,6 +421,8 @@
 03C995	GetChickenPointer_lo
 83C9A7	GetsCowPointer
 03C9A7	GetsCowPointer_lo
+83CB69	MapEvent_CB69
+03CB69	MapEvent_CB69_lo
 83D2E0	MapEvent_D2E0
 03D2E0	MapEvent_D2E0_lo
 83D4D7	MapEvent_D4D7

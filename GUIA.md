@@ -1452,7 +1452,10 @@ Al entrar a un mapa, `RunsFunctionbyIndex` ($83:CA98) llama a su rutina de
 arranca los guiones de evento de la gente y las cosas de ese lugar, según
 la fecha, la hora y las banderas de la historia, con `UNK_LoadCCDataLong`
 (slot, grupo de guiones, guion). HM-Decomp las tiene todas como un solo
-bloque; acá cada una es `MapEvent_xxxx` (su dirección). Hechas hasta ahora:
+bloque; acá cada una es `MapEvent_xxxx` (su dirección). Están todas salvo
+`DED3` (la casa del jugador, mapas $15-$17), que llama a rutinas de sonido
+que esperan al cuadro siguiente; por eso `RunsFunctionbyIndex` también
+queda en el original.
 
 | Rutina | Qué arranca |
 |---|---|
@@ -1468,6 +1471,7 @@ bloque; acá cada una es `MapEvent_xxxx` (su dirección). Hechas hasta ahora:
 | `DD95`, `DE64` | mapas $2B y $2A, con sus primeras visitas |
 | `DE9B` | mapa $27: con el bit 3 de $7F1F64 una escena que detiene al jugador |
 | `E407` | mapas $0C-$0F (el cruce): la primera vez (grupo $0A); desde el primer invierno una visita del grupo $0D, en dos partes |
+| `CB69` | la granja (mapas 0-3): la esposa y los hijos en casa; a las 6:00:00 de un día de visita la primera chica soltera con 200 o más corazones viene de visita (una vez cada una); escenas según las banderas de la historia; los primeros días; las visitas de las mañanas de lluvia; eventos de una sola vez (30.000 G desde el año 2, un sábado desde el primer invierno, 6 o más gallinas); una vez de cada nueve una visita que da 2 de felicidad. Error: un evento de otoño pone el bit 7 de $7F1F6A pero mira el bit 8, así que se repite cada día así |
 | `D2E0` | el pueblo (mapas 4-7): el 20 de otoño antes de las 3 el festival (los números 0-5 mezclados en $09A4, grupo $28), el 23 de primavera y el 12 de otoño antes de las 3 y el 10 de invierno antes de las 5 sus grupos ($0E, $26, $27), si no el día normal del guion 0 (nadie en los días especiales ni con lluvia); error 24 |
 | `E76D` | mapa $3C, la introducción: el jugador se despierta a las 7:00 con la energía llena y las manos vacías; el paso `$7F1F49` (0-$1C) elige el guion del grupo $47 (paso + 1) y sube uno; los pasos 7 y $0D además llenan el galpón. HM-Decomp tiene los primeros $140 bytes de esta rutina como datos; se desensamblaron desde la ROM |
 | `EBA6` | mapas $3D y $4B: la presentación del final (ver 5.13) |
@@ -1694,3 +1698,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 63,12 % | quién aparece en el pueblo |
 | 23-oct-2026 | 63,74 % | la introducción (mapa $3C) |
 | 23-oct-2026 | 65,20 % | la presentación del final |
+| 23-oct-2026 | 66,73 % | quién aparece en la granja |

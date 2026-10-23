@@ -1982,6 +1982,87 @@ static void prep_map_event_ending(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void)
   }
 }
 
+/* MapEvent_CB69, the farm: often 6:00:00 sharp (or a second off), the
+ * girls' hearts around 200, money around 30,000 G, 5-6 chickens, single */
+static void prep_map_event_farm(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_map_event(ram, r, rnd);
+  if (rnd() % 2) {
+    ram[0x11F1C] = 6; ram[0x11F1D] = 0;
+    ram[0x11F1E] = (uint8_t)((rnd() % 4) ? 0 : 1 + rnd() % 59);
+  } else {
+    ram[0x11F1D] = (uint8_t)(rnd() % 15); ram[0x11F1E] = (uint8_t)(rnd() % 60);
+  }
+  if (rnd() % 2) ram[0x11F66] &= (uint8_t)~0x1F;
+  if (rnd() % 2) { ram[0x11F6B] &= (uint8_t)~0xF0; ram[0x11F6C] &= (uint8_t)~0x3F; }
+  for (unsigned i = 0; i < 5; i++) hm_wr16(ram, 0x11F1F + 2 * i, (uint16_t)((rnd() % 2) ? 199 + rnd() % 2 : rnd() % 1000));
+  hm_wr16(ram, 0x11F04, (uint16_t)((rnd() % 2) ? 299 + rnd() % 2 : rnd()));
+  ram[0x11F06] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+  ram[0x11F0B] = (uint8_t)((rnd() % 2) ? 5 + rnd() % 2 : rnd() % 13);
+  ram[0x11F32] = (uint8_t)((rnd() % 2) ? 0x15 : rnd());
+  ram[0x11F35] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+  if (rnd() % 2) hm_wr16(ram, 0x0196, (uint16_t)(hm_rd16(ram, 0x0196) & ~0x001Eu));
+  if (rnd() % 2) ram[0x11F5A] &= (uint8_t)~0x02;
+  if (rnd() % 2) ram[0x11F67] &= (uint8_t)~0x01;                      /* $7F1F66 bit 8 */
+  if (rnd() % 2) ram[0x11F66] &= (uint8_t)~0xC0;
+  /* half the time, past the scenes and first days, to reach the end */
+  if (rnd() % 2) {
+    ram[0x11F5A] &= (uint8_t)~0x02;
+    ram[0x11F68] |= 0xA1;                                           /* bits 0, 5, 7 */
+    ram[0x11F66] &= (uint8_t)~0xC0; ram[0x11F67] &= (uint8_t)~0x01;
+    if (rnd() % 4) { ram[0x11F70] = (uint8_t)((ram[0x11F70] & ~0x02) | 0x01); ram[0x11F64] &= (uint8_t)~0x10; }
+    if (rnd() % 4) ram[0x0098C] = (uint8_t)(rnd() % 6);
+    if (rnd() % 4) ram[0x11F65] |= 0x01;                              /* $7F1F64 bit 8 */
+    if (rnd() % 2) ram[0x11F69] &= (uint8_t)~0x04;                    /* $7F1F68 bit 10 */
+    if (rnd() % 2) ram[0x11F69] &= (uint8_t)~0x40;                    /* bit 14 */
+    if (rnd() % 2) ram[0x11F64] |= 0xC0;
+    if (rnd() % 2) { ram[0x11F6B] &= (uint8_t)~0x0D; }               /* $7F1F6A bits 8, 10, 11 */
+    if (rnd() % 2) ram[0x11F6F] |= 0x04;                              /* $7F1F6E bit 10 */
+    ram[0x11F18] = (uint8_t)(rnd() % 3);
+    /* and then right at one of the late cases */
+    static const uint8_t visitor_days[] = { 2, 7, 13, 17, 25, 28 };
+    switch (rnd() % 8) {
+    case 0:                                                         /* the first summer */
+      ram[0x11F70] &= (uint8_t)~0x03; ram[0x11F64] &= (uint8_t)~0x10; ram[0x0098C] = 0;
+      ram[0x11F18] = 0; ram[0x11F19] = 1; ram[0x11F1B] = (uint8_t)(0x13 + rnd() % 2);
+      ram[0x11F1C] = 6; ram[0x11F1D] = 0; ram[0x11F1E] = 0;
+      break;
+    case 1:                                                         /* 30,000 G */
+      ram[0x11F18] = 1; ram[0x11F1C] = 6; ram[0x11F1D] = 0; ram[0x11F1E] = 0;
+      hm_wr16(ram, 0x0196, (uint16_t)(hm_rd16(ram, 0x0196) & ~0x001Au));
+      ram[0x11F69] &= (uint8_t)~0x04; ram[0x11F65] |= 0x01;
+      hm_wr16(ram, 0x11F04, (uint16_t)(2999 + rnd() % 2)); ram[0x11F06] = 0;
+      break;
+    case 2:                                                         /* a Saturday */
+      ram[0x11F18] = 1; ram[0x11F1A] = (uint8_t)(5 + rnd() % 2); ram[0x11F1C] = 6; ram[0x11F1D] = 0; ram[0x11F1E] = 0;
+      hm_wr16(ram, 0x0196, (uint16_t)(hm_rd16(ram, 0x0196) & ~0x001Au));
+      ram[0x11F64] |= 0x40; ram[0x11F69] &= (uint8_t)~0x44; ram[0x11F65] |= 0x01;
+      ram[0x11F06] = 0x80;                                          /* no 30,000 G */
+      break;
+    case 3:                                                         /* a fall visitor day */
+      ram[0x11F19] = 2; ram[0x11F1B] = visitor_days[rnd() % 6]; ram[0x11F18] = 0;
+      hm_wr16(ram, 0x0196, (uint16_t)(hm_rd16(ram, 0x0196) & ~0x001Au));
+      ram[0x11F64] |= 0x80; ram[0x11F69] |= 0x20; ram[0x11F6B] &= (uint8_t)~0x01; ram[0x11F65] |= 0x01;
+      if (rnd() % 2) ram[0x11F1C] = 7;
+      break;
+    case 4:                                                         /* the chickens */
+      ram[0x11F6B] &= (uint8_t)~0x0C; ram[0x11F6F] |= 0x04; ram[0x11F0B] = (uint8_t)(5 + rnd() % 2);
+      ram[0x11F1C] = 6; ram[0x11F1D] = 0; ram[0x11F1E] = 0; ram[0x11F65] |= 0x01;
+      hm_wr16(ram, 0x0196, (uint16_t)(hm_rd16(ram, 0x0196) & ~0x001Eu));
+      ram[0x11F64] &= (uint8_t)~0xC0; ram[0x11F18] = 0; ram[0x11F19] = (uint8_t)(rnd() % 2);
+      break;
+    case 5:                                                         /* the girls */
+      ram[0x11F66] &= (uint8_t)~0x9F; ram[0x11F1C] = 6; ram[0x11F1D] = 0; ram[0x11F1E] = 0;
+      ram[0x11F1B] = visitor_days[rnd() % 6];
+      hm_wr16(ram, 0x0196, (uint16_t)(hm_rd16(ram, 0x0196) & ~0x001Au));
+      ram[0x11F6B] &= (uint8_t)~0xF0; ram[0x11F6C] &= (uint8_t)~0x3F;
+      for (unsigned i = 0; i < 5; i++) hm_wr16(ram, 0x11F1F + 2 * i, (uint16_t)((rnd() % 3) ? 150 : 199 + rnd() % 2));
+      break;
+    default: break;
+    }
+  }
+}
+
 /* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
  * or winter, an ordinary weekday) */
 static void prep_map_event_dc4a(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -2203,6 +2284,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/mapevents.c", 0x83E76D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "MapEvent_EBA6", hm_MapEvent_EBA6, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83EBA6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event_ending },
+  { "MapEvent_CB69", hm_MapEvent_CB69, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83CB69, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event_farm },
   { "CODE_83F4D8", hm_CODE_83F4D8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/animals.c", 0x83F4D8, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_cow_festival },
   { "Sub_82A9A0", hm_Sub_82A9A0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
