@@ -474,6 +474,7 @@ void hm_SUB_82AD0E(uint8_t *ram, HmRegs *r);       /* interact.c */
 void hm_PlayerMovementInputs(uint8_t *ram, HmRegs *r); /* playerinput.c */
 void hm_CODE_84C7D6(uint8_t *ram, HmRegs *r);
 void hm_NameCursorPharse(uint8_t *ram, HmRegs *r); /* menus.c */
+void hm_SUB_82EB57(uint8_t *ram, HmRegs *r);
 void hm_Unk_OutOfMenu(uint8_t *ram, HmRegs *r);
 void hm_NameMenuKeyDown(uint8_t *ram, HmRegs *r);
 void hm_NameMenuKeyUp(uint8_t *ram, HmRegs *r);
@@ -565,6 +566,9 @@ void hm_GetOBJOrderToDraw(uint8_t *ram, HmRegs *r);
 void hm_PresetsWRAMCopyofOAM(uint8_t *ram, HmRegs *r);
 void hm_PresetsWRAMCopyOAMCopy(uint8_t *ram, HmRegs *r);
 void hm_InitializeOBJs(uint8_t *ram, HmRegs *r);
+void hm_CODE_81CFA0(uint8_t *ram, HmRegs *r);
+void hm_CODE_81CFE6(uint8_t *ram, HmRegs *r);
+void hm_CODE_81D03D(uint8_t *ram, HmRegs *r);
 void hm_CODE_8581A2(uint8_t *ram, HmRegs *r);
 void hm_SUB_848895(uint8_t *ram, HmRegs *r);
 void hm_SUB_848020(uint8_t *ram, HmRegs *r);

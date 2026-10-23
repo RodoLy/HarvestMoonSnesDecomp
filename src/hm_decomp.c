@@ -1840,6 +1840,39 @@ static void prep_map_music(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x0110] = (uint8_t)rnd();
 }
 
+/* menus.c: SUB_82EB57, the name screen's cursor (prep_inputs: a page and
+ * a cell), its old place anything. */
+static void prep_inputs(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_name_cursor(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_inputs(ram, r, rnd);
+  for (unsigned i = 0; i < 4; i++) ram[0x099B + i] = (uint8_t)rnd();
+}
+
+/* objects.c: the player's object: as changing a game object
+ * (prep_change_gobj), with the player's object $0905 = $A5, an animation
+ * $0901 (often the one shown, $0903) whose sprite from DATA8_81D210 is
+ * prepared, the player's position, the state. */
+static void prep_player_object(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_change_gobj(ram, r, rnd);
+  hm_wr16(ram, 0x0905, hm_rd16(ram, 0xA5));
+  uint16_t anim = (uint16_t)(rnd() % 0x80);
+  hm_wr16(ram, 0x0901, anim);
+  hm_wr16(ram, 0x0903, (uint16_t)((rnd() % 2) ? anim : rnd() % 0x80));
+  uint16_t sprite = hm_bus_rd16(ram, 0x81D210u + 3u * anim);
+  if (sprite < 0x450) prep_sprite(ram, sprite, rnd);
+  for (unsigned g = 0; g < 0x40; g++)
+    if (hm_rd16(ram, 0x0A320 + 4 * g) < 40) hm_wr16(ram, 0x0A320 + 4 * g, (uint16_t)(40 + rnd() % 200));
+  hm_wr16(ram, 0x090F, (uint16_t)rnd());
+  hm_wr16(ram, 0x0915, (uint16_t)rnd());
+  hm_wr16(ram, 0xD6, (uint16_t)rnd()); hm_wr16(ram, 0xD8, (uint16_t)rnd());
+  hm_wr16(ram, 0xD2, (uint16_t)rnd());
+  /* the timer byte +12 of the player's object: $FF sometimes (read back as $FFFF) */
+  uint16_t at = hm_bus_rd16(ram, 0x858BE0u + 2u * hm_rd16(ram, 0xA5));
+  if (rnd() % 3 == 0) ram[0x019C + at + 0x12] = 0xFF;
+}
+
 /* objects.c: InvertIfFliped: an offset and the flip bits. */
 static void prep_flip(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -2438,6 +2471,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/playerinput.c", 0x84C7D6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_input },
   { "NameCursorPharse", hm_NameCursorPharse, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/menus.c", 0x82EBAC, 0, 0, 0, 5, { { 0 } }, 0, prep_inputs },
+  { "SUB_82EB57", hm_SUB_82EB57, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/menus.c", 0x82EB57, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_name_cursor },
   { "Unk_OutOfMenu", hm_Unk_OutOfMenu, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/menus.c", 0x82EA60, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_inputs },
   { "NameMenuKeyDown", hm_NameMenuKeyDown, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
@@ -2826,6 +2861,12 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/events.c", 0x8483CC, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_slot_wander },
   { "SUB_848286", hm_SUB_848286, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/events.c", 0x848286, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_slot_sprite },
+  { "CODE_81CFA0", hm_CODE_81CFA0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/objects.c", 0x81CFA0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_object },
+  { "CODE_81CFE6", hm_CODE_81CFE6, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/objects.c", 0x81CFE6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_object },
+  { "CODE_81D03D", hm_CODE_81D03D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/objects.c", 0x81D03D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_object },
   { "GetOBJOrderToDraw", hm_GetOBJOrderToDraw, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/objects.c", 0x858377, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_draw_order },
   { "PresetsWRAMCopyofOAM", hm_PresetsWRAMCopyofOAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,

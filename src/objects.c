@@ -777,3 +777,99 @@ void hm_InitializeOBJs(uint8_t *ram, HmRegs *r)
   hm_PresetsWRAMCopyofOAM(ram, r);
   pull16(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * The player's own game object ($0905). Its animation number ($0901, the
+ * one shown last in $0903) picks a sprite and a flip from DATA8_81D210
+ * ($81:D210, 3 bytes each: the sprite, and a byte that x 64 is the flip,
+ * kept in $090F).
+ *
+ * CODE_81CFA0 ($81:CFA0, JSL, RTL): creates the object at the player's
+ * position (CreateGameObject) and keeps its number in $0905.
+ * CODE_81CFE6 ($81:CFE6, JSR, RTS), every frame: moves it to the player
+ * (CODE_8580B9); if the animation changed, gives it the new sprite
+ * (CODE_858100); then CODE_81D03D.
+ * CODE_81D03D ($81:D03D, JSR, RTS): reads the object back (CODE_8581CB);
+ * $0915 = its timer byte, sign-extended ($A7); at $FFFF (the frame lasts
+ * for ever: the animation is over) the game state bit $2000 is cleared.
+ * Leftovers: those of the object routines; A = $A5 / $0905 (CFA0), the
+ * cleared state or $A7 (D03D), C from the last compare.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define PLAYER_ANIMS     0x81D210   /* DATA8_81D210 */
+#define PLAYER_ANIM      0x0901     /* DB: */
+#define PLAYER_ANIM_SHOWN 0x0903
+#define PLAYER_FLIP      0x090F
+#define PLAYER_TIMER     0x0915
+
+/* $0903 = $0901; $A1 = its sprite, $090F = $9F = its flip; returns n x 3 */
+static void player_sprite(uint8_t *ram, HmRegs *r, uint16_t anim)
+{
+  hm_bus_wr16(ram, abs_db(r, PLAYER_ANIM_SHOWN), anim);
+  hm_dp_w16(ram, r, 0x7E, anim);
+  uint32_t idx = (uint32_t)(uint16_t)(anim << 1) + anim;  /* ASL; CLC; ADC $7E */
+  r->x = (uint16_t)idx;
+  hm_dp_w16(ram, r, 0xA1, hm_bus_rd16(ram, PLAYER_ANIMS + r->x));
+  r->x = (uint16_t)(r->x + 2);
+  uint16_t flip = (uint16_t)(hm_bus_rd8(ram, PLAYER_ANIMS + r->x) << 6);
+  r->c = 0;                                                /* the last ASL */
+  r->a = flip;
+  hm_bus_wr16(ram, abs_db(r, PLAYER_FLIP), flip);
+  hm_dp_w16(ram, r, 0x9F, flip);
+}
+
+void hm_CODE_81CFA0(uint8_t *ram, HmRegs *r)
+{
+  uint16_t anim = hm_bus_rd16(ram, abs_db(r, PLAYER_ANIM));
+  player_sprite(ram, r, anim);
+  r->a = 0;
+  hm_dp_w16(ram, r, 0xA3, 0);
+  hm_dp_w16(ram, r, 0x9B, hm_dp_r16(ram, r, 0xD6));
+  hm_dp_w16(ram, r, 0x9D, hm_dp_r16(ram, r, 0xD8));
+  r->a = hm_dp_r16(ram, r, 0xD8);
+  hm_jsl(ram, r, 0xCFDD, 0x85);
+  hm_CreateGameObject(ram, r);
+  hm_rtl(ram, r);
+  r->a = hm_dp_r16(ram, r, 0xA5);
+  hm_bus_wr16(ram, abs_db(r, PLAYER_GOBJ), r->a);
+}
+
+void hm_CODE_81D03D(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0xA5, hm_bus_rd16(ram, abs_db(r, PLAYER_GOBJ)));
+  hm_jsl(ram, r, 0xD047, 0x85);
+  hm_CODE_8581CB(ram, r);
+  hm_rtl(ram, r);
+  r->a = hm_dp_r16(ram, r, 0xA7);
+  hm_bus_wr16(ram, abs_db(r, PLAYER_TIMER), r->a);
+  r->c = 1;                                                /* CMP #$FFFF: >= */
+  if (r->a != 0xFFFF) { r->c = r->a >= 0xFFFF; return; }
+  r->a = (uint16_t)(0xDFFF & hm_dp_r16(ram, r, 0xD2));     /* the state's bit $2000 off */
+  hm_dp_w16(ram, r, 0xD2, r->a);
+}
+
+void hm_CODE_81CFE6(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0xA5, hm_bus_rd16(ram, abs_db(r, PLAYER_GOBJ)));
+  hm_dp_w16(ram, r, 0x9B, hm_dp_r16(ram, r, 0xD6));
+  hm_dp_w16(ram, r, 0x9D, hm_dp_r16(ram, r, 0xD8));
+  r->a = hm_bus_rd16(ram, abs_db(r, PLAYER_FLIP));
+  hm_dp_w16(ram, r, 0x9F, r->a);
+  hm_jsl(ram, r, 0xCFFD, 0x85);
+  hm_CODE_8580B9(ram, r);
+  hm_rtl(ram, r);
+  uint16_t anim = hm_bus_rd16(ram, abs_db(r, PLAYER_ANIM));
+  uint16_t shown = hm_bus_rd16(ram, abs_db(r, PLAYER_ANIM_SHOWN));
+  r->a = anim;
+  r->c = anim >= shown;                                    /* CMP $0903 */
+  if (anim != shown) {
+    player_sprite(ram, r, anim);
+    r->a = hm_bus_rd16(ram, abs_db(r, PLAYER_GOBJ));
+    hm_dp_w16(ram, r, 0xA5, r->a);
+    hm_jsl(ram, r, 0xD038, 0x85);
+    hm_CODE_858100(ram, r);
+    hm_rtl(ram, r);
+  }
+  push16(ram, r, 0xD03B);                                  /* JSR CODE_81D03D */
+  hm_CODE_81D03D(ram, r);
+  pull16(ram, r);
+}

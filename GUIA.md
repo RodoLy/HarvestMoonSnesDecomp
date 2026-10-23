@@ -798,6 +798,13 @@ a otro guion. Las judías mágicas creciendo son una.
   del hardware ($7E:A000) toda en X = Y = $F0, fuera de la pantalla, y la
   tabla alta ($7E:A200) a 0. `InitializeOBJs` libera los 40 objetos (y
   $DC = 0) y vacía la tabla; los huecos de gráficos quedan como estaban.
+- **El objeto del propio jugador** ($0905): su animación ($0901) elige un
+  sprite y un volteo de `DATA8_81D210` (3 bytes cada una; el byte del
+  volteo x 64 se guarda en $090F). `CODE_81CFA0` lo crea en la posición
+  del jugador; cada cuadro `CODE_81CFE6` lo lleva hasta el jugador y,
+  si la animación cambió ($0903 = la que se muestra), le da el sprite
+  nuevo; después `CODE_81D03D` lo relee y, cuando su cuadro dura para
+  siempre ($FF: la animación terminó), apaga el bit $2000 del estado ($D2).
 - **Un slot que camina** (`SUB_848331`): con el bit 5 de +01, cada +05
   cuadros el slot se mueve (+03, +04), bytes con signo, sumados a su
   posición.
@@ -1060,6 +1067,8 @@ agrega la letra (hasta 4, en $0885) u obedece el código; "listo" necesita
 al menos una letra. B borra la última letra (una letra vacía es $B1).
 Cambiar de página desplaza BG1: las tres páginas están en la misma imagen,
 la 1 a la derecha de la 0 y la 2 debajo.
+El sprite del cursor se pone en la x y la y de la casilla (`SUB_82EB57`,
+en $099B / $099D).
 
 **Mientras hay un cuadro de texto abierto** (modo 2, `ImmobileInputs`):
 
@@ -1602,3 +1611,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 57,86 % | animar los objetos con sprite, el orden de dibujo, vaciar la tabla de sprites |
 | 23-oct-2026 | 59,10 % | cargar una partida guardada y empezar una nueva |
 | 23-oct-2026 | 59,36 % | cargar las casillas de un mapa, la música de cada mapa |
+| 23-oct-2026 | 59,66 % | el objeto con sprite del jugador, el cursor de la pantalla del nombre |

@@ -784,6 +784,13 @@ beans growing are one.
   ($7E:A000) all at X = Y = $F0, off the screen, and the high table
   ($7E:A200) to 0. `InitializeOBJs` frees the 40 game objects (and $DC =
   0) and empties the table; the graphics slots are left as they are.
+- **The player's own object** ($0905): its animation ($0901) picks a
+  sprite and a flip from `DATA8_81D210` (3 bytes each; the flip byte x 64
+  is kept in $090F). `CODE_81CFA0` creates it at the player's position;
+  every frame `CODE_81CFE6` moves it to the player and, when the animation
+  changed ($0903 = the one shown), gives it the new sprite; then
+  `CODE_81D03D` reads it back and, when its frame lasts for ever ($FF: the
+  animation is over), clears the state bit $2000 ($D2).
 - **A slot walking** (`SUB_848331`): with +01 bit 5 set, every +05 frames
   the slot moves by (+03, +04), signed bytes, added to its position.
 - **A slot wandering on its own** (`SUB_8483CC`, 531 instructions; the
@@ -1035,6 +1042,8 @@ moves are "precooked". A adds the letter (up to 4, at $0885) or obeys the
 code; "done" needs at least one letter. B erases the last letter (an empty
 letter is $B1). Switching page scrolls BG1: the three pages are in the
 same picture, page 1 to the right of page 0 and page 2 below it.
+The cursor sprite is placed at the cell's x and y (`SUB_82EB57`, into
+$099B / $099D).
 
 **While a text box is open** (mode 2, `ImmobileInputs`):
 
@@ -1559,3 +1568,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 57.86 % | animating the game objects, the drawing order, emptying the sprite table |
 | 23-Oct-2026 | 59.10 % | loading a saved game and starting a new one |
 | 23-Oct-2026 | 59.36 % | loading a map's tiles, each map's music |
+| 23-Oct-2026 | 59.66 % | the player's game object, the name screen's cursor |

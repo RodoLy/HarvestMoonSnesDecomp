@@ -132,6 +132,10 @@ MANUAL = {
     0x8581CB: "CODE_8581CB",  # reading a game object back
     0x8582C7: "CODE_8582C7",  # animating the game objects
     0x858896: "PresetsWRAMCopyOAMCopy",  # no address in HM-Decomp
+    0x81CFA0: "CODE_81CFA0",  # creating the player's object
+    0x81CFE6: "CODE_81CFE6",  # the player's object each frame
+    0x81D03D: "CODE_81D03D",  # reading it back
+    0x82EB57: "SUB_82EB57",   # the name screen's cursor
     0x858BB0: "InvertIfFlipedX",  # no address in HM-Decomp
     0x858BBC: "InvertIfFlipedY",
     0x81A58F: "CODE_81A58F",  # mapedit.c: footprints in the snow

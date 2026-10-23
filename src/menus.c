@@ -417,6 +417,27 @@ void hm_NameCursorPharse(uint8_t *ram, HmRegs *r)
   r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, r->y));  /* LDA #0; XBA; LDA [$72],Y */
 }
 
+/* SUB_82EB57 ($82:EB57, JSL, RTL): the cursor's place on the name screen:
+ * the first two bytes of the current cell (x, y) into $099B / $099D.
+ * Leftovers: $72-$74 = the page's grid, A = y, Y = 8 x cell + 1, C = bit
+ * 13 of the cell number (the last ASL). */
+void hm_SUB_82EB57(uint8_t *ram, HmRegs *r)
+{
+  uint16_t grid = 0xEBF8;
+  uint8_t page = rd8(ram, r, NAME_PAGE);
+  if (page != 0) grid = page == 1 ? 0xEE30 : 0xF0D0;
+  hm_dp_w16(ram, r, 0x72, grid);
+  *hm_dp(ram, r, 0x74) = 0x82;
+  uint16_t cell = rd16(ram, r, NAME_CELL);
+  r->c = (cell >> 13) & 1;                                 /* ASL x 3 */
+  r->y = (uint16_t)(cell << 3);
+  r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, r->y));
+  hm_bus_wr16(ram, db_addr(r, 0x099B), r->a);
+  r->y++;
+  r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, r->y));
+  hm_bus_wr16(ram, db_addr(r, 0x099D), r->a);
+}
+
 /* Unk_OutOfMenu ($82:EA60, JSL, RTL): draw letter A at the name's place
  * $0994 (the letter cursor $0185 from DATA16_82EB4D: $5010, $5020...). */
 void hm_Unk_OutOfMenu(uint8_t *ram, HmRegs *r)
