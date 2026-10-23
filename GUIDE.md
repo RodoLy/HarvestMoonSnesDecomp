@@ -756,6 +756,27 @@ beans growing are one.
   object is flipped that way (`InvertIfFlipedX` / `Y`): the mirrored
   place of a 16-pixel piece. `ClearSpriteDataTables` empties the queue
   and frees every graphics slot (when a map loads).
+- **Animating the objects** (`CODE_8582C7`, every frame): a sprite's
+  entry (+0C) is a list of frames of 3 bytes: the frame's piece list and
+  how many frames it lasts; a piece list of 0 goes back to the first frame
+  (a loop). Each object counts down its timer (+12); at 0 it moves to the
+  next frame (+0E): its old pieces are freed and the new ones loaded,
+  unless one of the old ones is still waiting in the queue (then it tries
+  again next frame). A duration of $FF stays for ever. A timer of $FE
+  frees the object (pieces and record), but it can only be found there
+  when the object was just created or given a new sprite (they copy the
+  first frame's duration): a later frame of $FE is counted down right
+  after it is loaded, so it just lasts 254 frames.
+- **Drawing order** (`GetOBJOrderToDraw`): a kind of depth sort around
+  the player's object (`$0905`) into `$084C`: the objects whose Y is not
+  smaller than the player's go first, in their own order, then the
+  player, and the ones above it (smaller Y) fill the list from the end
+  backwards. Only the side of the player counts; it is not a full sort.
+- **Emptying the sprite table** (`PresetsWRAMCopyofOAM` and an exact copy,
+  `PresetsWRAMCopyOAMCopy`): the WRAM copy of the 128 hardware sprites
+  ($7E:A000) all at X = Y = $F0, off the screen, and the high table
+  ($7E:A200) to 0. `InitializeOBJs` frees the 40 game objects (and $DC =
+  0) and empties the table; the graphics slots are left as they are.
 - **A slot walking** (`SUB_848331`): with +01 bit 5 set, every +05 frames
   the slot moves by (+03, +04), signed bytes, added to its position.
 - **A slot wandering on its own** (`SUB_8483CC`, 531 instructions; the
@@ -1509,3 +1530,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 55.98 % | the slots that wander on their own (the town's people, the animals) |
 | 23-Oct-2026 | 56.14 % | each slot's sprite, every frame |
 | 23-Oct-2026 | 56.76 % | talking to people (commands 1E, 1F, 2D), a map animation and the music from a script; count corrected (−0.04) |
+| 23-Oct-2026 | 57.86 % | animating the game objects, the drawing order, emptying the sprite table |

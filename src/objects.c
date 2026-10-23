@@ -558,3 +558,222 @@ void hm_ClearSpriteDataTables(uint8_t *ram, HmRegs *r)
   hm_bus_wr16(ram, abs_db(r, 0x0848), 0);
   r->a = 0xFFFF; r->x = 0x1000; r->y = 64; r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_8582C7 ($85:82C7, JSL, RTL): animates the game objects, every
+ * frame. A sprite's entry (+0C) is a list of frames, 3 bytes each: the
+ * piece list of the frame and how many frames it lasts; a piece list of 0
+ * goes back to the first frame (a loop). For each of the $DC objects in
+ * use, by its timer +12:
+ *   0     the next frame: unless a piece of the current one is still
+ *         queued (CODE_858B7B; then it waits), its pieces are freed and
+ *         those of the frame at +0E are loaded; +10 = the frame's piece
+ *         list, +12 = its duration, +0E = the frame after it;
+ *   $FE   the object is freed (its pieces and +00 = 0). Only found right
+ *         after the object was created or given a sprite (they copy the
+ *         first frame's duration): a later frame of $FE is counted down
+ *         as soon as it is loaded, and simply lasts 254 frames;
+ *   $FF   stays on this frame for ever;
+ *   other one frame less (also right after loading a frame).
+ * Leftovers: $A9 = $24 x $DC, $AB = $DC, A = $AB, C = 1; X, Y and $75 /
+ * $77 / $7A of the last object worked on.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_2C7_CHECK  0x830E   /* JSR CODE_858B7B at $85:830C */
+#define RET_2C7_FREE   0x8315   /* JSR CODE_858B41 at $85:8313 */
+#define RET_2C7_LOAD   0x8344   /* JSR LoadGameObjectComponents at $85:8342 */
+#define RET_2C7_END    0x8356   /* JSR CODE_858B41 at $85:8354 */
+
+static void jsr85(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmRegs *))
+{
+  push16(ram, r, ret);
+  fn(ram, r);
+  pull16(ram, r);
+}
+static uint8_t gobj8(uint8_t *ram, HmRegs *r, uint16_t field, uint16_t x)   /* 8-bit LDA */
+{
+  uint8_t v = hm_bus_rd8(ram, abs_x(r, (uint16_t)(GOBJ + field), x));
+  r->a = (uint16_t)((r->a & 0xFF00) | v);
+  return v;
+}
+
+/* the next frame (.CODE_858303 with a timer of 0); false if it must wait */
+static bool next_frame(uint8_t *ram, HmRegs *r)
+{
+  jsr85(ram, r, RET_2C7_CHECK, hm_CODE_858B7B);
+  r->a = hm_dp_r16(ram, r, 0xAF);
+  if (r->a) return false;
+  jsr85(ram, r, RET_2C7_FREE, hm_CODE_858B41);
+  uint16_t x = r->x = hm_dp_r16(ram, r, 0xA9);
+  hm_dp_w16(ram, r, 0x75, r->a = hm_bus_rd16(ram, abs_x(r, GOBJ + 0x0E, x)));
+  while ((r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x75, 0))) == 0)    /* the end: loop */
+    hm_dp_w16(ram, r, 0x75, r->a = hm_bus_rd16(ram, abs_x(r, GOBJ + 0x0C, x)));
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x10, x), r->a);
+  r->y = 2;
+  uint8_t lasts = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x75, 2));
+  r->a = (uint16_t)((r->a & 0xFF00) | lasts);
+  hm_bus_wr8(ram, abs_x(r, GOBJ + 0x12, x), lasts);
+  uint16_t at = hm_dp_r16(ram, r, 0x75);
+  r->c = (uint32_t)at + 3 > 0xFFFF;
+  r->a = (uint16_t)(at + 3);
+  hm_bus_wr16(ram, abs_x(r, GOBJ + 0x0E, x), r->a);
+  jsr85(ram, r, RET_2C7_LOAD, hm_LoadGameObjectComponents);
+  return true;
+}
+
+void hm_CODE_8582C7(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0xA9, 0);
+  hm_dp_w16(ram, r, 0xAB, 0);
+  do {
+    uint16_t x = r->x = hm_dp_r16(ram, r, 0xA9);
+    r->a = hm_bus_rd16(ram, abs_x(r, GOBJ, x));
+    if (r->a) {
+      uint16_t sprite = hm_bus_rd16(ram, abs_x(r, GOBJ + 0x02, x));
+      uint8_t bank = sprite >= FIRST_SPRITE_87 ? 0x87 : 0x86;
+      r->c = sprite >= FIRST_SPRITE_87;                    /* CMP #$0262 */
+      r->a = (uint16_t)((sprite & 0xFF00) | bank);
+      *hm_dp(ram, r, 0x77) = bank;
+      *hm_dp(ram, r, 0x7A) = bank;
+      uint8_t timer = gobj8(ram, r, 0x12, x);
+      bool count_down = true;
+      if (timer == 0) {
+        count_down = next_frame(ram, r);
+      } else {
+        r->c = timer >= 0xFE;                              /* CMP #$FE */
+        if (timer == 0xFE) {
+          jsr85(ram, r, RET_2C7_END, hm_CODE_858B41);
+          r->a = 0;
+          hm_bus_wr16(ram, abs_x(r, GOBJ, r->x), 0);
+          count_down = false;
+        }
+      }
+      if (count_down) {                                    /* .CODE_858362 */
+        x = r->x = hm_dp_r16(ram, r, 0xA9);
+        timer = gobj8(ram, r, 0x12, x);
+        r->c = timer >= 0xFF;                              /* CMP #$FF */
+        if (timer != 0xFF) {
+          r->a = (uint16_t)((r->a & 0xFF00) | (uint8_t)(timer - 1));
+          hm_bus_wr8(ram, abs_x(r, GOBJ + 0x12, x), (uint8_t)(timer - 1));
+        }
+      }
+    }
+    uint16_t at = hm_dp_r16(ram, r, 0xA9);                 /* .CODE_8582D4 */
+    r->c = (uint32_t)at + GOBJ_SIZE > 0xFFFF;
+    hm_dp_w16(ram, r, 0xA9, (uint16_t)(at + GOBJ_SIZE));
+    hm_dp_w16(ram, r, 0xAB, (uint16_t)(hm_dp_r16(ram, r, 0xAB) + 1));
+    r->a = hm_dp_r16(ram, r, 0xAB);
+    r->c = r->a >= hm_dp_r16(ram, r, 0xDC);                /* CMP $DC */
+  } while (r->a != hm_dp_r16(ram, r, 0xDC));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * GetOBJOrderToDraw ($85:8377, JSR, RTS): the order the $DC game objects
+ * are drawn in ($084C, one byte each), a kind of depth sort around the
+ * player's object ($0905): the objects at or below the player (Y, +0A, not
+ * smaller than the player's) go first, in order, and the ones above go at
+ * the end, from the last place backwards; the player's object goes in the
+ * middle, last of the first group. So the player is drawn over everything
+ * above it on the screen and under what is in front of it. (The order is
+ * only by the side of the player; among themselves objects keep their
+ * numbers.)
+ * Leftovers: $A9 = the player's Y, $AD = the player's place, $AF = the
+ * place before it, $7E = $FFFF; X = $AD, Y = $DC, A = the player's object
+ * (8-bit), C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define DRAW_ORDER   0x084C   /* DB: */
+#define PLAYER_GOBJ  0x0905   /* DB: 16b */
+
+void hm_GetOBJOrderToDraw(uint8_t *ram, HmRegs *r)
+{
+  uint16_t player = hm_bus_rd16(ram, abs_db(r, PLAYER_GOBJ));
+  r->c = (player >> 15) & 1;                               /* ASL */
+  uint16_t at = hm_bus_rd16(ram, (GOBJ_OFFSETS + (uint16_t)(player << 1)) & 0xFFFFFF);
+  uint16_t player_y = hm_bus_rd16(ram, abs_x(r, GOBJ + 0x0A, at));
+  hm_dp_w16(ram, r, 0xA9, player_y);
+  hm_dp_w16(ram, r, 0xAD, 0);
+  hm_dp_w16(ram, r, 0xAF, (uint16_t)(hm_dp_r16(ram, r, 0xDC) - 1));
+  hm_dp_w16(ram, r, 0x7E, 0xFFFF);
+  uint16_t x = 0, y = 0;
+  do {
+    push16(ram, r, x);                                     /* PHX */
+    if (y != hm_bus_rd16(ram, abs_db(r, PLAYER_GOBJ))) {
+      uint16_t oy = hm_bus_rd16(ram, abs_x(r, GOBJ + 0x0A, x));
+      r->c = oy >= hm_dp_r16(ram, r, 0xA9);                /* CMP $A9 */
+      uint16_t place;
+      if (r->c) {
+        place = hm_dp_r16(ram, r, 0xAD);
+        hm_dp_w16(ram, r, 0xAD, (uint16_t)(place + 1));
+      } else {
+        place = hm_dp_r16(ram, r, 0xAF);
+        hm_dp_w16(ram, r, 0xAF, (uint16_t)(place - 1));
+      }
+      hm_bus_wr8(ram, abs_x(r, DRAW_ORDER, place), (uint8_t)y);
+    }
+    uint16_t back = pull16(ram, r);                        /* PLA */
+    r->c = (uint32_t)back + GOBJ_SIZE > 0xFFFF;
+    x = (uint16_t)(back + GOBJ_SIZE);
+    y++;
+  } while (y != hm_dp_r16(ram, r, 0xDC));                  /* CPY $DC */
+  r->x = hm_dp_r16(ram, r, 0xAD);
+  r->y = y;
+  r->c = 1;                                                /* CPY $DC: equal */
+  uint16_t p = hm_bus_rd16(ram, abs_db(r, PLAYER_GOBJ));
+  r->a = p;
+  hm_bus_wr8(ram, abs_x(r, DRAW_ORDER, r->x), (uint8_t)p);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * PresetsWRAMCopyofOAM ($85:8647, JSR, RTS) and PresetsWRAMCopyOAMCopy
+ * ($85:8896, the same code twice): empties the WRAM copy of the sprite
+ * table (OAM) before it is filled: the 128 sprites ($7E:A000, 4 bytes
+ * each) at X = Y = $F0, off the screen, and the high table ($7E:A200, 32
+ * bytes) to 0. $B7 = 1 (absolute, data bank).
+ * Leftovers: A = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define OAM_COPY       0x7EA000
+#define OAM_COPY_HIGH  0x7EA200
+
+void hm_PresetsWRAMCopyofOAM(uint8_t *ram, HmRegs *r)
+{
+  for (uint32_t i = 0; i < 0x200; i += 4) hm_bus_wr16(ram, OAM_COPY + i, 0xF0F0);
+  for (uint32_t i = 0; i < 0x20; i += 2) hm_bus_wr16(ram, OAM_COPY_HIGH + i, 0);
+  r->a = 1;
+  hm_bus_wr16(ram, abs_db(r, 0x00B7), 1);
+}
+void hm_PresetsWRAMCopyOAMCopy(uint8_t *ram, HmRegs *r) { hm_PresetsWRAMCopyofOAM(ram, r); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * InitializeOBJs ($85:820F, JSL, RTL): frees all 40 game objects (their
+ * first $12 bytes to 0, the piece bytes +14..+23 to $FF), no object handed
+ * out ($DC = 0) and the sprite table emptied (PresetsWRAMCopyofOAM). The
+ * pieces' graphics slots are not touched. $77 / $7A = the bank of sprite
+ * $A1's table, as usual.
+ * Leftovers: $0086 (absolute) = $5A0, Y = 40, A = 1 and the rest of
+ * PresetsWRAMCopyofOAM; X = $57C, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define RET_20F_PRESETS 0x82C5   /* JSR PresetsWRAMCopyofOAM at $85:82C3 */
+
+void hm_InitializeOBJs(uint8_t *ram, HmRegs *r)
+{
+  uint16_t sprite = hm_dp_r16(ram, r, 0xA1);
+  uint8_t bank = sprite >= FIRST_SPRITE_87 ? 0x87 : 0x86;
+  *hm_dp(ram, r, 0x77) = bank;
+  *hm_dp(ram, r, 0x7A) = bank;
+  uint32_t counter = abs_db(r, 0x0086);
+  hm_bus_wr16(ram, counter, 0);
+  uint16_t y = 0;
+  do {
+    uint16_t x = r->x = hm_bus_rd16(ram, counter);
+    for (uint16_t f = 0; f < 0x14; f += 2) hm_bus_wr16(ram, abs_x(r, (uint16_t)(GOBJ + f), x), 0);
+    for (uint16_t f = 0x14; f < 0x24; f++) hm_bus_wr8(ram, abs_x(r, (uint16_t)(GOBJ + f), x), 0xFF);
+    uint16_t next = hm_bus_rd16(ram, counter);
+    hm_bus_wr16(ram, counter, (uint16_t)(next + GOBJ_SIZE));
+    y++;
+  } while (y != GOBJ_MAX);
+  r->y = y;
+  r->c = 1;
+  hm_dp_w16(ram, r, 0xDC, 0);
+  push16(ram, r, RET_20F_PRESETS);
+  hm_PresetsWRAMCopyofOAM(ram, r);
+  pull16(ram, r);
+}

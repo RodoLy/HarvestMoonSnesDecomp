@@ -1736,6 +1736,74 @@ static void prep_music_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   prep_music(ram, r, rnd);
 }
 
+/* objects.c: CODE_8582C7, animating the game objects. Each one in use
+ * gets a real sprite and is somewhere in its list of frames (sometimes at
+ * the end, to loop back), with a timer about to run out, $FE (over) or
+ * $FF (for ever); every piece of every frame is prepared, and the slots
+ * have high use counts (CODE_858C9F hangs on 0). */
+static void prep_animate_gobjs(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  for (unsigned i = 0; i < 40; i++) {
+    uint32_t o = 0x019C + 0x24 * i;
+    uint16_t sprite = (uint16_t)(rnd() % 0x450);
+    uint8_t bank = sprite >= 0x262 ? 0x87 : 0x86;
+    uint32_t table = bank == 0x87 ? 0x878080u + 2u * (sprite - 0x262) : 0x868080u + 2u * sprite;
+    uint16_t entry = hm_bus_rd16(ram, table);
+    unsigned frames = 0;
+    while (frames < 32 && hm_bus_rd16(ram, (uint32_t)bank << 16 | (uint16_t)(entry + 3 * frames))) {
+      uint16_t list = hm_bus_rd16(ram, (uint32_t)bank << 16 | (uint16_t)(entry + 3 * frames));
+      uint8_t n = hm_bus_rd8(ram, (uint32_t)bank << 16 | list);
+      for (unsigned k = 0; k < n && k < 16; k++)
+        prep_piece(ram, hm_bus_rd16(ram, (uint32_t)bank << 16 | (uint16_t)(list + 1 + 5 * k)), rnd);
+      frames++;
+    }
+    unsigned at = frames ? rnd() % (frames + 1) : 0;
+    hm_wr16(ram, o + 0x00, (uint16_t)((rnd() % 4) ? 0x7777 : 0));
+    hm_wr16(ram, o + 0x02, sprite);
+    hm_wr16(ram, o + 0x0C, entry);
+    hm_wr16(ram, o + 0x0E, (uint16_t)(entry + 3 * at));
+    hm_wr16(ram, o + 0x10, hm_bus_rd16(ram, (uint32_t)bank << 16 | (uint16_t)(entry + 3 * (at ? at - 1 : 0))));
+    static const uint8_t timers[] = { 0, 0, 0, 1, 2, 0xFE, 0xFF, 0x10 };
+    ram[o + 0x12] = (uint8_t)((rnd() % 8) ? timers[rnd() % 8] : rnd());
+    uint8_t pieces = (uint8_t)(rnd() % 6);
+    ram[o + 0x13] = pieces;
+    for (unsigned k = 0; k < pieces; k++) ram[o + 0x14 + k] = (uint8_t)((rnd() % 6) ? rnd() % 0x40 : 0xFF);
+  }
+  for (unsigned g = 0; g < 0x40; g++) hm_wr16(ram, 0x0A320 + 4 * g, (uint16_t)(40 + rnd() % 200));
+  prep_queue(ram, 40, rnd);
+  hm_wr16(ram, 0xDC, (uint16_t)(1 + rnd() % 40));
+  hm_wr16(ram, 0x0740, (uint16_t)rnd());
+}
+
+/* objects.c: GetOBJOrderToDraw: how many objects ($DC, at least 1), the
+ * player's one ($0905, sometimes past $DC) and their Y (+0A), close to the
+ * player's and often equal. */
+static void prep_draw_order(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  uint16_t n = (uint16_t)(1 + rnd() % 40);
+  hm_wr16(ram, 0xDC, n);
+  uint16_t player = (uint16_t)((rnd() % 8) ? rnd() % n : rnd() % 40);
+  hm_wr16(ram, 0x0905, player);
+  uint16_t y = (uint16_t)rnd();
+  for (unsigned i = 0; i < 40; i++)
+    hm_wr16(ram, 0x019C + 0x24 * i + 0x0A, (uint16_t)((rnd() % 4) ? y - 8 + rnd() % 17 : rnd()));
+}
+/* PresetsWRAMCopyofOAM / InitializeOBJs: what they clear holds anything */
+static void prep_oam_copy(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  for (unsigned i = 0; i < 0x220; i++) ram[0xA000 + i] = (uint8_t)rnd();
+  hm_wr16(ram, 0x00B7, (uint16_t)rnd());
+}
+static void prep_init_objs(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_oam_copy(ram, r, rnd);
+  for (unsigned i = 0; i < 40 * 0x24; i++) ram[0x019C + i] = (uint8_t)rnd();
+  hm_wr16(ram, 0xA1, (uint16_t)((rnd() % 2) ? 0x250 + rnd() % 0x20 : rnd()));
+}
+
 /* objects.c: InvertIfFliped: an offset and the flip bits. */
 static void prep_flip(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -2714,6 +2782,16 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/events.c", 0x8483CC, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_slot_wander },
   { "SUB_848286", hm_SUB_848286, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/events.c", 0x848286, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_slot_sprite },
+  { "GetOBJOrderToDraw", hm_GetOBJOrderToDraw, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/objects.c", 0x858377, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_draw_order },
+  { "PresetsWRAMCopyofOAM", hm_PresetsWRAMCopyofOAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/objects.c", 0x858647, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_oam_copy },
+  { "PresetsWRAMCopyOAMCopy", hm_PresetsWRAMCopyOAMCopy, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/objects.c", 0x858896, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_oam_copy },
+  { "InitializeOBJs", hm_InitializeOBJs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/objects.c", 0x85820F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_init_objs },
+  { "CODE_8582C7", hm_CODE_8582C7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/objects.c", 0x8582C7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_animate_gobjs },
   { "CODE_8581CB", hm_CODE_8581CB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x8581CB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
   { "InvertIfFlipedX", hm_InvertIfFlipedX, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,

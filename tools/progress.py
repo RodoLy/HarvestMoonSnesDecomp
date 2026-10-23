@@ -122,6 +122,8 @@ LOCAL = {
     0x8580B9: ("CODE_8580B9", "CODE_8580B9"),
     0x858100: ("CODE_858100", "CODE_858100"),
     0x8581CB: ("CODE_8581CB", "CODE_8581CB"),
+    0x8582C7: ("CODE_8582C7", "CODE_8582C7", "GetOBJOrderToDraw"),
+    0x858896: ("PresetsWRAMCopyOAMCopy", "PresetsWRAMCopyOAMCopy"),
     0x858BB0: ("InvertIfFlipedX", "InvertIfFlipedX", "InvertIfFlipedY"),
     0x858BBC: ("InvertIfFlipedY", "InvertIfFlipedY", "Table_HighOAMXbit"),
     0x81A4F1: ("CODE_81A4F1", "CODE_81A4F1"),

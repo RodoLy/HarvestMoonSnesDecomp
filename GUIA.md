@@ -767,6 +767,29 @@ a otro guion. Las judías mágicas creciendo son una.
   `Y`): el sitio reflejado de una pieza de 16 píxeles.
   `ClearSpriteDataTables` vacía la cola y libera todos los huecos de
   gráficos (al cargar un mapa).
+- **Animar los objetos** (`CODE_8582C7`, cada cuadro): la entrada de un
+  sprite (+0C) es una lista de cuadros de 3 bytes: la lista de piezas del
+  cuadro y cuántos cuadros dura; una lista de piezas 0 vuelve al primer
+  cuadro (un bucle). Cada objeto descuenta su temporizador (+12); al
+  llegar a 0 pasa al cuadro siguiente (+0E): libera sus piezas viejas y
+  carga las nuevas, salvo que alguna vieja siga esperando en la cola
+  (entonces lo vuelve a intentar al cuadro siguiente). Una duración $FF
+  se queda para siempre. Un temporizador en $FE libera el objeto (piezas
+  y registro), pero solo puede encontrarse ahí si el objeto acaba de
+  crearse o de recibir otro sprite (copian la duración del primer cuadro):
+  un cuadro posterior de $FE se descuenta apenas se carga, así que solo
+  dura 254 cuadros.
+- **El orden de dibujo** (`GetOBJOrderToDraw`): una especie de orden por
+  profundidad alrededor del objeto del jugador (`$0905`), en `$084C`:
+  primero los objetos cuya Y no es menor que la del jugador, en su propio
+  orden, después el jugador, y los que están más arriba (Y menor) llenan
+  la lista desde el final hacia atrás. Solo cuenta de qué lado del
+  jugador están; no es un orden completo.
+- **Vaciar la tabla de sprites** (`PresetsWRAMCopyofOAM` y una copia
+  exacta, `PresetsWRAMCopyOAMCopy`): la copia en WRAM de los 128 sprites
+  del hardware ($7E:A000) toda en X = Y = $F0, fuera de la pantalla, y la
+  tabla alta ($7E:A200) a 0. `InitializeOBJs` libera los 40 objetos (y
+  $DC = 0) y vacía la tabla; los huecos de gráficos quedan como estaban.
 - **Un slot que camina** (`SUB_848331`): con el bit 5 de +01, cada +05
   cuadros el slot se mueve (+03, +04), bytes con signo, sumados a su
   posición.
@@ -1547,3 +1570,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 55,98 % | los slots que pasean solos (la gente del pueblo, los animales) |
 | 23-oct-2026 | 56,14 % | el sprite de cada slot, cada cuadro |
 | 23-oct-2026 | 56,76 % | hablar con la gente (comandos 1E, 1F, 2D), animación de mapa y música desde un guion; corrección de la cuenta (−0,04) |
+| 23-oct-2026 | 57,86 % | animar los objetos con sprite, el orden de dibujo, vaciar la tabla de sprites |

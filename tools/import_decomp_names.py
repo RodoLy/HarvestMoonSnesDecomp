@@ -130,6 +130,8 @@ MANUAL = {
     0x8580B9: "CODE_8580B9",  # objects.c: moving a game object
     0x858100: "CODE_858100",  # changing its sprite
     0x8581CB: "CODE_8581CB",  # reading a game object back
+    0x8582C7: "CODE_8582C7",  # animating the game objects
+    0x858896: "PresetsWRAMCopyOAMCopy",  # no address in HM-Decomp
     0x858BB0: "InvertIfFlipedX",  # no address in HM-Decomp
     0x858BBC: "InvertIfFlipedY",
     0x81A58F: "CODE_81A58F",  # mapedit.c: footprints in the snow
