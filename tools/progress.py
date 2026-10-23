@@ -129,6 +129,9 @@ LOCAL = {
     0x82EB57: ("SUB_82EB57", "SUB_82EB57"),
     0x83F4D8: ("CODE_83F4D8", "CODE_83F4D8"),
     # who appears on entering each map (UNK_TableFunctionSelect's routines)
+    0x83DE9B: ("@83DE9B", "MapEvent_DE9B", "@83DED3"),
+    0x83E407: ("@83E407", "MapEvent_E407", "@83E4CB"),
+    0x83E4CB: ("@83E4CB", "MapEvent_E4CB", "@83E586"),
     0x83D844: ("@83D844", "MapEvent_D844", "@83D929"),
     0x83D929: ("@83D929", "MapEvent_D929", "@83D955"),
     0x83D955: ("@83D955", "MapEvent_D955", "@83DA1F"),

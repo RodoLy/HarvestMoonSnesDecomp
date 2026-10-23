@@ -1409,9 +1409,21 @@ address). Done so far:
 | `E6C4` | the family: the wife (Ann or Eve, by $7F1F66, unless $7F1F6E bit 1), and each child (bits 2 / 3) once 60 days old |
 | `E74C` | nothing (most maps from $3B on) |
 | `D4D7`/`D5E7`, `D74E`/`D818`, `D844`/`D929`, `D955`/`DA1F`, `DB8F`/`DC1E` | the five girls' houses (two maps each): the girl the player married ($7F1F66 bit) appears there alone (group $22) while $7F1F6E bit 1 is set; otherwise the family's usual day |
-| `D613`, `DA4B`, `DAED` | more people with a usual day |
-| `DC4A` | a house with a visitor: on some days of fall and winter from year 2 on (2-7, 13-17, 25-28, ordinary weekdays) a second person comes (slot 9, group $21) |
-| `DD95`, `DE64` | two more houses, with their first visits |
+| `D613`, `DA4B`, `DAED` | more people with a usual day (maps $1B, $25, $24) |
+| `DC4A` | maps $10-$13 (the mountain): first visit, story scenes, and on some days of fall and winter from year 2 on (2-7, 13-17, 25-28, ordinary weekdays) a second person (slot 9, group $21) |
+| `DD95`, `DE64` | maps $2B and $2A, with their first visits |
+| `DE9B` | map $27: with $7F1F64 bit 3 a scene that stops the player |
+| `E407` | maps $0C-$0F (the crossroads): the first time (group $0A); from the first winter on a visit of group $0D, in two parts |
+| `E4CB` | map $29: a script at a tile until $7F1F6A bit 6; coming from below with $D2 bit 11 the dog goes back to the farm (120, 424) |
+
+Which map uses which routine: $00-$03 `CB69`, $04-$07 `D2E0`, $08-$0B
+`E5DF` `E5F1` `E603` `E6B2`, $0C-$0F `E407`, $10-$13 `DC4A`, $14 `E661`,
+$15-$17 `DED3`, $18-$19 `D4D7`, $1A `D5E7`, $1B `D613`, $1C `D74E`, $1D
+`D818`, $1E `DB8F`, $1F `DC1E`, $20 `D955`, $21 `DA1F`, $22 `D844`, $23
+`D929`, $24 `DAED`, $25 `DA4B`, $26 `E6C4`, $27 `DE9B`, $28 `E5B4`, $29
+`E4CB`, $2A `DE64`, $2B `DD95`, $2C `E5A2`, $2D-$30 `E5CD`, $31-$38
+`E586`, $39 `E632`, $3A `E690`, $3C `E76D`, $3D and $4B `EBA6`, the rest
+`E74C`.
 
 **The usual day.** Each person has one script in each of several groups,
 one per kind of day: $0B before the first event of the story
@@ -1608,3 +1620,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 59.85 % | the start of the ending: the favourite cow and the ranch development percentage |
 | 23-Oct-2026 | 60.23 % | who appears on each map: the first 13 routines |
 | 23-Oct-2026 | 62.32 % | who appears on each map: the houses (16 more routines) |
+| 23-Oct-2026 | 62.68 % | who appears on each map: the crossroads, maps $27 and $29 |

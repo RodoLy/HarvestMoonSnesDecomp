@@ -407,3 +407,88 @@ void hm_MapEvent_DE64(uint8_t *ram, HmRegs *r)
   if (!flag(ram, r, 0x7F1F68, 0x2000)) { spawn(ram, r, 0, 0x15, 0, 0xDE7A); return; }
   if (flag(ram, r, 0x7F1F64, 0x0002)) spawn(ram, r, 0, 1, 0x0A, 0xDE95);
 }
+
+/* DE9B: with $7F1F64 bit 3, a scene (slot $15, script $25 of group 0)
+ * that stops the player: $096E = $45, $D2 |= $40, action 0. */
+void hm_MapEvent_DE9B(uint8_t *ram, HmRegs *r)
+{
+  if (!flag(ram, r, 0x7F1F64, 0x0008)) return;
+  spawn(ram, r, 0x15, 0, 0x25, 0xDEB1);
+  r->a = (uint16_t)((r->a & 0xFF00) | 0x45);
+  hm_bus_wr8(ram, db(r, 0x096E), 0x45);
+  hm_bus_wr8(ram, db(r, 0x096F), 0);
+  hm_bus_wr8(ram, db(r, 0x0970), 0);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0040);
+  hm_dp_w16(ram, r, 0xD2, r->a);
+  r->a = 0;
+  hm_dp_w16(ram, r, 0xD4, 0);
+}
+
+/* E407, maps $0C-$0F (the crossroads): $7F1F5C bit 7 off and slot $15's script $15;
+ * then the first time (group $0A, $7F1F68 bit 4; while $7F1F68 bit 0 is
+ * clear, group $0B after that); from the first winter (or year 2) on, a
+ * visit of group $0D (first script 0, $7F1F68 bit 6 and $099F = 4; then
+ * script 1, until $7F1F68 bit 8, which also clears $7F1F31). */
+void hm_MapEvent_E407(uint8_t *ram, HmRegs *r)
+{
+  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5C) & 0xFF7F);
+  hm_bus_wr16(ram, 0x7F1F5C, r->a);
+  spawn(ram, r, 0x15, 0, 0x15, 0xE41F);
+  if (!flag(ram, r, 0x7F1F68, 0x0001)) {
+    if (flag(ram, r, 0x7F1F68, 0x0010)) { spawn(ram, r, 0, 0x0B, 0x0B, 0xE45F); return; }
+    spawn(ram, r, 0, 0x0A, 1, 0xE442);
+    seen(ram, r, 0x0010);
+    return;
+  }
+  if (!byte_of(ram, r, 0x7F1F18) && !byte_is(ram, r, SEASON, 3)) return;
+  if (!flag(ram, r, 0x7F1F68, 0x0040)) {
+    spawn(ram, r, 0, 0x0D, 0, 0xE48E);
+    seen(ram, r, 0x0040);
+    r->a = (uint16_t)((r->a & 0xFF00) | 0x04);
+    hm_bus_wr8(ram, db(r, 0x099F), 0x04);
+    return;
+  }
+  if (flag(ram, r, 0x7F1F68, 0x0100)) return;
+  spawn(ram, r, 0, 0x0D, 1, 0xE4BD);
+  r->a &= 0xFF00;
+  hm_bus_wr8(ram, 0x7F1F31, 0);
+}
+
+/* E4CB, map $29: until $7F1F6A bit 6, a script at the tile (224, 384)
+ * (SUB_8480F8: slot $10, script $1F). Coming from below ($D8 >= $200)
+ * with $D2 bit 11: the bit off and the
+ * dog placed on this season's farm at (120, 424), the player's animation
+ * = his direction. Then group $1D with $7F1F6C bit 4, group $1B with bit
+ * 0, or on Saturday group 2. */
+void hm_MapEvent_E4CB(uint8_t *ram, HmRegs *r)
+{
+  if (!flag(ram, r, 0x7F1F6A, 0x0040)) {
+    hm_bus_wr16(ram, db(r, 0x0985), 0x00E0);
+    hm_bus_wr16(ram, db(r, 0x0987), 0x0180);
+    r->a = 0x0010; r->x = 0; r->y = 0x001F;
+    hm_jsl(ram, r, 0xE4EE, 0x84);
+    hm_SUB_8480F8(ram, r);
+    hm_rtl(ram, r);
+  }
+  r->a = hm_dp_r16(ram, r, 0xD8);
+  r->c = r->a >= 0x0200;
+  if (r->c) {
+    uint16_t state = hm_dp_r16(ram, r, 0xD2);
+    r->a = state & 0x0800;
+    if (r->a) {
+      r->a = (uint16_t)(state & 0xF7FF);
+      hm_dp_w16(ram, r, 0xD2, r->a);
+      uint8_t season = byte_of(ram, r, SEASON);
+      hm_bus_wr8(ram, 0x7F1F30, season);
+      hm_bus_wr16(ram, 0x7F1F2C, 0x0078);
+      r->a = 0x01A8;
+      hm_bus_wr16(ram, 0x7F1F2E, 0x01A8);
+      r->a = hm_dp_r16(ram, r, 0xDA);                      /* LDA #0; CLC; ADC */
+      r->c = 0;
+      hm_bus_wr16(ram, db(r, 0x0901), r->a);
+    }
+  }
+  if (flag(ram, r, 0x7F1F6C, 0x0010)) { spawn(ram, r, 0, 0x1D, 2, 0xE54B); return; }
+  if (flag(ram, r, 0x7F1F6C, 0x0001)) { spawn(ram, r, 0, 0x1B, 1, 0xE566); return; }
+  if (byte_is(ram, r, WEEKDAY, 6)) spawn(ram, r, 0, 2, 4, 0xE580);
+}

@@ -1903,7 +1903,7 @@ static void prep_cow_festival(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 static void prep_map_event(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   (void)r;
-  for (uint32_t a = 0x11F5E; a < 0x11F76; a++) ram[a] = (uint8_t)rnd();
+  for (uint32_t a = 0x11F5A; a < 0x11F76; a++) ram[a] = (uint8_t)rnd();
   static const uint8_t seasons[] = { 0, 1, 2, 3, 3, 1 };
   ram[0x11F19] = seasons[rnd() % 6];
   static const uint8_t days[] = { 1, 0x18, 0x18, 0x0A, 0x0A, 0x07, 0x08, 0x0C, 0x0D, 0x11, 0x12,
@@ -1928,6 +1928,10 @@ static void prep_map_event(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 4) ram[0x11F68] |= (uint8_t)((rnd() % 4) ? 0x0E : 0x06);
   if (rnd() % 2) ram[0x11F69] |= 0x20;                              /* $7F1F68 bit 13 */
   if (rnd() % 2) { ram[0x11F5E] &= (uint8_t)~0x30; ram[0x11F6C] &= (uint8_t)~0x14; }
+  /* coming into the map from below or not; the state, the facing */
+  hm_wr16(ram, 0xD8, (uint16_t)((rnd() % 2) ? 0x1F8 + rnd() % 0x10 : rnd() % 0x400));
+  hm_wr16(ram, 0xD2, (uint16_t)rnd());
+  hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
 }
 
 /* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
@@ -2139,6 +2143,12 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/mapevents.c", 0x83DD95, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "MapEvent_DE64", hm_MapEvent_DE64, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83DE64, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_DE9B", hm_MapEvent_DE9B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83DE9B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_E407", hm_MapEvent_E407, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83E407, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_E4CB", hm_MapEvent_E4CB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83E4CB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "CODE_83F4D8", hm_CODE_83F4D8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/animals.c", 0x83F4D8, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_cow_festival },
   { "Sub_82A9A0", hm_Sub_82A9A0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,

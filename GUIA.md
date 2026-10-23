@@ -1446,9 +1446,21 @@ bloque; acá cada una es `MapEvent_xxxx` (su dirección). Hechas hasta ahora:
 | `E6C4` | la familia: la esposa (Ann o Eve, según $7F1F66, salvo con el bit 1 de $7F1F6E) y cada hijo (bits 2 / 3) desde los 60 días |
 | `E74C` | nada (la mayoría de los mapas desde el $3B) |
 | `D4D7`/`D5E7`, `D74E`/`D818`, `D844`/`D929`, `D955`/`DA1F`, `DB8F`/`DC1E` | las casas de las cinco chicas (dos mapas cada una): la que se casó con el jugador (su bit de $7F1F66) aparece ahí sola (grupo $22) mientras esté el bit 1 de $7F1F6E; si no, el día normal de la familia |
-| `D613`, `DA4B`, `DAED` | más gente con su día normal |
-| `DC4A` | una casa con visita: algunos días de otoño e invierno desde el año 2 (2-7, 13-17, 25-28, días de semana comunes) viene una segunda persona (slot 9, grupo $21) |
-| `DD95`, `DE64` | dos casas más, con sus primeras visitas |
+| `D613`, `DA4B`, `DAED` | más gente con su día normal (mapas $1B, $25, $24) |
+| `DC4A` | mapas $10-$13 (la montaña): primera visita, escenas de la historia, y algunos días de otoño e invierno desde el año 2 (2-7, 13-17, 25-28, días de semana comunes) una segunda persona (slot 9, grupo $21) |
+| `DD95`, `DE64` | mapas $2B y $2A, con sus primeras visitas |
+| `DE9B` | mapa $27: con el bit 3 de $7F1F64 una escena que detiene al jugador |
+| `E407` | mapas $0C-$0F (el cruce): la primera vez (grupo $0A); desde el primer invierno una visita del grupo $0D, en dos partes |
+| `E4CB` | mapa $29: un guion en una casilla hasta el bit 6 de $7F1F6A; al entrar desde abajo con el bit 11 de $D2 el perro vuelve a la granja (120, 424) |
+
+Qué mapa usa cada rutina: $00-$03 `CB69`, $04-$07 `D2E0`, $08-$0B
+`E5DF` `E5F1` `E603` `E6B2`, $0C-$0F `E407`, $10-$13 `DC4A`, $14 `E661`,
+$15-$17 `DED3`, $18-$19 `D4D7`, $1A `D5E7`, $1B `D613`, $1C `D74E`, $1D
+`D818`, $1E `DB8F`, $1F `DC1E`, $20 `D955`, $21 `DA1F`, $22 `D844`, $23
+`D929`, $24 `DAED`, $25 `DA4B`, $26 `E6C4`, $27 `DE9B`, $28 `E5B4`, $29
+`E4CB`, $2A `DE64`, $2B `DD95`, $2C `E5A2`, $2D-$30 `E5CD`, $31-$38
+`E586`, $39 `E632`, $3A `E690`, $3C `E76D`, $3D y $4B `EBA6`, el resto
+`E74C`.
 
 **El día normal.** Cada persona tiene un guion en cada uno de varios
 grupos, uno por tipo de día: $0B antes del primer evento de la historia
@@ -1652,3 +1664,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 59,85 % | el comienzo del final: la vaca preferida y el porcentaje de desarrollo del rancho |
 | 23-oct-2026 | 60,23 % | quién aparece en cada mapa: las 13 primeras rutinas |
 | 23-oct-2026 | 62,32 % | quién aparece en cada mapa: las casas (16 rutinas más) |
+| 23-oct-2026 | 62,68 % | quién aparece en cada mapa: el cruce, los mapas $27 y $29 |
