@@ -263,6 +263,7 @@ instructions are credited to the right one (20.45 % → 20.33 %).
 | `src/decompress.c` | the compressed data (LZSS) |
 | `src/coloranim.c` | colours that move (palette cycling) |
 | `src/joypad.c` | reading the controller |
+| `src/toolsound.c` | the noise of each tool |
 | `src/hm_decomp.c` | the checker and the preparations |
 
 ---
@@ -419,6 +420,12 @@ Out of season the tile ends up as a dead sprout.
 | Hammer | berry in the rock by the spring (maps 0C-0F) | 1/4 | once in the whole game |
 | Axe | berry in a stump off the farm | 1/16 | once |
 | Axe on the mountain (tile F4) | the gold axe event | — | once |
+
+**The noise of each tool** (`src/toolsound.c`). `Tool_Noise_Table`
+($82:9054) has 3 bytes per item in hand: a sound bank and two effects, one
+for when the tool lands on something and one for when it does not ($0922 =
+0 or 1; 2 means silent). `ToolUsedSound1` ($82:8FB1) picks the effect and
+plays it on the sound chip (`UNK_Audio19`); an effect of 0 is no sound.
 
 ### 5.6 Stamina
 
@@ -1284,3 +1291,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 22-Oct-2026 | 47.73 % | the colour animations: 57 routines (51 of them, small, read from a table) |
 | 22-Oct-2026 | 47.87 % | reading the controller (the buttons pressed, let go, and the menus' autorepeat) |
 | 22-Oct-2026 | 47.97 % | two unused routines that count the chickens and the cows |
+| 22-Oct-2026 | 48.04 % | the noise of each tool |

@@ -264,6 +264,7 @@ instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 | `src/decompress.c` | los datos comprimidos (LZSS) |
 | `src/coloranim.c` | colores que se mueven (ciclo de paleta) |
 | `src/joypad.c` | leer el mando |
+| `src/toolsound.c` | el ruido de cada herramienta |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 
@@ -424,6 +425,13 @@ Fuera de su estación, la casilla queda como brote muerto.
 | Martillo | baya en la roca del manantial (mapas 0C-0F) | 1/4 | una vez en todo el juego |
 | Hacha | baya en un tocón fuera de la granja | 1/16 | una vez |
 | Hacha en la montaña (casilla F4) | evento del hacha de oro | — | una vez |
+
+**El ruido de cada herramienta** (`src/toolsound.c`). `Tool_Noise_Table`
+($82:9054) tiene 3 bytes por objeto en la mano: un banco de sonidos y dos
+efectos, uno para cuando la herramienta da en algo y otro para cuando no
+($0922 = 0 o 1; 2 es en silencio). `ToolUsedSound1` ($82:8FB1) elige el
+efecto y lo toca en el chip de sonido (`UNK_Audio19`); un efecto 0 es sin
+sonido.
 
 ### 5.6 La energía
 
@@ -1313,3 +1321,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 47,73 % | las animaciones de colores: 57 rutinas (51 de ellas, pequeñas, de una tabla) |
 | 22-oct-2026 | 47,87 % | leer el mando (los botones apretados, soltados, y la autorrepetición de los menús) |
 | 22-oct-2026 | 47,97 % | dos rutinas sin usar que cuentan las gallinas y las vacas |
+| 22-oct-2026 | 48,04 % | el ruido de cada herramienta |

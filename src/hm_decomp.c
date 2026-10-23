@@ -1415,6 +1415,15 @@ static void prep_audio(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   r->a = (uint16_t)(r->a & 0xFF00);                   /* UNK_Audio2: the game passes 0 */
 }
 
+/* toolsound.c: the item in hand (the 28 of Tool_Noise_Table) and $0922
+ * (0 landed, 1 missed, 2 silent; sometimes 3, the next item's first). */
+static void prep_tool_sound(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_audio(ram, r, rnd);
+  ram[0x0921] = (uint8_t)(rnd() % 28);
+  ram[0x0922] = (uint8_t)((rnd() % 8) ? rnd() % 3 : 3);
+}
+
 /* menus.c: the name screen, menu 1 and mode 6, and InputTypeSelector
  * (every input mode). The page and cell of the name grid, the letters
  * typed, the pad, the mode and the menu. */
@@ -2157,6 +2166,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/animals.c", 0x83C9BA, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_animals },
   { "UnusedBarnCheck", hm_UnusedBarnCheck, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/animals.c", 0x83C9E5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_animals },
+  { "ToolUsedSound1", hm_ToolUsedSound1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
+    "src/toolsound.c", 0x828FB1, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_tool_sound },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 
