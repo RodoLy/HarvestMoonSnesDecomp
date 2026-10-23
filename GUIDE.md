@@ -213,7 +213,12 @@ Some tricks that were needed:
   a table so far away that it leaves the ROM, it lands on addresses with
   nothing there (the "open bus": you get whatever was last on the wires).
   That never happens in the game, so the preparations keep the inputs
-  inside the ROM.
+  inside the ROM. Beware of what a preparation does *not* set: the full
+  regression of October 23 found a difference in `UNK_CheckTileProperty`
+  because half of the time it kept the property table pointer ($0D-$0F)
+  the game had at that moment, and at that frame it pointed below $8000 of
+  a ROM bank. Now it is only kept if the whole table (4 bytes for 256
+  types) is real memory.
 
 ### 3.5 The percentage
 

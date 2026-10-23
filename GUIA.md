@@ -215,7 +215,13 @@ Algunos trucos que fueron necesarios:
   rutina lea una tabla tan lejos que se sale de la ROM, cae en direcciones
   donde no hay nada (el "bus abierto": se lee lo último que pasó por los
   cables). En el juego eso nunca pasa, así que las preparaciones dejan las
-  entradas dentro de la ROM.
+  entradas dentro de la ROM. Ojo con lo que la preparación *no* toca: la
+  regresión completa del 23 de octubre encontró una diferencia en
+  `UNK_CheckTileProperty` porque la mitad de las veces se dejaba el puntero
+  a la tabla de propiedades ($0D-$0F) que había en ese momento del juego, y
+  en ese cuadro apuntaba por debajo de $8000 de un banco de la ROM. Ahora
+  solo se conserva si toda la tabla (4 bytes por 256 tipos) es memoria de
+  verdad.
 
 ### 3.5 El porcentaje
 

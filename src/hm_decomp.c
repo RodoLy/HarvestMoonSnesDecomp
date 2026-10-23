@@ -228,7 +228,16 @@ static void prep_tile_in_front(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   static const uint8_t widths[] = { 1, 2, 4, 4 };
   ram[0x00181] = widths[rnd() % 4];
   for (int i = 0; i < 4096; i++) ram[0x009B6 + i] = (uint8_t)rnd();   /* tile types */
-  if (rnd() & 1) {                                        /* property table: somewhere in ROM */
+  /* property table: keep the game's one half of the time, but only if all
+   * of it (4 bytes x 256 types) is real memory; whatever the game left
+   * there can point below $8000 of a ROM bank, where the console reads
+   * open bus (seen in the full regression, seed 51). */
+  uint16_t at = hm_rd16(ram, 0x0D);
+  uint8_t bank = ram[0x0F];
+  bool real = bank == 0x7E || bank == 0x7F ||
+              ((bank & 0x7F) < 0x7E && at >= 0x8000 && at <= 0xFBFF) ||
+              ((bank & 0x7F) < 0x40 && at <= 0x1BFF);
+  if (!real || (rnd() & 1)) {                             /* somewhere in ROM */
     hm_wr16(ram, 0x0D, (uint16_t)(0x8000 | (rnd() & 0x7C00)));
     ram[0x0F] = (uint8_t)(0xA0 + rnd() % 0x20);
   }
