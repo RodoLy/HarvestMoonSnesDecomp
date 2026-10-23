@@ -866,6 +866,23 @@ del rancho** (`RanchMasteryCalculator`, de 0 a 999). Suma:
 | Desarrollo de la granja | /2 |
 | Felicidad de cada vaca | /8, máximo 25 |
 
+**La presentación** (`MapEvent_EBA6`, mapas $3D y $4B). Cada mañana del
+final el jugador se despierta a las 6:00 y el paso `$7F1F47` dice qué
+parte sigue; una parte que no corresponde se salta:
+
+| Paso | Parte (grupo de guiones) |
+|---|---|
+| 0 | sin esposa, felicidad menor que 100, sin vacas ni gallinas: el final malo ($2F), derecho a los créditos |
+| 1-4 | 7 o más vacas ($30), 1-6 vacas ($31), gallinas ($32), el cariño de la mejor vaca $C0 o más ($33) |
+| 5-8 | 200 o más de maíz, tomates, nabos, papas enviados ($34, $35, $37, $36) |
+| 9, $0A | sin esposa y felicidad 100+ / 800+ ($38, $39) |
+| $0B-$0F | la esposa: Maria, Ann, Nina, Ellen, Eve ($3A-$3E) |
+| $10 | sin esposa, felicidad 200+ y los corazones de las cinco chicas sumando 1500+ ($3F) |
+| $11, $12 | un hijo, dos hijos ($40, $41) |
+| $13 | todo: dos hijos, felicidad 900+, vacas y gallinas, las 10 bayas de poder, 10.000 G y 100 abrazos al perro ($42) |
+| $14 | la chica con más corazones ($09B3) y los créditos ($46) |
+| $20 | el puntaje del rancho (`RanchMasteryCalculator`) |
+
 ### 5.14 El cuadro de texto
 
 Los diálogos se muestran en **BG3**, la capa de fondo que se usa para el
@@ -1453,6 +1470,7 @@ bloque; acá cada una es `MapEvent_xxxx` (su dirección). Hechas hasta ahora:
 | `E407` | mapas $0C-$0F (el cruce): la primera vez (grupo $0A); desde el primer invierno una visita del grupo $0D, en dos partes |
 | `D2E0` | el pueblo (mapas 4-7): el 20 de otoño antes de las 3 el festival (los números 0-5 mezclados en $09A4, grupo $28), el 23 de primavera y el 12 de otoño antes de las 3 y el 10 de invierno antes de las 5 sus grupos ($0E, $26, $27), si no el día normal del guion 0 (nadie en los días especiales ni con lluvia); error 24 |
 | `E76D` | mapa $3C, la introducción: el jugador se despierta a las 7:00 con la energía llena y las manos vacías; el paso `$7F1F49` (0-$1C) elige el guion del grupo $47 (paso + 1) y sube uno; los pasos 7 y $0D además llenan el galpón. HM-Decomp tiene los primeros $140 bytes de esta rutina como datos; se desensamblaron desde la ROM |
+| `EBA6` | mapas $3D y $4B: la presentación del final (ver 5.13) |
 | `E4CB` | mapa $29: un guion en una casilla hasta el bit 6 de $7F1F6A; al entrar desde abajo con el bit 11 de $D2 el perro vuelve a la granja (120, 424) |
 
 Qué mapa usa cada rutina: $00-$03 `CB69`, $04-$07 `D2E0`, $08-$0B
@@ -1675,3 +1693,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 62,68 % | quién aparece en cada mapa: el cruce, los mapas $27 y $29 |
 | 23-oct-2026 | 63,12 % | quién aparece en el pueblo |
 | 23-oct-2026 | 63,74 % | la introducción (mapa $3C) |
+| 23-oct-2026 | 65,20 % | la presentación del final |

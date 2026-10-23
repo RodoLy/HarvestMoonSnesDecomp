@@ -595,9 +595,11 @@ void hm_MapEvent_D2E0(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────── */
 #define INTRO_STEP 0x7F1F49
 
-void hm_MapEvent_E76D(uint8_t *ram, HmRegs *r)
+/* waking up at `hour`:00 with full stamina, standing, facing down, the
+ * clock stopped, nothing in hand ($D2 = 1) */
+static void wake_up(uint8_t *ram, HmRegs *r, uint8_t hour)
 {
-  static const uint8_t clock[3] = { 7, 0, 0 };
+  const uint8_t clock[3] = { hour, 0, 0 };
   for (int i = 0; i < 3; i++) hm_bus_wr8(ram, 0x7F1F1C + i, clock[i]);
   hm_bus_wr16(ram, db(r, 0x0915), 0);
   hm_dp_w16(ram, r, 0xD2, 0);
@@ -614,6 +616,11 @@ void hm_MapEvent_E76D(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, db(r, 0x091D), 0);
   r->a = (uint16_t)(0xFFFD & hm_dp_r16(ram, r, 0xD2));
   hm_dp_w16(ram, r, 0xD2, r->a);
+}
+
+void hm_MapEvent_E76D(uint8_t *ram, HmRegs *r)
+{
+  wake_up(ram, r, 7);
 
   uint8_t step = byte_of(ram, r, INTRO_STEP);
   if (step) r->c = 1;                         /* the CMP chain ends on an equal or above */
@@ -634,4 +641,191 @@ void hm_MapEvent_E76D(uint8_t *ram, HmRegs *r)
   spawn(ram, r, 0, 0x47, (uint16_t)(step + 1), (uint16_t)(at + 0x0B));
   r->a = (uint16_t)((r->a & 0xFF00) | (uint8_t)(step + 1));
   hm_bus_wr8(ram, INTRO_STEP, (uint8_t)(step + 1));
+}
+
+/* ── EBA6, maps $3D and $4B: the ending ─────────────────────────────────
+ * The player wakes at 6:00 (as in the introduction) and the step
+ * $7F1F47 says which part of the ending's slide show comes next. Each part
+ * is shown only if it applies; if not, the next one is tried:
+ *   0  no wife, happiness below 100, no cows and no chickens: the bad
+ *      ending (group $2F; next step $14)
+ *   1  $7F1F5E bit 15 on; 7 cows or more ($30)   2  1-6 cows ($31)
+ *   3  chickens ($32)   4  the festival cow's affection ($09B5) $C0+ ($33)
+ *   5-8  200 or more corn, tomatoes, turnips, potatoes shipped ($34, $35,
+ *      $37, $36)
+ *   9 / $0A  no wife and happiness 100+ / 800+ ($38, $39)
+ *   $0B-$0F  married to Maria, Ann, Nina, Ellen, Eve (groups $3A-$3E: two
+ *      scripts for the first four, steps $21-$24 show the second)
+ *   $10  no wife, happiness 200+ and the five girls' hearts adding up to
+ *      1500+ ($3F)
+ *   $11 a child ($40)   $12 two children ($41)
+ *   $13  everything: two children, happiness 900+, cows and chickens, the
+ *      10 power berries, 10,000 G (money is kept in tens) and 100 hugs of
+ *      the dog ($42; $7F1F5E bit 15 off)
+ *   $14  the girl with the most hearts ($09B3, the first on a tie) and the
+ *      credits (group $46, scripts 0-7; $7F1F5E bit 15 on, off at the end)
+ *   $20  the ranch score (RanchMasteryCalculator, which shows script $0C)
+ * Steps $1C-$1F (scripts 8-$0B) follow each other, but nothing here leads
+ * to them (step $1B goes on to $20).
+ * ───────────────────────────────────────────────────────────────────── */
+#define ENDING_STEP 0x7F1F47
+#define COWS        0x7F1F0A
+#define CHICKENS    0x7F1F0B
+#define HAPPINESS   0x7F1F33
+#define HEARTS      0x7F1F1F   /* 5 words: Maria, Ann, Nina, Ellen, Eve */
+#define FLAGS_5E    0x7F1F5E
+
+/* spawn, then SEP #$20; LDA #next; STA.L $7F1F47 */
+static void part(uint8_t *ram, HmRegs *r, uint16_t x, uint16_t y, uint16_t at, uint8_t next)
+{
+  spawn(ram, r, 0, x, y, at);
+  r->a = (uint16_t)((r->a & 0xFF00) | next);
+  hm_bus_wr8(ram, ENDING_STEP, next);
+}
+static void flags_5e(uint8_t *ram, HmRegs *r, bool on)
+{
+  uint16_t v = hm_bus_rd16(ram, FLAGS_5E);
+  r->a = on ? (uint16_t)(v | 0x8000) : (uint16_t)(v & 0x7FFF);
+  hm_bus_wr16(ram, FLAGS_5E, r->a);
+}
+static bool no_wife(uint8_t *ram, HmRegs *r) { return !flag(ram, r, 0x7F1F66, 0x001F); }
+static bool shipped(uint8_t *ram, HmRegs *r, uint32_t addr) { return word_at_least(ram, r, addr, 200); }
+
+void hm_MapEvent_EBA6(uint8_t *ram, HmRegs *r)
+{
+  wake_up(ram, r, 6);
+  uint8_t step = byte_of(ram, r, ENDING_STEP);
+  if (step) r->c = 1;                         /* the CMP chain ends on an equal or above */
+  switch (step) {
+  case 0x00:
+    if (no_wife(ram, r) && !word_at_least(ram, r, HAPPINESS, 100) &&
+        !byte_of(ram, r, COWS) && !byte_of(ram, r, CHICKENS)) {
+      part(ram, r, 0x2F, 0, 0xED4D, 0x14);
+      return;
+    }
+    /* fall through */
+  case 0x01:
+    flags_5e(ram, r, true);
+    if (!byte_below(ram, r, COWS, 7)) { part(ram, r, 0x30, 0, 0xED7E, 0x02); return; }
+    /* fall through */
+  case 0x02: {
+    uint8_t cows = byte_of(ram, r, COWS);
+    if (cows && byte_below(ram, r, COWS, 7)) { part(ram, r, 0x31, 0, 0xEDA4, 0x03); return; }
+  } /* fall through */
+  case 0x03:
+    if (byte_of(ram, r, CHICKENS)) { part(ram, r, 0x32, 0, 0xEDC6, 0x04); return; }
+    /* fall through */
+  case 0x04:
+    if (!byte_below(ram, r, db(r, 0x09B5), 0xC0)) { part(ram, r, 0x33, 0, 0xEDE9, 0x05); return; }
+    /* fall through */
+  case 0x05:
+    if (shipped(ram, r, 0x7F1F4A)) { part(ram, r, 0x34, 0, 0xEE0C, 0x06); return; }
+    /* fall through */
+  case 0x06:
+    if (shipped(ram, r, 0x7F1F4C)) { part(ram, r, 0x35, 0, 0xEE2F, 0x07); return; }
+    /* fall through */
+  case 0x07:
+    if (shipped(ram, r, 0x7F1F4E)) { part(ram, r, 0x37, 0, 0xEE52, 0x08); return; }
+    /* fall through */
+  case 0x08:
+    if (shipped(ram, r, 0x7F1F50)) { part(ram, r, 0x36, 0, 0xEE75, 0x09); return; }
+    /* fall through */
+  case 0x09:
+    if (no_wife(ram, r) && word_at_least(ram, r, HAPPINESS, 100)) { part(ram, r, 0x38, 0, 0xEEA1, 0x0A); return; }
+    /* fall through */
+  case 0x0A:
+    if (no_wife(ram, r) && word_at_least(ram, r, HAPPINESS, 800)) { part(ram, r, 0x39, 0, 0xEECD, 0x0B); return; }
+    /* fall through */
+  case 0x0B:
+    if (flag(ram, r, 0x7F1F66, 0x0001)) { part(ram, r, 0x3A, 0, 0xEEF0, 0x21); return; }
+    goto girl_2;
+  case 0x21:
+    part(ram, r, 0x3A, 1, 0xEF08, 0x0C);
+    return;
+  case 0x0C:
+  girl_2:
+    if (flag(ram, r, 0x7F1F66, 0x0002)) { part(ram, r, 0x3B, 0, 0xEF2B, 0x22); return; }
+    goto girl_3;
+  case 0x22:
+    part(ram, r, 0x3B, 1, 0xEF43, 0x0D);
+    return;
+  case 0x0D:
+  girl_3:
+    if (flag(ram, r, 0x7F1F66, 0x0004)) { part(ram, r, 0x3C, 0, 0xEF66, 0x23); return; }
+    goto girl_4;
+  case 0x23:
+    part(ram, r, 0x3C, 1, 0xEF7E, 0x0E);
+    return;
+  case 0x0E:
+  girl_4:
+    if (flag(ram, r, 0x7F1F66, 0x0008)) { part(ram, r, 0x3D, 0, 0xEFA1, 0x24); return; }
+    goto girl_5;
+  case 0x24:
+    part(ram, r, 0x3D, 1, 0xEFB9, 0x0F);
+    return;
+  case 0x0F:
+  girl_5:
+    if (flag(ram, r, 0x7F1F66, 0x0010)) { part(ram, r, 0x3E, 0, 0xEFDC, 0x10); return; }
+    /* fall through */
+  case 0x10:
+    if (no_wife(ram, r) && word_at_least(ram, r, HAPPINESS, 200)) {
+      uint32_t sum = 0;
+      unsigned carry = 0;
+      for (int i = 0; i < 5; i++) {                        /* CLC; ADC x 4 */
+        sum = (sum & 0xFFFF) + hm_bus_rd16(ram, HEARTS + 2 * i) + carry;
+        carry = sum > 0xFFFF;
+      }
+      r->a = (uint16_t)sum;
+      r->c = r->a >= 0x05DC;
+      if (r->c) { part(ram, r, 0x3F, 0, 0xF022, 0x11); return; }
+    }
+    /* fall through */
+  case 0x11:
+    if (flag(ram, r, 0x7F1F6E, 0x000C)) { part(ram, r, 0x40, 0, 0xF045, 0x12); return; }
+    /* fall through */
+  case 0x12:
+    if (flag(ram, r, 0x7F1F6E, 0x0008)) { part(ram, r, 0x41, 0, 0xF068, 0x13); return; }
+    /* fall through */
+  case 0x13:
+    if (flag(ram, r, 0x7F1F6E, 0x0008) && word_at_least(ram, r, HAPPINESS, 900) &&
+        byte_of(ram, r, COWS) && byte_of(ram, r, CHICKENS) && byte_is(ram, r, 0x7F1F36, 10)) {
+      uint32_t low = (uint32_t)hm_bus_rd16(ram, 0x7F1F04) + 0xFC18;   /* money - 1000 */
+      r->c = low > 0xFFFF;
+      uint32_t high = (uint32_t)hm_bus_rd8(ram, 0x7F1F06) + 0xFF + r->c;
+      r->c = high > 0xFF;
+      r->a = (uint16_t)((low & 0xFF00) | (uint8_t)high);
+      if (!(high & 0x80) && word_at_least(ram, r, 0x7F1F52, 100)) {
+        part(ram, r, 0x42, 0, 0xF0C9, 0x14);
+        flags_5e(ram, r, false);
+        return;
+      }
+    }
+    /* fall through */
+  case 0x14: {
+    uint16_t best = hm_bus_rd16(ram, HEARTS);
+    r->a = best;
+    hm_bus_wr16(ram, db(r, 0x09B3), best);
+    for (int i = 1; i < 5; i++) {
+      uint16_t h = hm_bus_rd16(ram, HEARTS + 2 * i);
+      r->c = r->a >= h;                                      /* CMP.L; BCS */
+      if (!r->c) { r->a = h; hm_bus_wr16(ram, db(r, 0x09B3), h); }
+    }
+    part(ram, r, 0x46, 0, 0xF131, 0x15);
+    flags_5e(ram, r, true);
+    return;
+  }
+  case 0x15: part(ram, r, 0x46, 1, 0xF156, 0x16); return;
+  case 0x16: part(ram, r, 0x46, 2, 0xF16E, 0x17); return;
+  case 0x17: part(ram, r, 0x46, 3, 0xF186, 0x18); return;
+  case 0x18: part(ram, r, 0x46, 4, 0xF19E, 0x19); return;
+  case 0x19: part(ram, r, 0x46, 5, 0xF1B6, 0x1A); return;
+  case 0x1A: part(ram, r, 0x46, 6, 0xF1CE, 0x1B); return;
+  case 0x1B: part(ram, r, 0x46, 7, 0xF1E6, 0x20); flags_5e(ram, r, false); return;
+  case 0x1C: part(ram, r, 0x46, 8, 0xF20B, 0x1D); return;
+  case 0x1D: part(ram, r, 0x46, 9, 0xF223, 0x1E); return;
+  case 0x1E: part(ram, r, 0x46, 0x0A, 0xF23B, 0x1F); return;
+  case 0x1F: part(ram, r, 0x46, 0x0B, 0xF253, 0x20); flags_5e(ram, r, false); return;
+  case 0x20: hm_RanchMasteryCalculator(ram, r); return;   /* JMP */
+  default: return;                                        /* $25 (CODE_83F4D7) and up */
+  }
 }

@@ -1939,6 +1939,49 @@ static void prep_map_event(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x0917] = (uint8_t)rnd();
 }
 
+/* MapEvent_EBA6, the ending: its step, and every number its parts test,
+ * often around the bounds */
+static void prep_map_event_ending(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_map_event(ram, r, rnd);
+  ram[0x11F47] = (uint8_t)((rnd() % 8) ? rnd() % 0x26 : rnd());
+  static const uint8_t herd[] = { 0, 0, 1, 6, 7, 12 };
+  ram[0x11F0A] = herd[rnd() % 6];
+  ram[0x11F0B] = herd[rnd() % 6];
+  static const uint16_t happy[] = { 99, 100, 199, 200, 799, 800, 899, 900, 0, 999 };
+  hm_wr16(ram, 0x11F33, happy[rnd() % 10]);
+  for (unsigned i = 0; i < 4; i++) hm_wr16(ram, 0x11F4A + 2 * i, (uint16_t)((rnd() % 2) ? 199 + rnd() % 2 : rnd() % 400));
+  for (unsigned i = 0; i < 5; i++) hm_wr16(ram, 0x11F1F + 2 * i, (uint16_t)((rnd() % 2) ? 280 + rnd() % 40 : rnd()));
+  ram[0x11F36] = (uint8_t)((rnd() % 2) ? 10 : rnd() % 11);
+  hm_wr16(ram, 0x11F04, (uint16_t)((rnd() % 2) ? 999 + rnd() % 2 : rnd()));
+  ram[0x11F06] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+  hm_wr16(ram, 0x11F52, (uint16_t)((rnd() % 2) ? 99 + rnd() % 2 : rnd() % 200));
+  ram[0x09B5] = (uint8_t)((rnd() % 2) ? 0xBF + rnd() % 2 : rnd());
+  if (rnd() % 2) ram[0x11F66] &= (uint8_t)~0x1F;                    /* no wife */
+  if (rnd() % 3 == 0) ram[0x11F66] = (uint8_t)(1 << (rnd() % 5));
+  for (unsigned c = 0; c < 12; c++) for (unsigned i = 0; i < 16; i++) ram[0x0C1C6 + 16 * c + i] = (uint8_t)rnd();
+  ram[0x0917] = (uint8_t)(100 + rnd() % 156);                       /* max stamina */
+  /* a quarter of the time, right at one of the parts with many conditions */
+  switch (rnd() % 12) {
+  case 0:                                                           /* the bad ending */
+    ram[0x11F47] = 0; ram[0x11F66] &= (uint8_t)~0x1F;
+    hm_wr16(ram, 0x11F33, (uint16_t)((rnd() % 2) ? 99 : 100));
+    ram[0x11F0A] = (uint8_t)(rnd() % 4 ? 0 : 1); ram[0x11F0B] = (uint8_t)(rnd() % 4 ? 0 : 1);
+    break;
+  case 1:                                                           /* the girls' hearts */
+    ram[0x11F47] = 0x10; ram[0x11F66] &= (uint8_t)~0x1F;
+    hm_wr16(ram, 0x11F33, 200);
+    for (unsigned i = 0; i < 5; i++) hm_wr16(ram, 0x11F1F + 2 * i, (uint16_t)(299 + rnd() % 3));
+    break;
+  case 2:                                                           /* everything */
+    ram[0x11F47] = 0x13; ram[0x11F6E] |= 0x08;
+    hm_wr16(ram, 0x11F33, 900); ram[0x11F0A] = 1; ram[0x11F0B] = 1; ram[0x11F36] = 10;
+    hm_wr16(ram, 0x11F52, 100); ram[0x11F06] = 0;
+    break;
+  default: break;
+  }
+}
+
 /* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
  * or winter, an ordinary weekday) */
 static void prep_map_event_dc4a(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -2158,6 +2201,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/mapevents.c", 0x83D2E0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "MapEvent_E76D", hm_MapEvent_E76D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E76D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
+  { "MapEvent_EBA6", hm_MapEvent_EBA6, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/mapevents.c", 0x83EBA6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event_ending },
   { "CODE_83F4D8", hm_CODE_83F4D8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/animals.c", 0x83F4D8, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_cow_festival },
   { "Sub_82A9A0", hm_Sub_82A9A0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,

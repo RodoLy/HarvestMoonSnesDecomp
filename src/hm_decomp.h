@@ -256,6 +256,7 @@ void hm_MonthlyFarmTilesCheck(uint8_t *ram, HmRegs *r);
 void hm_NightlyFarmTilesCheck(uint8_t *ram, HmRegs *r);
 void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r);
 void hm_CODE_83F4D8(uint8_t *ram, HmRegs *r);
+void hm_MapEvent_EBA6(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_E76D(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_D2E0(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_DE9B(uint8_t *ram, HmRegs *r);
