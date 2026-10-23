@@ -1614,6 +1614,13 @@ static void prep_slot_walk(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[slot + 0x06] = (uint8_t)((rnd() % 4) ? 1 : rnd());
 }
 
+/* objects.c: InvertIfFliped: an offset and the flip bits. */
+static void prep_flip(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  r->a = (uint16_t)((rnd() % 2) ? rnd() % 0x40 : rnd());
+  hm_wr16(ram, 0x9F, (uint16_t)rnd());
+}
+
 /* menus.c: the name screen, menu 1 and mode 6, and InputTypeSelector
  * (every input mode). The page and cell of the name grid, the letters
  * typed, the pad, the mode and the menu. */
@@ -2540,6 +2547,14 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/objects.c", 0x858100, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
   { "SUB_848331", hm_SUB_848331, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/events.c", 0x848331, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_slot_walk },
+  { "CODE_8581CB", hm_CODE_8581CB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/objects.c", 0x8581CB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
+  { "InvertIfFlipedX", hm_InvertIfFlipedX, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/objects.c", 0x858BB0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_flip },
+  { "InvertIfFlipedY", hm_InvertIfFlipedY, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/objects.c", 0x858BBC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_flip },
+  { "ClearSpriteDataTables", hm_ClearSpriteDataTables, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+    "src/objects.c", 0x858ED7, 1, 0, 0, 0xFFFF, { { 0 } }, 200, NULL },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

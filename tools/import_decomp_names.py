@@ -126,6 +126,9 @@ MANUAL = {
     0x858C9F: "CODE_858C9F",
     0x8580B9: "CODE_8580B9",  # objects.c: moving a game object
     0x858100: "CODE_858100",  # changing its sprite
+    0x8581CB: "CODE_8581CB",  # reading a game object back
+    0x858BB0: "InvertIfFlipedX",  # no address in HM-Decomp
+    0x858BBC: "InvertIfFlipedY",
     0x829999: "ToolUsedCornSeeds",  # HM-Decomp's address comment has a typo (82A9999)
 }
 

@@ -721,7 +721,12 @@ down, script $17/$14 starts). Its requests are bits of $7F1F5C:
   slot's).
 - **Moving and changing one:** `CODE_8580B9` moves an object (flip, X, Y);
   `CODE_858100` gives it another sprite: the old pieces are freed (with
-  the same refusal as above) and the new ones loaded.
+  the same refusal as above) and the new ones loaded. `CODE_8581CB` reads
+  an object back into those variables.
+- **Flipped sprites:** a piece's offset becomes -offset - 16 when the
+  object is flipped that way (`InvertIfFlipedX` / `Y`): the mirrored
+  place of a 16-pixel piece. `ClearSpriteDataTables` empties the queue
+  and frees every graphics slot (when a map loads).
 - **A slot walking** (`SUB_848331`): with +01 bit 5 set, every +05 frames
   the slot moves by (+03, +04), signed bytes, added to its position.
 
@@ -1438,3 +1443,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 53.48 % | destroying a game object, and the script commands that do it |
 | 23-Oct-2026 | 54.03 % | four script commands that choose animations and make a person face you |
 | 23-Oct-2026 | 54.42 % | moving a game object, changing its sprite, a slot's walking step |
+| 23-Oct-2026 | 54.60 % | flipped sprites, emptying the sprite tables, reading an object back |

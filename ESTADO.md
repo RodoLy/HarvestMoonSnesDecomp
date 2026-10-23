@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **423 rutinas reescritas y verificadas** (0 diferencias):
+- **427 rutinas reescritas y verificadas** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -111,6 +111,7 @@ en el README (`tools/progress.py`).
 | CODE_8581A2/858B7B/858B41/858C9F (destruir un objeto), SUB_848895, SUB_848020, Event_UNK1, Event_UNKCCchanges7/11 | $85:81A2-, $84:8020, $84:8895, $84:9375, $84:9810, $84:B34B | src/objects.c, events.c, eventcmds.c |
 | Event_UNKCCchanges3/8/15/17 (animaciones; 17 = girarse hacia el jugador) | $84:8F0A, $84:957D, $84:B8D9, $84:BA72 | src/eventcmds.c |
 | CODE_8580B9 (mover un objeto), CODE_858100 (cambiarle el sprite), SUB_848331 (paso de un slot) | $85:80B9, $85:8100, $84:8331 | src/objects.c, events.c |
+| CODE_8581CB, InvertIfFlipedX/Y, ClearSpriteDataTables | $85:81CB, $85:8BB0, $85:8BBC, $85:8ED7 | src/objects.c |
 | GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |

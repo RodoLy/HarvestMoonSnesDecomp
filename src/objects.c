@@ -492,3 +492,69 @@ void hm_CODE_858100(uint8_t *ram, HmRegs *r)
   r->a = 0;
   hm_dp_w16(ram, r, 0xA7, 0);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_8581CB ($85:81CB, JSL, RTL): reads object $A5 back into the
+ * variables CreateGameObject takes ($A1 sprite, $9F flip, $A3, $9B / $9D
+ * position; only if the record is in use), and $A7 = its byte +12 (from
+ * the sprite's entry) sign-extended, in use or not.
+ * Leftovers: $A9 / X = the offset, A = $A7, C = 1 (CMP #0).
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_CODE_8581CB(uint8_t *ram, HmRegs *r)
+{
+  uint16_t x = object_offset(ram, r);
+  r->x = x;
+  if (hm_bus_rd16(ram, abs_x(r, GOBJ, x))) {
+    hm_dp_w16(ram, r, 0xA1, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x02, x)));
+    hm_dp_w16(ram, r, 0x9F, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x04, x)));
+    hm_dp_w16(ram, r, 0xA3, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x06, x)));
+    hm_dp_w16(ram, r, 0x9B, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x08, x)));
+    hm_dp_w16(ram, r, 0x9D, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x0A, x)));
+  }
+  int8_t b = (int8_t)hm_bus_rd8(ram, abs_x(r, GOBJ + 0x12, x));
+  r->a = (uint16_t)(int16_t)b;
+  hm_dp_w16(ram, r, 0xA7, r->a);
+  r->c = 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * InvertIfFlipedX / InvertIfFlipedY ($85:8BB0 / $85:8BBC, JSR, RTS): A = a
+ * piece's offset inside the sprite; if the object is flipped that way ($9F
+ * bit 6 / bit 7) it becomes -A - 16, the mirrored place of a 16-pixel
+ * piece. Leftovers: C from that add, or untouched.
+ * ───────────────────────────────────────────────────────────────────────── */
+static void invert_if(uint8_t *ram, HmRegs *r, uint16_t bit)
+{
+  uint16_t a = r->a;
+  push16(ram, r, a);                                       /* PHA */
+  if (!(hm_dp_r16(ram, r, 0x9F) & bit)) { r->a = pull16(ram, r); return; }
+  pull16(ram, r);
+  uint32_t sum = (uint32_t)(uint16_t)(-a) + 0xFFF0;        /* EOR #$FFFF; INC; CLC; ADC #$FFF0 */
+  r->c = sum > 0xFFFF;
+  r->a = (uint16_t)sum;
+}
+void hm_InvertIfFlipedX(uint8_t *ram, HmRegs *r) { invert_if(ram, r, 0x0040); }
+void hm_InvertIfFlipedY(uint8_t *ram, HmRegs *r) { invert_if(ram, r, 0x0080); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * ClearSpriteDataTables ($85:8ED7, JSL, RTL): empties everything about the
+ * piece graphics: no slot in use ($7E:A320 counts 0, their +2 words
+ * $FFFF), an empty queue ($7E:A220, $BB = $BD = 0, $7E:A420 = $FFFF) and
+ * no piece loaded ($7F:0F00-$7F:1EFF = $FF), then $0846 = $0848 = 0.
+ * Leftovers: A = $FFFF, X = $1000, Y = 64, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_ClearSpriteDataTables(uint8_t *ram, HmRegs *r)
+{
+  hm_bus_wr16(ram, 0x7EA420, 0xFFFF);
+  hm_dp_w16(ram, r, 0xBB, 0);
+  hm_dp_w16(ram, r, 0xBD, 0);
+  for (uint16_t y = 0; y != 64; y++) {
+    hm_bus_wr16(ram, SLOT_USERS + 4 * y, 0);
+    hm_bus_wr16(ram, SLOT_USERS + 2 + 4 * y, 0xFFFF);
+    hm_bus_wr16(ram, PIECE_QUEUE + 4 * y, 0xFFFF);
+  }
+  for (uint16_t x = 0; x != 0x1000; x += 2) hm_bus_wr16(ram, PIECE_SLOT + x, 0xFFFF);
+  hm_bus_wr16(ram, abs_db(r, 0x0846), 0);
+  hm_bus_wr16(ram, abs_db(r, 0x0848), 0);
+  r->a = 0xFFFF; r->x = 0x1000; r->y = 64; r->c = 1;
+}

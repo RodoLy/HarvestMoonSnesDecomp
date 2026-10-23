@@ -729,7 +729,13 @@ $7F1F5C:
   (el de otro slot).
 - **Moverlo y cambiarlo:** `CODE_8580B9` mueve un objeto (volteo, X, Y);
   `CODE_858100` le pone otro sprite: se liberan las piezas viejas (con el
-  mismo rechazo de arriba) y se cargan las nuevas.
+  mismo rechazo de arriba) y se cargan las nuevas. `CODE_8581CB` vuelve a
+  leer un objeto en esas variables.
+- **Sprites volteados:** la distancia de una pieza pasa a ser -distancia -
+  16 cuando el objeto está volteado en ese sentido (`InvertIfFlipedX` /
+  `Y`): el sitio reflejado de una pieza de 16 píxeles.
+  `ClearSpriteDataTables` vacía la cola y libera todos los huecos de
+  gráficos (al cargar un mapa).
 - **Un slot que camina** (`SUB_848331`): con el bit 5 de +01, cada +05
   cuadros el slot se mueve (+03, +04), bytes con signo, sumados a su
   posición.
@@ -1474,3 +1480,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 53,48 % | destruir un objeto con sprite, y los comandos de guion que lo hacen |
 | 23-oct-2026 | 54,03 % | cuatro comandos de guion que eligen animaciones y hacen que una persona te mire |
 | 23-oct-2026 | 54,42 % | mover un objeto con sprite, cambiarle el sprite, el paso de un slot que camina |
+| 23-oct-2026 | 54,60 % | sprites volteados, vaciar las tablas de sprites, releer un objeto |
