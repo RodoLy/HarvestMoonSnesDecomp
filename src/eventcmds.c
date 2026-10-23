@@ -2203,3 +2203,129 @@ void hm_Event_UNKCCchanges11(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x01), flags);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Choosing a slot's animation.
+ * Event_UNKCCchanges8 ($84:957D): <table word> <entry>; Event_UNKCCchanges15
+ * ($84:B8D9): <table word>, the entry being the player's direction ($DA).
+ * Both: +33 = the table ($B3:<word>), +02 = the entry, +01 bits 0-1 set,
+ * the animation read (SUB_848895), and the slot's frame counter +10 one up.
+ * Leftovers: A = the new +10, Y = $10, C from that add.
+ * ───────────────────────────────────────────────────────────────────────── */
+/* +02 already written: the flags, the animation, the frame counter */
+static void set_animation(uint8_t *ram, HmRegs *r, uint16_t ret)
+{
+  r->y = 1;
+  uint8_t flags = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x01)) | 0x03);
+  r->a = (uint16_t)((r->a & 0xFF00) | flags);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x01), flags);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x33));
+  hm_dp_w16(ram, r, 0x72, r->a);
+  r->a = (uint16_t)((r->a & 0xFF00) | 0xB3);
+  *hm_dp(ram, r, 0x74) = 0xB3;
+  hm_jsl(ram, r, ret, 0x84);
+  hm_SUB_848895(ram, r);
+  hm_rtl(ram, r);
+  r->y = 0x10;
+  uint16_t frames = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x10));
+  r->c = frames == 0xFFFF;                                 /* CLC; ADC #1 */
+  r->a = (uint16_t)(frames + 1);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x10), r->a);
+}
+
+void hm_Event_UNKCCchanges8(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->y = 0x33;
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x33), arg16(ram, r));
+  advance(ram, r, 2);
+  uint8_t entry = arg8(ram, r);
+  r->y = 2;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x02), entry);
+  advance(ram, r, 1);
+  set_animation(ram, r, 0x95D9);
+}
+
+void hm_Event_UNKCCchanges15(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->y = 0x33;
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x33), arg16(ram, r));
+  advance(ram, r, 2);
+  r->a = hm_dp_r16(ram, r, 0xDA);                          /* the player's direction */
+  r->y = 2;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x02), (uint8_t)r->a);
+  set_animation(ram, r, 0xB92D);
+}
+
+/* Event_UNKCCchanges3 ($84:8F0A): <x word> <y word> <table word> <entry>:
+ * puts the slot at (x, y) (+1A / +1C) with that animation (as command 8). */
+void hm_Event_UNKCCchanges3(uint8_t *ram, HmRegs *r)
+{
+  static const uint8_t at[3] = { 0x1A, 0x1C, 0x33 };
+  for (int i = 0; i < 3; i++) {
+    advance(ram, r, (uint16_t)(i ? 2 : 1));
+    r->y = at[i];
+    hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, at[i]), arg16(ram, r));
+  }
+  advance(ram, r, 2);
+  uint8_t entry = arg8(ram, r);
+  r->y = 2;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x02), entry);
+  advance(ram, r, 1);
+  set_animation(ram, r, 0x8F8C);
+}
+
+/* Event_UNKCCchanges17 ($84:BA72): <address>: if the player talked to the
+ * slot (+0C, see SUB_82AD0E), is not in action $0A and $7F1F5E bit 6 is set,
+ * the slot turns to face the player (+02 = the player's direction with bit 0
+ * flipped: the opposite one), stops (+03 / +04 / +0C = 0, +08 = +07), gets
+ * +01 bits 2 and 4, a frame (+10 one up), and the script jumps to the
+ * address. Otherwise the address is skipped. */
+void hm_Event_UNKCCchanges17(uint8_t *ram, HmRegs *r)
+{
+  advance(ram, r, 1);
+  r->y = 0x0C;
+  uint8_t talked = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x0C)));
+  r->c = 1;                                                /* CMP #0 */
+  bool turn = talked != 0;
+  if (turn) {
+    r->a = hm_dp_r16(ram, r, 0xD4);
+    r->c = r->a >= 0x0A;
+    turn = r->a != 0x0A;
+  }
+  if (turn) {
+    r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5E) & 0x0040);
+    turn = r->a != 0;
+  }
+  if (!turn) { advance(ram, r, 2); return; }
+  jump(ram, r);
+  r->y = 0x07;
+  uint8_t b = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x07)));
+  r->y = 0x08;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x08), b);
+  static const uint8_t cleared[3] = { 0x03, 0x04, 0x0C };
+  for (int i = 0; i < 3; i++) {
+    r->y = cleared[i];
+    lda8(r, 0);
+    hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, cleared[i]), 0);
+  }
+  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xDA) ^ 0x0001);
+  r->y = 2;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x02), (uint8_t)r->a);
+  r->y = 0x33;
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x33));
+  hm_dp_w16(ram, r, 0x72, r->a);
+  lda8(r, 0xB3);
+  *hm_dp(ram, r, 0x74) = 0xB3;
+  hm_jsl(ram, r, 0xBB03, 0x84);
+  hm_SUB_848895(ram, r);
+  hm_rtl(ram, r);
+  r->y = 1;
+  uint8_t flags = lda8(r, (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x01)) | 0x14));
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x01), flags);
+  r->y = 0x10;
+  uint16_t frames = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x10));
+  r->c = frames == 0xFFFF;
+  r->a = (uint16_t)(frames + 1);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x10), r->a);
+}

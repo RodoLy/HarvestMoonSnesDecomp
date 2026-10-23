@@ -616,6 +616,9 @@ va. Algunos comandos:
 | `TransitiontoX`, `TransitiontoHouse` | cambian de mapa (`$098B`; `$0196` bit `$4000` arranca la transición) |
 | `SetItemonHand`, `ChangeItemonHand`, `DropItemAnimation` | ponen o quitan un objeto en las manos |
 | `UNKCCchanges4`, `6`, `10` | preparan una caminata del slot: velocidad, destino, punto de partida |
+| `UNKCCchanges8`, `15`, `3` | eligen la animación del slot: una tabla del banco $B3 y una entrada (dada, o la dirección del jugador); el 3 además coloca el slot |
+| `UNKCCchanges17` | si el jugador le habló al slot, este se gira hacia el jugador, se para y el guion salta |
+| `UNK1`, `UNKCCchanges7` | destruyen el objeto del propio slot, o otro slot con su objeto |
 
 **Cosas que se levantan.** Varios comandos usan la misma prueba de "manos
 libres": el slot lo permite (+0C), pulsas A, no tienes nada en las manos y
@@ -1463,3 +1466,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 22-oct-2026 | 50,23 % | lo que recibe cada mapa al cargarse (39 rutinas); ya pasa de la mitad del código |
 | 22-oct-2026 | 52,99 % | la música y las subidas al chip de sonido (13 rutinas), el envío de las 5, las acciones del jugador, de puntos a corazones |
 | 23-oct-2026 | 53,48 % | destruir un objeto con sprite, y los comandos de guion que lo hacen |
+| 23-oct-2026 | 54,03 % | cuatro comandos de guion que eligen animaciones y hacen que una persona te mire |

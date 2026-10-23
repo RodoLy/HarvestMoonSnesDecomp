@@ -1580,6 +1580,22 @@ static void prep_destroy_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x72, (uint16_t)(0x8000 + (rnd() & 0x7FFF))); ram[0x74] = 0xB3;   /* SUB_848895 */
 }
 
+/* eventcmds.c: the animation commands. A table in the ROM, the player's
+ * action ($0A sometimes) and direction, $7F1F5E bit 6, whether the player
+ * talked to the slot (+0C). */
+static void prep_anim_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_destroy_cmd(ram, r, rnd);
+  hm_wr16(ram, 0xD4, (uint16_t)((rnd() % 3) ? 0x0A : rnd() % 0x20));
+  hm_wr16(ram, 0xDA, (uint16_t)((rnd() % 2) ? rnd() % 4 : rnd()));
+  hm_wr16(ram, 0x11F5E, (uint16_t)rnd());
+  uint16_t slot = hm_rd16(ram, 0xCC);
+  ram[slot + 0x0C] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+  uint16_t at = hm_rd16(ram, 0xC9);
+  ram[0x10000 + at + 6] |= 0x80;                            /* command 3's table */
+  ram[slot + 0x34] |= 0x80;            /* command 17 uses the slot's own table, +33 */
+}
+
 /* menus.c: the name screen, menu 1 and mode 6, and InputTypeSelector
  * (every input mode). The page and cell of the name grid, the letters
  * typed, the pad, the mode and the menu. */
@@ -2492,6 +2508,14 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x849375, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy_cmd },
   { "Event_UNKCCchanges11", hm_Event_UNKCCchanges11, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849810, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy_cmd },
+  { "Event_UNKCCchanges8", hm_Event_UNKCCchanges8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84957D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
+  { "Event_UNKCCchanges15", hm_Event_UNKCCchanges15, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84B8D9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
+  { "Event_UNKCCchanges3", hm_Event_UNKCCchanges3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x848F0A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
+  { "Event_UNKCCchanges17", hm_Event_UNKCCchanges17, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/eventcmds.c", 0x84BA72, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
 };
 const int g_hm_decomp_count = (int)(sizeof g_hm_decomp_fns / sizeof g_hm_decomp_fns[0]);
 

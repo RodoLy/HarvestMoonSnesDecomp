@@ -562,6 +562,10 @@ void hm_SUB_848020(uint8_t *ram, HmRegs *r);
 void hm_Event_UNK1(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCCchanges7(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCCchanges11(uint8_t *ram, HmRegs *r);
+void hm_Event_UNKCCchanges8(uint8_t *ram, HmRegs *r);
+void hm_Event_UNKCCchanges15(uint8_t *ram, HmRegs *r);
+void hm_Event_UNKCCchanges3(uint8_t *ram, HmRegs *r);
+void hm_Event_UNKCCchanges17(uint8_t *ram, HmRegs *r);
 void hm_UNK_SetPointer42(uint8_t *ram, HmRegs *r); /* coloranim.c */
 void hm_UNK_BigLoop(uint8_t *ram, HmRegs *r);
 void hm_Zeroes42Pointers(uint8_t *ram, HmRegs *r);
