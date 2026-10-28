@@ -454,6 +454,10 @@ static void prep_file_line(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_letter(ram, r, rnd);
   prep_sram(ram, r, rnd);
+  /* the year picks its suffix ("st", "nd", "rd") from a table of three:
+   * a garbage year would read letters, and DMA sources, from past it */
+  if (g_sram && g_sram_size >= 0x2000)
+    for (unsigned s = 0; s < 2; s++) g_sram[0x1000 * s] = (uint8_t)(rnd() % 3);
   hm_io_quiet();
   ram[0x28] = 0;
   r->a = (uint16_t)(rnd() % 3);
@@ -2000,8 +2004,12 @@ static void prep_slot_wander(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[slot + 0x02] = (uint8_t)((rnd() % 8) ? rnd() % 4 : rnd());
   if (ram[slot + 0x01] & 0x80) ram[slot + 0x02] &= 3;      /* CEEEE: 0-3 */
   static const int8_t steps[] = { 0, 0, 1, -1, 2, -2, 0x7F, -0x80 };
-  ram[slot + 0x03] = (uint8_t)steps[rnd() % 8];
-  ram[slot + 0x04] = (uint8_t)steps[rnd() % 8];
+  /* the big steps only away from the top and left edges: a corner
+   * looked at below 0 would read the tile table's open bus in the
+   * original (prep_collision) */
+  unsigned kinds = (x >= 0xC0 && y >= 0xC0) ? 8 : 6;
+  ram[slot + 0x03] = (uint8_t)steps[rnd() % kinds];
+  ram[slot + 0x04] = (uint8_t)steps[rnd() % kinds];
   /* a direction past 3 (the area check takes it as "down") only without a
    * step: CDDDD would get it too, and it was checked for 0-3 */
   if (ram[slot + 0x02] >= 4) ram[slot + 0x03] = ram[slot + 0x04] = 0;
@@ -2045,6 +2053,9 @@ static void prep_slot_sprite(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   }
   prep_slot_wander(ram, r, rnd);
   uint16_t slot = hm_rd16(ram, 0xCC);
+  /* the animations take entry +02 of their table, and only entries 0-3
+   * (the directions) are checked to hold real sprites */
+  ram[slot + 0x02] &= 3;
   prep_change_gobj(ram, r, rnd);
   uint16_t sprite = hm_rd16(ram, 0xA1);
   if (s_n_sprite_tables > 0)
