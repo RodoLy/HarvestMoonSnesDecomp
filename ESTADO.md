@@ -135,6 +135,7 @@ en el README (`tools/progress.py`).
 | Las puertas (SUB_809A64: salir por las casillas $C0-$CF, banderas de horario y festivales) y la montaña (SUB_809D0B: hallazgos por estación, empezar a pescar); HaveLunch ahora exacta también en registros | $80:9A64-$80:9EBB, $82:80AA | src/playerstate.c, stamina.c |
 | El cargador de piezas de sprite del NMI (CODE_858CB2; error 28: tres bucles sin fin) | $85:8CB2 | src/objects.c |
 | UNK_Audio1 (la subida del programa de sonido con el protocolo de arranque del chip; se prueba una vez en el cuadro 1 al nombrarla en HM_DECOMP_FUZZ_ONLY, flag HM_LIVE) | $83:843D | src/audio.c |
+| Las rutinas que son solo un retorno (COP_Return, ScreenTransitionReturn, ShippingReturn, CODE_83F4D7) y UNUSED2 ($0103 + 1, nadie la llama) | $80:872A, $80:972B, $82:81BF, $83:F4D7, $83:8376 | src/interact.c, audio.c |
 | GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |

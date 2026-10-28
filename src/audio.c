@@ -719,3 +719,15 @@ void hm_UNK_Audio1(uint8_t *ram, HmRegs *r)
   hm_pull8(ram, r);                                           /* PLP */
   r->c = flags & 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNUSED2 ($83:8376, JSL, RTL; nothing calls it): one more instrument
+ * noted, $0103 + 1 (the count UNK_Audio3 and UNK_Audio9 keep).
+ * Leftovers: A's low byte = the new count; X, Y, C untouched.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_UNUSED2(uint8_t *ram, HmRegs *r)
+{
+  uint8_t n = (uint8_t)(rd8(ram, r, 0x0103) + 1);
+  set_a8(r, n);
+  hm_bus_wr8(ram, db_addr(r, 0x0103), n);
+}

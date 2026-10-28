@@ -228,5 +228,8 @@ static void map_animation_action(uint8_t *ram, HmRegs *r, uint16_t animation, ui
 void hm_CODE_81D6E2(uint8_t *ram, HmRegs *r) { map_animation_action(ram, r, 0x11, 0xD6EA); }
 void hm_CODE_81D6F8(uint8_t *ram, HmRegs *r) { map_animation_action(ram, r, 0x12, 0xD700); }
 
-/* the actions that do nothing: a lone RTS */
+/* the actions that do nothing: a lone RTS. Also the other routines that
+ * are only a return: COP_Return ($80:872A, RTS), ScreenTransitionReturn
+ * ($80:972B, RTL), ShippingReturn ($82:81BF, RTL; the end ShippingScene
+ * and the next routine share) and CODE_83F4D7 ($83:F4D7, RTS). */
 void hm_ActionNothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }

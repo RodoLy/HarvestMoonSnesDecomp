@@ -1008,7 +1008,8 @@ busy (the opposite of the others). After a song's instruments, `UNK_Audio9`
 always sends instrument 6 as well: it does so when the list ends in empty
 places, and every one of the 26 songs' lists does. And again an
 address of HM-Decomp is one byte early: `UNK_Audio14` starts at $83:8D39,
-not 8D38.
+not 8D38. `UNUSED2` ($83:8376), which nothing calls, only adds one to the
+instrument count ($0103).
 
 ### 5.16 The saved games
 
@@ -1836,4 +1837,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 27-Oct-2026 | 71.73 % | what each item does once put down: eating, throwing, shipping, buying |
 | 27-Oct-2026 | 79.88 % | the player's actions: TVs, bed, shops, dealers, carpenter, bar |
 | 28-Oct-2026 | 83.43 % | the player each frame: walking, running, jumping, the animations, moving round corners |
-| 28-Oct-2026 | 85.04 % | the doors and the mountain, the sprite pieces' loader, the sound program's upload at power-on |
+| 28-Oct-2026 | 85.06 % | the doors and the mountain, the sprite pieces' loader, the sound program's upload at power-on |

@@ -120,6 +120,8 @@ LOCAL = {
     0x838D39: ("UNK_Audio14", "UNK_Audio14", "UNK_Audio6"),  # HM-Decomp says 838D38
     0x858B7B: ("CODE_858B7B", "CODE_858B7B"),
     0x858CB2: ("CODE_858CB2", "CODE_858CB2"),
+    0x8281BF: ("ShippingReturn", "ShippingReturn"),    # no address comment
+    0x83F4D7: ("CODE_83F4D7", "CODE_83F4D7"),
     0x8580B9: ("CODE_8580B9", "CODE_8580B9"),
     0x858100: ("CODE_858100", "CODE_858100"),
     0x8581CB: ("CODE_8581CB", "CODE_8581CB"),

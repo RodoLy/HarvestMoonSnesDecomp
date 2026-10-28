@@ -1033,7 +1033,8 @@ ocupado (al revés que las demás). Después de los instrumentos de una canción
 `UNK_Audio9` manda siempre también el instrumento 6: lo hace cuando la
 lista termina en huecos vacíos, y las listas de las 26 canciones terminan
 así. Y otra vez una dirección de HM-Decomp va un byte antes:
-`UNK_Audio14` empieza en $83:8D39, no en 8D38.
+`UNK_Audio14` empieza en $83:8D39, no en 8D38. `UNUSED2` ($83:8376), que nadie llama, solo
+suma uno a la cuenta de instrumentos ($0103).
 
 ### 5.16 Las partidas guardadas
 
@@ -1893,4 +1894,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 27-oct-2026 | 71,73 % | lo que hace cada objeto ya dejado: comer, tirar, enviar, comprar |
 | 27-oct-2026 | 79,88 % | las acciones del jugador: teles, cama, tiendas, tratantes, carpintero, bar |
 | 28-oct-2026 | 83,43 % | el jugador cada cuadro: caminar, correr, saltar, las animaciones, rodear esquinas |
-| 28-oct-2026 | 85,04 % | las puertas y la montaña, el cargador de piezas de sprite, la subida del programa de sonido al encender |
+| 28-oct-2026 | 85,06 % | las puertas y la montaña, el cargador de piezas de sprite, la subida del programa de sonido al encender |

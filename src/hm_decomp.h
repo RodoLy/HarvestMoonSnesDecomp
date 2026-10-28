@@ -368,6 +368,7 @@ void hm_SUB_809D0B(uint8_t *ram, HmRegs *r);
 void hm_SUB_809A64(uint8_t *ram, HmRegs *r);
 void hm_CODE_858CB2(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio1(uint8_t *ram, HmRegs *r);
+void hm_UNUSED2(uint8_t *ram, HmRegs *r);
 void hm_CODE_81CB77(uint8_t *ram, HmRegs *r);
 void hm_CODE_81D716(uint8_t *ram, HmRegs *r);   /* actions.c */
 void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r);

@@ -3886,6 +3886,18 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/audio.c", 0x83878C, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_upload },
   { "UNK_Audio3", hm_UNK_Audio3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/audio.c", 0x838598, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_upload },
+  /* the routines that are only a return (other routines jump or branch
+   * to them, or nothing calls them) */
+  { "COP_Return", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/interact.c", 0x80872A, 0, 0, 0, 0xFFFF, { { 0 } }, 50, NULL },
+  { "ScreenTransitionReturn", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/interact.c", 0x80972B, 0, 0, 0, 0xFFFF, { { 0 } }, 50, NULL },
+  { "ShippingReturn", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/interact.c", 0x8281BF, 0, 0, 0, 0xFFFF, { { 0 } }, 50, NULL },
+  { "CODE_83F4D7", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/interact.c", 0x83F4D7, 0, 0, 0, 0xFFFF, { { 0 } }, 50, NULL },
+  { "UNUSED2", hm_UNUSED2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/audio.c", 0x838376, 1, 0, 0, 0xFFFF, { W16(0x0103, 0, 0xFFFF) }, 0, NULL },
   { "UNK_Audio1", hm_UNK_Audio1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP | HM_LIVE,
     "src/audio.c", 0x83843D, 0, 0, 0, 0xFFFF, { { 0 } }, 1, prep_boot_upload },
   { "UNK_Audio4", hm_UNK_Audio4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
