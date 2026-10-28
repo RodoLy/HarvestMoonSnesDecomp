@@ -2091,6 +2091,102 @@ static void prep_put_down(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x0D, hm_bus_rd16(ram, 0x82B294)); ram[0x0F] = hm_bus_rd8(ram, 0x82B296);
 }
 
+/* items.c: an item map object at any step of its routine. Everything its
+ * steps call is made safe (text boxes, game objects, the collision check,
+ * the tile in front, the events) and the inputs they branch on are biased:
+ * the state, the answer, the player's action, the map, the day and hour,
+ * and, half of the time, a whole map of one interesting tile type. */
+static uint8_t item_pick(uint32_t (*rnd)(void), const uint8_t *list, unsigned n) { return list[rnd() % n]; }
+static void prep_item_any(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), const uint8_t *items, unsigned n,
+                          bool keep_item)
+{
+  prep_text_box(ram, r, rnd);
+  prep_collision(ram, r, rnd);
+  prep_destroy(ram, r, rnd);
+  prep_new_animal(ram, r, rnd);
+  uint16_t near_x = hm_rd16(ram, 0xDF), near_y = hm_rd16(ram, 0xE1);  /* where the objects are */
+  prep_put_down(ram, r, rnd);
+  if (rnd() % 2) { hm_wr16(ram, 0xD6, near_x); hm_wr16(ram, 0xD8, near_y); }
+  uint8_t item = item_pick(rnd, items, n);
+  ram[0x0984] = item;
+  ram[0x091D] = (uint8_t)((rnd() % 4) ? item : item_pick(rnd, items, n));
+  static const uint8_t states[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 0xFF };
+  ram[0x0976] = (uint8_t)((rnd() % 8) ? states[rnd() % sizeof states] : rnd());
+  hm_wr16(ram, 0x0978, (uint16_t)(rnd() % 40));
+  unsigned slot = rnd() % 10;
+  hm_wr16(ram, 0x07, (uint16_t)(0xB4E6 + 16 * slot)); ram[0x09] = 0x7E;
+  ram[0x019A] = (uint8_t)((rnd() % 4) ? ((rnd() % 2) ? 2 : rnd() % 2) : rnd());
+  ram[0x018F] = (uint8_t)((rnd() % 4) ? rnd() % 2 : rnd());
+  static const uint16_t actions[] = { 0, 3, 5, 5, 8 };
+  hm_wr16(ram, 0xD4, (uint16_t)((rnd() % 6) ? actions[rnd() % 5] : rnd()));
+  hm_wr16(ram, 0xD2, (uint16_t)rnd());
+  ram[0x0974] = (uint8_t)rnd();
+  static const uint8_t maps[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 0x0F, 0x10, 0x12, 0x14, 0x15, 0x27, 0x28 };
+  ram[0x22] = (uint8_t)((rnd() % 6) ? maps[rnd() % sizeof maps] : rnd() % 0x60);
+  ram[0x11F1A] = (uint8_t)((rnd() % 2) ? 0 : rnd() % 7);              /* weekday */
+  ram[0x11F1C] = (uint8_t)((rnd() % 2) ? 6 + rnd() % 11 : rnd() % 24); /* hour */
+  hm_wr16(ram, 0x0196, (uint16_t)((rnd() % 2) ? rnd() & ~0x0002u : rnd()));
+  for (unsigned a = 0x11F5C; a < 0x11F76; a++) ram[a] = (uint8_t)rnd();
+  if (rnd() % 2) ram[0x11F5C] |= 0x10;
+  if (rnd() % 2) ram[0x11F6F] &= (uint8_t)~0x20;                       /* no egg hatching */
+  if (rnd() % 2) ram[0x11F67] &= (uint8_t)~0x20;                       /* no spring event yet */
+  if (rnd() % 2) ram[0x11F74] &= (uint8_t)~0x20;
+  ram[0x09AC] = (uint8_t)((rnd() % 4) ? 1 + rnd() % 5 : rnd());
+  hm_wr16(ram, 0x09AD, (uint16_t)(rnd() % 0x400)); hm_wr16(ram, 0x09AF, (uint16_t)(rnd() % 0x400));
+  ram[0x0920] = (uint8_t)(0x24 + rnd() % 13);
+  if (rnd() % 3 == 0) ram[0x11F61] &= (uint8_t)~0x40;                 /* objects block */
+  if (rnd() % 2) { hm_wr16(ram, 0xCF, 0); ram[0xD1] = (uint8_t)((rnd() % 2) ? 0 : rnd()); }
+  hm_wr16(ram, 0x090B, (uint16_t)rnd()); hm_wr16(ram, 0x090D, (uint16_t)rnd());
+  static const uint8_t tiles[] = { 0x01, 0x02, 0x07, 0x08, 0xF0, 0xF2, 0xF4, 0xF7, 0xF9, 0xFA, 0xFB,
+                                   0xFC, 0xFD, 0xFF, 0xE1, 0xC5, 0xE2, 0xE8, 0xEE, 0xEF, 0x00 };
+  if (rnd() % 2) memset(&ram[0x09B6], tiles[rnd() % sizeof tiles], 4096);
+  /* the rare places: the coop's incubator with an egg, the mountain's
+   * spring and pond, an animal set down near tiles $C0-$D0 */
+  switch (rnd() % 6) {
+  case 0:
+    if (!keep_item) ram[0x0984] = ram[0x091D] = 0x14;
+    ram[0x22] = 0x28;
+    memset(&ram[0x09B6], (rnd() % 4) ? 0xF7 : 0xF2, 4096);
+    break;
+  case 1:
+    ram[0x22] = (uint8_t)(0x10 + rnd() % 5);
+    if (!keep_item && rnd() % 2) ram[0x0984] = ram[0x091D] = 7;
+    memset(&ram[0x09B6], (rnd() % 2) ? 0xF0 : 0xF4, 4096);
+    break;
+  case 2: {
+    static const uint8_t edge[] = { 0xBF, 0xC0, 0xCF, 0xD0, 0xE1 };
+    memset(&ram[0x09B6], edge[rnd() % sizeof edge], 4096);
+    break;
+  }
+  default: break;
+  }
+  /* SUB_81809A calls them with A's high byte 0 (LDA #0; XBA; LDA $0984;
+   * ASL), which the shop goods keep for their article number */
+  r->a = (uint16_t)(rnd() & 0xFF);
+  r->x = (uint16_t)rnd(); r->y = (uint16_t)rnd();
+}
+static const uint8_t k_item_general[] = {
+  0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+  0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1E, 0x1F, 0x20, 0x21,
+  0x22, 0x24, 0x25, 0x26, 0x29, 0x57, 0x58, 0x59, 0x5A };
+static const uint8_t k_item_shop[] = {
+  0x1B, 0x1C, 0x1D, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
+  0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56 };
+static void prep_item(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_item_any(ram, r, rnd, k_item_general, sizeof k_item_general, false);
+}
+static void prep_item_food(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  static const uint8_t food[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+  prep_item_any(ram, r, rnd, food, sizeof food, true);
+}
+static void prep_item_shop(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_item_any(ram, r, rnd, k_item_shop, sizeof k_item_shop, true);
+  if (rnd() % 2) ram[0x0976] = (uint8_t)(rnd() % 4);
+}
+
 /* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
  * or winter, an ordinary weekday) */
 static void prep_map_event_dc4a(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -2401,6 +2497,172 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/items.c", 0x8180B7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_put_down },
   { "SUB_818000", hm_SUB_818000, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/items.c", 0x818000, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_put_down },
+  { "CODE_81883A", hm_CODE_81883A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x81883A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_818855", hm_CODE_818855, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818855, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "CODE_81889A", hm_CODE_81889A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x81889A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_8188BC", hm_CODE_8188BC, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x8188BC, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_8188E5", hm_CODE_8188E5, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x8188E5, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_818923", hm_CODE_818923, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818923, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "CODE_818B6B", hm_CODE_818B6B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818B6B, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "CODE_818BA5", hm_CODE_818BA5, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818BA5, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "CODE_818C24", hm_CODE_818C24, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818C24, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_818D38", hm_CODE_818D38, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818D38, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_818E16", hm_CODE_818E16, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818E16, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_818E1B", hm_CODE_818E1B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818E1B, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_818E98", hm_CODE_818E98, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818E98, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_818F2A", hm_CODE_818F2A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818F2A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_818F5A", hm_CODE_818F5A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x818F5A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_819010", hm_CODE_819010, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x819010, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_819021", hm_CODE_819021, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x819021, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_819049", hm_CODE_819049, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x819049, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_819228", hm_CODE_819228, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x819228, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_819379", hm_CODE_819379, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x819379, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_81968F", hm_CODE_81968F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x81968F, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_819695", hm_CODE_819695, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/items.c", 0x819695, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_01", hm_ItemObject_01, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8180FE, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "ItemObject_02", hm_ItemObject_02, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818102, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "ItemObject_03", hm_ItemObject_03, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818106, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "ItemObject_04", hm_ItemObject_04, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81810A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "ItemObject_05", hm_ItemObject_05, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81810E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "ItemObject_06", hm_ItemObject_06, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818112, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "ItemObject_07", hm_ItemObject_07, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818116, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "ItemObject_08", hm_ItemObject_08, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81811A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
+  { "ItemObject_09", hm_ItemObject_09, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81811E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_0A", hm_ItemObject_0A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818122, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_0D", hm_ItemObject_0D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818126, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_0E", hm_ItemObject_0E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81812A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_0F", hm_ItemObject_0F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81812E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_10", hm_ItemObject_10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818132, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_11", hm_ItemObject_11, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81814A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_12", hm_ItemObject_12, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818162, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_13", hm_ItemObject_13, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81817A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_14", hm_ItemObject_14, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818192, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_15", hm_ItemObject_15, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818196, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_16", hm_ItemObject_16, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81819A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_17", hm_ItemObject_17, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81819E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_18", hm_ItemObject_18, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8181A2, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_19", hm_ItemObject_19, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8181A6, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_1A", hm_ItemObject_1A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8181AA, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_1B", hm_ItemObject_1B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8181AE, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_1C", hm_ItemObject_1C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8181C8, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_1D", hm_ItemObject_1D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8181E2, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_1E", hm_ItemObject_1E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8181FC, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_1F", hm_ItemObject_1F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81823E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_20", hm_ItemObject_20, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818280, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_21", hm_ItemObject_21, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8182C2, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_22", hm_ItemObject_22, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8182FE, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_23", hm_ItemObject_23, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8183B6, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_24", hm_ItemObject_24, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8183B7, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_25", hm_ItemObject_25, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8183BB, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_26", hm_ItemObject_26, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8183BF, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_27", hm_ItemObject_27, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8183C3, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_28", hm_ItemObject_28, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8183C4, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_29", hm_ItemObject_29, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8183C5, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_44", hm_ItemObject_44, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818499, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_45", hm_ItemObject_45, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8184D5, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_46", hm_ItemObject_46, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818511, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_47", hm_ItemObject_47, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81854D, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_48", hm_ItemObject_48, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818589, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_49", hm_ItemObject_49, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8185C5, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_4A", hm_ItemObject_4A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8185DF, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_4B", hm_ItemObject_4B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8185F6, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_4C", hm_ItemObject_4C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81860D, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_4D", hm_ItemObject_4D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818624, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_4E", hm_ItemObject_4E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81865B, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_4F", hm_ItemObject_4F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818692, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_50", hm_ItemObject_50, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8186C9, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_51", hm_ItemObject_51, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818700, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_52", hm_ItemObject_52, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818737, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_53", hm_ItemObject_53, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81874E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_54", hm_ItemObject_54, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818765, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_55", hm_ItemObject_55, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x818781, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_56", hm_ItemObject_56, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x81879D, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
+  { "ItemObject_58", hm_ItemObject_58, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8187B7, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_59", hm_ItemObject_59, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8187BB, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "ItemObject_5A", hm_ItemObject_5A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/items.c", 0x8187BF, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
   { "SpawnMapObject", hm_SpawnMapObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x81A500, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_spawn },
   { "ToolUsedNoAction", hm_ToolUsedNoAction, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,

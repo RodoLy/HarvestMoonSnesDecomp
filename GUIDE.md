@@ -1461,6 +1461,37 @@ property table, is drawn in front; and if it makes a sound
 `SUB_81809A` runs the item's own routine (table `DATA8_8197C0`, 91
 items) by its state (`$0976`).
 
+**The items' routines** (`items.c`). Most items only run one of six
+state machines (JSR), which picks a step by the state (JMP):
+
+| Machine | Items | States |
+|---|---|---|
+| `CODE_8188E5` | most | 0 in hand, 2 carried, 3 dropped, 4 gone, 5-6 offered for sale, 7 shipped, 8 put on an object |
+| `CODE_818855` | food (1-8) | as above, but 0 asks "eat it?" and 1 eats (`ChangeStamina` with the food's value, `DATA8_819FC6`) |
+| `CODE_8188BC` | fodder ($1A) | 3: into a feed box of the barn or coop (tile types $E2-$EE: its bit in $0932 / $0934, one more in $0930 / $0931) |
+| `CODE_81889A` | $0D-$0F, $57 | 2 thrown only at ground or a bin, 3 lands (the tile becomes the item's, first byte of `Items_Price_Table`) |
+| `CODE_81883A` | animals ($25, $26, $29) | 2 thrown only where it can stand (three tiles ahead free), 3 set down: the chicken's record keeps the map and tile, and its walk starts |
+| `CODE_818923` | shop goods ($1B-$1D, $44-$56) | 0 "buy it?", 1 pays (`AddMoney` with the negative price) or "not enough money", 2 back on the counter, 3 bought |
+
+Where a dropped item lands (`CODE_819379`): on the farm, in the barn or
+the coop at a shipping bin (tile $F2) an item with a price is shipped
+(added to $7F1F07 before 5 pm; after 5 pm it is simply lost) and the bin's
+animation plays; an egg in the coop's incubator ($F7) starts a chick if
+none is hatching ($7F1F6E bit 13, +5 happiness); on the farm, bins and
+boxes ($F0, $F9-$FD); on the mountain the spring ($F0) and the pond ($F4).
+Item 7 thrown into the spring before 5 pm starts an event once a day
+($7F1F66 bit 13). Anything else just falls on the tile in front.
+
+Thrown at an object in town on a Sunday before 5 pm at a stall ($F0), a
+sellable item is offered (`DATA8_81A094`: the text and the money; text
+$0313 means "cannot be sold"). Once bought, a shop article becomes
+another item ($1B-$1D become $58-$5A, $49 becomes $19, $56 becomes 6) or
+goes to the shed ($7F1F00-$7F1F03): a seed bag counts one more (up to
+255), a gold tool replaces the plain one in the shed and in the player's
+two slots, fodder fills its counter (12). The crops ($10-$13) count one
+more shipped in the frame they are shipped. The 26 tools ($2A-$43) stay
+in the original: they use the frame routines (`CODE_81A94A`).
+
 **The usual day.** Each person has one script in each of several groups,
 one per kind of day: $0B before the first event of the story
 ($7F1F68 bit 0); $07 with $0196 bit 3; $01 when tomorrow's weather is 6 or
@@ -1672,3 +1703,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 65.20 % | the ending's slide show |
 | 23-Oct-2026 | 66.73 % | who appears on the farm |
 | 23-Oct-2026 | 66.97 % | putting down what is carried |
+| 27-Oct-2026 | 71.73 % | what each item does once put down: eating, throwing, shipping, buying |

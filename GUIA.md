@@ -1499,6 +1499,40 @@ de propiedades del mapa, se dibuja delante; y si hace ruido
 `SUB_81809A` corre la rutina propia del objeto (tabla `DATA8_8197C0`, 91
 objetos) según su estado (`$0976`).
 
+**Las rutinas de los objetos** (`items.c`). Casi todos los objetos solo
+corren una de seis máquinas de estados (JSR), que elige un paso según el
+estado (JMP):
+
+| Máquina | Objetos | Estados |
+|---|---|---|
+| `CODE_8188E5` | la mayoría | 0 en la mano, 2 cargado, 3 soltado, 4 se va, 5-6 ofrecido en venta, 7 enviado, 8 puesto sobre un objeto |
+| `CODE_818855` | comida (1-8) | como arriba, pero 0 pregunta "¿comerlo?" y 1 lo come (`ChangeStamina` con el valor de la comida, `DATA8_819FC6`) |
+| `CODE_8188BC` | forraje ($1A) | 3: a un comedero del establo o del gallinero (casillas $E2-$EE: su bit en $0932 / $0934 y uno más en $0930 / $0931) |
+| `CODE_81889A` | $0D-$0F, $57 | 2 se tira solo hacia suelo o un cajón, 3 cae (la casilla pasa a ser la del objeto, primer byte de `Items_Price_Table`) |
+| `CODE_81883A` | animales ($25, $26, $29) | 2 se tira solo donde puede pararse (tres casillas libres delante), 3 se baja: el registro de la gallina guarda el mapa y la casilla, y empieza su paseo |
+| `CODE_818923` | mercancía de tienda ($1B-$1D, $44-$56) | 0 "¿comprarlo?", 1 paga (`AddMoney` con el precio negativo) o "no te alcanza", 2 vuelve al mostrador, 3 comprado |
+
+Dónde cae un objeto soltado (`CODE_819379`): en la granja, el establo o el
+gallinero, en un cajón de envío (casilla $F2) un objeto con precio se
+envía (se suma a $7F1F07 antes de las 5 de la tarde; después simplemente
+se pierde) y se anima el cajón; un huevo en la incubadora del gallinero
+($F7) da un pollito si no hay otro en camino (bit 13 de $7F1F6E, +5 de
+felicidad); en la granja, cajones y cajas ($F0, $F9-$FD); en la montaña el
+manantial ($F0) y el estanque ($F4). El objeto 7 tirado al manantial
+antes de las 5 empieza un evento una vez al día (bit 13 de $7F1F66). Todo
+lo demás solo cae en la casilla de enfrente.
+
+Tirado hacia un objeto en el pueblo un domingo antes de las 5 en un puesto
+($F0), un objeto que se puede vender se ofrece (`DATA8_81A094`: el texto y
+el dinero; el texto $0313 quiere decir "no se puede vender"). Ya comprado,
+un artículo de tienda se vuelve otro objeto ($1B-$1D pasan a $58-$5A, $49
+a $19, $56 a 6) o va al cobertizo ($7F1F00-$7F1F03): una bolsa de semillas
+cuenta una más (hasta 255), una herramienta de oro reemplaza a la normal
+en el cobertizo y en las dos ranuras del jugador, el forraje llena su
+contador (12). Los cultivos ($10-$13) cuentan uno más enviado en el cuadro
+en que se envían. Las 26 herramientas ($2A-$43) siguen en el original:
+usan las rutinas que esperan cuadros (`CODE_81A94A`).
+
 **El día normal.** Cada persona tiene un guion en cada uno de varios
 grupos, uno por tipo de día: $0B antes del primer evento de la historia
 (bit 0 de $7F1F68); $07 con el bit 3 de $0196; $01 cuando el clima de
@@ -1717,3 +1751,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 65,20 % | la presentación del final |
 | 23-oct-2026 | 66,73 % | quién aparece en la granja |
 | 23-oct-2026 | 66,97 % | dejar en el suelo lo que se carga |
+| 27-oct-2026 | 71,73 % | lo que hace cada objeto ya dejado: comer, tirar, enviar, comprar |
