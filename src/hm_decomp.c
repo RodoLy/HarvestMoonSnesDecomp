@@ -155,6 +155,143 @@ static void prep_event_start(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   r->y = (uint16_t)(rnd() % 0x60);   /* script number */
 }
 
+/* CODE_858CB2: the loader's queue ($BB..$BD), its budget (below $2000: at
+ * most 31 pieces, the trap is at 32), the slots: new ones left or not, and
+ * at least one free (with none free the original spins) */
+static void prep_loader(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  uint16_t bb = (uint16_t)(4 * (rnd() % 64));
+  uint16_t n = (uint16_t)((rnd() % 4) ? rnd() % 12 : rnd() % 64);
+  hm_wr16(ram, 0xBB, bb);
+  hm_wr16(ram, 0xBD, (uint16_t)((bb + 4 * n) & 0xFF));
+  hm_wr16(ram, 0xC7, (uint16_t)((rnd() % 4) ? 0x100 * (rnd() % 0x20) + rnd() % 0x100 : rnd() % 0x2000));
+  for (unsigned q = 0; q < 64; q++) {
+    hm_wr16(ram, 0x0A220 + 4 * q, (uint16_t)(rnd() % 0x800));
+    hm_wr16(ram, 0x0A222 + 4 * q, (uint16_t)(0x019C + 0x24 * (rnd() % 40) + 0x14 + rnd() % 16));
+  }
+  uint32_t db = (uint32_t)r->db << 16;
+  hm_bus_wr16(ram, db | 0x0846, (uint16_t)((rnd() % 2) ? 0x40 : rnd() % 0x41));
+  hm_bus_wr16(ram, db | 0x0848, (uint16_t)((rnd() % 4) ? rnd() % 0x40 : rnd()));
+  for (unsigned s = 0; s < 0x40; s++) {
+    hm_wr16(ram, 0x0A320 + 4 * s, (uint16_t)((rnd() % 3) ? 1 + rnd() % 200 : 0));
+    hm_wr16(ram, 0x0A322 + 4 * s, (uint16_t)((rnd() % 4) ? rnd() % 0x800 : 0xFFFF));
+  }
+  /* each piece takes a free slot: 32 free ones are enough for 31 pieces */
+  for (unsigned k = 0, s = rnd() % 0x40; k < 32; k++, s = (s + 1 + rnd() % 2) % 0x40)
+    hm_wr16(ram, 0x0A320 + 4 * s, 0);
+  if (rnd() % 2) hm_wr16(ram, 0xC7, (uint16_t)(rnd() % 0x2000));
+}
+
+/* SUB_809D0B: the mountain, its find tiles and the water's edge */
+static void prep_mountain(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r;
+  ram[0x22] = (uint8_t)((rnd() % 8) ? 0x10 + rnd() % 4 : rnd());
+  hm_wr16(ram, 0x00196, (uint16_t)((rnd() % 3) ? 0 : rnd()));
+  static const uint16_t tiles[] = { 0xF8, 0xF8, 0xF9, 0xFA, 0xFB, 0xFB, 0x00, 0x1F9 };
+  hm_wr16(ram, 0x00878, tiles[rnd() % 8]);
+  hm_wr16(ram, 0x0087A, (rnd() % 3) ? hm_rd16(ram, 0x00878) : tiles[rnd() % 8]);
+  /* mostly the season of the find tile under him (one roll in 17 finds) */
+  static const uint8_t season_of[] = { 0, 0, 2, 3 };
+  uint16_t t = hm_rd16(ram, 0x00878);
+  if (t < 0xF8 || t > 0xFB) t = hm_rd16(ram, 0x0087A);
+  ram[0x11F19] = (uint8_t)((rnd() % 4) ? ((t >= 0xF8 && t <= 0xFB) ? season_of[t - 0xF8] : rnd() % 4)
+                                       : ((rnd() % 4) ? rnd() % 4 : rnd()));
+  hm_wr16(ram, 0x11F5C, (uint16_t)((rnd() % 4) ? 0 : rnd()));
+  hm_wr16(ram, 0x11F5A, (uint16_t)((rnd() % 4) ? 0x0200 : rnd()));
+  static const uint16_t st[] = { 0, 0, 0x0002, 0x0010, 0x0800, 0x0001 };
+  hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 4) ? st[rnd() % 6] : rnd()));
+  static const uint16_t act[] = { 0, 1, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14 };
+  hm_wr16(ram, 0xD4, act[rnd() % 8]);
+  for (unsigned i = 0; i < 3; i++) ram[HM_RNG_STATE + i] = (uint8_t)rnd();   /* other rolls */
+}
+
+/* SUB_809A64: the doors. Both tiles under the player an exit ($C0-$CF), a
+ * real tile property table at $0D, every frame of the walk out ($098A
+ * 0-$0D), dates and hours on the edges of the flags' tests, the maps that
+ * shut ($0B), save the farm (below 4) or pass an hour ($0C-$0F). */
+static void prep_map_copy(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_doors(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_mountain(ram, r, rnd);
+  prep_map_copy(ram, r, rnd);
+  uint16_t t = (uint16_t)(0xC0 + rnd() % 16);
+  static const uint16_t other[] = { 0xBF, 0xD0, 0xF8, 0xFB, 0x00 };
+  hm_wr16(ram, 0x00878, (rnd() % 8) ? t : other[rnd() % 5]);
+  hm_wr16(ram, 0x0087A, (rnd() % 8) ? t : other[rnd() % 5]);
+  static const uint16_t tables[] = { 0xB3B4, 0xB7B4, 0xBBB4, 0xBFB4, 0xC3B4, 0xC7B4, 0xCBB4 };
+  if (rnd() % 2) { hm_wr16(ram, 0x0D, tables[rnd() % 7]); ram[0x0F] = 0x82; }
+  else {
+    /* a made-up table at $7E:F800: any door of the 256 whose map animation
+     * is a real one (the real tables never use flag 3) */
+    hm_wr16(ram, 0x0D, 0xF800); ram[0x0F] = 0x7E;
+    for (unsigned k = 0xC0; k < 0xD0; k++) {
+      uint8_t idx;
+      do idx = (uint8_t)rnd(); while (hm_bus_rd8(ram, 0x80B6F5u + 8u * idx + 2) >= 0x60);
+      ram[0x0F800 + 4 * k] = idx;
+    }
+  }
+  hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 4) ? rnd() & ~0x0010 : rnd()));
+  hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 4) ? rnd() & ~0x0006 : rnd()));
+  hm_wr16(ram, 0x11F6C, (uint16_t)rnd());
+  static const uint8_t steps[] = { 0, 0, 0, 0, 0, 1, 1, 2, 5, 0x0C, 0x0D, 0x0D, 0x0D };
+  uint32_t db = (uint32_t)r->db << 16;
+  hm_bus_wr8(ram, db | 0x098A, (uint8_t)((rnd() % 8) ? steps[rnd() % 13] : rnd()));
+  hm_bus_wr16(ram, db | 0x00CF, (uint16_t)((rnd() % 2) ? 0 : rnd()));
+  hm_bus_wr8(ram, db | 0x098B, (uint8_t)rnd());
+  hm_wr16(ram, 0xDA, (uint16_t)((rnd() % 4) ? rnd() % 4 : rnd()));
+  static const uint8_t maps[] = { 0, 2, 3, 4, 0x0B, 0x0C, 0x0D, 0x0F, 0x0F, 0x10, 0x20, 0x20 };
+  uint8_t map = (uint8_t)((rnd() % 4) ? maps[rnd() % 12] : rnd() % 0x60);
+  ram[0x22] = map;
+  hm_bus_wr8(ram, db | 0x0022, (rnd() % 8) ? map : (uint8_t)(rnd() % 8));
+  static const uint8_t hours[] = { 6, 0x10, 0x11, 0x11, 0x12, 0x12 };
+  ram[0x11F1C] = (uint8_t)((rnd() % 8) ? hours[rnd() % 6] : rnd() % 0x18);
+  static const uint8_t days[] = { 1, 1, 0x18, 0x18, 9, 0x0A, 0x0A, 0x0B, 0x0C, 0x0D, 0x14 };
+  ram[0x11F1B] = days[rnd() % 11];
+  ram[0x11F19] = (uint8_t)(rnd() % 4);
+  static const uint8_t weekdays[] = { 0, 0, 1, 3, 5, 6, 6 };
+  ram[0x11F1A] = weekdays[rnd() % 7];
+  hm_wr16(ram, 0x00196, (uint16_t)rnd());
+  hm_bus_wr8(ram, db | 0x0973, (uint8_t)rnd());
+  /* scenarios: the first frame on a door with one flag, the date on its
+   * edges; the last frame leaving the maps $0C-$0F at 17:00 / 18:00 */
+  int scenario = (int)(rnd() % 3);
+  if (scenario == 0) return;
+  hm_wr16(ram, 0xD2, (uint16_t)(hm_rd16(ram, 0xD2) & ~0x0010));
+  hm_wr16(ram, 0x11F60, (uint16_t)(hm_rd16(ram, 0x11F60) & ~0x0006));
+  hm_wr16(ram, 0x11F6C, (uint16_t)(hm_rd16(ram, 0x11F6C) & ~0x0001));
+  hm_wr16(ram, 0x00878, t);
+  hm_wr16(ram, 0x0087A, t);
+  if (scenario == 1) {
+    static const uint8_t bits[] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
+    uint8_t bit = bits[rnd() % 8], idx = 0;
+    for (int tries = 0; tries < 1000; tries++) {
+      idx = (uint8_t)rnd();
+      uint32_t e = 0x80B6F5u + 8u * idx;
+      if ((hm_bus_rd8(ram, e + 3) & bit) && hm_bus_rd8(ram, e + 2) < 0x60) break;
+    }
+    hm_wr16(ram, 0x0D, 0xF800); ram[0x0F] = 0x7E;
+    ram[0x0F800 + 4 * t] = idx;
+    hm_bus_wr8(ram, db | 0x098A, 0);
+    if (ram[0x22] == 0x0B && rnd() % 4) ram[0x22] = 0x20;
+    static const uint8_t edge_hours[] = { 0x10, 0x11 };
+    ram[0x11F1C] = edge_hours[rnd() % 2];
+    static const uint8_t edge_days[] = { 1, 0x18, 9, 0x0A, 0x0A, 0x0B, 0x0C, 0x0D };
+    ram[0x11F1B] = edge_days[rnd() % 8];
+    static const uint8_t edge_weekdays[] = { 0, 1, 5, 6 };
+    ram[0x11F1A] = edge_weekdays[rnd() % 4];
+    ram[0x11F19] = (uint8_t)((rnd() % 2) ? 3 : rnd() % 4);
+    if (rnd() % 2) ram[0x11F19] = (ram[0x11F1B] == 1) ? 0 : (ram[0x11F1B] == 0x18) ? 3 : ram[0x11F19];
+  } else {
+    hm_bus_wr8(ram, db | 0x098A, 0x0D);
+    static const uint8_t leave[] = { 0x0B, 0x0C, 0x0E, 0x0F, 0x10, 0x03 };
+    ram[0x22] = leave[rnd() % 6];
+    hm_bus_wr8(ram, db | 0x0022, ram[0x22]);
+    static const uint8_t late[] = { 0x10, 0x11, 0x12 };
+    ram[0x11F1C] = late[rnd() % 3];
+  }
+}
+
 static void prep_animals(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_random_farm_and_weather(ram, r, rnd);      /* grass to graze, $0196 */
@@ -1531,6 +1668,14 @@ static void prep_multiply16(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 
 /* audio.c: the uploads. A song 0-25 ($0110), a sound effect 0-49 ($0114),
  * $0103 (instruments noted) 0-10. */
+/* UNK_Audio1: what RESET gives it, the sound program at $AD:8000 */
+static void prep_boot_upload(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)r; (void)rnd;
+  hm_wr16(ram, 0x0A, 0x8000);
+  ram[0x0C] = 0xAD;
+}
+
 static void prep_upload(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_audio(ram, r, rnd);
@@ -2625,7 +2770,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     0x83B1C9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_money },
   { "SUB_8281C0", hm_SUB_8281C0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/weather.c",
     0x8281C0, 0, 0, 0, 0xFFFF, { B8(HM_WEATHER_TOMORROW, 0, 40), W16(0x00196, 0, 0x03FF) } },
-  { "HaveLunch", hm_HaveLunch, 0, "src/stamina.c", 0x8280AA, 1, 0, 0, 0xFF,
+  { "HaveLunch", hm_HaveLunch, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/stamina.c", 0x8280AA, 1, 0, 0, 0xFF,
     { B8(0x11F1C, 11, 13), W16(HM_GAME_STATE, 0, 0xFFFF), W16(HM_PLAYER_ACTION, 0x0E, 0x19),
       B8(HM_MAX_STAMINA, 0, 255), B8(HM_CURRENT_STAMINA, 0, 255), B8(HM_RNG_STATE, 0, 255) } },
   { "GetTileContent", hm_GetTileContent, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/tools.c",
@@ -2988,6 +3133,12 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/actions.c", 0x81FA69, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
   { "PlayerAction_57", hm_PlayerAction_57, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/actions.c", 0x81FA84, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "CODE_858CB2", hm_CODE_858CB2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/objects.c", 0x858CB2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_loader },
+  { "SUB_809A64", hm_SUB_809A64, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x809A64, 0, 0, 0, 0xFFFF, { { 0 } }, 400, prep_doors },
+  { "SUB_809D0B", hm_SUB_809D0B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x809D0B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_mountain },
   { "PlayerState_00", hm_PlayerState_00, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
     "src/playerstate.c", 0x81BFDC, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_foot },
   { "ResetIdleAnimatioTimer", hm_ResetIdleAnimatioTimer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
@@ -3735,6 +3886,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/audio.c", 0x83878C, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_upload },
   { "UNK_Audio3", hm_UNK_Audio3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/audio.c", 0x838598, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_upload },
+  { "UNK_Audio1", hm_UNK_Audio1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP | HM_LIVE,
+    "src/audio.c", 0x83843D, 0, 0, 0, 0xFFFF, { { 0 } }, 1, prep_boot_upload },
   { "UNK_Audio4", hm_UNK_Audio4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/audio.c", 0x8384D3, 1, 0, 0, 0xFFFF, { { 0 } }, 20, prep_upload },
   { "GetFenceFromStack", hm_GetFenceFromStack, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
@@ -3914,9 +4067,10 @@ static void skip_why(const char *name, const char *why)
   if (on) fprintf(stderr, "[decomp-check] skipped %s: %s\n", name, why);
 }
 
-void *hm_decomp_check_begin(const CpuState *cpu)
+void *hm_decomp_check_begin(const CpuState *cpu, const char *name)
 {
   if (s_fuzzing && s_check_depth > 0) return NULL;
+  (void)name;
   s_check_depth++;
   Snapshot *s = malloc(sizeof *s);
   if (!s) { s_check_depth--; return NULL; }
@@ -4064,8 +4218,12 @@ static void fuzz_at(unsigned frame)
   if ((int)frame >= at && (int)frame < at + g_hm_decomp_count &&
       !(g_hm_decomp_fns[(int)frame - at].out_mask & HM_APU))
     only = (int)frame - at;
+  /* HM_LIVE (the upload to the chip's boot ROM): frame 1, before the
+   * game's own upload is done; only when named (below). */
+  for (int i = 0; i < g_hm_decomp_count && only < 0; i++)
+    if ((g_hm_decomp_fns[i].out_mask & HM_LIVE) && frame == 1) only = i;
   for (int i = 0, k = 0; i < g_hm_decomp_count && only < 0; i++)
-    if (g_hm_decomp_fns[i].out_mask & HM_APU) {
+    if ((g_hm_decomp_fns[i].out_mask & HM_APU) && !(g_hm_decomp_fns[i].out_mask & HM_LIVE)) {
       if ((int)frame == apu_at + k) only = i;
       k++;
     }
@@ -4110,7 +4268,8 @@ static void fuzz_at(unsigned frame)
         s += len;
       }
       if (!found) n_calls = 0;
-    }
+      else if (f->out_mask & HM_LIVE) n_calls = 1;   /* named: one call */
+    } else if (f->out_mask & HM_LIVE) n_calls = 0;
     /* HM_DECOMP_FUZZ_CALL=<n>: run only call n of it (same inputs as in the
      * full run), e.g. to trace it. */
     const char *one_call = getenv("HM_DECOMP_FUZZ_CALL");
@@ -4140,7 +4299,7 @@ static void fuzz_at(unsigned frame)
        * 4096-tile farm loop) would otherwise hit the frame deadline, yield
        * half-way and not be comparable. The machine is restored after. */
       g_cpu.master_cycles = apu ? apu_clock : 0;
-      if (apu) {
+      if (apu && !(f->out_mask & HM_LIVE)) {
         int ready = 0;
         for (long k = 0; k < 200000 && !ready; k++) {
           g_cpu.master_cycles += 64;
@@ -4197,7 +4356,7 @@ static void fuzz_at(unsigned frame)
       unsigned bad_before = s_stats[i].bad;
       if (f->out_mask & HM_INTERP) {
         /* No wrapper around it: check this call here. */
-        void *snap = hm_decomp_check_begin(&g_cpu);
+        void *snap = hm_decomp_check_begin(&g_cpu, f->name);
         /* No compiled body: run the original in the recompiler's
          * interpreter, as the game itself does. */
         uint16_t s_in = g_cpu.S;

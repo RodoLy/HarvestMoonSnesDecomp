@@ -872,3 +872,252 @@ void hm_PlayerState_08(uint8_t *ram, HmRegs *r)
   }
   END(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_809D0B ($80:9D0B, JSL, RTL): the mountain (maps $10-$13), on days
+ * without $0196 bits 1, 3, 4. Where the player stands ($0878 / $087A, the
+ * tiles under him):
+ *   - tile $F9 in spring, $FA in autumn, $FB in winter: one chance in 16,
+ *     once a day ($7F1F5C bit 13 / 14 / 15), of a find: event $11 / $2C,
+ *     $13 / $2B, $12 / $2A;
+ *   - both tiles $F8 (the water's edge) with the fishing rod ($7F1F5A
+ *     bit 9), his hands free and not in snow or bit 11: he starts fishing
+ *     (action $0F), unless he already is (actions $10-$13).
+ * Leftovers: those of the last routine called and the stores after it.
+ * ───────────────────────────────────────────────────────────────────────── */
+static bool under_player(uint8_t *ram, HmRegs *r, uint16_t tile)
+{
+  r->a = rd16(ram, r, 0x0878);
+  r->c = r->a >= tile;
+  if (r->a == tile) return true;
+  r->a = rd16(ram, r, 0x087A);
+  r->c = r->a >= tile;
+  return r->a == tile;
+}
+static void mountain_find(uint8_t *ram, HmRegs *r, uint8_t season, uint16_t bit,
+                          uint16_t a, uint16_t x, uint16_t at_rng, uint16_t at_event)
+{
+  uint8_t s = hm_bus_rd8(ram, 0x7F1F19);
+  set_a8(r, s);
+  if (season == 0) { if (s) return; }
+  else { r->c = s >= season; if (s != season) return; }
+  set_a8(r, 0x10);
+  jsl(ram, r, at_rng, 0x80, hm_RNGReturn0toA);
+  if (r->a & 0xFF) return;
+  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5C) & bit);
+  if (r->a) return;
+  long_or(ram, r, 0x7F1F5C, bit);
+  event_long(ram, r, a, x, 0x0000, at_event);
+}
+
+void hm_SUB_809D0B(uint8_t *ram, HmRegs *r)
+{
+  uint8_t map = *hm_dp(ram, r, 0x22);
+  set_a8(r, map);
+  r->c = map >= 0x04;
+  if (map < 0x04) return;
+  r->c = map >= 0x10;
+  if (map < 0x10) return;
+  r->c = map >= 0x14;
+  if (map >= 0x14) return;
+  r->a = (uint16_t)(rd16(ram, r, 0x0196) & 0x001A);
+  if (r->a) return;
+  if (under_player(ram, r, 0x00F9)) {
+    mountain_find(ram, r, 0, 0x2000, 0x0011, 0x002C, 0x9E0C, 0x9E39);
+    return;
+  }
+  if (under_player(ram, r, 0x00FA)) {
+    mountain_find(ram, r, 2, 0x4000, 0x0013, 0x002B, 0x9E4D, 0x9E77);
+    return;
+  }
+  if (under_player(ram, r, 0x00FB)) {
+    mountain_find(ram, r, 3, 0x8000, 0x0012, 0x002A, 0x9E8B, 0x9EB5);
+    return;
+  }
+  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5A) & 0x0200);
+  if (!r->a) return;
+  static const uint16_t busy[] = { 0x0002, 0x0010, 0x0800 };
+  for (unsigned i = 0; i < 3; i++) {
+    r->a = (uint16_t)(dp16(ram, r, GAME_STATE) & busy[i]);
+    if (r->a) return;
+  }
+  r->a = rd16(ram, r, 0x0878);
+  r->c = r->a >= 0x00F8;
+  if (r->a != 0x00F8) return;
+  r->a = rd16(ram, r, 0x087A);
+  r->c = r->a >= 0x00F8;
+  if (r->a != 0x00F8) return;
+  for (uint16_t k = 0x10; k <= 0x13; k++) {
+    r->a = dp16(ram, r, ACTION);
+    r->c = r->a >= k;
+    if (r->a == k) return;
+  }
+  set_action(ram, r, 0x000F);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_809A64 ($80:9A64, JSL, RTL): the doors. The tiles under the player
+ * ($0878 / $087A) are both of the types $C0-$CF (an exit) or the routine
+ * leaves; a type from $D0 goes on to SUB_809D0B (the mountain). Not while
+ * $D2 bit 4 or $7F1F60 bits 1-2; with $7F1F6C bit 0, not the exits whose
+ * entry has destination $1C.
+ * The exit's entry: the tile's property byte ([$0D] + 4 tile) x 8 into the
+ * door table (Unk_Table13, $80:B6F5): +0 the destination map, +2 the map
+ * animation (0 = none), +3 flags, +4 / +6 the X / Y where he arrives.
+ * $098A counts the frames of the walk out:
+ *   0: the first; the destination ($098B): + the season (flag 0); flag 6:
+ *      on day 1 of spring $3A, on day 24 of winter $39, on days 10-12 + 4
+ *      (the festivals). The door is shut (he stays, the tiles under him are
+ *      forgotten) in map $0B, or by its flags: 1 from 17:00, 2 before 17:00,
+ *      3 on weekdays 1-5, 4 on the 10th of winter or Saturdays, 5 on
+ *      Sundays, 7 with $0196 bit 4. Open: the clock stops ($0973 = 0), the
+ *      arrival point goes to $017D / $017F and the map animation starts;
+ *   1: waits while $00CF;
+ *   then up to $0D he walks on (action 1) in his facing (3 = any other);
+ *   at $0D: leaving a farm map (below 4) the farm is saved; leaving the
+ *      maps $0C-$0F an hour passes (not past 18:00) and HaveLunch; then
+ *      $0196 bit 14 (the transition).
+ * Leftovers: the original's A, X, Y and C on each path.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define DOORS 0x80B6F5   /* Unk_Table13: 8 bytes an exit */
+
+static uint8_t door(uint8_t *ram, uint16_t x) { return hm_bus_rd8(ram, DOORS + x); }
+static bool cmp8(HmRegs *r, uint8_t a, uint8_t v) { r->c = a >= v; return a == v; }
+
+/* LDA $0878; ASL; ASL; TAY; LDA #0; XBA; LDA [$0D],Y; ASL x3; TAX */
+static uint16_t door_entry(uint8_t *ram, HmRegs *r)
+{
+  uint16_t tile = rd16(ram, r, 0x0878);
+  r->y = (uint16_t)(tile << 2);
+  r->a = (uint16_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0D, r->y)) << 3);
+  r->c = 0;                                       /* a byte x 8 */
+  r->x = r->a;
+  return r->x;
+}
+static void door_shut(uint8_t *ram, HmRegs *r)
+{
+  state_off(ram, r, 0x0080);
+  wr16(ram, r, 0x0878, 0);
+  wr16(ram, r, 0x087A, 0);
+  wr8(ram, r, 0x098A, 0);
+}
+/* the flags 1-5 and 7 (C as the CMPs leave it: the closed door keeps it) */
+static bool shut_by_flags(uint8_t *ram, HmRegs *r, uint8_t flags)
+{
+  uint8_t hour = hm_bus_rd8(ram, 0x7F1F1C), weekday = hm_bus_rd8(ram, 0x7F1F1A);
+  uint8_t season = hm_bus_rd8(ram, 0x7F1F19), day = hm_bus_rd8(ram, 0x7F1F1B);
+  if (flags & 0x02) { r->c = hour >= 0x11; if (r->c) return true; }       /* from 17:00 */
+  if (flags & 0x04) { r->c = hour >= 0x11; if (!r->c) return true; }      /* before 17:00 */
+  if ((flags & 0x08) && weekday != 0 && !cmp8(r, weekday, 0x06)) return true;
+  if (flags & 0x10) {
+    if (cmp8(r, season, 0x03) && cmp8(r, day, 0x0A)) return true;
+    if (cmp8(r, weekday, 0x06)) return true;
+  }
+  if ((flags & 0x20) && weekday == 0) return true;
+  if ((flags & 0x80) && (rd16(ram, r, 0x0196) & 0x0010)) return true;
+  return false;
+}
+/* the first frame on the exit; X = the entry */
+static void door_open(uint8_t *ram, HmRegs *r, uint16_t x)
+{
+  uint8_t flags = door(ram, x + 3);
+  uint8_t dest = rd8(ram, r, 0x098B);
+  if (flags & 0x01) dest = (uint8_t)(dest + hm_bus_rd8(ram, 0x7F1F19));
+  if (flags & 0x40) {                                     /* the festivals */
+    uint8_t day = hm_bus_rd8(ram, 0x7F1F1B), season = hm_bus_rd8(ram, 0x7F1F19);
+    if (day == 0x01) { if (season == 0) dest = 0x3A; }
+    else if (day == 0x18) { if (season == 3) dest = 0x39; }
+    else if (day >= 0x0A && day < 0x0D) dest = (uint8_t)(dest + 4);
+  }
+  wr8(ram, r, 0x098B, dest);
+  uint8_t map = *hm_dp(ram, r, 0x22);
+  if (cmp8(r, map, 0x0B) || shut_by_flags(ram, r, flags)) {
+    door_shut(ram, r);
+    return;
+  }
+  wr8(ram, r, 0x0973, 0);                                 /* the clock stops */
+  r->x = (uint16_t)(x + 6);
+  wr16(ram, r, 0x017D, hm_bus_rd16(ram, DOORS + x + 4));
+  wr16(ram, r, 0x017F, hm_bus_rd16(ram, DOORS + x + 6));
+  uint8_t animation = *hm_dp(ram, r, 0x92);
+  r->a = animation;                                       /* LDA #0; XBA; LDA $92 */
+  r->c = 1;                                               /* CMP #0 */
+  if (animation) jsl(ram, r, 0x9C56, 0x81, hm_StartMapAnimation);
+}
+
+void hm_SUB_809A64(uint8_t *ram, HmRegs *r)
+{
+  static const uint16_t under[] = { 0x0878, 0x087A };
+  for (unsigned i = 0; i < 2; i++) {
+    r->a = rd16(ram, r, under[i]);
+    r->c = r->a >= 0x00C0;
+    if (!r->c) return;
+    r->c = r->a >= 0x00D0;
+    if (r->c) { hm_SUB_809D0B(ram, r); return; }
+  }
+  r->a = (uint16_t)(dp16(ram, r, GAME_STATE) & 0x0010);
+  if (r->a) return;
+  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F60) & 0x0006);
+  if (r->a) return;
+  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F6C) & 0x0001);
+  if (r->a) {
+    uint16_t x = door_entry(ram, r);
+    set_a8(r, door(ram, x));
+    if (cmp8(r, (uint8_t)r->a, 0x1C)) return;
+  }
+  set_action(ram, r, 0x0000);
+  state_on(ram, r, 0x0080);
+
+  uint8_t step = rd8(ram, r, 0x098A);
+  set_a8(r, step);
+  bool walk = false;
+  if (cmp8(r, step, 0x01)) {
+    r->a = rd16(ram, r, 0x00CF);
+    if (r->a) return;
+    walk = true;
+  } else if (step >= 0x02) walk = true;
+  if (!walk) {                                            /* the first frame */
+    set_a8(r, (uint8_t)(step + 1));
+    wr8(ram, r, 0x098A, (uint8_t)(step + 1));
+    uint16_t x = door_entry(ram, r);
+    wr8(ram, r, 0x098B, door(ram, x));                    /* the destination */
+    *hm_dp(ram, r, 0x92) = door(ram, x + 2);
+    r->x = (uint16_t)(x + 3);
+    door_open(ram, r, x);
+    return;
+  }
+
+  step = rd8(ram, r, 0x098A);
+  set_a8(r, step);
+  if (!cmp8(r, step, 0x0D)) {                             /* walking out */
+    set_a8(r, (uint8_t)(step + 1));
+    wr8(ram, r, 0x098A, (uint8_t)(step + 1));
+    set_action(ram, r, 0x0001);
+    uint16_t facing = dp16(ram, r, FACING);
+    r->a = facing;
+    if (facing > 2) { r->c = facing >= 2; facing = 3; }
+    else r->c = 1;
+    set_dp16(ram, r, FACING, facing);
+    r->a = facing;
+    wr16(ram, r, 0x0911, facing);
+    return;
+  }
+  uint8_t map = rd8(ram, r, 0x0022);                      /* LDA $0022 (absolute) */
+  set_a8(r, map);
+  r->c = map >= 0x04;
+  if (!r->c) jsl(ram, r, 0x9CDC, 0x82, hm_CopyCurrentMaptoFarmMap);
+  map = *hm_dp(ram, r, 0x22);
+  set_a8(r, map);
+  r->c = map >= 0x0C;
+  if (r->c && (r->c = map >= 0x10, !r->c)) {
+    uint8_t hour = hm_bus_rd8(ram, 0x7F1F1C);
+    set_a8(r, hour);
+    if (!cmp8(r, hour, 0x12)) {
+      set_a8(r, (uint8_t)(hour + 1));
+      hm_bus_wr8(ram, 0x7F1F1C, (uint8_t)(hour + 1));
+      jsl(ram, r, 0x9CFB, 0x82, hm_HaveLunch);
+    }
+  }
+  r->a = (uint16_t)(rd16(ram, r, 0x0196) | 0x4000);
+  wr16(ram, r, 0x0196, r->a);
+}

@@ -57,13 +57,13 @@ def rename(gen_dir, names):
 WRAP_DECL = """
 /* hm decomp wrappers (tools/apply_overrides.py) */
 extern int g_hm_decomp_check;
-void *hm_decomp_check_begin(const struct CpuState *cpu);
+void *hm_decomp_check_begin(const struct CpuState *cpu, const char *name);
 void hm_decomp_check_end(const char *name, void *snapshot, const struct CpuState *cpu, int completed);
 """
 WRAPPER = """
 RecompReturn {fn}(CpuState *cpu) {{
   if (!g_hm_decomp_check) return {fn}__rom(cpu);
-  void *_snap = hm_decomp_check_begin(cpu);
+  void *_snap = hm_decomp_check_begin(cpu, "{name}");
   RecompReturn _r = {fn}__rom(cpu);
   hm_decomp_check_end("{name}", _snap, cpu, _r == RECOMP_RETURN_NORMAL);
   return _r;

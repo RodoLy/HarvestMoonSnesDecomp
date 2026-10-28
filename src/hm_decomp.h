@@ -195,7 +195,14 @@ enum { HM_OUT_A = 1, HM_OUT_X = 2, HM_OUT_Y = 4, HM_OUT_C = 8,
         * from call to call (the chip only runs up to the CPU's time, so a
         * clock set back to 0 would leave it stopped and the routine
         * waiting for its answer forever). */
-       HM_APU = 64 };
+       HM_APU = 64,
+       /* Fuzzed only when named in HM_DECOMP_FUZZ_ONLY, once, without
+        * waiting for "ready", at frame 1 (before the game's own upload is
+        * done): UNK_Audio1, which talks to the chip's boot ROM; after the
+        * upload the chip runs the game's sound program and never answers
+        * that way again. E.g. HM_DECOMP_FUZZ=100000:1
+        * HM_DECOMP_FUZZ_ONLY=UNK_Audio1. */
+       HM_LIVE = 128 };
 
 /* Fuzzing: which inputs to randomize when testing a routine on its own
  * (HM_DECOMP_FUZZ). Ranges are inclusive; size 1 or 2 bytes. */
@@ -230,7 +237,7 @@ struct CpuState;
  * registered routine <iterations> times with random inputs (checking each
  * call), then restore the machine exactly as it was. Driven by a mod-runtime
  * frame callback registered in hm_decomp.c. */
-void *hm_decomp_check_begin(const struct CpuState *cpu);
+void *hm_decomp_check_begin(const struct CpuState *cpu, const char *name);
 void hm_decomp_check_end(const char *name, void *snapshot, const struct CpuState *cpu,
                          int completed);
 
@@ -357,6 +364,10 @@ void hm_PlayerState_05(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_08(uint8_t *ram, HmRegs *r);
 void hm_CODE_81CB14(uint8_t *ram, HmRegs *r);
 void hm_CODE_81CB5E(uint8_t *ram, HmRegs *r);
+void hm_SUB_809D0B(uint8_t *ram, HmRegs *r);
+void hm_SUB_809A64(uint8_t *ram, HmRegs *r);
+void hm_CODE_858CB2(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio1(uint8_t *ram, HmRegs *r);
 void hm_CODE_81CB77(uint8_t *ram, HmRegs *r);
 void hm_CODE_81D716(uint8_t *ram, HmRegs *r);   /* actions.c */
 void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r);

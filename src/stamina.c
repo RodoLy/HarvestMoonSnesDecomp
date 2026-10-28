@@ -113,32 +113,43 @@ void hm_ChangeStamina(uint8_t *ram, HmRegs *r)
  * (RNGReturn0toA(3): 0..2) and game-state bits $0004 and $0400 are set.
  * "Busy" is game state $0430 or $0800, or fishing (actions $0F-$13) or
  * jumping ($17, $18).
- * Checked on WRAM only: ChangeStamina's rewrite doesn't model the registers
- * it leaves, and the early returns keep them.
+ * Leftovers: A, X, Y and C of the test it stops at or of the last call
+ * (C = 1 on a busy action, from its CMP; past them, action >= $18).
  * ───────────────────────────────────────────────────────────────────────── */
-#define HM_LUNCH_CHOICE   0x00924
+#define HM_LUNCH_CHOICE   0x0924   /* DB */
 #define RET_LUNCH_STAMINA 0x80C0   /* JSL ChangeStamina at $82:80BD */
 #define RET_LUNCH_ROLL    0x8118   /* JSL RNGReturn0toA at $82:8115 */
 
 void hm_HaveLunch(uint8_t *ram, HmRegs *r)
 {
-  if (ram[HM_HOUR] != 12) return;
+  uint8_t hour = ram[HM_HOUR];
+  r->a = (uint16_t)((r->a & 0xFF00) | hour);
+  r->c = hour >= 12;
+  if (hour != 12) return;
   r->a = (uint16_t)((r->a & 0xFF00) | 20);       /* LDA #20 (8-bit) */
   r->n = 0;                                      /* ...which clears N */
   hm_jsl(ram, r, RET_LUNCH_STAMINA, 0x81);
   hm_ChangeStamina(ram, r);
   hm_rtl(ram, r);
 
-  uint16_t state = hm_rd16(ram, HM_GAME_STATE);
-  if (state & 0x0430) return;
-  uint16_t action = hm_rd16(ram, HM_PLAYER_ACTION);
-  if ((action >= 0x0F && action <= 0x13) || action == 0x17 || action == 0x18) return;
-  if (state & 0x0800) return;
+  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) & 0x0430);
+  if (r->a) return;
+  uint16_t action = hm_dp_r16(ram, r, 0xD4);
+  r->a = action;
+  static const uint16_t busy[] = { 0x0F, 0x10, 0x11, 0x12, 0x13, 0x17, 0x18 };
+  for (unsigned i = 0; i < sizeof busy / sizeof busy[0]; i++) {
+    r->c = action >= busy[i];
+    if (action == busy[i]) return;
+  }
+  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) & 0x0800);
+  if (r->a) return;
 
   r->a = (uint16_t)((r->a & 0xFF00) | 3);
   hm_jsl(ram, r, RET_LUNCH_ROLL, 0x80);
   hm_RNGReturn0toA(ram, r);
   hm_rtl(ram, r);
-  ram[HM_LUNCH_CHOICE] = (uint8_t)r->a;
-  hm_wr16(ram, HM_GAME_STATE, (uint16_t)(hm_rd16(ram, HM_GAME_STATE) | 0x0004 | 0x0400));
+  hm_bus_wr8(ram, (uint32_t)r->db << 16 | HM_LUNCH_CHOICE, (uint8_t)r->a);
+  hm_dp_w16(ram, r, 0xD2, (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0004));
+  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0400);
+  hm_dp_w16(ram, r, 0xD2, r->a);
 }

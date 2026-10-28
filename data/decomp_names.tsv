@@ -1032,5 +1032,6 @@
 058C30	LoadSpriteComponent_lo
 858C9F	CODE_858C9F
 058C9F	CODE_858C9F_lo
+058CB2	CODE_858CB2_lo
 858ED7	ClearSpriteDataTables
 058ED7	ClearSpriteDataTables_lo

@@ -125,6 +125,7 @@ MANUAL = {
     0x81D1C5: "CODE_81D1C5",  # people.c
     0x8581A2: "CODE_8581A2",  # objects.c: destroying a game object
     0x858B7B: "CODE_858B7B",
+    0x858CB2: "CODE_858CB2",  # objects.c: the loader of queued pieces (NMI)
     0x858B41: "CODE_858B41",
     0x858C9F: "CODE_858C9F",
     0x8580B9: "CODE_8580B9",  # objects.c: moving a game object

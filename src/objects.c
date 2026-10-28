@@ -873,3 +873,127 @@ void hm_CODE_81CFE6(uint8_t *ram, HmRegs *r)
   hm_CODE_81D03D(ram, r);
   pull16(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_858CB2 ($85:8CB2, JSL, RTL): the loader of the queued pieces (run
+ * at the NMI). While the queue ($BB != $BD) has pieces and the budget $C7
+ * has $100 bytes left for one more, takes the piece at $BB:
+ *   - its slot: the next new one while $0846 < $40 (then $0846 + 1), or
+ *     else the first free one ($7E:A320 + 4 slot = 0) from slot $0848
+ *     (which turns 1-$40 each piece);
+ *   - the slot gets one user and the piece; the piece that was in it, if
+ *     any, is no longer loaded ($7F:0F00 + it = $FF); the new one is
+ *     ($7F:0F00 + piece = slot), and the slot is written where the queue
+ *     said (bank $80);
+ *   - a copy for the NMI at $7E:A420 + $BF (6 bytes each, $FFFF after the
+ *     last): the piece's graphics (ROM $86:8000 + 2 x the piece's low 6
+ *     bits, x $20, + $2000 x bits 6-7, + $8000), its bank ($88 + the
+ *     piece's high byte), and the slot's VRAM address ($86:8000 + 2 x
+ *     slot, x $10).
+ * At the end $0742 = what is left in the queue (entries).
+ * Traps (the original spins forever): no free slot; a slot >= $2000; 32
+ * pieces in one go. None can happen with the budgets the game gives; the
+ * rewrite spins too.
+ * Leftovers: $7E, $C1, $C3, $C5, $75 of the last piece, $7A = $80; X the
+ * last X; Y the count of the search; C from the last LSR; A's high byte
+ * from the last 16-bit load of the loop's test.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define LOAD_COPIES      0x7EA420   /* 6 bytes each: source, bank, VRAM */
+#define PIECE_GRAPHICS   0x868000   /* ROM: words, 2 x the index */
+#define NEW_SLOTS        0x0846     /* DB: slots handed out so far (to $40) */
+#define SEARCH_FROM      0x0848     /* DB: */
+#define QUEUE_LEFT       0x0742     /* DB: */
+
+static void trap(void) { for (;;) { } }
+
+/* the console's multiplier: 8 x 8 bits */
+static uint16_t graphics_times(uint8_t *ram, uint16_t index, uint8_t by)
+{
+  return (uint16_t)((uint8_t)hm_bus_rd16(ram, PIECE_GRAPHICS + 2u * index) * by);
+}
+
+void hm_CODE_858CB2(uint8_t *ram, HmRegs *r)
+{
+  *hm_dp(ram, r, 0x7A) = 0x80;
+  hm_dp_w16(ram, r, 0xBF, 0);
+  for (;;) {
+    r->a = hm_dp_r16(ram, r, 0xBD);
+    if (r->a == hm_dp_r16(ram, r, 0xBB)) break;
+    r->a = hm_dp_r16(ram, r, 0xC7);
+    if (r->a < 0x0100) break;
+
+    uint16_t at = hm_dp_r16(ram, r, 0xBB);
+    r->x = at;
+    uint16_t piece = hm_bus_rd16(ram, (PIECE_QUEUE + at) & 0xFFFFFF);
+    hm_dp_w16(ram, r, 0xC1, piece);
+    hm_dp_w16(ram, r, 0x78, hm_bus_rd16(ram, (PIECE_QUEUE + 2 + at) & 0xFFFFFF));
+    hm_dp_w16(ram, r, 0xC7, (uint16_t)(hm_dp_r16(ram, r, 0xC7) - 0x0100));
+    uint16_t next = (uint16_t)(at + 4);
+    if (next == 0x0100) next = 0;
+    hm_dp_w16(ram, r, 0xBB, next);
+    uint16_t from = (uint16_t)((hm_bus_rd16(ram, abs_db(r, SEARCH_FROM)) & 0x3F) + 1);
+    hm_bus_wr16(ram, abs_db(r, SEARCH_FROM), from);
+
+    uint16_t handed = hm_bus_rd16(ram, abs_db(r, NEW_SLOTS));
+    if (handed != 0x0040) {
+      hm_dp_w16(ram, r, 0xC5, handed);
+      hm_dp_w16(ram, r, 0xC3, (uint16_t)(handed << 2));
+      hm_bus_wr16(ram, abs_db(r, NEW_SLOTS), (uint16_t)(handed + 1));
+    } else {
+      uint16_t x = (uint16_t)(from << 2);
+      for (r->y = 0; hm_bus_rd16(ram, (SLOT_USERS + x) & 0xFFFFFF) != 0; ) {
+        x = (uint16_t)((x + 4) & 0xFF);
+        if (++r->y == 0x40) trap();
+      }
+      hm_dp_w16(ram, r, 0xC3, x);
+      hm_dp_w16(ram, r, 0xC5, (uint16_t)(x >> 2));
+    }
+    uint16_t slot4 = hm_dp_r16(ram, r, 0xC3);
+    if (slot4 & 0x8000) trap();
+    uint16_t slot = hm_dp_r16(ram, r, 0xC5);
+    hm_bus_wr8(ram, hm_dp_long(ram, r, 0x78, 0), (uint8_t)slot);
+    *hm_dp(ram, r, 0x75) = (uint8_t)slot;
+    *hm_dp(ram, r, 0x76) = 0;
+
+    r->x = slot4;
+    hm_bus_wr16(ram, (SLOT_USERS + slot4) & 0xFFFFFF, 0x0001);
+    uint16_t old = hm_bus_rd16(ram, (SLOT_USERS + 2 + slot4) & 0xFFFFFF);
+    if (old != 0xFFFF) {
+      push16(ram, r, slot4);                               /* PHX ... PLX */
+      hm_bus_wr8(ram, (PIECE_SLOT + old) & 0xFFFFFF, 0xFF);
+      pull16(ram, r);
+    }
+    hm_bus_wr16(ram, (SLOT_USERS + 2 + slot4) & 0xFFFFFF, piece);
+    hm_bus_wr8(ram, (PIECE_SLOT + piece) & 0xFFFFFF, (uint8_t)(slot4 >> 2));
+
+    /* the piece's number: bits 0-5 the graphics, 6-7 a $2000 part, 8-9 the bank */
+    uint16_t high = (uint16_t)(piece & 0xFFC0);
+    uint16_t part = (uint16_t)(high >> 6);
+    hm_dp_w16(ram, r, 0x7E, (uint16_t)((part >> 2) << 2));
+    hm_dp_w16(ram, r, 0xC5, (uint16_t)((part >> 2) + 0x88));
+    uint16_t low = (uint16_t)(piece - high);
+    uint16_t source = graphics_times(ram, low, 0x20);
+    hm_dp_w16(ram, r, 0xC1, source);
+    uint16_t base = (uint16_t)((part & 3) << 13);       /* Table_of_Multof2000 */
+    uint16_t sum = (uint16_t)(source + base + 0x8000);
+    hm_dp_w16(ram, r, 0xC3, sum);
+    hm_dp_w16(ram, r, 0x75, graphics_times(ram, slot & 0xFF, 0x10));
+
+    uint16_t bf = hm_dp_r16(ram, r, 0xBF);
+    r->x = bf;
+    hm_bus_wr16(ram, (LOAD_COPIES + bf) & 0xFFFFFF, sum);
+    hm_bus_wr16(ram, (LOAD_COPIES + 2 + bf) & 0xFFFFFF, hm_dp_r16(ram, r, 0xC5));
+    hm_bus_wr16(ram, (LOAD_COPIES + 4 + bf) & 0xFFFFFF, hm_dp_r16(ram, r, 0x75));
+    hm_bus_wr16(ram, (LOAD_COPIES + 6 + bf) & 0xFFFFFF, 0xFFFF);
+    bf = (uint16_t)(bf + 6);
+    if (bf == 0x00C0) trap();
+    hm_dp_w16(ram, r, 0xBF, bf);
+  }
+  uint8_t bb = *hm_dp(ram, r, 0xBB), bd = *hm_dp(ram, r, 0xBD);
+  uint8_t left = (uint8_t)(bb >= bd ? bb - bd : bd - bb);
+  r->c = (left >> 1) & 1;
+  left = (uint8_t)(left >> 2);
+  r->a = (uint16_t)((r->a & 0xFF00) | left);
+  hm_bus_wr8(ram, abs_db(r, QUEUE_LEFT), left);
+  hm_bus_wr8(ram, abs_db(r, QUEUE_LEFT + 1), 0);
+}

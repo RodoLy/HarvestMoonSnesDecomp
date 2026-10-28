@@ -647,3 +647,75 @@ void hm_UNK_Audio5(uint8_t *ram, HmRegs *r)
   r->a = song;
   hm_bus_wr8(ram, db_addr(r, 0x0110), song);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNK_Audio1 ($83:843D, JSL, RTL; at power-on, from RESET): the sound
+ * program goes to the chip with the protocol of its boot ROM (the "IPL"):
+ *   1. wait until ports 0-1 read $BBAA (the chip is waiting);
+ *   2. the block's address ($0500) in ports 2-3, 1 in port 1 ("data
+ *      follows"), $CC in port 0; wait for the $CC back;
+ *   3. $FD6 bytes from [$0A] (the caller gives $AD:8000): each byte in
+ *      port 1 and its index (0, 1, 2... wrapping at $FF) in port 0, with
+ *      one 16-bit store (which writes port 1 first), each once the chip
+ *      echoed the previous index;
+ *   4. the address $0500 again, 0 in port 1 ("run it") and in port 0 the
+ *      last index + 4 (4 if that wraps to 0); wait for its echo.
+ * The original loops back to 3 while an overflow (V) says another block
+ * follows, but its second header is built with X = 0, which never sets
+ * it: there is only one block.
+ * Leftovers: A = the last value of port 0 (high byte 0), X = 0, Y = $FD6,
+ * the flags as they were (PHP / PLP); the stack below keeps the PHA'd
+ * values.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define IPL_BLOCK_SIZE 0x0FD6
+#define IPL_ADDRESS    0x0500
+
+/* CMP $2140 (8-bit) until port 0 reads v */
+static void wait_echo(uint8_t *ram, HmRegs *r, uint8_t v)
+{
+  while (port(ram, r, 0) != v) {}
+}
+
+void hm_UNK_Audio1(uint8_t *ram, HmRegs *r)
+{
+  uint8_t flags = r->p;
+  hm_push8(ram, r, flags);                                    /* PHP */
+  r->y = 0;
+  for (;;) {                                                  /* CMP $2140 (16-bit) */
+    uint8_t lo = port(ram, r, 0), hi = port(ram, r, 1);
+    if (lo == 0xAA && hi == 0xBB) break;
+  }
+  hm_push8(ram, r, 0xCC);                                     /* PHA */
+  set_port(ram, r, 2, (uint8_t)IPL_ADDRESS);
+  set_port(ram, r, 3, (uint8_t)(IPL_ADDRESS >> 8));
+  set_port(ram, r, 1, 1);                                     /* CPX #1; ROL: data follows */
+  hm_pull8(ram, r);                                           /* PLA */
+  set_port(ram, r, 0, 0xCC);
+  wait_echo(ram, r, 0xCC);
+
+  uint8_t index = 0;
+  for (uint16_t left = IPL_BLOCK_SIZE; left; left--) {
+    uint8_t byte = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0A, r->y));
+    r->y++;
+    if (left != IPL_BLOCK_SIZE) {
+      wait_echo(ram, r, index);
+      index++;
+    }
+    set_port(ram, r, 1, byte);                                /* STA $2140 (16-bit): */
+    set_port(ram, r, 0, index);                               /* $2141 goes first */
+  }
+  wait_echo(ram, r, index);
+  uint8_t start = (uint8_t)(index + 4);                       /* ADC #3 after CMP (C = 1) */
+  if (start == 0) start = 4;                                  /* again: 0 + 3 + the carry */
+  hm_push8(ram, r, start);                                    /* PHA */
+  r->x = 0;
+  set_port(ram, r, 2, (uint8_t)IPL_ADDRESS);
+  set_port(ram, r, 3, (uint8_t)(IPL_ADDRESS >> 8));
+  set_port(ram, r, 1, 0);                                     /* run it */
+  hm_pull8(ram, r);                                           /* PLA */
+  set_port(ram, r, 0, start);
+  wait_echo(ram, r, start);
+  r->a = start;
+  hm_pull8(ram, r);                                           /* PLP */
+  r->c = flags & 1;
+}

@@ -132,6 +132,9 @@ en el README (`tools/progress.py`).
 | Las rutinas de los objetos: ItemObject_01-5A (61, sin las 26 herramientas), las 6 máquinas de estados (CODE_81883A, 818855, 81889A, 8188BC, 8188E5, 818923) y sus 16 pasos (CODE_818B6B-CODE_819695) | $81:80FE-$81:96AE | src/items.c |
 | Las acciones del jugador $0F-$57 (CODE_81D716 y PlayerAction_10-57, 71 rutinas; falta la $35, espera cuadros) | $81:D716-$81:FAB3 | src/actions.c |
 | El jugador cada cuadro: los 26 pasos por acción de SUB_81BFB7 (PlayerState_XX, CODE_81C556/C66E/C736/C83B/CB14/CB5E), el fin del cuadro (ResetIdleAnimatioTimer) y el movimiento (CODE_81CB77); faltan el despachador y la acción $1C (esperan cuadros) | $81:BFDC-$81:CF9F | src/playerstate.c |
+| Las puertas (SUB_809A64: salir por las casillas $C0-$CF, banderas de horario y festivales) y la montaña (SUB_809D0B: hallazgos por estación, empezar a pescar); HaveLunch ahora exacta también en registros | $80:9A64-$80:9EBB, $82:80AA | src/playerstate.c, stamina.c |
+| El cargador de piezas de sprite del NMI (CODE_858CB2; error 28: tres bucles sin fin) | $85:8CB2 | src/objects.c |
+| UNK_Audio1 (la subida del programa de sonido con el protocolo de arranque del chip; se prueba una vez en el cuadro 1 al nombrarla en HM_DECOMP_FUZZ_ONLY, flag HM_LIVE) | $83:843D | src/audio.c |
 | GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |

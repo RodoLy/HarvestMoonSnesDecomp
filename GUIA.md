@@ -762,6 +762,17 @@ a otro guion. Las judías mágicas creciendo son una.
   números 0-$261 se describen en el banco $86 y $262-$44F en el $87.
 - **Gráficos de las piezas:** si el dibujo de una pieza ya está en video
   se reutiliza; si no, va a una cola que vacía el NMI.
+- **El cargador** (`CODE_858CB2`, en el NMI): mientras la cola tiene
+  piezas y al presupuesto del cuadro (`$C7`) le quedan $100 bytes para una
+  más, toma la pieza siguiente y le da un hueco de gráficos: uno nuevo
+  mientras se hayan repartido menos de 64 (`$0846`), y después el primero
+  libre (`$7E:A320` = 0) desde un comienzo que va rotando (`$0848`, 1-64).
+  La pieza que tenía el hueco queda como no cargada (`$7F:0F00` = $FF), la
+  nueva lo recibe, el número del hueco se escribe donde decía la entrada
+  de la cola, y una copia va a la lista que el NMI manda a video
+  (`$7E:A420`, 6 bytes cada una: dirección de los gráficos, banco y
+  dirección en VRAM; $FFFF la termina). `$0742` = cuántas piezas siguen
+  esperando.
 - **Objetos del mapa** (`$7E:B4E6`, 10): los efectos que dejan las
   herramientas, como la hierba cortada o el golpe en la piedra.
 - **Destruir uno** (`CODE_8581A2`, `src/objects.c`): cada hueco de
@@ -982,6 +993,21 @@ sonido) y las canciones. Todas las órdenes:
 | $07 | `UNK_Audio13` | (sin argumento; el que recibe se guarda y nunca se manda) |
 | $08, $09 | `UNK_Audio14`, `UNK_Audio6` | órdenes de dos argumentos que se usan al cambiar de canción (1 y $10 o $40: quizá un fundido) |
 | $0A-$0C | ver arriba | efectos de sonido y dos pequeñas |
+
+**Antes de todo eso, el propio programa de sonido** (`UNK_Audio1`, una
+vez, al encender): el chip arranca en una ROM de arranque diminuta con su
+propio protocolo. El juego espera a que los puertos 0-1 lean $BBAA,
+escribe la dirección ($0500) en los puertos 2-3, 1 en el puerto 1 ("van
+datos") y $CC en el puerto 0, y espera a que vuelva el $CC. Luego van uno
+a uno los $FD6 bytes desde $AD:8000: el byte en el puerto 1 y su índice
+(0, 1, 2... que vuelve a 0 después de $FF) en el puerto 0, cada uno
+cuando el chip devolvió el índice anterior. Al final, otra vez la
+dirección, 0 en el puerto 1 ("ejecútalo") y el índice + 4 en el puerto 0.
+El bucle está preparado para más bloques (lo decide la bandera de
+desbordamiento), pero el juego arma siempre la última cabecera sin más:
+hay un solo bloque. Después el chip ejecuta el programa del juego y ya no
+contesta el protocolo de arranque, así que esta rutina solo se comprueba
+en vivo (`HM_LIVE`), al encender.
 
 Los datos grandes viajan **de 3 en 3 bytes**: el juego manda primero
 cuántos grupos de 3 (el tamaño entre 3, redondeado hacia arriba) y luego
@@ -1605,6 +1631,43 @@ rodearla (siempre en los tipos 0 y $A0-$AF; si no, según en qué mitad de
 la casilla está); una puerta ($C0-$CF) lo para enseguida; luego la cámara
 lo sigue y cada 8 movimientos deja una huella (`CODE_81A58F`).
 
+### 5.30 Las puertas y la montaña
+
+`SUB_809A64` corre cada cuadro con las dos casillas bajo el jugador
+(`$0878` / `$087A`). Si las dos son salidas ($C0-$CF), lo hace salir:
+
+- No con el bit 4 de `$D2` ni los bits 1-2 de `$7F1F60`; con el bit 0 de
+  `$7F1F6C`, tampoco por las salidas que llevan a $1C.
+- La entrada de la salida: el byte de propiedades de la casilla (`[$0D]` +
+  4 x casilla) x 8 en la tabla de puertas `Unk_Table13` ($80:B6F5): +0 el
+  mapa al que lleva, +2 una animación de mapa (0 = ninguna), +3 banderas,
+  +4 / +6 dónde aparece (X, Y).
+- `$098A` cuenta los cuadros. En el primero el destino (`$098B`) puede
+  cambiar: + la estación (bandera 0); con la bandera 6, el día 1 de
+  primavera da $3A, el día 24 de invierno $39 y los días 10-12 suman 4 (los
+  festivales). La puerta está cerrada en el mapa $0B y según sus banderas:
+  1 desde las 17:00, 2 antes de las 17:00, 3 de lunes a viernes (días 1-5),
+  4 el día 10 de invierno o los sábados, 5 los domingos, 7 con el bit 4 de
+  `$0196`. Cerrada, el jugador se queda y se olvidan las casillas bajo él.
+  Abierta, el reloj se detiene (`$0973` = 0), el punto de llegada va a
+  `$017D` / `$017F` y empieza la animación del mapa.
+- El cuadro 1 espera mientras `$00CF`; luego, hasta $0D, sigue caminando
+  (acción 1) hacia donde mira. En $0D: al salir de un mapa de la granja
+  (menor que 4) se guarda la granja (`CopyCurrentMaptoFarmMap`); al salir
+  de los mapas $0C-$0F pasa una hora (no más allá de las 18:00, con
+  `HaveLunch`); después el bit 14 de `$0196` arranca la transición.
+
+Un tipo de casilla desde $D0 sigue en `SUB_809D0B`, la montaña (mapas
+$10-$13, no los días con los bits 1, 3, 4 de `$0196`):
+
+- Casilla $F9 en primavera, $FA en otoño y $FB en invierno: una
+  posibilidad en 17, una vez por día (bits 13-15 de `$7F1F5C`), de un
+  hallazgo (evento $11/$2C, $13/$2B, $12/$2A).
+- Las dos casillas $F8 (la orilla del agua), con la caña (bit 9 de
+  `$7F1F5A`), las manos libres y sin nieve (bits 1, 4, 11 de `$D2`):
+  empieza a pescar (acción $0F), salvo que ya esté pescando (acciones
+  $10-$13).
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1703,6 +1766,12 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 27. **Una búsqueda sin fin.** Al tomar un huevo del gallinero (acción $53)
     se busca el nido de la columna de la casilla de enfrente entre 13; si
     no hay ninguno salta a sí mismo para siempre (`$81:F856`).
+28. **Tres lugares donde gira para siempre.** El cargador de piezas
+    (`CODE_858CB2`) salta a sí mismo cuando no hay ningún hueco de gráficos
+    libre, cuando un número de hueco es $2000 o más, y en la pieza 32 de un
+    cuadro (su lista de copias tiene sitio para 31). Como en el 23, son
+    callejones sin salida de los que el propio juego se mantiene lejos: el
+    presupuesto deja pasar menos piezas por cuadro.
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -1824,3 +1893,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 27-oct-2026 | 71,73 % | lo que hace cada objeto ya dejado: comer, tirar, enviar, comprar |
 | 27-oct-2026 | 79,88 % | las acciones del jugador: teles, cama, tiendas, tratantes, carpintero, bar |
 | 28-oct-2026 | 83,43 % | el jugador cada cuadro: caminar, correr, saltar, las animaciones, rodear esquinas |
+| 28-oct-2026 | 85,04 % | las puertas y la montaña, el cargador de piezas de sprite, la subida del programa de sonido al encender |

@@ -751,6 +751,16 @@ beans growing are one.
   0-$261 are described in bank $86 and $262-$44F in bank $87.
 - **Piece graphics:** if a piece's picture is already in video memory it
   is reused; otherwise it goes to a queue the NMI empties.
+- **The loader** (`CODE_858CB2`, run at the NMI): while the queue has
+  pieces and the frame's budget (`$C7`) still has $100 bytes for one more,
+  it takes the next piece and gives it a graphics slot: a new one while
+  fewer than 64 were handed out (`$0846`), then the first free one
+  (`$7E:A320` = 0) from a start that turns (`$0848`, 1-64). The piece that
+  had the slot is marked not loaded (`$7F:0F00` = $FF), the new one gets
+  it, the slot number is written where the queue entry said, and a copy
+  goes to the list the NMI sends to video memory (`$7E:A420`, 6 bytes
+  each: the graphics' address, bank and VRAM address; $FFFF ends it).
+  `$0742` = how many pieces are still waiting.
 - **Map objects** (`$7E:B4E6`, 10): the effects tools leave, like cut grass
   or the hit on a rock.
 - **Destroying one** (`CODE_8581A2`, `src/objects.c`): each graphics slot
@@ -961,6 +971,19 @@ the commands:
 | $07 | `UNK_Audio13` | (no argument; the one it is given is kept and never sent) |
 | $08, $09 | `UNK_Audio14`, `UNK_Audio6` | two-argument commands used when the song changes (1 and $10 or $40: maybe a fade) |
 | $0A-$0C | see above | sound effects and two small ones |
+
+**Before all that, the sound program itself** (`UNK_Audio1`, once, at
+power-on): the chip starts in a tiny boot ROM with its own protocol. The
+game waits until ports 0-1 read $BBAA, writes the address ($0500) in
+ports 2-3, 1 in port 1 ("data follows") and $CC in port 0, and waits for
+the $CC back. Then the $FD6 bytes from $AD:8000 go one by one: the byte in
+port 1 and its index (0, 1, 2... wrapping at $FF) in port 0, each one
+after the chip echoed the previous index. Last, the address again, 0 in
+port 1 ("run it") and the index + 4 in port 0. The loop is ready for more
+blocks (the overflow flag decides), but the game always builds the last
+header with no more: there is one block. After this the chip runs the
+game's program and never answers the boot protocol again, so this
+routine is only checked live (`HM_LIVE`), at power-on.
 
 Big data travels **3 bytes at a time**: the game first sends how many
 groups of 3 (the size divided by 3, rounded up), then each group, waiting
@@ -1561,6 +1584,40 @@ types 0 and $A0-$AF, otherwise by which half of the tile he is in); a
 door ($C0-$CF) stops him at once; then the camera follows and every 8
 moves a footprint is left (`CODE_81A58F`).
 
+### 5.30 Doors and the mountain
+
+`SUB_809A64` runs every frame with the two tiles under the player
+(`$0878` / `$087A`). When both are exits ($C0-$CF) it walks him out:
+
+- Not while `$D2` bit 4 or `$7F1F60` bits 1-2; with `$7F1F6C` bit 0, not
+  through the exits that lead to $1C.
+- The exit's entry: the tile's property byte (`[$0D]` + 4 x tile) x 8 in
+  the door table `Unk_Table13` ($80:B6F5): +0 the map it leads to, +2 a
+  map animation (0 = none), +3 flags, +4 / +6 where he arrives (X, Y).
+- `$098A` counts the frames. On the first one the destination (`$098B`)
+  can change: + the season (flag 0); with flag 6, day 1 of spring gives
+  $3A, day 24 of winter $39 and days 10-12 add 4 (the festivals). The door
+  is shut in map $0B and by its flags: 1 from 17:00, 2 before 17:00, 3 on
+  weekdays 1-5, 4 on the 10th of winter or on Saturdays, 5 on Sundays, 7
+  with `$0196` bit 4. Shut, he stays and the tiles under him are
+  forgotten. Open, the clock stops (`$0973` = 0), the arrival point goes
+  to `$017D` / `$017F` and the map animation starts.
+- Frame 1 waits while `$00CF`; then up to $0D he walks on (action 1) in
+  his facing. At $0D: leaving a farm map (below 4) the farm is saved
+  (`CopyCurrentMaptoFarmMap`); leaving the maps $0C-$0F an hour passes
+  (not past 18:00, with `HaveLunch`); then `$0196` bit 14 starts the
+  transition.
+
+A tile type from $D0 goes on to `SUB_809D0B`, the mountain (maps $10-$13,
+not on days with `$0196` bits 1, 3, 4):
+
+- Tile $F9 in spring, $FA in autumn and $FB in winter: one chance in 17,
+  once a day (`$7F1F5C` bits 13-15), of a find (event $11/$2C, $13/$2B,
+  $12/$2A).
+- Both tiles $F8 (the water's edge), with the fishing rod (`$7F1F5A`
+  bit 9), his hands free and no snow (`$D2` bits 1, 4, 11): he starts
+  fishing (action $0F), unless he already is (actions $10-$13).
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1655,6 +1712,11 @@ Things the game does wrong or oddly, found while decompiling:
 27. **A search with no end.** Picking an egg from the coop (action $53)
     looks for the nest in the column of the tile in front among 13; if
     none is there it jumps to itself for ever (`$81:F856`).
+28. **Three places to spin for ever.** The piece loader (`CODE_858CB2`)
+    jumps to itself when no graphics slot is free, when a slot number is
+    $2000 or more, and on the 32nd piece of a frame (its copy list has room
+    for 31). Like 23, they are dead ends the game's own limits keep away
+    from: the budget lets fewer pieces through per frame.
 
 ## 7. Differences found in the recompilation
 
@@ -1774,3 +1836,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 27-Oct-2026 | 71.73 % | what each item does once put down: eating, throwing, shipping, buying |
 | 27-Oct-2026 | 79.88 % | the player's actions: TVs, bed, shops, dealers, carpenter, bar |
 | 28-Oct-2026 | 83.43 % | the player each frame: walking, running, jumping, the animations, moving round corners |
+| 28-Oct-2026 | 85.04 % | the doors and the mountain, the sprite pieces' loader, the sound program's upload at power-on |
