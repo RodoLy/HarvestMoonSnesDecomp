@@ -1501,6 +1501,36 @@ any other day. On winter 10 before 5 pm some go to group $27, on winter 24
 to group $0F. A person's first visit (group $0B) sets its bit in
 $7F1F68 so it is only seen once.
 
+
+### 5.28 The player's actions
+
+Pressing A on a door-like tile whose property has byte +1 bit 0 sets
+`$096E` to the tile's byte +0 and `$D2` bit 6; every frame
+`PlayerInteractionSelector` then runs action `$096E` (table at `$81:D593`,
+88 entries) until it clears that bit. `$096F` counts its steps and `$0970`
+its frames. HM-Decomp puts actions $10-$57 inside `CODE_81D716` (the TV)
+and reads part of them as data; `actions.c` names them `PlayerAction_XX`:
+
+| Actions | What they are |
+|---|---|
+| $0F, $12, $13 | the TVs: the weather report, then the channel's text for the season (`DATA8_81D510`) and its picture |
+| $10, $11 | the bed (sleep: the day ends) and a walk into the room |
+| $14 | the diary (the save menu) |
+| $15, $1D, $4A-$50 | fodder from the silo; the fence pieces' places (`$09A4`, `$7F1F78`) |
+| $1E | the calendar (the season's page) |
+| $26, $2D, $33, $36, $3F | the girls' diaries: the page for her hearts, -1 happiness |
+| $27-$2C, $2F-$32, $34, $37-$3E | shelves: the item of the tile type in hand |
+| $2E | the ranch's counter: buy a cow (5,000 G) or a chicken (1,000 G), sell them |
+| $40, $54, $55 | signs with a menu (one text per answer) |
+| $41 | the hot spring (+12 stamina) |
+| $43, $44 | the cow / chicken dealer, and the entry to the animal festivals |
+| $46 | the shipper's visit |
+| $47, $48 | the carpenter (the house extension: 250 / 500 lumber, 5,000 / 10,000 G) and its end (+50 / +100 happiness) |
+| $51, $52 | a drink at the bar (200 / 300 G, +1 / +3 happiness) |
+| $53 | an egg from a nest of the coop (`$7F1F45`) |
+
+Action $35 is not rewritten: it waits frames (`ToolUsedSound2`, `UNK_Audio24`).
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1587,6 +1617,14 @@ Things the game does wrong or oddly, found while decompiling:
     visitor days) checks `$7F1F6A` bit 8 to know whether it was seen, but
     marks bit 7. So it comes back on every such day until something else
     sets bit 8.
+26. **A text read with the wrong width.** In the shipper's visit (player
+    action $46), when the low word of the day's shipping money is not 0
+    the branch to the text keeps A in 16 bits, so `LDA #$00; STA $0191`
+    is read as `LDA #$8D00; STA ($01),Y`: $8D00 is written wherever
+    `($01),Y` points and `$0191` keeps its old value.
+27. **A search with no end.** Picking an egg from the coop (action $53)
+    looks for the nest in the column of the tile in front among 13; if
+    none is there it jumps to itself for ever (`$81:F856`).
 
 ## 7. Differences found in the recompilation
 
@@ -1704,3 +1742,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 66.73 % | who appears on the farm |
 | 23-Oct-2026 | 66.97 % | putting down what is carried |
 | 27-Oct-2026 | 71.73 % | what each item does once put down: eating, throwing, shipping, buying |
+| 27-Oct-2026 | 79.88 % | the player's actions: TVs, bed, shops, dealers, carpenter, bar |

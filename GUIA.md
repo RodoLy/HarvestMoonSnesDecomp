@@ -1543,6 +1543,37 @@ de las 5 de la tarde algunos van al grupo $27, y el 24 de invierno al $0F.
 La primera visita de una persona (grupo $0B) marca su bit en $7F1F68 para
 que se vea una sola vez.
 
+
+### 5.28 Las acciones del jugador
+
+Apretar A en una casilla tipo puerta cuya propiedad tiene el bit 0 del byte
++1 pone en `$096E` el byte +0 de la casilla y el bit 6 de `$D2`; cada
+cuadro `PlayerInteractionSelector` corre la acción `$096E` (tabla en
+`$81:D593`, 88 entradas) hasta que la acción borra ese bit. `$096F` cuenta
+sus pasos y `$0970` sus cuadros. HM-Decomp mete las acciones $10-$57 dentro
+de `CODE_81D716` (la tele) y lee parte de ellas como datos; `actions.c` las
+llama `PlayerAction_XX`:
+
+| Acciones | Qué son |
+|---|---|
+| $0F, $12, $13 | las teles: el pronóstico del tiempo, luego el texto del canal para la estación (`DATA8_81D510`) y su imagen |
+| $10, $11 | la cama (dormir: termina el día) y un paseo hasta el cuarto |
+| $14 | el diario (el menú de guardar) |
+| $15, $1D, $4A-$50 | forraje del silo; los lugares de los trozos de cerca (`$09A4`, `$7F1F78`) |
+| $1E | el calendario (la página de la estación) |
+| $26, $2D, $33, $36, $3F | los diarios de las chicas: la página según sus corazones, -1 de felicidad |
+| $27-$2C, $2F-$32, $34, $37-$3E | estantes: el objeto del tipo de casilla, en la mano |
+| $2E | el mostrador del rancho: comprar una vaca (5.000 G) o una gallina (1.000 G), venderlas |
+| $40, $54, $55 | letreros con menú (un texto por respuesta) |
+| $41 | las aguas termales (+12 de aguante) |
+| $43, $44 | el tratante de vacas / gallinas, y la inscripción a las ferias de animales |
+| $46 | la visita del que recoge los envíos |
+| $47, $48 | el carpintero (la ampliación de la casa: 250 / 500 de madera, 5.000 / 10.000 G) y su final (+50 / +100 de felicidad) |
+| $51, $52 | un trago en el bar (200 / 300 G, +1 / +3 de felicidad) |
+| $53 | un huevo de un nido del gallinero (`$7F1F45`) |
+
+La acción $35 no está reescrita: espera cuadros (`ToolUsedSound2`, `UNK_Audio24`).
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1633,6 +1664,14 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     en los días de visita) mira el bit 8 de `$7F1F6A` para saber si ya se
     vio, pero marca el bit 7. Así que vuelve cada día así hasta que otra
     cosa ponga el bit 8.
+26. **Un texto leído con el ancho equivocado.** En la visita del que
+    recoge los envíos (acción $46), cuando la parte baja del dinero de
+    envíos del día no es 0 el salto al texto deja A en 16 bits, así que
+    `LDA #$00; STA $0191` se lee como `LDA #$8D00; STA ($01),Y`: se
+    escribe $8D00 donde apunte `($01),Y` y `$0191` conserva su valor.
+27. **Una búsqueda sin fin.** Al tomar un huevo del gallinero (acción $53)
+    se busca el nido de la columna de la casilla de enfrente entre 13; si
+    no hay ninguno salta a sí mismo para siempre (`$81:F856`).
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -1752,3 +1791,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 66,73 % | quién aparece en la granja |
 | 23-oct-2026 | 66,97 % | dejar en el suelo lo que se carga |
 | 27-oct-2026 | 71,73 % | lo que hace cada objeto ya dejado: comer, tirar, enviar, comprar |
+| 27-oct-2026 | 79,88 % | las acciones del jugador: teles, cama, tiendas, tratantes, carpintero, bar |

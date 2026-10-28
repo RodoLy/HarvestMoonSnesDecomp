@@ -130,6 +130,7 @@ en el README (`tools/progress.py`).
 | MapEvent_CB69 (la granja) | $83:CB69-$83:D2DF | src/mapevents.c |
 | SUB_818000 (dejar el objeto), SUB_8180B7 (su sprite) | $81:8000, $81:80B7 | src/items.c |
 | Las rutinas de los objetos: ItemObject_01-5A (61, sin las 26 herramientas), las 6 máquinas de estados (CODE_81883A, 818855, 81889A, 8188BC, 8188E5, 818923) y sus 16 pasos (CODE_818B6B-CODE_819695) | $81:80FE-$81:96AE | src/items.c |
+| Las acciones del jugador $0F-$57 (CODE_81D716 y PlayerAction_10-57, 71 rutinas; falta la $35, espera cuadros) | $81:D716-$81:FAB3 | src/actions.c |
 | GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |

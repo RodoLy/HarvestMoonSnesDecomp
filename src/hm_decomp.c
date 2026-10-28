@@ -2187,6 +2187,68 @@ static void prep_item_shop(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 2) ram[0x0976] = (uint8_t)(rnd() % 4);
 }
 
+/* actions.c: an action of the player at any of its steps: text boxes,
+ * map animations, map tiles and the player's game object made safe; the
+ * step, the frame counter (near the ends it waits for), the answer, the TV
+ * channel, the bits the actions read, the pieces of fence. A = the action
+ * x 2, as PlayerInteractionSelector leaves it. */
+static void prep_player_action(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_text_box(ram, r, rnd);
+  prep_player_object(ram, r, rnd);
+  prep_put_down(ram, r, rnd);
+  ram[0x096F] = (uint8_t)((rnd() % 8) ? rnd() % 6 : rnd());
+  static const uint8_t near_end[] = { 0x15, 0x16, 0x1D, 0x1E, 0x1F, 0x20, 0x01, 0x00, 0x07,
+                                      0x3F, 0x41, 0x63, 0xC5 };
+  ram[0x0970] = (uint8_t)((rnd() % 4) ? near_end[rnd() % sizeof near_end] : rnd());
+  ram[0x019A] = (uint8_t)((rnd() % 4) ? rnd() % 4 : rnd());
+  ram[0x018F] = (uint8_t)((rnd() % 4) ? rnd() % 2 : rnd());
+  ram[0x0990] = (uint8_t)((rnd() % 4) ? rnd() % 6 : rnd() % 0x20);
+  ram[0x11F19] = (uint8_t)(rnd() % 4);
+  if (rnd() % 2) { hm_wr16(ram, 0xCF, 0); ram[0xD1] = 0; }
+  hm_wr16(ram, 0x0196, (uint16_t)rnd());
+  hm_wr16(ram, 0xD2, (uint16_t)rnd());
+  uint16_t room = (uint16_t)rnd();
+  hm_wr16(ram, 0x0878, room);
+  hm_wr16(ram, 0x087A, (uint16_t)((rnd() % 2) ? room : rnd()));
+  for (unsigned a = 0x11F5A; a < 0x11F80; a++) ram[a] = (uint8_t)rnd();
+  if (rnd() % 2) ram[0x11F6E] &= (uint8_t)~0x10;
+  if (rnd() % 2) hm_wr16(ram, 0x11F66, (uint16_t)(rnd() & ~0x001Fu));
+  for (unsigned i = 0; i < 8; i++) ram[0x09A4 + i] = (uint8_t)((rnd() % 3) ? rnd() % 6 : 0);
+  if (rnd() % 2) hm_wr16(ram, 0x11F78, (uint16_t)(rnd() & rnd()));
+  for (unsigned g = 0; g < 5; g++)                                    /* affections */
+    hm_wr16(ram, 0x11F1F + 2 * g, (uint16_t)((rnd() % 4) ? rnd() % 0x400 : rnd()));
+  hm_wr16(ram, HM_STORED_GRASS, (uint16_t)((rnd() % 4) ? rnd() % 1000 : rnd() % 2));
+  /* the coop's nests are in columns $10-$DF: keep the tile in front in
+   * them (PlayerAction_53 would search for ever otherwise) */
+  hm_wr16(ram, 0xD6, (uint16_t)(0x20 + rnd() % 0xA0));
+  hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
+  hm_wr16(ram, 0x01, (uint16_t)(0x1000 + rnd() % 0x800));             /* PlayerAction_46's stray store */
+  ram[0x09A0] = (uint8_t)(0x18 + rnd() % 12);                         /* the dealer's cow, chicken */
+  ram[0x09A1] = (uint8_t)(0x24 + rnd() % 13);
+  ram[0x11F18] = (uint8_t)(rnd() % 3);                                /* year */
+  ram[0x11F0A] = (uint8_t)((rnd() % 3) ? rnd() % 13 : 12);            /* cows, chickens */
+  ram[0x11F0B] = (uint8_t)((rnd() % 3) ? rnd() % 13 : 12);
+  hm_wr16(ram, 0x11F29, (uint16_t)(rnd() % 0x200));                   /* room */
+  hm_wr16(ram, 0x11F0E, (uint16_t)((rnd() % 2) ? 0x00FA : 0x01F4));   /* lumber needed */
+  static const uint16_t wood[] = { 0x00F9, 0x00FA, 0x01F3, 0x01F4 };
+  hm_wr16(ram, HM_STORED_WOOD, (uint16_t)((rnd() % 2) ? wood[rnd() % 4] : rnd() % 1000));
+  ram[0x0921] = (uint8_t)((rnd() % 2) ? 0x0A + rnd() % 2 : rnd() % 0x20);   /* the tool in hand */
+  for (unsigned i = 0; i < 12; i++) {                                 /* the cows' records, byte +0 */
+    static const uint8_t cow[] = { 0x01, 0x03, 0x05, 0x11, 0x21, 0x41, 0x71, 0x07 };
+    ram[0x0C1C6 + 16 * i] = (uint8_t)((rnd() % 4) ? cow[rnd() % sizeof cow] : rnd());
+  }
+  ram[0x11F04] = (uint8_t)rnd(); ram[0x11F05] = (uint8_t)rnd();       /* money */
+  ram[0x11F06] = (uint8_t)((rnd() % 2) ? 0 : rnd() % 0x10);
+  hm_wr16(ram, 0x11F15, (uint16_t)(rnd() % 0x400)); ram[0x11F17] = 0; /* the cow's price */
+  if (rnd() % 2) { hm_wr16(ram, 0x11F07, 0); ram[0x11F09] = (uint8_t)((rnd() % 2) ? 0 : rnd()); }
+  else { hm_wr16(ram, 0x11F07, (uint16_t)(1 + rnd() % 0xFFFF)); ram[0x11F09] = (uint8_t)rnd(); }
+  hm_wr16(ram, 0x0124, (uint16_t)((rnd() % 4) ? rnd() & 0x7FFF : rnd()));
+  hm_wr16(ram, 0x0128, (uint16_t)rnd());
+  r->a = (uint16_t)(2 * (0x0F + rnd() % 0x49));
+  r->x = (uint16_t)rnd(); r->y = (uint16_t)(rnd() % 0x400);
+}
+
 /* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
  * or winter, an ordinary weekday) */
 static void prep_map_event_dc4a(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -2663,6 +2725,150 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/items.c", 0x8187BB, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
   { "ItemObject_5A", hm_ItemObject_5A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8187BF, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
+  { "CODE_81D716", hm_CODE_81D716, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+    "src/actions.c", 0x81D716, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_10", hm_PlayerAction_10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81D7C5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_11", hm_PlayerAction_11, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81D979, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_12", hm_PlayerAction_12, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81D9CC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_13", hm_PlayerAction_13, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DA82, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_14", hm_PlayerAction_14, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DB38, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_15", hm_PlayerAction_15, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DBA1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_16", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DBCC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_17", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DBCD, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_18", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DBCE, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_19", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DBCF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_1A", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DBD0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_1B", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DBD1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_1C", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DBD2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_1D", hm_PlayerAction_1D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DBD3, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_1E", hm_PlayerAction_1E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DBF0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_1F", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DC57, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_20", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DC58, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_21", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DC59, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_22", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DC5A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_23", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DC5B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_24", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DC5C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_25", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DC5D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_26", hm_PlayerAction_26, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DC5E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_27", hm_PlayerAction_27, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DCCE, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_28", hm_PlayerAction_28, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DCF3, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_29", hm_PlayerAction_29, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DD18, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_2A", hm_PlayerAction_2A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DD3D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_2B", hm_PlayerAction_2B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DD62, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_2C", hm_PlayerAction_2C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DD87, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_2D", hm_PlayerAction_2D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DDAC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_2F", hm_PlayerAction_2F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E245, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_30", hm_PlayerAction_30, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E26A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_31", hm_PlayerAction_31, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E28F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_32", hm_PlayerAction_32, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E2B4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_33", hm_PlayerAction_33, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E2D9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_34", hm_PlayerAction_34, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E349, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_36", hm_PlayerAction_36, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E394, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_37", hm_PlayerAction_37, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E404, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_38", hm_PlayerAction_38, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E429, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_39", hm_PlayerAction_39, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E44E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_3A", hm_PlayerAction_3A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E473, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_3B", hm_PlayerAction_3B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E498, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_3C", hm_PlayerAction_3C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E4BD, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_3D", hm_PlayerAction_3D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E4E2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_3E", hm_PlayerAction_3E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E507, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_3F", hm_PlayerAction_3F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E52C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_4A", hm_PlayerAction_4A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F490, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_4B", hm_PlayerAction_4B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F4AD, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_4C", hm_PlayerAction_4C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F4CA, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_4D", hm_PlayerAction_4D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F4E6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_4E", hm_PlayerAction_4E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F502, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_4F", hm_PlayerAction_4F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F51E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_50", hm_PlayerAction_50, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F53A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_2E", hm_PlayerAction_2E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81DE1C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_40", hm_PlayerAction_40, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E59C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_41", hm_PlayerAction_41, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E6C3, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_42", hm_PlayerAction_42, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E6EA, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_43", hm_PlayerAction_43, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81E79E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_44", hm_PlayerAction_44, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81EBD5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_45", hm_PlayerAction_45, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81EFAD, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_46", hm_PlayerAction_46, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F061, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_47", hm_PlayerAction_47, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F121, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_48", hm_PlayerAction_48, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F2DA, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_49", hm_PlayerAction_49, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F40E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_51", hm_PlayerAction_51, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F5B0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_52", hm_PlayerAction_52, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F6D7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_53", hm_PlayerAction_53, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F7FF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_54", hm_PlayerAction_54, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F86A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_55", hm_PlayerAction_55, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81F942, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_56", hm_PlayerAction_56, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81FA69, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_57", hm_PlayerAction_57, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+    "src/actions.c", 0x81FA84, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
   { "SpawnMapObject", hm_SpawnMapObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x81A500, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_spawn },
   { "ToolUsedNoAction", hm_ToolUsedNoAction, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
