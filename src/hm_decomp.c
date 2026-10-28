@@ -405,8 +405,8 @@ static void prep_update_graphics(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 /* video.c: fixed copies (only the data bank and a quiet beam) */
 static void prep_vram_fixed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
-  (void)ram;
   hm_io_quiet();
+  ram[0x28] = 0;                                           /* no other channel waiting */
   r->db = (rnd() % 2) ? 0x80 : 0x00;
 }
 /* video.c: SUB_82E5E7: A = the block, Y = the second set or not */
@@ -423,6 +423,78 @@ static void prep_name_letters(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   prep_letter(ram, r, rnd);
   hm_io_quiet();
   ram[0x28] = 0;
+}
+
+/* items.c: CODE_81A94A: a tool and the bag, mostly in its shop (maps
+ * $26-$28) with that map's real tile property table */
+static void prep_put_down(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_shelf(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_put_down(ram, r, rnd);
+  hm_io_quiet();
+  /* the tools that exist (0-$1B): past the table the tile to draw is
+   * garbage, and its graphics would be read from the I/O area */
+  uint8_t tool = (uint8_t)(rnd() % 0x1C);
+  ram[0x0921] = tool;
+  ram[0x0923] = (uint8_t)((rnd() % 4) ? 1 + rnd() % 0xFF : 0);
+  uint8_t shop = tool < 0x19 ? 0x26 : tool == 0x19 ? 0x28 : 0x27;
+  uint8_t map = (uint8_t)((rnd() % 4) ? shop : 0x26 + rnd() % 3);
+  ram[0x22] = map;
+  hm_wr16(ram, 0x0D, hm_bus_rd16(ram, 0x82B294u + 3u * map));
+  ram[0x0F] = hm_bus_rd8(ram, 0x82B296u + 3u * map);
+  /* only the channel ChangeMapTile prepares is started (random waiting
+   * channels would be copies of $10000 bytes) */
+  ram[0x28] = 0;
+}
+
+static void prep_sram(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+/* video.c: CODE_82E405: the saved games (some empty), the text state, a
+ * line 0-2 */
+static void prep_file_line(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_letter(ram, r, rnd);
+  prep_sram(ram, r, rnd);
+  hm_io_quiet();
+  ram[0x28] = 0;
+  r->a = (uint16_t)(rnd() % 3);
+  r->y = (uint16_t)((rnd() % 2) ? 0 : 1);
+  r->db = (rnd() % 2) ? 0x80 : 0x00;
+}
+
+static void prep_oam_copy(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_draw_order(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static uint32_t sprite_pieces(uint8_t *ram, uint16_t sprite);
+/* objects.c: PrepareOAMData: up to 40 objects, in use or not, with real
+ * sprites (their piece lists), flips, positions around the camera (some
+ * pieces off screen), loaded slots or $FF; the preset ($0195) */
+static void prep_prepare_oam(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_oam_copy(ram, r, rnd);
+  prep_draw_order(ram, r, rnd);
+  hm_io_quiet();
+  r->db = (rnd() % 2) ? 0x80 : 0x00;
+  uint16_t cam_x = (uint16_t)rnd(), cam_y = (uint16_t)rnd();
+  hm_wr16(ram, 0xF5, cam_x);
+  hm_wr16(ram, 0xF7, cam_y);
+  for (unsigned i = 0; i < 40; i++) {
+    uint16_t o = (uint16_t)(0x019C + 0x24 * i);
+    hm_wr16(ram, o, (uint16_t)((rnd() % 4) ? 0x7777 : 0));
+    uint16_t sprite = (uint16_t)(rnd() % 0x450);
+    hm_wr16(ram, (uint16_t)(o + 0x02), sprite);
+    static const uint16_t flips[] = { 0, 0x40, 0x80, 0xC0 };
+    hm_wr16(ram, (uint16_t)(o + 0x04), (uint16_t)((rnd() % 4) ? flips[rnd() % 4] : rnd()));
+    hm_wr16(ram, (uint16_t)(o + 0x08), (uint16_t)(cam_x - 32 + rnd() % 320));
+    if (rnd() % 2) hm_wr16(ram, (uint16_t)(o + 0x0A), (uint16_t)(cam_y - 32 + rnd() % 288));
+    uint32_t list = sprite_pieces(ram, sprite);
+    hm_wr16(ram, (uint16_t)(o + 0x10), (uint16_t)list);
+    uint8_t n = hm_bus_rd8(ram, list);
+    if (n > 12) n = 12;
+    ram[o + 0x13] = n;
+    for (unsigned k = 0; k < 12; k++) ram[o + 0x14 + k] = (uint8_t)((rnd() % 6) ? rnd() % 0x40 : 0xFF);
+  }
+  ram[0x0195] = (uint8_t)((rnd() % 4) ? rnd() % 11 : rnd());
+  ram[0x9A] = (uint8_t)rnd();
+  hm_wr16(ram, 0xA1, (uint16_t)(rnd() % 0x450));
 }
 
 static void prep_animals(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -4060,6 +4132,16 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/video.c", 0x82E5E7, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_title_block },
   { "SUB_82EA80", hm_SUB_82EA80, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x82EA80, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_name_letters },
+  { "CODE_81A94A", hm_CODE_81A94A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/items.c", 0x81A94A, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_shelf },
+  { "SUB_82EAB4", hm_SUB_82EAB4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR | HM_INTERP,
+    "src/video.c", 0x82EAB4, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_vram_fixed },
+  { "SUB_82E742", hm_SUB_82E742, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR | HM_INTERP,
+    "src/video.c", 0x82E742, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_vram_fixed },
+  { "CODE_82E405", hm_CODE_82E405, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR | HM_INTERP,
+    "src/video.c", 0x82E405, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_file_line },
+  { "PrepareOAMData", hm_PrepareOAMData, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/objects.c", 0x8583E0, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_prepare_oam },
   { "COP_Return", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/interact.c", 0x80872A, 0, 0, 0, 0xFFFF, { { 0 } }, 50, NULL },
   { "ScreenTransitionReturn", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,

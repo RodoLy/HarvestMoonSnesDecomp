@@ -547,3 +547,181 @@ void hm_SUB_82EA80(uint8_t *ram, HmRegs *r)
   }
   r->c = 1;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Bars of tiles (the title screen's and the file screen's frames). A bar is
+ * drawn one column at a time: the column's two tile pairs live in the
+ * direct page ($7E/$80 the top row, $82/$84 the bottom one: tile, tile + 1,
+ * tile + $10, tile + $11) and are copied from there ($80:007E, $80:0082, 4
+ * bytes each, channels 0 and 1) to VRAM $86 and $86 + $20; then the four
+ * tiles and the address move on by 2.
+ *   SUB_82EAB4 ($82:EAB4, JSR, RTS): one bar: the first tile at
+ *     $82:EB4B, the address at $82:EB49, the columns at $82:EB55.
+ *   SUB_82E742 ($82:E742, JSR, RTS): eight bars, from the tables at
+ *     $82:F268 (tiles), $82:F258 (addresses), $82:F288 (columns).
+ * Leftovers: A = Y = $88 = the bar's columns, C = 1 (CPY); X = 8 (from
+ * StartProgramedDMA) or, for the eight bars, $10.
+ * ───────────────────────────────────────────────────────────────────────── */
+static void bar_start(uint8_t *ram, HmRegs *r, uint16_t tile, uint16_t vram)
+{
+  hm_dp_w16(ram, r, 0x7E, tile);
+  hm_dp_w16(ram, r, 0x80, (uint16_t)(tile + 1));
+  hm_dp_w16(ram, r, 0x82, (uint16_t)(tile + 0x10));
+  hm_dp_w16(ram, r, 0x84, (uint16_t)(tile + 0x11));
+  hm_dp_w16(ram, r, 0x86, vram);
+}
+/* one column; the AddProgrammedDMA / StartProgramedDMA calls at `at` */
+static void bar_column(uint8_t *ram, HmRegs *r, const uint16_t at[3])
+{
+  for (int half = 0; half < 2; half++) {
+    *hm_dp(ram, r, DMA_CHANNEL) = (uint8_t)half;
+    *hm_dp(ram, r, 0x29) = BBAD_VRAM;
+    r->y = 0x0004;
+    r->x = (uint16_t)(hm_dp_r16(ram, r, 0x86) + 0x20 * half);
+    hm_dp_w16(ram, r, 0x72, (uint16_t)(0x007E + 4 * half));
+    *hm_dp(ram, r, 0x74) = 0x80;
+    r->a = 0x0080;
+    jsl(ram, r, at[half], 0x80, hm_AddProgrammedDMA);
+  }
+  jsl(ram, r, at[2], 0x80, hm_StartProgramedDMA);
+  for (unsigned v = 0x7E; v <= 0x86; v += 2)
+    hm_dp_w16(ram, r, v, (uint16_t)(hm_dp_r16(ram, r, v) + 2));
+}
+
+void hm_SUB_82EAB4(uint8_t *ram, HmRegs *r)
+{
+  static const uint16_t at[3] = { 0xEAF3, 0xEB1E, 0xEB22 };
+  bar_start(ram, r, hm_bus_rd16(ram, 0x82EB4B), hm_bus_rd16(ram, 0x82EB49));
+  uint16_t columns = hm_bus_rd16(ram, 0x82EB55);
+  uint16_t y = 0;
+  do {
+    push16(ram, r, y);                                     /* PHY */
+    bar_column(ram, r, at);
+    y = (uint16_t)(pull16(ram, r) + 1);                    /* PLY; INY */
+    r->y = y;
+    r->a = columns;
+    hm_dp_w16(ram, r, 0x88, columns);
+  } while (y != columns);
+  r->c = 1;
+}
+
+void hm_SUB_82E742(uint8_t *ram, HmRegs *r)
+{
+  static const uint16_t at[3] = { 0xE787, 0xE7B2, 0xE7B6 };
+  for (uint16_t x = 0; x != 0x10; x += 2) {
+    bar_start(ram, r, hm_bus_rd16(ram, 0x82F268u + x), hm_bus_rd16(ram, 0x82F258u + x));
+    uint16_t columns = hm_bus_rd16(ram, 0x82F288u + x);
+    uint16_t y = 0;
+    do {
+      push16(ram, r, y);                                   /* PHY; PHX */
+      push16(ram, r, x);
+      bar_column(ram, r, at);
+      pull16(ram, r);                                      /* PLX; PLY; INY */
+      y = (uint16_t)(pull16(ram, r) + 1);
+      r->y = y;
+      r->a = columns;
+      hm_dp_w16(ram, r, 0x88, columns);
+    } while (y != columns);
+    r->x = (uint16_t)(x + 2);
+  }
+  r->c = 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_82E405 ($82:E405, JSR, RTS): one saved game's line on the file
+ * screen; A = the line (slot), Y as SUB_82E5E7 wants it. The slot's summary
+ * is read (LoadGameSlotResume); an empty one (X = 0) is drawn as a blank
+ * block (JML SUB_82E5E7). Otherwise, at the positions of the line's 8-byte
+ * entry at $82:F278 (the text position goes in $0185, + 8 a letter):
+ *   +0 the player's name, 4 letters ($0881-$0884);
+ *   +2 the year (+ 1, PrintDigit) and its two-letter suffix ($82:F298);
+ *   +4 the day, two digits (PrintDigit with $018C = 1, then 0, + 8);
+ *   +6 the season's name (LoadsDateNames) and its 6 letters ($08B3-$08BD).
+ * Every letter or digit is sent at once (StartProgramedDMA).
+ * Leftovers: those of the last StartProgramedDMA; the stack keeps the
+ * pushed entry offsets.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define TEXT_AT 0x800185   /* the text position (long) */
+
+static void letter_now(uint8_t *ram, HmRegs *r, uint16_t letter, uint16_t at)
+{
+  r->a = letter;
+  r->x = 0;
+  jsl(ram, r, at, 0x83, hm_DrawLetter);
+  jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_StartProgramedDMA);
+}
+static void next_letter(uint8_t *ram)
+{
+  hm_bus_wr16(ram, TEXT_AT, (uint16_t)(hm_bus_rd16(ram, TEXT_AT) + 8));
+}
+static uint16_t rd16_db(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_rd16(ram, db(r, a)); }
+/* PrintDigit of $0192 with $018C = `which`, sent at once; A's high byte
+ * is the position's (its 16-bit load) */
+static void digit_now(uint8_t *ram, HmRegs *r, uint8_t which, uint16_t at)
+{
+  wr8(ram, r, 0x018C, which);
+  uint8_t flags = (uint8_t)(hm_bus_rd8(ram, db(r, 0x019B)) & 0x7F);
+  wr8(ram, r, 0x019B, flags);
+  r->a = (uint16_t)((hm_bus_rd16(ram, TEXT_AT) & 0xFF00) | flags);
+  jsl(ram, r, at, 0x83, hm_PrintDigit);
+  jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_StartProgramedDMA);
+}
+
+void hm_CODE_82E405(uint8_t *ram, HmRegs *r)
+{
+  uint16_t a = r->a, y = r->y;
+  push16(ram, r, a);                                       /* PHA; PHY */
+  push16(ram, r, y);
+  jsl(ram, r, 0xE409, 0x83, hm_LoadGameSlotResume);
+  r->y = pull16(ram, r);                                   /* PLY; PLA */
+  r->a = pull16(ram, r);
+  r->c = r->x >= 0;                                        /* CPX #0 */
+  if (r->x == 0) { hm_SUB_82E5E7(ram, r); return; }        /* JML: an empty slot */
+
+  uint16_t entry = (uint16_t)(r->a << 3);
+  push16(ram, r, entry);                                   /* PHX */
+  hm_dp_w16(ram, r, 0x82, hm_bus_rd16(ram, 0x82F278u + entry));
+  for (uint16_t i = 0; i < 4; i++) {                       /* the name */
+    push16(ram, r, i);
+    hm_bus_wr16(ram, TEXT_AT, hm_dp_r16(ram, r, 0x82));
+    letter_now(ram, r, hm_bus_rd8(ram, db(r, (uint16_t)(0x0881 + i))), 0xE43C);
+    hm_dp_w16(ram, r, 0x82, (uint16_t)(hm_dp_r16(ram, r, 0x82) + 8));
+    pull16(ram, r);
+  }
+  pull16(ram, r);                                          /* PLX; INX; INX */
+  entry = (uint16_t)(entry + 2);
+  push16(ram, r, entry);
+  hm_bus_wr16(ram, TEXT_AT, hm_bus_rd16(ram, 0x82F278u + entry));
+  uint8_t year = hm_bus_rd8(ram, 0x7F1F18);
+  wr8(ram, r, 0x0192, (uint8_t)(year + 1));
+  wr16(ram, r, 0x0193, 0);
+  digit_now(ram, r, 0, 0xE481);
+  next_letter(ram);
+  letter_now(ram, r, hm_bus_rd16(ram, 0x82F298u + 4u * year), 0xE4AE);
+  next_letter(ram);
+  letter_now(ram, r, hm_bus_rd16(ram, 0x82F298u + 4u * year + 2), 0xE4DF);
+  pull16(ram, r);
+  entry = (uint16_t)(entry + 2);
+  push16(ram, r, entry);
+  hm_bus_wr16(ram, TEXT_AT, hm_bus_rd16(ram, 0x82F278u + entry));
+  wr8(ram, r, 0x0192, hm_bus_rd8(ram, 0x7F1F1B));
+  wr16(ram, r, 0x0193, 0);
+  digit_now(ram, r, 1, 0xE512);
+  pull16(ram, r);                                          /* PLX; PHX */
+  push16(ram, r, entry);
+  uint32_t at8 = (uint32_t)hm_bus_rd16(ram, 0x82F278u + entry) + 8;
+  r->c = at8 > 0xFFFF;
+  hm_bus_wr16(ram, TEXT_AT, (uint16_t)at8);
+  r->a = (uint16_t)(at8 & 0xFF00);                         /* SEP; LDA #0 */
+  wr8(ram, r, 0x018C, 0);
+  jsl(ram, r, 0xE531, 0x83, hm_PrintDigit);
+  jsl(ram, r, 0xE535, 0x80, hm_StartProgramedDMA);
+  jsl(ram, r, 0xE53B, 0x82, hm_LoadsDateNames);
+  pull16(ram, r);
+  entry = (uint16_t)(entry + 2);
+  hm_bus_wr16(ram, TEXT_AT, hm_bus_rd16(ram, 0x82F278u + entry));
+  for (uint16_t i = 0; i < 6; i++) {                       /* the season's name */
+    if (i) next_letter(ram);
+    letter_now(ram, r, rd16_db(ram, r, (uint16_t)(0x08B3 + 2 * i)), (uint16_t)(0xE552 + 0x1C * i));
+  }
+}

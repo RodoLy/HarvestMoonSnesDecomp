@@ -1686,6 +1686,30 @@ not on days with `$0196` bits 1, 3, 4):
   ($9C:BBA3) to VRAM $5000. `SUB_82E5E7` (title and name screens) draws a
   3 x 2 block of tiles from $82:E666 at the address of a table ($82:E73E);
   `SUB_82EA80` draws four letters $A8 on the name screen.
+- **Bars of tiles** (the title and file screens' frames): `SUB_82EAB4`
+  draws one, `SUB_82E742` eight, a column at a time. The column's four
+  tiles (tile, + 1, + $10, + $11) are kept in the direct page ($7E-$84)
+  and copied from there by DMA ($80:007E and $80:0082) to the VRAM address
+  ($86) and the row below; then everything moves on by 2.
+- **A saved game's line** (`CODE_82E405`, file screen): the slot's
+  summary (`LoadGameSlotResume`); empty, a blank block (`SUB_82E5E7`);
+  otherwise the player's name, the year (+ 1) and its suffix, the day and
+  the season's name, each letter sent to VRAM at once.
+- **Tools back on the shelf** (`CODE_81A94A`): with something in the bag,
+  if the tool belongs to the shop shown (tools 1-$18 map $26, tool $19
+  map $28, from $1A map $27), its place on the shelf is redrawn
+  (`ChangeMapTile`) and sent; then its bit is set in the shed's rows
+  (`$7F:1F00`).
+- **The sprite table** (`PrepareOAMData`, every frame): the WRAM copy of
+  the OAM is emptied and the objects sorted for drawing (5.12); then, for
+  each object in use and each of its loaded pieces (last to first), the
+  screen position (object + the piece's offset, mirrored by the flip, -
+  the camera `$F5` / `$F7`); a piece off screen (X outside -16..255, Y
+  outside -16..239) is left out. The four bytes go to `$7E:A000`: X, Y,
+  the slot's first tile (`$86:8000`) and the attributes (palette, flip,
+  priority 2, the object's flip, the graphic preset `$0195` x 16); the X
+  high bit to `$7E:A200`. Last, channel 4 is set up to copy the table to
+  OAM, and `$9A` asks the NMI to start it.
 
 ---
 
@@ -1792,6 +1816,16 @@ Things the game does wrong or oddly, found while decompiling:
     `$420C`, HDMAEN, so every frame with work to do ends with HDMA off.
 
 ## 7. Differences found in the recompilation
+
+- **Wider sprites on screen (on purpose).** For widescreen, the
+  recompilation changes `PrepareOAMData`'s on-screen test: instead of X in
+  -16..255 it asks `hm_ws_oam_left_limit()` / `hm_ws_oam_right_limit()`
+  (the "oam left / oam right" overrides of the build). The rewrite keeps
+  the original's 256 pixels, so it is checked against the interpreter
+  (HM_INTERP), which runs the original code. The interpreter itself also
+  clears X's and Y's high byte when the indexes go 8-bit and back, as the
+  console does, while the compiled game keeps it (next point): preparations
+  of routines checked that way set that byte to 0.
 
 - **`SEP #$10` does not clear the high byte of X and Y.** On the real
   SNES, switching the indexes to 8 bits clears their high byte; in the
@@ -1912,3 +1946,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 28-Oct-2026 | 85.06 % | the doors and the mountain, the sprite pieces' loader, the sound program's upload at power-on |
 | 28-Oct-2026 | 85.91 % | the picture chip: prepared DMAs, blanking and brightness, graphic presets, clearing video memory |
 | 28-Oct-2026 | 86.59 % | the picture chip in the NMI: the sprite pieces, one DMA at once, the frame's update; the automatic scroll; the text box's graphics |
+| 28-Oct-2026 | 88.12 % | the title and file screens (bars of tiles, a saved game's line), tools back on the shelf, the sprite table |

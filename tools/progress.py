@@ -123,6 +123,8 @@ LOCAL = {
     0x858E57: ("CopiesWRAMtoOBJVGRAM", "CopiesWRAMtoOBJVGRAM"),
     0x82E5E7: ("SUB_82E5E7", "SUB_82E5E7"),
     0x82EA80: ("SUB_82EA80", "SUB_82EA80"),
+    0x82EAB4: ("SUB_82EAB4", "SUB_82EAB4"),
+    0x82E742: ("SUB_82E742", "SUB_82E742"),
     0x8281BF: ("ShippingReturn", "ShippingReturn"),    # no address comment
     0x83F4D7: ("CODE_83F4D7", "CODE_83F4D7"),
     0x8580B9: ("CODE_8580B9", "CODE_8580B9"),

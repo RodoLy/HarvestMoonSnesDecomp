@@ -139,6 +139,8 @@ en el README (`tools/progress.py`).
 | El chip de imagen (comprobación nueva HM_IO sobre la máquina real, src/hm_io.c): StartProgramedDMA, ForceBlank, ResetForceBlank, SetsBrightness, InitialzieScreenStatusVar, ManageGraphicPresets, ZeroesVRAM/OAM/CGRAM/PartialVRAM, UNUSED1 | $80:8846-$80:8E47 | src/video.c |
 | StartLastPreparedDMA, LoadsFromVRAMwithOffset, CopiesWRAMtoOBJVGRAM, UpdateGraphics (error 29: apaga el HDMA), AutoMapScrolling | $80:8AB2, $80:AA38, $85:8E57, $80:86B1, $80:95B3 | src/video.c, scroll.c |
 | LoadDialogueBox, SUB_82E5E7, SUB_82EA80 | $83:92BB, $82:E5E7, $82:EA80 | src/video.c |
+| CODE_81A94A (herramienta al estante), SUB_82EAB4, SUB_82E742 (barras de casillas), CODE_82E405 (línea de una partida guardada) | $81:A94A, $82:EAB4, $82:E742, $82:E405 | src/items.c, video.c |
+| PrepareOAMData (la tabla de sprites de cada cuadro; comprobada con el intérprete: la recompilación amplía a propósito la prueba de pantalla para la pantalla ancha) | $85:83E0 | src/objects.c |
 | GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |

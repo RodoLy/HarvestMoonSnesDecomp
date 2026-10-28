@@ -417,6 +417,11 @@ void hm_AutoMapScrolling(uint8_t *ram, HmRegs *r);
 void hm_LoadDialogueBox(uint8_t *ram, HmRegs *r);
 void hm_SUB_82E5E7(uint8_t *ram, HmRegs *r);
 void hm_SUB_82EA80(uint8_t *ram, HmRegs *r);
+void hm_CODE_81A94A(uint8_t *ram, HmRegs *r);
+void hm_SUB_82EAB4(uint8_t *ram, HmRegs *r);
+void hm_SUB_82E742(uint8_t *ram, HmRegs *r);
+void hm_CODE_82E405(uint8_t *ram, HmRegs *r);
+void hm_PrepareOAMData(uint8_t *ram, HmRegs *r);
 void hm_CODE_81CB77(uint8_t *ram, HmRegs *r);
 void hm_CODE_81D716(uint8_t *ram, HmRegs *r);   /* actions.c */
 void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r);

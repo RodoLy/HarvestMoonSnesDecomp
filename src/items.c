@@ -1331,3 +1331,51 @@ void hm_ItemObject_1F(uint8_t *ram, HmRegs *r) { piece(ram, r, 2, 0x826A, 0x826E
 void hm_ItemObject_20(uint8_t *ram, HmRegs *r) { piece(ram, r, 3, 0x82AC, 0x82B0); }
 void hm_ItemObject_21(uint8_t *ram, HmRegs *r) { piece(ram, r, 4, 0x82EB, 0x82EF); }
 void hm_ItemObject_22(uint8_t *ram, HmRegs *r) { piece(ram, r, 5, 0x8324, 0x8328); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_81A94A ($81:A94A, JSL, RTL): a tool goes back on its shelf. Only
+ * with something in the bag ($0923). The tool in hand ($0921) has an
+ * 8-byte entry at $81:BE0F: +0 X, +2 Y, +4 the tile (ChangeMapTile's
+ * arguments), +6 a row of the shed's flags ($7F:1F00 + it), +7 its bit.
+ * If the shop it belongs to is the map shown (tools 1-$18: map $26, tool
+ * $19: map $28, from $1A: map $27), its place on the shelf is redrawn and
+ * sent at once (StartProgramedDMA). Then, wherever the player is (and for
+ * tool 0 too), its bit is set in the shed's row.
+ * Leftovers: A = the row's new value (high byte 0), X = Y = the row, C = 0;
+ * with the bag empty, A's low byte 0 and the rest untouched.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define SHELVES 0x81BE0F   /* 8 bytes a tool */
+#define SHED_ROWS 0x7F1F00
+
+void hm_CODE_81A94A(uint8_t *ram, HmRegs *r)
+{
+  set_a8(r, rd8(ram, r, 0x0923));
+  if (!rd8(ram, r, 0x0923)) return;
+  uint8_t tool = rd8(ram, r, 0x0921);
+  set_a8(r, tool);
+  if (tool) {
+    uint8_t shop = tool < 0x19 ? 0x26 : tool == 0x19 ? 0x28 : 0x27;
+    uint8_t map = rd8(ram, r, 0x0022);                     /* LDA $0022 (absolute) */
+    set_a8(r, map);
+    if (map == shop) {
+      uint16_t x = (uint16_t)(tool * 8);
+      uint16_t tx = hm_bus_rd16(ram, SHELVES + x), ty = hm_bus_rd16(ram, SHELVES + x + 2);
+      hm_push8(ram, r, (uint8_t)(tx >> 8)); hm_push8(ram, r, (uint8_t)tx);   /* PHA; PHA; PLY; PLX */
+      hm_push8(ram, r, (uint8_t)(ty >> 8)); hm_push8(ram, r, (uint8_t)ty);
+      hm_pull8(ram, r); hm_pull8(ram, r); hm_pull8(ram, r); hm_pull8(ram, r);
+      r->a = hm_bus_rd16(ram, SHELVES + x + 4);
+      r->x = tx;
+      r->y = ty;
+      jsl(ram, r, 0xA9A6, 0x81, hm_ChangeMapTile);
+      jsl(ram, r, 0xA9AA, 0x80, hm_StartProgramedDMA);
+    }
+  }
+  uint16_t x = (uint16_t)(tool * 8 + 6);
+  uint8_t row = hm_bus_rd8(ram, SHELVES + x), bit = hm_bus_rd8(ram, SHELVES + x + 1);
+  *hm_dp(ram, r, 0x92) = bit;
+  r->x = r->y = row;
+  uint8_t v = (uint8_t)(hm_bus_rd8(ram, SHED_ROWS + row) | bit);
+  hm_bus_wr8(ram, SHED_ROWS + row, v);
+  r->a = v;
+  r->c = 0;
+}

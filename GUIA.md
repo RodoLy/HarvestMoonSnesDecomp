@@ -1739,6 +1739,33 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   y de nombre) dibuja un bloque de 3 x 2 casillas desde $82:E666 en la
   dirección de una tabla ($82:E73E); `SUB_82EA80` dibuja cuatro letras $A8
   en la pantalla del nombre.
+- **Barras de casillas** (los marcos de las pantallas de título y de
+  partidas): `SUB_82EAB4` dibuja una, `SUB_82E742` ocho, una columna cada
+  vez. Las cuatro casillas de la columna (casilla, + 1, + $10, + $11) se
+  guardan en la página directa ($7E-$84) y se copian desde ahí por DMA
+  ($80:007E y $80:0082) a la dirección de VRAM ($86) y a la fila de abajo;
+  luego todo avanza 2.
+- **La línea de una partida guardada** (`CODE_82E405`, pantalla de
+  partidas): el resumen de la ranura (`LoadGameSlotResume`); vacía, un
+  bloque en blanco (`SUB_82E5E7`); si no, el nombre del jugador, el año
+  (+ 1) y su sufijo, el día y el nombre de la estación, cada letra enviada
+  a la VRAM en el acto.
+- **Herramientas de vuelta al estante** (`CODE_81A94A`): con algo en la
+  bolsa, si la herramienta es de la tienda que se ve (herramientas 1-$18
+  mapa $26, la $19 mapa $28, desde la $1A mapa $27), su lugar en el
+  estante se vuelve a dibujar (`ChangeMapTile`) y se envía; después se
+  marca su bit en las filas del cobertizo (`$7F:1F00`).
+- **La tabla de sprites** (`PrepareOAMData`, en cada cuadro): se vacía la
+  copia de la OAM en la WRAM y se ordenan los objetos para dibujarlos
+  (5.12); después, por cada objeto en uso y cada una de sus piezas
+  cargadas (de la última a la primera), la posición en pantalla (objeto +
+  el desplazamiento de la pieza, reflejado por el volteo, - la cámara
+  `$F5` / `$F7`); una pieza fuera de la pantalla (X fuera de -16..255, Y
+  fuera de -16..239) se deja fuera. Los cuatro bytes van a `$7E:A000`: X,
+  Y, la primera casilla del hueco (`$86:8000`) y los atributos (paleta,
+  volteo, prioridad 2, el volteo del objeto, el modo gráfico `$0195` x 16);
+  el bit alto de X a `$7E:A200`. Al final se prepara el canal 4 para
+  copiar la tabla a la OAM, y `$9A` le pide al NMI que lo lance.
 
 ---
 
@@ -1851,6 +1878,18 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     apagado.
 
 ## 7. Diferencias encontradas en la recompilación
+
+- **Más sprites en pantalla (a propósito).** Para la pantalla ancha, la
+  recompilación cambia la prueba de "está en pantalla" de
+  `PrepareOAMData`: en vez de X en -16..255 consulta
+  `hm_ws_oam_left_limit()` / `hm_ws_oam_right_limit()` (las sustituciones
+  "oam left / oam right" del build). La reescritura conserva los 256
+  píxeles del original, así que se comprueba contra el intérprete
+  (HM_INTERP), que corre el código original. El propio intérprete además
+  borra el byte alto de X e Y cuando los índices pasan a 8 bits y vuelven,
+  como la consola, mientras que el juego compilado lo conserva (punto
+  siguiente): las preparaciones de las rutinas comprobadas así ponen ese
+  byte a 0.
 
 - **`SEP #$10` no borra el byte alto de X e Y.** En el SNES real, pasar
   los índices a 8 bits borra su byte alto, y en la recompilación queda
@@ -1973,3 +2012,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 28-oct-2026 | 85,06 % | las puertas y la montaña, el cargador de piezas de sprite, la subida del programa de sonido al encender |
 | 28-oct-2026 | 85,91 % | el chip de imagen: DMA preparados, negro y brillo, modos gráficos, borrar la memoria de video |
 | 28-oct-2026 | 86,59 % | el chip de imagen en el NMI: las piezas de sprite, un DMA de inmediato, la actualización del cuadro; el desplazamiento automático; los gráficos de la caja de texto |
+| 28-oct-2026 | 88,12 % | las pantallas de título y de partidas (barras de casillas, la línea de una partida), herramientas de vuelta al estante, la tabla de sprites |

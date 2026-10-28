@@ -997,3 +997,193 @@ void hm_CODE_858CB2(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, abs_db(r, QUEUE_LEFT), left);
   hm_bus_wr8(ram, abs_db(r, QUEUE_LEFT + 1), 0);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * PrepareOAMData ($85:83E0, JSL, RTL): the sprite table for this frame.
+ * The WRAM copy of the OAM is emptied (PresetsWRAMCopyOAMCopy) and the
+ * objects put in drawing order ($084C, GetOBJOrderToDraw). Then, object by
+ * object in that order (only the records in use), piece by piece from the
+ * last to the first (pieces not loaded, $FF, are skipped):
+ *   - the screen position: the object's ($9B, $9D) + the piece's offset in
+ *     the sprite's piece list (signed bytes +2 / +3, mirrored by the flip
+ *     $9F: InvertIfFlipedX / Y) - the camera ($F5, $F7);
+ *   - a piece outside the screen (X not in -16..255, Y not in -16..239) is
+ *     left out;
+ *   - its 4 bytes at $7E:A000 + $AF: X, Y, the graphics slot's tile number
+ *     ($86:8000 + 2 x slot) and the attributes: the palette (byte +4: bits
+ *     0-2 x 2), the flip (bits 4-5 to 6-7), priority 2, xor the object's
+ *     flip, | the graphic preset ($0195) x 16; the high table at
+ *     $7E:A200 + $AF / 16 gets the X high bit ($85:8BD0).
+ * Last, the DMA of the table to OAM is set up on channel 4 ($7E:A000, $220
+ * bytes, OAM address 0) and flagged in $9A for the NMI.
+ * Leftovers: A = $9A's new value with $AF's high byte, X = $220, Y = the
+ * object count ($DC), C = 1 (CPY $DC); $AF = $084A = the table's size used.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define ORDER        0x084C     /* DB: the drawing order */
+#define OAM_COPY     0x7EA000
+#define OAM_HIGH     0x7EA200
+#define HIGH_X_BITS  0x858BD0
+#define SLOT_TILES   0x868000   /* 2 x slot: the slot's first tile */
+
+static void set_piece_bank(uint8_t *ram, HmRegs *r, uint16_t sprite)
+{
+  uint8_t bank = sprite >= FIRST_SPRITE_87 ? 0x87 : 0x86;
+  r->a = (uint16_t)((sprite & 0xFF00) | bank);
+  *hm_dp(ram, r, 0x77) = bank;
+  *hm_dp(ram, r, 0x7A) = bank;
+}
+/* the gobj record offset of the object drawn n-th */
+static uint16_t ordered(uint8_t *ram, HmRegs *r, uint16_t n)
+{
+  r->x = (uint16_t)(hm_bus_rd8(ram, abs_x(r, ORDER, n)) << 1);
+  r->a = hm_bus_rd16(ram, GOBJ_OFFSETS + r->x);
+  hm_dp_w16(ram, r, 0xA9, r->a);
+  return r->a;
+}
+/* a piece's offset byte, sign-extended, through InvertIfFliped X / Y */
+static uint16_t piece_offset(uint8_t *ram, HmRegs *r, uint16_t y, uint16_t ret, void (*flip)(uint8_t *, HmRegs *))
+{
+  int8_t off = (int8_t)hm_bus_rd8(ram, hm_dp_long(ram, r, 0x78, y));
+  r->a = (uint16_t)(int16_t)off;
+  push16(ram, r, ret);                                     /* JSR */
+  flip(ram, r);
+  pull16(ram, r);
+  return r->a;
+}
+
+void hm_PrepareOAMData(uint8_t *ram, HmRegs *r)
+{
+  set_piece_bank(ram, r, hm_dp_r16(ram, r, 0xA1));
+  push16(ram, r, 0x8401); hm_PresetsWRAMCopyOAMCopy(ram, r); pull16(ram, r);
+  push16(ram, r, 0x8404); hm_GetOBJOrderToDraw(ram, r); pull16(ram, r);
+
+  ordered(ram, r, 0);
+  hm_dp_w16(ram, r, 0xAB, 0);
+  hm_dp_w16(ram, r, 0xAF, 0);
+  uint16_t y = 0;
+  for (;;) {
+    uint16_t obj = hm_dp_r16(ram, r, 0xA9);
+    r->x = obj;
+    r->a = hm_bus_rd16(ram, abs_x(r, GOBJ, obj));
+    if (r->a == 0) {                                       /* not in use: the next one */
+      for (;;) {
+        y++;
+        ordered(ram, r, y);
+        r->c = y >= hm_dp_r16(ram, r, 0xDC);
+        if (y == hm_dp_r16(ram, r, 0xDC)) goto done;
+        r->x = hm_dp_r16(ram, r, 0xA9);
+        r->a = hm_bus_rd16(ram, abs_x(r, GOBJ, r->x));
+        if (r->a) break;
+      }
+      obj = hm_dp_r16(ram, r, 0xA9);
+    }
+    /* an object */
+    hm_dp_w16(ram, r, 0xAB, y);
+    r->x = obj;
+    set_piece_bank(ram, r, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x02, obj)));
+    hm_dp_w16(ram, r, 0x78, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x10, obj)));
+    hm_dp_w16(ram, r, 0x9F, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x04, obj)));
+    hm_dp_w16(ram, r, 0x9B, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x08, obj)));
+    hm_dp_w16(ram, r, 0x9D, hm_bus_rd16(ram, abs_x(r, GOBJ + 0x0A, obj)));
+    *hm_dp(ram, r, 0xAD) = hm_bus_rd8(ram, abs_x(r, GOBJ + 0x13, obj));
+    *hm_dp(ram, r, 0xAE) = 0;
+    /* the last piece's entry: list + 1 + 5 (n - 1) */
+    hm_dp_w16(ram, r, 0x78, (uint16_t)(hm_dp_r16(ram, r, 0x78) + 1));
+    uint16_t n1 = (uint16_t)(hm_dp_r16(ram, r, 0xAD) - 1);
+    hm_dp_w16(ram, r, 0x7E, n1);
+    hm_dp_w16(ram, r, 0x80, (uint16_t)(n1 << 1));
+    uint32_t s = (uint32_t)(uint16_t)(n1 << 1) + n1;                 /* CLC; ADC $7E */
+    s = (uint32_t)(uint16_t)s + (uint16_t)(n1 << 1) + (s > 0xFFFF);  /* ADC $80 */
+    s = (uint32_t)(uint16_t)s + hm_dp_r16(ram, r, 0x78) + (s > 0xFFFF);   /* ADC $78 */
+    hm_dp_w16(ram, r, 0x78, (uint16_t)s);
+    hm_dp_w16(ram, r, 0x75, (uint16_t)(obj + hm_dp_r16(ram, r, 0xAD) - 1));   /* the last piece */
+    r->c = 1;                                              /* SBC #1: no borrow */
+
+    for (;;) {                                             /* the pieces, last to first */
+      y = hm_dp_r16(ram, r, 0xAB);
+      r->y = y;
+      r->a = hm_dp_r16(ram, r, 0xAD);
+      if (r->a == 0) break;
+      r->x = hm_dp_r16(ram, r, 0x75);
+      uint8_t slot = hm_bus_rd8(ram, abs_x(r, GOBJ + 0x14, r->x));
+      if (slot != 0xFF) {
+        uint16_t dx = piece_offset(ram, r, 2, 0x84D6, hm_InvertIfFlipedX);
+        hm_dp_w16(ram, r, 0xBF, (uint16_t)(dx + hm_dp_r16(ram, r, 0x9B) - hm_dp_r16(ram, r, 0xF5)));
+        uint16_t dy = piece_offset(ram, r, 3, 0x84F7, hm_InvertIfFlipedY);
+        uint32_t fy = (uint32_t)(uint16_t)(dy + hm_dp_r16(ram, r, 0x9D)) - hm_dp_r16(ram, r, 0xF7);
+        hm_dp_w16(ram, r, 0xC1, (uint16_t)fy);
+        hm_dp_w16(ram, r, 0xC5, 3);
+        /* the high table: bits for 4 sprites a byte, 16 bytes a word */
+        uint16_t at = hm_dp_r16(ram, r, 0xAF);
+        hm_dp_w16(ram, r, 0x7E, (uint16_t)(at & 0xFFE0));
+        uint16_t word = (uint16_t)((at & 0xFFE0) >> 4);
+        hm_dp_w16(ram, r, 0x80, word);
+        hm_dp_w16(ram, r, 0x7E, (uint16_t)(at - (at & 0xFFE0)));
+        uint16_t high = hm_bus_rd16(ram, (OAM_HIGH + word) & 0xFFFFFF);
+        hm_dp_w16(ram, r, 0xC3, high);
+        uint16_t fx = hm_dp_r16(ram, r, 0xBF);
+        r->x = word;
+        if (fx >= 0x0100) {
+          r->x = (uint16_t)((hm_dp_r16(ram, r, 0x7E) & 0xFFFC) >> 1);
+          high |= hm_bus_rd16(ram, HIGH_X_BITS + r->x);
+          hm_dp_w16(ram, r, 0xC3, high);
+        }
+        uint16_t fyv = hm_dp_r16(ram, r, 0xC1);
+        bool on_screen = (fx < 0x0100 || fx >= 0xFFF0) && (fyv < 0x00F0 || fyv >= 0xFFF0);
+        if (on_screen) {
+          r->x = at;
+          hm_bus_wr8(ram, (OAM_COPY + at) & 0xFFFFFF, (uint8_t)fx);
+          hm_bus_wr8(ram, (OAM_COPY + 1 + at) & 0xFFFFFF, (uint8_t)fyv);
+          hm_bus_wr16(ram, (OAM_HIGH + word) & 0xFFFFFF, hm_dp_r16(ram, r, 0xC3));
+          uint8_t b = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x78, 4));
+          *hm_dp(ram, r, 0xB2) = b;
+          *hm_dp(ram, r, 0xB1) = (uint8_t)((b << 1) & 0x0E);   /* the palette */
+          uint8_t f = (uint8_t)(((uint8_t)(b << 2) & 0xC0) >> 1);
+          *hm_dp(ram, r, 0xB2) = f;
+          uint8_t attr = (uint8_t)(((uint8_t)(f << 2) | f) & 0xC0);
+          attr = (uint8_t)((attr | *hm_dp(ram, r, 0xB1) | 0x20) ^ *hm_dp(ram, r, 0x9F));
+          hm_bus_wr8(ram, (OAM_COPY + 3 + at) & 0xFFFFFF, attr);
+          uint8_t preset = (uint8_t)(hm_bus_rd8(ram, abs_db(r, 0x0195)) << 4);
+          attr = (uint8_t)(preset | hm_bus_rd8(ram, (OAM_COPY + 3 + at) & 0xFFFFFF));
+          hm_bus_wr8(ram, (OAM_COPY + 3 + at) & 0xFFFFFF, attr);
+          r->y = 4;
+          r->x = (uint16_t)(slot << 1);
+          r->a = hm_bus_rd16(ram, SLOT_TILES + r->x);
+          r->x = at;
+          hm_bus_wr8(ram, (OAM_COPY + 2 + at) & 0xFFFFFF, (uint8_t)r->a);
+          hm_dp_w16(ram, r, 0xAF, (uint16_t)(at + 4));
+        }
+      }
+      r->a = (uint16_t)(hm_dp_r16(ram, r, 0x78) - 5);         /* the piece before */
+      hm_dp_w16(ram, r, 0x78, r->a);
+      hm_dp_w16(ram, r, 0x75, (uint16_t)(hm_dp_r16(ram, r, 0x75) - 1));
+      hm_dp_w16(ram, r, 0xAD, (uint16_t)(hm_dp_r16(ram, r, 0xAD) - 1));
+    }
+    /* no pieces left: the next object (Y = $AB) */
+    for (;;) {
+      y++;
+      ordered(ram, r, y);
+      r->c = y >= hm_dp_r16(ram, r, 0xDC);
+      if (y == hm_dp_r16(ram, r, 0xDC)) goto done;
+      r->x = hm_dp_r16(ram, r, 0xA9);
+      r->a = hm_bus_rd16(ram, abs_x(r, GOBJ, r->x));
+      if (r->a) break;
+    }
+  }
+done:
+  r->y = y;
+  r->a = hm_dp_r16(ram, r, 0xAF);
+  hm_bus_wr16(ram, abs_db(r, 0x084A), r->a);
+  r->x = 0;
+  hm_bus_wr16(ram, abs_db(r, 0x2102), 0);                 /* OAM address 0 */
+  hm_bus_wr8(ram, abs_db(r, 0x4340), 0x00);
+  hm_bus_wr8(ram, abs_db(r, 0x4341), 0x04);                /* OAMDATA */
+  hm_bus_wr8(ram, abs_db(r, 0x4342), 0x00);
+  hm_bus_wr8(ram, abs_db(r, 0x4343), 0xA0);
+  hm_bus_wr8(ram, abs_db(r, 0x4344), 0x7E);
+  r->x = 0x0220;
+  hm_bus_wr16(ram, abs_db(r, 0x4345), 0x0220);
+  uint8_t flag = (uint8_t)(*hm_dp(ram, r, 0x9A) | 0x10);
+  r->a = (uint16_t)((r->a & 0xFF00) | flag);
+  *hm_dp(ram, r, 0x9A) = flag;
+}
