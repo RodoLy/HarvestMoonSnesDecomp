@@ -191,8 +191,23 @@ Some tricks that were needed:
 - **The saved games (SRAM)** are compared too: the checker copies the
   cartridge's battery RAM before the call and checks that the rewrite
   leaves it exactly as the original did.
-- **The video hardware**: its registers are not memory. What the game
-  writes there is not compared, except the DMA registers.
+- **The video hardware, solved by running twice.** The picture chip
+  (PPU), the DMA unit and the CPU's own registers ($42xx) are not memory,
+  but they keep state. For the routines that use them (flag `HM_IO`,
+  `src/hm_io.c`) the checker saves that state before the call (the PPU's
+  registers, its VRAM, CGRAM and OAM pointers and latches, the three
+  memories themselves, the DMA channels and HDMAEN, NMITIMEN, the timers,
+  the multiplier and divider, the WRAM port). The original runs as always.
+  Then the checker keeps its result aside, puts back the state from before
+  (chips and WRAM) and runs the rewrite on the real machine: its writes go
+  to the emulated chips, so a DMA it starts really copies. Both results
+  must be identical, and the original's is put back for the game to go on.
+  The rewrite's writes do not move the emulated beam. The original's do
+  (each write catches the beam up with the CPU's clock, a DMA charges its
+  time), so the random test switches HDMA and the raster IRQs off and starts
+  every call at the same point of the frame: the CPU's clock is not set back
+  to 0, which made the beam jump. Live, in the game, StartProgramedDMA
+  passed 1,037 calls out of 1,039 (2 skipped, cut by the frame).
 - **The sound chip, solved by recording.** Its answers come from another
   processor and cannot be computed. So, while the original runs, the
   checker writes down every read and write on the sound ports, in order.
@@ -261,6 +276,7 @@ whose count included it (56.14 % → 56.10 %).
 | `src/ending.c` | the ending's score |
 | `src/text.c` | the dialogue box |
 | `src/audio.c` | talking to the sound chip |
+| `src/video.c` | the picture chip: DMAs, blanking, presets, clearing |
 | `src/save.c` | the saved games |
 | `src/menus.c` | buttons in menus |
 | `src/scroll.c` | scrolling the map |
@@ -276,6 +292,7 @@ whose count included it (56.14 % → 56.10 %).
 | `src/maptiles.c` | what a map gets when it loads |
 | `src/shipping.c` | the shipping at 5 pm |
 | `src/hm_decomp.c` | the checker and the preparations |
+| `src/hm_io.c` | the checker's part for the chips (HM_IO) |
 
 ---
 
@@ -1619,6 +1636,37 @@ not on days with `$0196` bits 1, 3, 4):
   bit 9), his hands free and no snow (`$D2` bits 1, 4, 11): he starts
   fishing (action $0F), unless he already is (actions $10-$13).
 
+### 5.31 The picture chip
+
+`src/video.c`, checked on the real machine (3.4).
+
+- **The prepared DMAs.** A routine that wants something copied to video
+  memory sets up a DMA channel and leaves a note: `$28` has one bit per
+  channel waiting, `$2A` + channel the VMAIN value, `$32` + 2 x channel the
+  destination. `StartProgramedDMA` (in the NMI) starts them: a channel
+  whose B address is $18 goes to VRAM (VMAIN, then the 16-bit address),
+  any other to CGRAM (the low byte as the colour number). It reads `$28`
+  again for each channel, so a copy into WRAM through $2180 can change
+  which channels follow.
+- **Blanking and brightness.** `$24` is the game's copy of INIDISP
+  ($2100). `ForceBlank` sets bit 7, `ResetForceBlank` keeps only the
+  brightness, `SetsBrightness` puts the brightness (A & $0F; 0 means blank
+  instead) and keeps the blank bit; `InitialzieScreenStatusVar` clears the
+  copy and blanks.
+- **The 11 graphic presets** (`ManageGraphicPresets`, A = the preset,
+  kept in `$19B6`): about twenty PPU registers (sprite size, BG mode,
+  tilemap and character addresses, windows, main/sub screens, colour
+  maths) get the preset's value from a table each ($80:8B44-$80:8C4B), and
+  each value is also kept in WRAM ($19B7-$19E1, most never read again).
+  In forced blank the scroll registers go to 0; M7SEL = 0 and COLDATA =
+  $E0 always.
+- **Clearing.** `ZeroesVRAM` (all 64 KB), `ZeroesOAM`, `ZeroesCGRAM` and
+  `ZeroesPartialVRAM` (from the address in A, $FFF bytes) blank the screen,
+  switch the interrupts off and copy a fixed word of 0 from the ROM
+  ($80:8424) with one DMA. Their sizes are generous: twice the OAM, and
+  the CGRAM one byte short of twice its size. `UNUSED1`, which nothing
+  calls, would put every sprite off screen.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1838,3 +1886,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 27-Oct-2026 | 79.88 % | the player's actions: TVs, bed, shops, dealers, carpenter, bar |
 | 28-Oct-2026 | 83.43 % | the player each frame: walking, running, jumping, the animations, moving round corners |
 | 28-Oct-2026 | 85.06 % | the doors and the mountain, the sprite pieces' loader, the sound program's upload at power-on |
+| 28-Oct-2026 | 85.91 % | the picture chip: prepared DMAs, blanking and brightness, graphic presets, clearing video memory |

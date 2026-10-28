@@ -149,6 +149,17 @@ static inline uint8_t *hm_bus_ram(uint8_t *ram, uint32_t addr)
     return &g_hm_sram[(((uint32_t)(bank & 0xF) << 15) | a) & (g_hm_sram_size - 1)];
   return NULL;
 }
+/* HM_IO routines: while the checker runs the rewrite on the real machine
+ * (hm_io.c), the chips' registers are really read and written. */
+extern int g_hm_io_live;
+uint8_t hm_io_read_live(uint16_t reg);
+void hm_io_write_live(uint16_t reg, uint8_t v);
+static inline int hm_is_chip_reg(uint32_t addr)
+{
+  uint16_t a = (uint16_t)addr;
+  return ((addr >> 16) & 0x7F) < 0x40 &&
+         ((a >= 0x2100 && a < 0x2140) || (a >= 0x2180 && a < 0x2184) || (a >= 0x4200 && a < 0x4380));
+}
 static inline uint8_t hm_bus_rd8(uint8_t *ram, uint32_t addr)
 {
   uint8_t *p = hm_bus_ram(ram, addr);
@@ -158,6 +169,7 @@ static inline uint8_t hm_bus_rd8(uint8_t *ram, uint32_t addr)
   if (a >= 0x8000 && (bank & 0x7F) < 0x7E)
     return g_rom[(uint32_t)(bank & 0x3F) << 15 | (a & 0x7FFF)];
   if (hm_is_apu_port(addr)) return hm_apu_read(a);
+  if (g_hm_io_live && hm_is_chip_reg(addr)) return hm_io_read_live(a);
   if (hm_is_io_reg(addr)) return hm_io_read(a);
   return 0;
 }
@@ -170,6 +182,7 @@ static inline void hm_bus_wr8(uint8_t *ram, uint32_t addr, uint8_t v)
   uint8_t *p = hm_bus_ram(ram, addr);
   if (p) *p = v;
   else if (hm_is_apu_port(addr)) hm_apu_write((uint16_t)addr, v);
+  else if (g_hm_io_live && hm_is_chip_reg(addr)) hm_io_write_live((uint16_t)addr, v);
 }
 static inline void hm_bus_wr16(uint8_t *ram, uint32_t addr, uint16_t v)
 {
@@ -202,7 +215,23 @@ enum { HM_OUT_A = 1, HM_OUT_X = 2, HM_OUT_Y = 4, HM_OUT_C = 8,
         * upload the chip runs the game's sound program and never answers
         * that way again. E.g. HM_DECOMP_FUZZ=100000:1
         * HM_DECOMP_FUZZ_ONLY=UNK_Audio1. */
-       HM_LIVE = 128 };
+       HM_LIVE = 128,
+       /* Writes the console's chips (PPU, DMA, WRAM port, $42xx): checked
+        * by running the rewrite on the real machine from the state before
+        * and comparing the chips' state (hm_io.c). */
+       HM_IO = 256 };
+
+/* hm_io.c: the chips' state for HM_IO checks. */
+typedef struct HmIoState HmIoState;
+int hm_io_available(void);
+HmIoState *hm_io_save(void);
+void hm_io_load(const HmIoState *s);
+void hm_io_free(HmIoState *s);
+int hm_io_diff(const HmIoState *rewrite, const HmIoState *rom, char *why, size_t n);
+void hm_io_quiet(void);
+typedef struct HmBeam HmBeam;
+HmBeam *hm_beam_save(void);
+void hm_beam_load(const HmBeam *b);
 
 /* Fuzzing: which inputs to randomize when testing a routine on its own
  * (HM_DECOMP_FUZZ). Ranges are inclusive; size 1 or 2 bytes. */
@@ -369,6 +398,17 @@ void hm_SUB_809A64(uint8_t *ram, HmRegs *r);
 void hm_CODE_858CB2(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio1(uint8_t *ram, HmRegs *r);
 void hm_UNUSED2(uint8_t *ram, HmRegs *r);
+void hm_StartProgramedDMA(uint8_t *ram, HmRegs *r);
+void hm_InitialzieScreenStatusVar(uint8_t *ram, HmRegs *r);
+void hm_ManageGraphicPresets(uint8_t *ram, HmRegs *r);
+void hm_ForceBlank(uint8_t *ram, HmRegs *r);
+void hm_ResetForceBlank(uint8_t *ram, HmRegs *r);
+void hm_SetsBrightness(uint8_t *ram, HmRegs *r);
+void hm_ZeroesVRAM(uint8_t *ram, HmRegs *r);
+void hm_ZeroesOAM(uint8_t *ram, HmRegs *r);
+void hm_UNUSED1(uint8_t *ram, HmRegs *r);
+void hm_ZeroesCGRAM(uint8_t *ram, HmRegs *r);
+void hm_ZeroesPartialVRAM(uint8_t *ram, HmRegs *r);
 void hm_CODE_81CB77(uint8_t *ram, HmRegs *r);
 void hm_CODE_81D716(uint8_t *ram, HmRegs *r);   /* actions.c */
 void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r);

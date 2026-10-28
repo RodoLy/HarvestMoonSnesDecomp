@@ -192,8 +192,24 @@ Algunos trucos que fueron necesarios:
 - **Las partidas guardadas (SRAM)** también se comparan: el comprobador
   copia la RAM con batería del cartucho antes de la llamada y revisa que
   la reescritura la deje exactamente igual que el original.
-- **El hardware de video**: sus registros no son memoria. Lo que el juego
-  escribe ahí no se compara, salvo los registros de DMA.
+- **El hardware de video, resuelto corriendo dos veces.** El chip de
+  imagen (PPU), la unidad de DMA y los registros propios de la CPU ($42xx)
+  no son memoria, pero guardan estado. Para las rutinas que los usan (flag
+  `HM_IO`, `src/hm_io.c`) el comprobador guarda ese estado antes de la
+  llamada (los registros del PPU, sus punteros y pestillos de VRAM, CGRAM
+  y OAM, las tres memorias, los canales de DMA y HDMAEN, NMITIMEN, los
+  temporizadores, el multiplicador y el divisor, el puerto de WRAM). El
+  original corre como siempre. Después el comprobador aparta su resultado,
+  repone el estado de antes (chips y WRAM) y corre la reescritura sobre la
+  máquina real: sus escrituras van a los chips emulados, así que un DMA
+  que lance copia de verdad. Los dos resultados tienen que ser idénticos,
+  y se repone el del original para que el juego siga. Las escrituras de la
+  reescritura no mueven el haz emulado. Las del original sí (cada escritura
+  pone el haz al día con el reloj de la CPU, un DMA cobra su tiempo), así
+  que la prueba al azar apaga el HDMA y las IRQ por línea y empieza cada
+  llamada en el mismo punto del cuadro: ya no pone el reloj de la CPU a 0,
+  que hacía saltar el haz. En vivo, en el juego, StartProgramedDMA pasó
+  1.037 de 1.039 llamadas (2 saltadas, cortadas por el cuadro).
 - **El chip de sonido, resuelto grabando.** Sus respuestas vienen de otro
   procesador y no se pueden calcular. Entonces, mientras corre el
   original, el comprobador anota cada lectura y escritura en los puertos
@@ -263,6 +279,7 @@ $80:9553), cuya cuenta lo incluía (56,14 % → 56,10 %).
 | `src/objects.c` | objetos con sprite |
 | `src/text.c` | el cuadro de diálogo |
 | `src/audio.c` | hablar con el chip de sonido |
+| `src/video.c` | el chip de imagen: DMA, negro, modos, borrar |
 | `src/save.c` | las partidas guardadas |
 | `src/menus.c` | botones en los menús |
 | `src/scroll.c` | desplazar el mapa |
@@ -279,6 +296,7 @@ $80:9553), cuya cuenta lo incluía (56,14 % → 56,10 %).
 | `src/shipping.c` | el envío de las 5 de la tarde |
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
+| `src/hm_io.c` | la parte del comprobador para los chips (HM_IO) |
 
 ---
 
@@ -1669,6 +1687,37 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   empieza a pescar (acción $0F), salvo que ya esté pescando (acciones
   $10-$13).
 
+### 5.31 El chip de imagen
+
+`src/video.c`, comprobadas sobre la máquina real (3.4).
+
+- **Los DMA preparados.** Una rutina que quiere copiar algo a la memoria
+  de video prepara un canal de DMA y deja una nota: `$28` tiene un bit por
+  canal en espera, `$2A` + canal el valor de VMAIN, `$32` + 2 x canal el
+  destino. `StartProgramedDMA` (en el NMI) los lanza: un canal cuya
+  dirección B es $18 va a la VRAM (VMAIN y luego la dirección de 16 bits),
+  cualquier otro a la CGRAM (el byte bajo como número de color). Vuelve a
+  leer `$28` en cada canal, así que una copia a la WRAM por $2180 puede
+  cambiar qué canales siguen.
+- **Pantalla en negro y brillo.** `$24` es la copia del juego de INIDISP
+  ($2100). `ForceBlank` pone el bit 7, `ResetForceBlank` deja solo el
+  brillo, `SetsBrightness` pone el brillo (A & $0F; 0 significa negro) y
+  conserva el bit de negro; `InitialzieScreenStatusVar` borra la copia y
+  pone la pantalla en negro.
+- **Los 11 modos gráficos** (`ManageGraphicPresets`, A = el modo, guardado
+  en `$19B6`): unos veinte registros del PPU (tamaño de sprites, modo de
+  fondos, direcciones de mapas y caracteres, ventanas, pantallas principal
+  y secundaria, mezcla de colores) reciben el valor del modo, cada uno de
+  su tabla ($80:8B44-$80:8C4B), y cada valor se guarda también en la WRAM
+  ($19B7-$19E1, casi nunca se vuelven a leer). Con la pantalla en negro los
+  registros de desplazamiento van a 0; M7SEL = 0 y COLDATA = $E0 siempre.
+- **Borrar.** `ZeroesVRAM` (los 64 KB), `ZeroesOAM`, `ZeroesCGRAM` y
+  `ZeroesPartialVRAM` (desde la dirección en A, $FFF bytes) ponen la
+  pantalla en negro, apagan las interrupciones y copian con un DMA una
+  palabra fija de 0 de la ROM ($80:8424). Los tamaños son generosos: el
+  doble de la OAM, y la CGRAM un byte menos que el doble. `UNUSED1`, que
+  nadie llama, sacaría todos los sprites de la pantalla.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1895,3 +1944,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 27-oct-2026 | 79,88 % | las acciones del jugador: teles, cama, tiendas, tratantes, carpintero, bar |
 | 28-oct-2026 | 83,43 % | el jugador cada cuadro: caminar, correr, saltar, las animaciones, rodear esquinas |
 | 28-oct-2026 | 85,06 % | las puertas y la montaña, el cargador de piezas de sprite, la subida del programa de sonido al encender |
+| 28-oct-2026 | 85,91 % | el chip de imagen: DMA preparados, negro y brillo, modos gráficos, borrar la memoria de video |

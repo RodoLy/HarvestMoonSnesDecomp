@@ -292,6 +292,62 @@ static void prep_doors(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   }
 }
 
+/* video.c: StartProgramedDMA. Channels waiting ($28), their VMAIN ($2A+)
+ * and destinations ($32+), and the channels set up as the game does: to
+ * VRAM ($18), CGRAM ($22), OAM ($04), now and then the other way (into
+ * WRAM); short copies from WRAM or ROM. */
+static void prep_prog_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  hm_io_quiet();
+  /* the WRAM port ($2181-$2183) away from the stack and the direct page */
+  uint32_t port = 0x2000u + rnd() % 0x1C000u;
+  hm_io_write_live(0x2181, (uint8_t)port);
+  hm_io_write_live(0x2182, (uint8_t)(port >> 8));
+  hm_io_write_live(0x2183, (uint8_t)(port >> 16));
+  r->db = (rnd() % 2) ? 0x80 : 0x00;
+  ram[0x28] = (uint8_t)rnd();
+  for (unsigned ch = 0; ch < 8; ch++) {
+    ram[0x2A + ch] = (uint8_t)((rnd() % 2) ? 0x80 : rnd());
+    hm_wr16(ram, 0x32 + 2 * ch, (uint16_t)rnd());
+    static const uint8_t bbad[] = { 0x18, 0x18, 0x22, 0x22, 0x04, 0x19, 0x80 };
+    static const uint8_t banks[] = { 0x7E, 0x7F, 0x80, 0x9F, 0xA8 };
+    uint16_t at = (uint16_t)(0x4300 + 16 * ch);
+    uint8_t mode = (uint8_t)((rnd() % 4) ? rnd() % 2 : rnd() & 0x1F);
+    if (rnd() % 16 == 0) mode |= 0x80;                       /* B to A */
+    uint8_t bank = banks[rnd() % 5];
+    uint16_t src = (uint16_t)rnd();
+    if (bank == 0x7E && src < 0x2000) src = (uint16_t)(0x2000 + src);  /* not the stack or DP */
+    if (bank >= 0x80) src |= 0x8000;
+    uint16_t size = (uint16_t)(1 + rnd() % 0x400);
+    dma_write(g_dma, at, mode);
+    dma_write(g_dma, (uint16_t)(at + 1), bbad[rnd() % 7]);
+    dma_write(g_dma, (uint16_t)(at + 2), (uint8_t)src);
+    dma_write(g_dma, (uint16_t)(at + 3), (uint8_t)(src >> 8));
+    dma_write(g_dma, (uint16_t)(at + 4), bank);
+    dma_write(g_dma, (uint16_t)(at + 5), (uint8_t)size);
+    dma_write(g_dma, (uint16_t)(at + 6), (uint8_t)(size >> 8));
+  }
+}
+
+/* video.c: the INIDISP copy ($24), A (a brightness or a preset: 0-10, now
+ * and then past the tables) */
+static void prep_screen(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  hm_io_quiet();
+  ram[0x24] = (uint8_t)rnd();
+  r->a = (uint16_t)((rnd() % 4) ? (rnd() & 0xFF00) | rnd() % 11 : rnd());
+  if (rnd() % 2) r->db = 0x80;
+}
+
+/* video.c: the clearing routines (A = a VRAM address, $AF = a size) */
+static void prep_clear(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  hm_io_quiet();
+  r->a = (uint16_t)rnd();
+  hm_wr16(ram, 0xAF, (uint16_t)((rnd() % 2) ? 0x200 : rnd() % 0x400));
+  if (rnd() % 2) r->db = 0x80;
+}
+
 static void prep_animals(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_random_farm_and_weather(ram, r, rnd);      /* grass to graze, $0196 */
@@ -3888,6 +3944,28 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/audio.c", 0x838598, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_upload },
   /* the routines that are only a return (other routines jump or branch
    * to them, or nothing calls them) */
+  { "StartProgramedDMA", hm_StartProgramedDMA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
+    "src/video.c", 0x808AF0, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_prog_dma },
+  { "InitialzieScreenStatusVar", hm_InitialzieScreenStatusVar, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/video.c", 0x808C4C, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_screen },
+  { "ManageGraphicPresets", hm_ManageGraphicPresets, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
+    "src/video.c", 0x808C59, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_screen },
+  { "ForceBlank", hm_ForceBlank, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
+    "src/video.c", 0x808E0F, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_screen },
+  { "ResetForceBlank", hm_ResetForceBlank, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/video.c", 0x808E1E, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_screen },
+  { "SetsBrightness", hm_SetsBrightness, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
+    "src/video.c", 0x808E2D, 1, 1, 0, 0xFFFF, { { 0 } }, 300, prep_screen },
+  { "ZeroesVRAM", hm_ZeroesVRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/video.c", 0x808846, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
+  { "ZeroesOAM", hm_ZeroesOAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/video.c", 0x808887, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
+  { "UNUSED1", hm_UNUSED1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/video.c", 0x8088C3, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
+  { "ZeroesCGRAM", hm_ZeroesCGRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/video.c", 0x808980, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
+  { "ZeroesPartialVRAM", hm_ZeroesPartialVRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
+    "src/video.c", 0x8089BC, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
   { "COP_Return", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/interact.c", 0x80872A, 0, 0, 0, 0xFFFF, { { 0 } }, 50, NULL },
   { "ScreenTransitionReturn", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
@@ -4025,7 +4103,9 @@ typedef struct Snapshot {
   uint8_t dma[0x80];       /* $4300-$437F before the call */
   uint8_t *sram;           /* the battery RAM before the call (or NULL) */
   int apu_from;            /* where its sound-port traffic starts in s_apu_log */
+  HmIoState *io;           /* HM_IO: the chips before the call (hm_io.c) */
 } Snapshot;
+static void snapshot_free(Snapshot *s) { hm_io_free(s->io); free(s->sram); free(s); }
 
 typedef struct Stats { unsigned calls, ok, bad, skipped; } Stats;
 static Stats *s_stats;
@@ -4082,7 +4162,8 @@ static void skip_why(const char *name, const char *why)
 void *hm_decomp_check_begin(const CpuState *cpu, const char *name)
 {
   if (s_fuzzing && s_check_depth > 0) return NULL;
-  (void)name;
+  int index = 0;
+  const HmDecompFn *f = find(name, &index);
   s_check_depth++;
   Snapshot *s = malloc(sizeof *s);
   if (!s) { s_check_depth--; return NULL; }
@@ -4095,6 +4176,7 @@ void *hm_decomp_check_begin(const CpuState *cpu, const char *name)
   s->sram = NULL;
   if (g_sram && g_sram_size > 0 && (s->sram = malloc((size_t)g_sram_size)) != NULL)
     memcpy(s->sram, g_sram, (size_t)g_sram_size);
+  s->io = (f && (f->out_mask & HM_IO)) ? hm_io_save() : NULL;
   return s;
 }
 
@@ -4107,7 +4189,7 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   if (s_check_depth == 0) s_apu_recording = 0;
   HmApuReplay apu = { s_apu_log + s->apu_from, s_apu_n - s->apu_from, 0, 0, "" };
   const HmDecompFn *f = find(name, &index);
-  if (!f) { free(s->sram); free(s); return; }
+  if (!f) { snapshot_free(s); return; }
   Stats *st = &s_stats[index];
   st->calls++;
   /* A routine interrupted mid-way (the frame deadline yielded), handed to
@@ -4115,7 +4197,7 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
    * once and the interpreter runs it, e.g. the sprite routines of bank $85)
    * or run in decimal mode is not comparable here; the rewrites assume
    * binary mode. The fuzzer still checks them. */
-  if (!completed || s->cpu._flag_D) { skip_why(name, completed ? "decimal mode" : "interrupted"); st->skipped++; free(s->sram); free(s); return; }
+  if (!completed || s->cpu._flag_D) { skip_why(name, completed ? "decimal mode" : "interrupted"); st->skipped++; snapshot_free(s); return; }
 
   HmRegs in = { s->cpu.A, s->cpu.X, s->cpu.Y, s->cpu._flag_C, s->cpu._flag_N, s->cpu.DB, s->cpu.D,
                 s->cpu.S, s->cpu.PB };
@@ -4123,21 +4205,51 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   HmRegs out = in;
   uint8_t dma_after[0x80];
   dma_regs_save(dma_after);
-  if (s_apu_overflow) { skip_why(name, "sound-port log full"); st->skipped++; free(s->sram); free(s); return; }
-  g_hm_dma_regs = s->dma;
+  if (s_apu_overflow) { skip_why(name, "sound-port log full"); st->skipped++; snapshot_free(s); return; }
+  /* HM_IO: the rewrite runs on the real machine (WRAM and chips) put back
+   * as they were before the call; afterwards what it left is taken (WRAM to
+   * s->ram, the DMA registers to s->dma, the chips to `io_rw`) and the
+   * original's result is put back. */
+  int io = (f->out_mask & HM_IO) != 0;
+  HmIoState *io_rom = NULL, *io_rw = NULL;
+  uint8_t *ram_rom = NULL;
+  uint64_t clock = g_cpu.master_cycles;
+  if (io) {
+    if (!s->io || !(io_rom = hm_io_save()) || !(ram_rom = malloc(sizeof s->ram))) {
+      hm_io_free(io_rom); skip_why(name, "chip state not available"); st->skipped++; snapshot_free(s); return;
+    }
+    memcpy(ram_rom, cpu->ram, sizeof s->ram);
+    memcpy(cpu->ram, s->ram, sizeof s->ram);
+    hm_io_load(s->io);
+  }
+  g_hm_dma_regs = io ? NULL : s->dma;
+  g_hm_io_live = io;
   g_hm_sram = s->sram;
   g_hm_sram_size = (uint32_t)g_sram_size;
   g_hm_apu = &apu;
-  if (!setjmp(s_apu_abort)) f->fn(s->ram, &out);
+  if (!setjmp(s_apu_abort)) f->fn(io ? cpu->ram : s->ram, &out);
   g_hm_apu = NULL;
   g_hm_sram = NULL;
   g_hm_dma_regs = NULL;
+  g_hm_io_live = 0;
+  if (io) {
+    io_rw = hm_io_save();
+    dma_regs_save(s->dma);
+    memcpy(s->ram, cpu->ram, sizeof s->ram);
+    memcpy(cpu->ram, ram_rom, sizeof s->ram);
+    hm_io_load(io_rom);
+    g_cpu.master_cycles = clock;
+    free(ram_rom);
+  }
   if (!apu.bad && apu.pos != apu.n)
     snprintf(apu.why, sizeof apu.why, "APU: rewrite did %d port accesses, rom %d", apu.pos, apu.n), apu.bad = 1;
 
   int bad = 0;
   char why[256] = "";
   if (apu.bad) { bad = 1; snprintf(why, sizeof why, "%s", apu.why); }
+  if (!bad && io && io_rw && hm_io_diff(io_rw, io_rom, why, sizeof why)) bad = 1;
+  hm_io_free(io_rw);
+  hm_io_free(io_rom);
   if (!bad && (f->out_mask & HM_OUT_A) && out.a != cpu->A) { bad = 1; snprintf(why, sizeof why, "A %04X != rom %04X", out.a, cpu->A); }
   if (!bad && (f->out_mask & HM_OUT_X) && out.x != cpu->X) { bad = 1; snprintf(why, sizeof why, "X %04X != rom %04X", out.x, cpu->X); }
   if (!bad && (f->out_mask & HM_OUT_Y) && out.y != cpu->Y) { bad = 1; snprintf(why, sizeof why, "Y %04X != rom %04X", out.y, cpu->Y); }
@@ -4185,7 +4297,7 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
   } else {
     st->ok++;
   }
-  free(s->sram); free(s);
+  snapshot_free(s);
 }
 
 /* ── Fuzzing (HM_DECOMP_FUZZ=<frame>:<iterations>) ─────────────────── */
@@ -4249,6 +4361,8 @@ static void fuzz_at(unsigned frame)
   if (g_sram && g_sram_size > 0 && !saved_sram) saved_sram = malloc((size_t)g_sram_size);
   if (saved_sram) memcpy(saved_sram, g_sram, (size_t)g_sram_size);
   dma_regs_save(saved_dma);
+  HmIoState *saved_io = hm_io_save();           /* the chips (HM_IO routines change them) */
+  HmBeam *saved_beam = hm_beam_save();
   uint16_t saved_pad[2] = { RtlGetPadState(0), RtlGetPadState(1) };  /* prep_joypad */
   int prev = g_hm_decomp_check;
   if (!s_stats) { s_stats = calloc((size_t)g_hm_decomp_count, sizeof *s_stats); atexit(report); }
@@ -4307,10 +4421,11 @@ static void fuzz_at(unsigned frame)
       memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
       if (saved_sram) memcpy(g_sram, saved_sram, (size_t)g_sram_size);
       dma_regs_restore(saved_dma);
+      if (f->out_mask & HM_IO) { hm_io_load(saved_io); hm_beam_load(saved_beam); }
       /* Every call starts with a fresh frame budget: long routines (the
        * 4096-tile farm loop) would otherwise hit the frame deadline, yield
        * half-way and not be comparable. The machine is restored after. */
-      g_cpu.master_cycles = apu ? apu_clock : 0;
+      g_cpu.master_cycles = apu ? apu_clock : (f->out_mask & HM_IO) ? saved_cpu.master_cycles : 0;
       if (apu && !(f->out_mask & HM_LIVE)) {
         int ready = 0;
         for (long k = 0; k < 200000 && !ready; k++) {
@@ -4390,6 +4505,10 @@ static void fuzz_at(unsigned frame)
   memcpy(g_cpu.ram, saved_ram, sizeof saved_ram);
   if (saved_sram) memcpy(g_sram, saved_sram, (size_t)g_sram_size);
   dma_regs_restore(saved_dma);
+  hm_io_load(saved_io);
+  hm_io_free(saved_io);
+  hm_beam_load(saved_beam);
+  free(saved_beam);
   RtlSetPadState(0, saved_pad[0]);
   RtlSetPadState(1, saved_pad[1]);
   g_hm_decomp_check = prev;
