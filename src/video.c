@@ -280,3 +280,270 @@ void hm_UNUSED1(uint8_t *ram, HmRegs *r)
   r->a = 0x0010;
   wr8(ram, r, 0x420B, 0x10);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * StartLastPreparedDMA ($80:8AB2, JSL, RTL): StartProgramedDMA for one
+ * channel only, the one in $27 (the last one prepared), right away; then
+ * $28 = 0, forgetting any other waiting channel.
+ * Leftovers: X = the channel, C = 0 (the last LSR); A's low byte = the
+ * channel's bit, its high byte the VRAM address's (VRAM) or as it was;
+ * the stack keeps the channel PHA'd.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define DMA_CHANNEL 0x27   /* DP */
+#define CHANNEL_BITS 0x808B3C
+
+void hm_StartLastPreparedDMA(uint8_t *ram, HmRegs *r)
+{
+  uint8_t ch = *hm_dp(ram, r, DMA_CHANNEL);
+  set_a8(r, ch);
+  hm_push8(ram, r, ch);                                            /* PHA */
+  uint8_t bbad = hm_bus_rd8(ram, db(r, (uint16_t)(0x4301 + (uint8_t)(ch << 4))));
+  hm_pull8(ram, r);                                                /* PLX */
+  if (bbad == BBAD_VRAM) {
+    wr8(ram, r, 0x2115, *hm_dp(ram, r, (unsigned)(DMA_VMAIN + ch)));
+    r->a = hm_dp_r16(ram, r, (unsigned)(DMA_DESTINATION + 2u * ch));
+    wr16(ram, r, 0x2116, r->a);
+  } else {
+    set_a8(r, *hm_dp(ram, r, (uint8_t)(DMA_DESTINATION + (uint8_t)(2 * ch))));
+    wr8(ram, r, 0x2121, (uint8_t)r->a);
+  }
+  r->x = ch;
+  r->c = 0;
+  uint8_t bit = hm_bus_rd8(ram, CHANNEL_BITS + ch);
+  set_a8(r, bit);
+  wr8(ram, r, 0x420B, bit);
+  *hm_dp(ram, r, DMA_WAITING) = 0;
+  wr8(ram, r, 0x420B, 0);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * LoadsFromVRAMwithOffset ($80:AA38, JSR, RTS; despite its name it writes
+ * VRAM): Y bytes from $7E:2000 + $7E to the VRAM address X (VMAIN $80),
+ * prepared on channel 0 with AddProgrammedDMA and started at once
+ * (StartLastPreparedDMA).
+ * Leftovers: those of StartLastPreparedDMA, X and Y as they were (PHX /
+ * PHY / PLY / PLX, 16-bit).
+ * ───────────────────────────────────────────────────────────────────────── */
+static void jsl(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bank, void (*fn)(uint8_t *, HmRegs *))
+{
+  hm_jsl(ram, r, (uint16_t)(at + 3), bank);
+  fn(ram, r);
+  hm_rtl(ram, r);
+}
+static void push16(uint8_t *ram, HmRegs *r, uint16_t v) { hm_push8(ram, r, (uint8_t)(v >> 8)); hm_push8(ram, r, (uint8_t)v); }
+static uint16_t pull16(uint8_t *ram, HmRegs *r) { uint8_t lo = hm_pull8(ram, r); return (uint16_t)(lo | hm_pull8(ram, r) << 8); }
+
+void hm_LoadsFromVRAMwithOffset(uint8_t *ram, HmRegs *r)
+{
+  uint16_t x = r->x, y = r->y;
+  push16(ram, r, x);
+  push16(ram, r, y);
+  *hm_dp(ram, r, DMA_CHANNEL) = 0;
+  *hm_dp(ram, r, 0x29) = BBAD_VRAM;                        /* the B address */
+  uint32_t sum = 0x2000u + hm_dp_r16(ram, r, 0x7E);
+  r->c = sum > 0xFFFF;
+  hm_dp_w16(ram, r, 0x72, (uint16_t)sum);
+  *hm_dp(ram, r, 0x74) = 0x7E;
+  r->a = 0x0080;                                           /* VMAIN */
+  jsl(ram, r, 0xAA5B, 0x80, hm_AddProgrammedDMA);
+  jsl(ram, r, 0xAA5F, 0x80, hm_StartLastPreparedDMA);
+  r->y = pull16(ram, r);
+  r->x = pull16(ram, r);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CopiesWRAMtoOBJVGRAM ($85:8E57, JSL, RTL): the sprite pieces the loader
+ * (CODE_858CB2) queued at $7E:A420 (6 bytes each: source, bank, VRAM
+ * address; $FFFF ends the list) go to VRAM, each as two DMAs of $40 bytes
+ * on channel 0: the top half of the 16 x 16 piece from the source to the
+ * address, the bottom half from source + $200 to address + $100.
+ * Leftovers: A = $FFFF, C = 1 (CMP), X = $BF = the end of the list.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define LOAD_COPIES 0x7EA420
+
+void hm_CopiesWRAMtoOBJVGRAM(uint8_t *ram, HmRegs *r)
+{
+  wr8(ram, r, 0x2115, 0x80);
+  wr8(ram, r, 0x4300, 0x01);
+  wr8(ram, r, 0x4301, BBAD_VRAM);
+  hm_dp_w16(ram, r, 0xBF, 0);
+  for (;;) {
+    uint16_t x = hm_dp_r16(ram, r, 0xBF);
+    r->x = x;
+    r->a = hm_bus_rd16(ram, LOAD_COPIES + x);
+    if (r->a == 0xFFFF) break;
+    for (int half = 0; half < 2; half++) {
+      uint32_t vram = hm_bus_rd16(ram, LOAD_COPIES + 4u + x) + 0x100u * half;
+      uint32_t src = hm_bus_rd16(ram, LOAD_COPIES + x) + 0x200u * half;
+      wr16(ram, r, 0x2116, (uint16_t)vram);
+      wr16(ram, r, 0x4302, (uint16_t)src);
+      wr16(ram, r, 0x4305, 0x0040);
+      wr8(ram, r, 0x4304, hm_bus_rd8(ram, LOAD_COPIES + 2u + x));
+      wr8(ram, r, 0x420B, 0x01);
+      r->x = hm_dp_r16(ram, r, 0xBF);
+    }
+    hm_dp_w16(ram, r, 0xBF, (uint16_t)(x + 6));
+  }
+  r->c = 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UpdateGraphics ($80:86B1, JSR, RTS; from the NMI). Unless the frame's
+ * work is done already ($00 != 0): the prepared DMAs (StartProgramedDMA),
+ * the sprite table (channel 4, if $9A says so), the sprite pieces
+ * (CopiesWRAMtoOBJVGRAM). Then always: the pads (ReadJoypad), one random
+ * number (GetRNG), the scroll of BG1-BG3 from $013C-$0147, and $00 = 1.
+ * Quirk: after the sprite pieces the A register is 16-bit (left so by
+ * CopiesWRAMtoOBJVGRAM), so the last "STZ $9A; STZ $420B" also clear $9B
+ * and HDMAEN.
+ * Leftovers: A = $0001 (GetRNG's high byte 0), X and Y those of the calls,
+ * the flags as they were (PHP / PLP). (StartProgramedDMA makes X and Y
+ * 8-bit and CopiesWRAMtoOBJVGRAM 16-bit again: the console would clear
+ * Y's high byte there, the recompiled game, our reference, keeps it.)
+ * ───────────────────────────────────────────────────────────────────────── */
+#define NMI_STATUS  0x00   /* DP */
+#define OAM_CHANNEL 0x9A   /* DP: the MDMAEN bit for the sprite table */
+
+static void jsr(uint8_t *ram, HmRegs *r, uint16_t at, void (*fn)(uint8_t *, HmRegs *))
+{
+  uint16_t ret = (uint16_t)(at + 2);
+  hm_push8(ram, r, (uint8_t)(ret >> 8));
+  hm_push8(ram, r, (uint8_t)ret);
+  fn(ram, r);
+  hm_pull8(ram, r); hm_pull8(ram, r);
+}
+
+void hm_UpdateGraphics(uint8_t *ram, HmRegs *r)
+{
+  php(ram, r);
+  set_a8(r, *hm_dp(ram, r, NMI_STATUS));
+  if (!*hm_dp(ram, r, NMI_STATUS)) {
+    jsl(ram, r, 0x86B8, 0x80, hm_StartProgramedDMA);
+    set_a8(r, *hm_dp(ram, r, OAM_CHANNEL));
+    wr8(ram, r, 0x420B, (uint8_t)r->a);
+    *hm_dp(ram, r, OAM_CHANNEL) = 0;
+    wr8(ram, r, 0x420B, 0);
+    jsl(ram, r, 0x86C8, 0x85, hm_CopiesWRAMtoOBJVGRAM);
+    /* CopiesWRAMtoOBJVGRAM returns with a 16-bit A, so these two STZ are
+     * 16-bit: $9B goes too, and $420C (HDMAEN): HDMA is switched off */
+    hm_dp_w16(ram, r, OAM_CHANNEL, 0);
+    wr16(ram, r, 0x420B, 0);
+  }
+  jsr(ram, r, 0x86D1, hm_ReadJoypad);
+  jsl(ram, r, 0x86D4, 0x83, hm_GetRNG);
+  for (uint16_t i = 0; i < 12; i++) {                      /* BG1HOFS .. BG3VOFS, low then high */
+    set_a8(r, hm_bus_rd8(ram, db(r, (uint16_t)(0x013C + i))));
+    wr8(ram, r, (uint16_t)(0x210D + i / 2), (uint8_t)r->a);
+  }
+  set_a8(r, 0x01);
+  *hm_dp(ram, r, NMI_STATUS) = 1;
+  plp(ram, r);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * LoadDialogueBox ($83:92BB, JSL, RTL): the text box's graphics. The
+ * tilemap at $A5:CB05 is decompressed to $7E:2000 (DecompressTileMap) and
+ * copied to VRAM $7800 ($400 bytes); then the letters' graphics at
+ * $9C:BBA3 to VRAM $5000 ($1000 bytes). Both with AddProgrammedDMA on
+ * channel 0 and StartLastPreparedDMA.
+ * Leftovers: those of the last StartLastPreparedDMA; X = $5000, Y = $1000
+ * (AddProgrammedDMA keeps them).
+ * ───────────────────────────────────────────────────────────────────────── */
+static void vram_copy(uint8_t *ram, HmRegs *r, uint32_t src, uint16_t vram, uint16_t size,
+                      uint16_t at_add, uint16_t at_start)
+{
+  *hm_dp(ram, r, DMA_CHANNEL) = 0;
+  *hm_dp(ram, r, 0x29) = BBAD_VRAM;
+  r->y = size;
+  r->x = vram;
+  hm_dp_w16(ram, r, 0x72, (uint16_t)src);
+  *hm_dp(ram, r, 0x74) = (uint8_t)(src >> 16);
+  r->a = 0x0080;                                           /* VMAIN */
+  jsl(ram, r, at_add, 0x80, hm_AddProgrammedDMA);
+  jsl(ram, r, at_start, 0x80, hm_StartLastPreparedDMA);
+}
+
+void hm_LoadDialogueBox(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0x72, 0xCB05);
+  hm_dp_w16(ram, r, 0x75, 0x2000);
+  *hm_dp(ram, r, 0x74) = 0xA5;
+  *hm_dp(ram, r, 0x77) = 0x7E;
+  r->a = 0x207E;                                           /* LDA #$2000; ...; LDA #$7E */
+  jsl(ram, r, 0x92D3, 0x83, hm_DecompressTileMap);
+  vram_copy(ram, r, 0x7E2000, 0x7800, 0x0400, 0x92F9, 0x92FD);
+  vram_copy(ram, r, 0x9CBBA3, 0x5000, 0x1000, 0x9324, 0x9328);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_82E5E7 ($82:E5E7, JSR, RTS; the title and name screens): draws a
+ * 3 x 2 block of tiles. A = which block: its VRAM address from the table at
+ * $82:E73E ($80); Y = 0 or not ($84): the second set of tiles. For each of
+ * the two rows ($82 = 0, 1; the row's address + $400 each time) three DMAs
+ * of $24 bytes from $82:E666 + $7E ($7E = 0 or $6C, + $24 each) to VRAM
+ * address, + $20 each.
+ * Leftovers: A = 2, C = 1 (CMP #2), X = the last address + $60, Y = $24;
+ * $7E, $80, $82, $84 as they ended.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_SUB_82E5E7(uint8_t *ram, HmRegs *r)
+{
+  r->x = (uint16_t)(r->a << 1);
+  hm_dp_w16(ram, r, 0x80, hm_bus_rd16(ram, 0x82E73Eu + r->x));
+  hm_dp_w16(ram, r, 0x82, 0);
+  hm_dp_w16(ram, r, 0x84, r->y);
+  for (;;) {
+    r->x = hm_dp_r16(ram, r, 0x80);
+    r->y = 0x0024;
+    hm_dp_w16(ram, r, 0x7E, hm_dp_r16(ram, r, 0x84) ? 0x006C : 0);
+    for (uint16_t i = 0; i < 3; i++) {
+      push16(ram, r, i);                                   /* PHA */
+      *hm_dp(ram, r, DMA_CHANNEL) = 0;
+      *hm_dp(ram, r, 0x29) = BBAD_VRAM;
+      uint16_t src = (uint16_t)(0xE666 + hm_dp_r16(ram, r, 0x7E));
+      hm_dp_w16(ram, r, 0x72, src);
+      *hm_dp(ram, r, 0x74) = 0x82;
+      r->a = (uint16_t)((src & 0xFF00) | 0x80);            /* 8-bit LDA #$80: VMAIN */
+      uint16_t x = r->x, y = r->y;
+      push16(ram, r, y);                                   /* PHY; PHX */
+      push16(ram, r, x);
+      jsl(ram, r, 0xE630, 0x80, hm_AddProgrammedDMA);
+      jsl(ram, r, 0xE634, 0x80, hm_StartLastPreparedDMA);
+      x = pull16(ram, r);                                  /* PLX; PLY */
+      y = pull16(ram, r);
+      r->y = y;
+      r->x = (uint16_t)(x + 0x20);
+      hm_dp_w16(ram, r, 0x7E, (uint16_t)(hm_dp_r16(ram, r, 0x7E) + 0x24));
+      r->a = (uint16_t)(pull16(ram, r) + 1);               /* PLA; INC */
+      r->c = r->a >= 3;
+    }
+    hm_dp_w16(ram, r, 0x80, (uint16_t)(hm_dp_r16(ram, r, 0x80) + 0x400));
+    r->a = (uint16_t)(hm_dp_r16(ram, r, 0x82) + 1);
+    hm_dp_w16(ram, r, 0x82, r->a);
+    r->c = r->a >= 2;
+    if (r->a == 2) break;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_82EA80 ($82:EA80, JSL, RTL; the name screen): four letters $A8 drawn
+ * (DrawLetter, X = 1) at the positions $82:EB4D, + $10 each ($0185 = the
+ * position), each sent at once (StartProgramedDMA).
+ * Leftovers: X = 4, C = 1 (CPX #4), A = $82 = the last position + $10, Y
+ * that of the calls.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_SUB_82EA80(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0x82, hm_bus_rd16(ram, 0x82EB4D));
+  for (uint16_t i = 0; i < 4; i++) {
+    push16(ram, r, i);                                     /* PHX */
+    hm_bus_wr16(ram, 0x800185, hm_dp_r16(ram, r, 0x82));
+    r->a = 0x00A8;
+    r->x = 0x0001;
+    jsl(ram, r, 0xEA9A, 0x83, hm_DrawLetter);
+    jsl(ram, r, 0xEA9E, 0x80, hm_StartProgramedDMA);
+    r->a = (uint16_t)(hm_dp_r16(ram, r, 0x82) + 0x10);
+    hm_dp_w16(ram, r, 0x82, r->a);
+    r->x = (uint16_t)(pull16(ram, r) + 1);                 /* PLX; INX */
+  }
+  r->c = 1;
+}

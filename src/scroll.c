@@ -447,3 +447,30 @@ void hm_SUB_809F61(uint8_t *ram, HmRegs *r)
   }
   drift(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * AutoMapScrolling ($80:95B3, JSL, RTL): while $0880 counts down, the map
+ * scrolls by itself: $F5 += $087C and $F7 += $087E, copied to BG1's scroll
+ * ($013C / $013E); a negative Y scroll becomes 0 (but $F7 keeps it).
+ * Leftovers: A = the new $F7 (or the 8-bit 0 of the counter), C from the
+ * last ADC.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_AutoMapScrolling(uint8_t *ram, HmRegs *r)
+{
+  uint32_t timer = (uint32_t)r->db << 16 | 0x0880;
+  uint8_t t = hm_bus_rd8(ram, timer);
+  r->a = (uint16_t)((r->a & 0xFF00) | t);
+  if (!t) return;
+  t--;
+  r->a = (uint16_t)((r->a & 0xFF00) | t);
+  hm_bus_wr8(ram, timer, t);
+  static const uint16_t pos[] = { 0xF5, 0xF7 }, speed[] = { 0x087C, 0x087E }, bg[] = { 0x013C, 0x013E };
+  for (int i = 0; i < 2; i++) {
+    uint32_t sum = (uint32_t)hm_dp_r16(ram, r, pos[i]) + hm_bus_rd16(ram, (uint32_t)r->db << 16 | speed[i]);
+    r->c = sum > 0xFFFF;
+    r->a = (uint16_t)sum;
+    hm_dp_w16(ram, r, pos[i], r->a);
+    hm_bus_wr16(ram, (uint32_t)r->db << 16 | bg[i], r->a);
+  }
+  if (r->a & 0x8000) hm_bus_wr16(ram, (uint32_t)r->db << 16 | 0x013E, 0);
+}

@@ -348,6 +348,83 @@ static void prep_clear(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 2) r->db = 0x80;
 }
 
+/* video.c: one prepared channel ($27) */
+static void prep_last_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_prog_dma(ram, r, rnd);
+  ram[0x27] = (uint8_t)(rnd() % 8);
+}
+/* video.c: LoadsFromVRAMwithOffset: X = the VRAM address, Y = the size,
+ * $7E = the offset in $7E:2000 */
+static void prep_vram_load(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_prog_dma(ram, r, rnd);
+  r->x = (uint16_t)rnd();
+  r->y = (uint16_t)(1 + rnd() % 0x800);
+  hm_wr16(ram, 0x7E, (uint16_t)(rnd() % 0x8000));
+}
+/* video.c: the sprite pieces' copy list at $7E:A420 (ending with $FFFF) */
+static void prep_piece_copies(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_prog_dma(ram, r, rnd);
+  unsigned n = rnd() % 32;
+  static const uint8_t banks[] = { 0x88, 0x89, 0x8A, 0x8B, 0x7E, 0x7F };
+  for (unsigned i = 0; i < n; i++) {
+    uint8_t bank = banks[rnd() % 6];
+    uint16_t src = (uint16_t)rnd();
+    if (bank >= 0x80) src |= 0x8000; else if (src < 0x2000) src = (uint16_t)(src + 0x2000);
+    hm_wr16(ram, 0x0A420 + 6 * i, (uint16_t)((rnd() % 16 == 0) ? 0xFFFE : src));
+    hm_wr16(ram, 0x0A422 + 6 * i, bank);
+    hm_wr16(ram, 0x0A424 + 6 * i, (uint16_t)rnd());
+  }
+  hm_wr16(ram, 0x0A420 + 6 * n, 0xFFFF);
+}
+static void prep_joypad(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+/* video.c: UpdateGraphics: all of the above, $00 (done or not), $9A */
+static void prep_update_graphics(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_piece_copies(ram, r, rnd);
+  prep_joypad(ram, r, rnd);
+  ram[0x00] = (uint8_t)((rnd() % 2) ? 0 : rnd());
+  ram[0x9A] = (uint8_t)((rnd() % 2) ? 0x10 : 0);
+  /* channel 4 as the game has it: the sprite table ($7E:A000, $220 bytes
+   * to OAMDATA), not also among the prepared ones (started twice, its
+   * second copy would be $10000 bytes long, through the sound ports) */
+  ram[0x28] &= (uint8_t)~0x10;
+  static const uint8_t oam_dma[] = { 0x00, 0x04, 0x00, 0xA0, 0x7E, 0x20, 0x02 };
+  for (unsigned i = 0; i < sizeof oam_dma; i++) dma_write(g_dma, (uint16_t)(0x4340 + i), oam_dma[i]);
+  for (unsigned i = 0; i < 3; i++) ram[HM_RNG_STATE + i] = (uint8_t)rnd();
+  for (unsigned i = 0; i < 12; i++) ram[0x013C + i] = (uint8_t)rnd();
+  ram[0x9B] = (uint8_t)rnd();
+  /* Y's high byte: the interpreter (the fuzzer's original) clears it on
+   * the way through 8-bit indexes, the compiled game keeps it; with 0 both
+   * agree */
+  r->y &= 0x00FF;
+}
+
+/* video.c: fixed copies (only the data bank and a quiet beam) */
+static void prep_vram_fixed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)ram;
+  hm_io_quiet();
+  r->db = (rnd() % 2) ? 0x80 : 0x00;
+}
+/* video.c: SUB_82E5E7: A = the block, Y = the second set or not */
+static void prep_title_block(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_vram_fixed(ram, r, rnd);
+  r->a = (uint16_t)(rnd() % 4);
+  r->y = (uint16_t)((rnd() % 2) ? 0 : 1 + rnd() % 0xFF);
+}
+static void prep_letter(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+/* video.c: SUB_82EA80: the letter's state (DrawLetter) and a quiet beam */
+static void prep_name_letters(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_letter(ram, r, rnd);
+  hm_io_quiet();
+  ram[0x28] = 0;
+}
+
 static void prep_animals(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_random_farm_and_weather(ram, r, rnd);      /* grass to graze, $0196 */
@@ -3966,6 +4043,23 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/video.c", 0x808980, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
   { "ZeroesPartialVRAM", hm_ZeroesPartialVRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
     "src/video.c", 0x8089BC, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
+  { "StartLastPreparedDMA", hm_StartLastPreparedDMA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
+    "src/video.c", 0x808AB2, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_last_dma },
+  { "LoadsFromVRAMwithOffset", hm_LoadsFromVRAMwithOffset, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR,
+    "src/video.c", 0x80AA38, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_vram_load },
+  { "CopiesWRAMtoOBJVGRAM", hm_CopiesWRAMtoOBJVGRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/video.c", 0x858E57, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_piece_copies },
+  { "UpdateGraphics", hm_UpdateGraphics, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP | HM_JSR,
+    "src/video.c", 0x8086B1, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_update_graphics },
+  { "AutoMapScrolling", hm_AutoMapScrolling, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP, "src/scroll.c",
+    0x8095B3, 1, 0, 0, 0xFFFF,
+    { B8(0x0880, 0, 3), W16(0x087C, 0, 0xFFFF), W16(0x087E, 0, 0xFFFF), W16(0xF5, 0, 0xFFFF), W16(0xF7, 0, 0xFFFF) } },
+  { "LoadDialogueBox", hm_LoadDialogueBox, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
+    "src/video.c", 0x8392BB, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_vram_fixed },
+  { "SUB_82E5E7", hm_SUB_82E5E7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP | HM_JSR,
+    "src/video.c", 0x82E5E7, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_title_block },
+  { "SUB_82EA80", hm_SUB_82EA80, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/video.c", 0x82EA80, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_name_letters },
   { "COP_Return", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/interact.c", 0x80872A, 0, 0, 0, 0xFFFF, { { 0 } }, 50, NULL },
   { "ScreenTransitionReturn", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,

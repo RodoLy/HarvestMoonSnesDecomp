@@ -1717,6 +1717,28 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   palabra fija de 0 de la ROM ($80:8424). Los tamaños son generosos: el
   doble de la OAM, y la CGRAM un byte menos que el doble. `UNUSED1`, que
   nadie llama, sacaría todos los sprites de la pantalla.
+- **Un DMA preparado de inmediato** (`StartLastPreparedDMA`): lo mismo
+  solo para el canal de `$27`, lanzado en el acto; `$28` se borra y se
+  olvida cualquier otro canal en espera. `LoadsFromVRAMwithOffset` la usa
+  para copiar Y bytes de `$7E:2000` + `$7E` a la dirección de VRAM X (pese
+  a su nombre escribe en la VRAM).
+- **Las piezas de sprite** (`CopiesWRAMtoOBJVGRAM`): la lista que deja el
+  cargador en `$7E:A420` (5.12) va a la VRAM, cada pieza con dos DMA de
+  $40 bytes: la mitad de arriba, y la de abajo desde origen + $200 a
+  dirección + $100.
+- **Cada NMI** (`UpdateGraphics`): salvo que el trabajo del cuadro ya esté
+  hecho (`$00`), los DMA preparados, la tabla de sprites (canal 4, si lo
+  dice `$9A`) y las piezas de sprite; después siempre los mandos, un
+  número al azar, el desplazamiento de BG1-BG3 desde `$013C-$0147`, y
+  `$00` = 1.
+- **El desplazamiento automático** (`AutoMapScrolling`): mientras `$0880`
+  cuenta hacia atrás, el mapa se mueve `$087C` / `$087E` en cada cuadro.
+- **Cargas fijas.** `LoadDialogueBox`: el mapa de la caja de texto
+  ($A5:CB05, descomprimido en `$7E:2000`) a la VRAM $7800 y los gráficos de
+  las letras ($9C:BBA3) a la VRAM $5000. `SUB_82E5E7` (pantallas de título
+  y de nombre) dibuja un bloque de 3 x 2 casillas desde $82:E666 en la
+  dirección de una tabla ($82:E73E); `SUB_82EA80` dibuja cuatro letras $A8
+  en la pantalla del nombre.
 
 ---
 
@@ -1822,6 +1844,11 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     cuadro (su lista de copias tiene sitio para 31). Como en el 23, son
     callejones sin salida de los que el propio juego se mantiene lejos: el
     presupuesto deja pasar menos piezas por cuadro.
+29. **El HDMA apagado en cada cuadro.** En el NMI, después de las piezas de
+    sprite (`CopiesWRAMtoOBJVGRAM` vuelve con A de 16 bits), `UpdateGraphics`
+    borra `$9A` y `$420B` con escrituras de 16 bits: borran también `$9B` y
+    `$420C`, HDMAEN, así que cada cuadro con trabajo termina con el HDMA
+    apagado.
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -1945,3 +1972,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 28-oct-2026 | 83,43 % | el jugador cada cuadro: caminar, correr, saltar, las animaciones, rodear esquinas |
 | 28-oct-2026 | 85,06 % | las puertas y la montaña, el cargador de piezas de sprite, la subida del programa de sonido al encender |
 | 28-oct-2026 | 85,91 % | el chip de imagen: DMA preparados, negro y brillo, modos gráficos, borrar la memoria de video |
+| 28-oct-2026 | 86,59 % | el chip de imagen en el NMI: las piezas de sprite, un DMA de inmediato, la actualización del cuadro; el desplazamiento automático; los gráficos de la caja de texto |

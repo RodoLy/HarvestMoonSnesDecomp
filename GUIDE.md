@@ -1666,6 +1666,26 @@ not on days with `$0196` bits 1, 3, 4):
   ($80:8424) with one DMA. Their sizes are generous: twice the OAM, and
   the CGRAM one byte short of twice its size. `UNUSED1`, which nothing
   calls, would put every sprite off screen.
+- **One prepared DMA at once** (`StartLastPreparedDMA`): the same for the
+  channel in `$27` only, started right away; `$28` is cleared, forgetting
+  any other waiting channel. `LoadsFromVRAMwithOffset` uses it to copy Y
+  bytes from `$7E:2000` + `$7E` to the VRAM address X (despite its name it
+  writes VRAM).
+- **The sprite pieces** (`CopiesWRAMtoOBJVGRAM`): the list the loader
+  leaves at `$7E:A420` (5.12) goes to VRAM, each piece as two DMAs of $40
+  bytes: the top half, and the bottom half from source + $200 to address +
+  $100.
+- **Each NMI** (`UpdateGraphics`): unless the frame's work is done (`$00`),
+  the prepared DMAs, the sprite table (channel 4, when `$9A` says so) and
+  the sprite pieces; then always the pads, one random number, BG1-BG3's
+  scroll from `$013C-$0147`, and `$00` = 1.
+- **The automatic scroll** (`AutoMapScrolling`): while `$0880` counts down,
+  the map moves by `$087C` / `$087E` each frame.
+- **Fixed loads.** `LoadDialogueBox`: the text box's tilemap ($A5:CB05,
+  decompressed to `$7E:2000`) to VRAM $7800 and the letters' graphics
+  ($9C:BBA3) to VRAM $5000. `SUB_82E5E7` (title and name screens) draws a
+  3 x 2 block of tiles from $82:E666 at the address of a table ($82:E73E);
+  `SUB_82EA80` draws four letters $A8 on the name screen.
 
 ---
 
@@ -1766,6 +1786,10 @@ Things the game does wrong or oddly, found while decompiling:
     $2000 or more, and on the 32nd piece of a frame (its copy list has room
     for 31). Like 23, they are dead ends the game's own limits keep away
     from: the budget lets fewer pieces through per frame.
+29. **HDMA switched off every frame.** In the NMI, after the sprite pieces
+    (`CopiesWRAMtoOBJVGRAM` returns with a 16-bit A), `UpdateGraphics`
+    clears `$9A` and `$420B` with 16-bit stores: they also clear `$9B` and
+    `$420C`, HDMAEN, so every frame with work to do ends with HDMA off.
 
 ## 7. Differences found in the recompilation
 
@@ -1887,3 +1911,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 28-Oct-2026 | 83.43 % | the player each frame: walking, running, jumping, the animations, moving round corners |
 | 28-Oct-2026 | 85.06 % | the doors and the mountain, the sprite pieces' loader, the sound program's upload at power-on |
 | 28-Oct-2026 | 85.91 % | the picture chip: prepared DMAs, blanking and brightness, graphic presets, clearing video memory |
+| 28-Oct-2026 | 86.59 % | the picture chip in the NMI: the sprite pieces, one DMA at once, the frame's update; the automatic scroll; the text box's graphics |

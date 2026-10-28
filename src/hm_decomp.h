@@ -409,6 +409,14 @@ void hm_ZeroesOAM(uint8_t *ram, HmRegs *r);
 void hm_UNUSED1(uint8_t *ram, HmRegs *r);
 void hm_ZeroesCGRAM(uint8_t *ram, HmRegs *r);
 void hm_ZeroesPartialVRAM(uint8_t *ram, HmRegs *r);
+void hm_StartLastPreparedDMA(uint8_t *ram, HmRegs *r);
+void hm_LoadsFromVRAMwithOffset(uint8_t *ram, HmRegs *r);
+void hm_CopiesWRAMtoOBJVGRAM(uint8_t *ram, HmRegs *r);
+void hm_UpdateGraphics(uint8_t *ram, HmRegs *r);
+void hm_AutoMapScrolling(uint8_t *ram, HmRegs *r);
+void hm_LoadDialogueBox(uint8_t *ram, HmRegs *r);
+void hm_SUB_82E5E7(uint8_t *ram, HmRegs *r);
+void hm_SUB_82EA80(uint8_t *ram, HmRegs *r);
 void hm_CODE_81CB77(uint8_t *ram, HmRegs *r);
 void hm_CODE_81D716(uint8_t *ram, HmRegs *r);   /* actions.c */
 void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r);
