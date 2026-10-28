@@ -411,6 +411,7 @@ void hm_ZeroesCGRAM(uint8_t *ram, HmRegs *r);
 void hm_ZeroesPartialVRAM(uint8_t *ram, HmRegs *r);
 void hm_StartLastPreparedDMA(uint8_t *ram, HmRegs *r);
 void hm_LoadsFromVRAMwithOffset(uint8_t *ram, HmRegs *r);
+void hm_BackgroundsManager(uint8_t *ram, HmRegs *r);
 void hm_CopiesWRAMtoOBJVGRAM(uint8_t *ram, HmRegs *r);
 void hm_UpdateGraphics(uint8_t *ram, HmRegs *r);
 void hm_AutoMapScrolling(uint8_t *ram, HmRegs *r);

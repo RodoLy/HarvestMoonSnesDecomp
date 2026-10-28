@@ -725,3 +725,273 @@ void hm_CODE_82E405(uint8_t *ram, HmRegs *r)
     letter_now(ram, r, rd16_db(ram, r, (uint16_t)(0x08B3 + 2 * i)), (uint16_t)(0xE552 + 0x1C * i));
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * BackgroundsManager ($80:A7C6, JSL, RTL): loads the picture of map $22.
+ * Maps_Graphics_Table ($80:AA7C) points, through the data bank, at the
+ * map's record ($18 = the pointer); it reads, in order:
+ *   - maps below $57 (the rest are the title and splash screens):
+ *       the graphics preset (to $0195, then ManageGraphicPresets),
+ *       a word ORed into the flags $0196 (bit 5 dropped again if bit 0 of
+ *       $7F1F5C is set);
+ *   - $0181 (the size of the layers, an index for the tables below) and
+ *     $0182 (3 or more sets bit 0 of $0196);
+ *   - $92 = how many tilemaps, $93 = how many layer pictures;
+ *   - maps below $57: the edges the sprites are kept inside ($ED, $F1,
+ *     $EF, $F3);
+ *   - for each tilemap: the VRAM address and the long address of the
+ *     packed data; it is unpacked (DecompressTileMap) to $7E:2000 and
+ *     copied whole ($2000 bytes) to VRAM on channel 0;
+ *   - for each layer picture: its VRAM address ($8A) and long address. It
+ *     is unpacked to $7E:2000 (or, if bit 15 of $0196 is set, copied as it
+ *     is, $8000 bytes); the farms (maps 0-3) get their fields and houses
+ *     drawn on it (UNK_PartialMap); a map with one picture also gets its
+ *     extras (UNK_ExecuteFromPointers) unless bit 1 of $7F1F5E is set.
+ *     Then, with the position, the scroll and the subpixels cleared, it
+ *     goes to VRAM as 2 x 32 x 2 rows of $40 bytes (LoadsFromVRAMwithOffset);
+ *     $1A / $1C come from the tables $80:AA68 / $80:AA72 (by $0181), and
+ *     $80 = $1A - $40 is the step between the row pairs. For the maps below
+ *     $5B whose picture goes to $7000 the second row of each pair, and the
+ *     gap between the halves, are skipped.
+ * Last, for maps below $57, the camera is walked to where it should be
+ * ($017D, $017F) 8 pixels at a time (by the word at $1E, its low byte just
+ * set to 8), each step drawing the new column (UNK_StaticMapScroling) or
+ * row (UpdateBGOffset) and sending it (StartProgramedDMA).
+ * Leftovers: C = 1; A, X and Y those of the last step.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define MAPS_GRAPHICS_TABLE 0x80AA7C
+#define LAYER_SIZES         0x80AA68
+#define LAYER_SIZES_2       0x80AA72
+
+static uint32_t record_at(uint8_t *ram, const HmRegs *r)    /* ($18),Y */
+{
+  return ((uint32_t)r->db << 16) + hm_dp_r16(ram, r, 0x18) + r->y;
+}
+static uint8_t rec8(uint8_t *ram, HmRegs *r) { return hm_bus_rd8(ram, record_at(ram, r) & 0xFFFFFF); }
+static uint16_t rec16(uint8_t *ram, HmRegs *r) { return hm_bus_rd16(ram, record_at(ram, r) & 0xFFFFFF); }
+
+/* $72-$74 = the long address in the record, $75-$77 = $7E:2000; A = $207E */
+static void packed_source(uint8_t *ram, HmRegs *r)
+{
+  hm_dp_w16(ram, r, 0x72, rec16(ram, r));
+  r->y = (uint16_t)(r->y + 2);
+  *hm_dp(ram, r, 0x74) = rec8(ram, r);
+  r->y++;
+  push16(ram, r, r->y);                                    /* PHY */
+  hm_dp_w16(ram, r, 0x75, 0x2000);
+  *hm_dp(ram, r, 0x77) = 0x7E;
+  r->a = 0x207E;
+}
+
+/* the camera walk: + the word at $1E until $at equals the target */
+static void walk_camera(uint8_t *ram, HmRegs *r, uint8_t at, uint16_t target, uint16_t call,
+                        void (*draw)(uint8_t *, HmRegs *))
+{
+  for (;;) {
+    uint16_t now = hm_dp_r16(ram, r, at), to = rd16_db(ram, r, target);
+    r->a = now;
+    r->c = now >= to;                                      /* CMP */
+    if (now == to) return;
+    uint32_t sum = (uint32_t)now + hm_dp_r16(ram, r, 0x1E);
+    r->c = sum > 0xFFFF;
+    r->a = (uint16_t)sum;
+    hm_dp_w16(ram, r, at, r->a);
+    jsl(ram, r, call, 0x80, hm_SUB_809EBC);
+    jsl(ram, r, (uint16_t)(call + 4), 0x80, draw);
+    jsl(ram, r, (uint16_t)(call + 8), 0x80, hm_StartProgramedDMA);
+  }
+}
+
+void hm_BackgroundsManager(uint8_t *ram, HmRegs *r)
+{
+  uint8_t map = *hm_dp(ram, r, 0x22);
+  r->x = (uint16_t)(map << 1);                             /* ASL; TAX */
+  r->c = 0;
+  r->a = hm_bus_rd16(ram, MAPS_GRAPHICS_TABLE + r->x);
+  hm_dp_w16(ram, r, 0x18, r->a);
+  r->y = 0;
+  set_a8(r, map);
+  r->c = map >= 0x57;                                      /* CMP #$57 */
+  if (map < 0x57) {
+    set_a8(r, rec8(ram, r));
+    wr8(ram, r, 0x0195, (uint8_t)r->a);                    /* the graphics preset */
+    jsl(ram, r, 0xA7E9, 0x80, hm_ManageGraphicPresets);
+    r->y++;
+    r->a = (uint16_t)(rec16(ram, r) | rd16_db(ram, r, 0x0196));
+    wr16(ram, r, 0x0196, r->a);
+    r->a = hm_bus_rd16(ram, 0x7F1F5C) & 0x0001;
+    if (r->a) {
+      r->a = rd16_db(ram, r, 0x0196) & 0xFFDF;
+      wr16(ram, r, 0x0196, r->a);
+    }
+    r->y = (uint16_t)(r->y + 2);
+  }
+  set_a8(r, rec8(ram, r));
+  wr8(ram, r, 0x0181, (uint8_t)r->a);                      /* the layer size */
+  r->y++;
+  set_a8(r, rec8(ram, r));
+  wr8(ram, r, 0x0182, (uint8_t)r->a);
+  r->c = (uint8_t)r->a >= 3;
+  if (r->c) {
+    r->a = rd16_db(ram, r, 0x0196) | 0x0001;
+    wr16(ram, r, 0x0196, r->a);
+  }
+  r->y++;
+  set_a8(r, rec8(ram, r));
+  *hm_dp(ram, r, 0x92) = (uint8_t)r->a;                    /* tilemaps */
+  r->y++;
+  set_a8(r, rec8(ram, r));
+  *hm_dp(ram, r, 0x93) = (uint8_t)r->a;                    /* layer pictures */
+  r->y++;
+  set_a8(r, map);
+  r->c = map >= 0x57;
+  if (map < 0x57) {                                        /* the sprite edges */
+    static const uint8_t edges[4] = { 0xED, 0xF1, 0xEF, 0xF3 };
+    for (int i = 0; i < 4; i++) {
+      r->a = rec16(ram, r);
+      hm_dp_w16(ram, r, edges[i], r->a);
+      r->y = (uint16_t)(r->y + 2);
+    }
+  }
+
+  set_a8(r, *hm_dp(ram, r, 0x92));
+  if (*hm_dp(ram, r, 0x92)) {
+    do {                                                   /* the tilemaps */
+      push16(ram, r, rec16(ram, r));                       /* the VRAM address */
+      r->y = (uint16_t)(r->y + 2);
+      packed_source(ram, r);
+      jsl(ram, r, 0xA883, 0x83, hm_DecompressTileMap);
+      set_a8(r, 0x00);
+      *hm_dp(ram, r, DMA_CHANNEL) = 0;
+      set_a8(r, BBAD_VRAM);
+      *hm_dp(ram, r, 0x29) = BBAD_VRAM;
+      r->y = pull16(ram, r);                               /* PLY; PLA; PHY */
+      r->a = pull16(ram, r);
+      push16(ram, r, r->y);
+      r->x = r->a;
+      r->y = 0x2000;
+      hm_dp_w16(ram, r, 0x72, 0x2000);
+      *hm_dp(ram, r, 0x74) = 0x7E;
+      r->a = 0x0080;
+      jsl(ram, r, 0xA8AA, 0x80, hm_AddProgrammedDMA);
+      jsl(ram, r, 0xA8AE, 0x80, hm_StartLastPreparedDMA);
+      r->y = pull16(ram, r);
+      uint8_t left = (uint8_t)(*hm_dp(ram, r, 0x92) - 1);
+      set_a8(r, left);
+      *hm_dp(ram, r, 0x92) = left;
+    } while (*hm_dp(ram, r, 0x92));
+  }
+
+  for (;;) {                                               /* the layer pictures */
+    r->a = rec16(ram, r);
+    hm_dp_w16(ram, r, 0x8A, r->a);                         /* its VRAM address */
+    r->y = (uint16_t)(r->y + 2);
+    packed_source(ram, r);
+    r->a = rd16_db(ram, r, 0x0196) & 0x8000;
+    if (!r->a) {
+      jsl(ram, r, 0xA8EB, 0x83, hm_DecompressTileMap);
+    } else {                                               /* stored as it is */
+      uint32_t from = hm_dp_r16(ram, r, 0x72) | (uint32_t)*hm_dp(ram, r, 0x74) << 16;
+      uint32_t to = hm_dp_r16(ram, r, 0x75) | (uint32_t)*hm_dp(ram, r, 0x77) << 16;
+      for (r->y = 0; r->y != 0x8000; r->y = (uint16_t)(r->y + 2)) {
+        r->a = hm_bus_rd16(ram, (from + r->y) & 0xFFFFFF);
+        hm_bus_wr16(ram, (to + r->y) & 0xFFFFFF, r->a);
+      }
+      r->c = 1;
+    }
+    set_a8(r, map);
+    r->c = map >= 0x04;
+    if (map < 0x04) jsl(ram, r, 0xA909, 0x82, hm_UNK_PartialMap);  /* a farm */
+    set_a8(r, *hm_dp(ram, r, 0x93));
+    r->c = *hm_dp(ram, r, 0x93) >= 1;
+    if (*hm_dp(ram, r, 0x93) == 1) {
+      r->a = hm_bus_rd16(ram, 0x7F1F5E) & 0x0002;
+      if (!r->a) jsl(ram, r, 0xA920, 0x81, hm_UNK_ExecuteFromPointers);
+    }
+    hm_dp_w16(ram, r, 0xF5, 0);
+    hm_dp_w16(ram, r, 0xF7, 0);
+    hm_dp_w16(ram, r, 0x10, 0x0410);
+    hm_dp_w16(ram, r, 0x14, 0x0A00);
+    hm_dp_w16(ram, r, 0x12, 0);
+    hm_dp_w16(ram, r, 0x16, 0);
+    *hm_dp(ram, r, 0x20) = 0;
+    *hm_dp(ram, r, 0x21) = 0;
+    hm_dp_w16(ram, r, 0xD6, 0);
+    hm_dp_w16(ram, r, 0xD8, 0);
+    r->x = (uint16_t)(hm_bus_rd8(ram, db(r, 0x0181)) << 1);
+    r->a = hm_bus_rd16(ram, LAYER_SIZES + r->x);
+    hm_dp_w16(ram, r, 0x1A, r->a);
+    r->c = r->a >= 0x0040;                                 /* SEC; SBC */
+    r->a = (uint16_t)(r->a - 0x0040);
+    hm_dp_w16(ram, r, 0x80, r->a);
+    r->a = hm_bus_rd16(ram, LAYER_SIZES_2 + r->x);
+    hm_dp_w16(ram, r, 0x1C, r->a);
+    hm_dp_w16(ram, r, 0x7E, 0);
+    r->x = hm_dp_r16(ram, r, 0x8A);
+    r->y = 0x0040;
+    /* skip the second row of each pair (and the gap) */
+    bool short_rows = map < 0x5B;
+    for (uint16_t half = 0; half < 2; half++) {
+      r->a = half;
+      push16(ram, r, half);
+      for (uint16_t row = 0; row < 0x20; row++) {
+        r->a = row;
+        push16(ram, r, row);
+        jsr(ram, r, 0xA97A, hm_LoadsFromVRAMwithOffset);
+        uint32_t s = (uint32_t)hm_dp_r16(ram, r, 0x7E) + 0x40;
+        hm_dp_w16(ram, r, 0x7E, (uint16_t)s);
+        s = (uint32_t)r->x + 0x400;
+        r->a = r->x = (uint16_t)s;
+        r->c = s > 0xFFFF;
+        set_a8(r, map);
+        r->c = map >= 0x5B;
+        bool skip = false;
+        if (short_rows) {
+          r->y = hm_dp_r16(ram, r, 0x8A);
+          r->c = r->y >= 0x7000;
+          skip = r->y == 0x7000;
+        }
+        if (!skip) {
+          r->y = 0x0040;
+          jsr(ram, r, 0xA99F, hm_LoadsFromVRAMwithOffset);
+        }
+        s = (uint32_t)hm_dp_r16(ram, r, 0x7E) + hm_dp_r16(ram, r, 0x80);
+        hm_dp_w16(ram, r, 0x7E, (uint16_t)s);
+        r->c = r->x >= 0x03E0;
+        r->a = r->x = (uint16_t)(r->x - 0x03E0);
+        r->y = 0x0040;
+        r->a = (uint16_t)(pull16(ram, r) + 1);
+        r->c = r->a >= 0x0020;
+      }
+      set_a8(r, map);
+      r->c = map >= 0x5B;
+      bool skip = false;
+      if (short_rows) {
+        r->y = hm_dp_r16(ram, r, 0x8A);
+        r->c = r->y >= 0x7000;
+        skip = r->y == 0x7000;
+      }
+      if (!skip) {
+        uint32_t s = (uint32_t)r->x + 0x400;
+        r->a = r->x = (uint16_t)s;
+        r->c = s > 0xFFFF;
+      }
+      r->y = 0x0040;
+      r->a = (uint16_t)(pull16(ram, r) + 1);
+      r->c = r->a >= 0x0002;
+    }
+    r->y = pull16(ram, r);                                 /* PLY */
+    uint8_t left = (uint8_t)(*hm_dp(ram, r, 0x93) - 1);
+    set_a8(r, left);
+    *hm_dp(ram, r, 0x93) = left;
+    if (!left) break;
+  }
+
+  set_a8(r, map);
+  r->c = map >= 0x57;
+  if (map >= 0x57) return;
+  set_a8(r, 0x08);
+  *hm_dp(ram, r, 0x1E) = 0x08;
+  walk_camera(ram, r, 0xD6, 0x017D, 0xAA0B, hm_UNK_StaticMapScroling);
+  walk_camera(ram, r, 0xD8, 0x017F, 0xAA29, hm_UpdateBGOffset);
+}

@@ -448,6 +448,25 @@ static void prep_shelf(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 }
 
 static void prep_sram(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+/* video.c: BackgroundsManager: any map (the title screens too); the
+ * player's start a multiple of the step 8 (the word at $1E) or the walk
+ * there never ends; bit 15 of $0196 (the picture stored unpacked) only
+ * from the map's record: elsewhere the $8000 bytes copied as they are run
+ * from the ROM into the I/O area */
+static void prep_backgrounds(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  hm_io_quiet();
+  ram[0x28] = 0;
+  ram[0x22] = (uint8_t)(rnd() % 0x60);
+  r->db = (rnd() % 2) ? 0x80 : 0x00;
+  ram[0x1F] = 0;
+  hm_wr16(ram, 0x017D, (uint16_t)(8 * (rnd() % 0x50)));
+  hm_wr16(ram, 0x017F, (uint16_t)(8 * (rnd() % 0x50)));
+  hm_wr16(ram, 0x0196, (uint16_t)((rnd() % 2) ? rnd() & 0x7FFF : rnd() & 0x001F));
+  ram[0x11F5C] = (uint8_t)rnd();
+  ram[0x11F5E] = (uint8_t)rnd();
+  r->a = (uint16_t)rnd(); r->x = (uint16_t)rnd(); r->y = (uint16_t)rnd();
+}
 /* video.c: CODE_82E405: the saved games (some empty), the text state, a
  * line 0-2 */
 static void prep_file_line(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -4149,6 +4168,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/video.c", 0x82EAB4, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_vram_fixed },
   { "SUB_82E742", hm_SUB_82E742, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR | HM_INTERP,
     "src/video.c", 0x82E742, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_vram_fixed },
+  { "BackgroundsManager", hm_BackgroundsManager, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+    "src/video.c", 0x80A7C6, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_backgrounds },
   { "CODE_82E405", hm_CODE_82E405, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR | HM_INTERP,
     "src/video.c", 0x82E405, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_file_line },
   { "PrepareOAMData", hm_PrepareOAMData, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,

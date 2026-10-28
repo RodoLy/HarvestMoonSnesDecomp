@@ -1766,6 +1766,22 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   volteo, prioridad 2, el volteo del objeto, el modo gráfico `$0195` x 16);
   el bit alto de X a `$7E:A200`. Al final se prepara el canal 4 para
   copiar la tabla a la OAM, y `$9A` le pide al NMI que lo lance.
+- **El dibujo de un mapa** (`BackgroundsManager`, al entrar en un mapa y
+  para las pantallas de título): el registro del mapa
+  (`Maps_Graphics_Table`, $80:AA7C) da, para los mapas por debajo de $57,
+  el preset gráfico (`ManageGraphicPresets`) y banderas de `$0196`; luego
+  el tamaño de las capas (`$0181`), cuántos tilemaps y cuántos dibujos de
+  capa y (mapas por debajo de $57) los bordes de los que no salen la
+  cámara ni los sprites (`$ED`-`$F3`). Cada tilemap se descomprime en
+  `$7E:2000` y se copia entero a la VRAM; cada dibujo de capa también se
+  descomprime ahí (o, con el bit 15 de `$0196`, se copia tal cual: los
+  mapas grandes de exterior lo guardan sin comprimir, un banco entero de
+  la ROM), recibe los campos dibujados en las
+  granjas (`UNK_PartialMap`) y los añadidos del mapa
+  (`UNK_ExecuteFromPointers`) y va a la VRAM en filas de $40 bytes. Al
+  final el jugador se lleva de 8 en 8 píxeles desde 0 hasta su posición de
+  entrada (`$017D`, `$017F`), dibujando y enviando en cada paso la columna
+  o fila nueva: la pantalla se construye igual que al desplazarse.
 
 ---
 
@@ -2013,3 +2029,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 28-oct-2026 | 85,91 % | el chip de imagen: DMA preparados, negro y brillo, modos gráficos, borrar la memoria de video |
 | 28-oct-2026 | 86,59 % | el chip de imagen en el NMI: las piezas de sprite, un DMA de inmediato, la actualización del cuadro; el desplazamiento automático; los gráficos de la caja de texto |
 | 28-oct-2026 | 88,12 % | las pantallas de título y de partidas (barras de casillas, la línea de una partida), herramientas de vuelta al estante, la tabla de sprites |
+| 28-oct-2026 | 88,80 % | el dibujo de un mapa (BackgroundsManager: tilemaps, dibujos de capa y el paseo de la cámara); dos preparaciones del fuzz más realistas (el año de una partida, los pasos y la dirección de un slot que pasea) |

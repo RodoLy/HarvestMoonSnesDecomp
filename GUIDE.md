@@ -1710,6 +1710,20 @@ not on days with `$0196` bits 1, 3, 4):
   priority 2, the object's flip, the graphic preset `$0195` x 16); the X
   high bit to `$7E:A200`. Last, channel 4 is set up to copy the table to
   OAM, and `$9A` asks the NMI to start it.
+- **A map's picture** (`BackgroundsManager`, on entering a map and for
+  the title screens): the map's record (`Maps_Graphics_Table`, $80:AA7C)
+  gives, for maps below $57, the graphics preset (`ManageGraphicPresets`)
+  and flags for `$0196`; then the layer size (`$0181`), how many tilemaps
+  and how many layer pictures, and (maps below $57) the edges the camera
+  and sprites stay inside (`$ED`-`$F3`). Each tilemap is unpacked to
+  `$7E:2000` and copied whole to VRAM; each layer picture is unpacked
+  there too (or, with bit 15 of `$0196`, copied as it is: the big
+  outdoor maps keep theirs unpacked, a whole ROM bank), gets the fields drawn on it on the farms
+  (`UNK_PartialMap`) and the map's extras (`UNK_ExecuteFromPointers`), and
+  goes to VRAM in rows of $40 bytes. Last, the player is walked 8 pixels at
+  a time from 0 to the start position (`$017D`, `$017F`), each step
+  drawing and sending the new column or row: the screen is built the way
+  scrolling builds it.
 
 ---
 
@@ -1947,3 +1961,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 28-Oct-2026 | 85.91 % | the picture chip: prepared DMAs, blanking and brightness, graphic presets, clearing video memory |
 | 28-Oct-2026 | 86.59 % | the picture chip in the NMI: the sprite pieces, one DMA at once, the frame's update; the automatic scroll; the text box's graphics |
 | 28-Oct-2026 | 88.12 % | the title and file screens (bars of tiles, a saved game's line), tools back on the shelf, the sprite table |
+| 28-Oct-2026 | 88.80 % | a map's picture (BackgroundsManager: tilemaps, layer pictures and the camera walk); two fuzz preparations made realistic (a saved game's year, a wandering slot's steps and direction) |
