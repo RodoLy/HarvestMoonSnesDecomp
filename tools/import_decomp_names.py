@@ -139,6 +139,29 @@ MANUAL = {
     0x83F4D8: "CODE_83F4D8",  # the start of the ending
     0x818000: "SUB_818000",   # putting an item down
     0x8180B7: "SUB_8180B7",   # an item's sprite
+    # playerstate.c: the player's steps by action (DATA16_81C027), unlabelled
+    0x81BFDC: "PlayerState_00",
+    0x81C002: "ResetIdleAnimatioTimer",
+    0x81C0B5: "PlayerState_1A",
+    0x81C111: "PlayerState_17",
+    0x81C153: "PlayerState_18",
+    0x81C1A1: "PlayerState_16",
+    0x81C1F0: "PlayerState_15",
+    0x81C211: "PlayerState_14",
+    0x81C232: "PlayerState_0F",
+    0x81C242: "PlayerState_10",
+    0x81C263: "PlayerState_11",
+    0x81C28E: "PlayerState_12",
+    0x81C2AF: "PlayerState_13",
+    0x81C333: "PlayerState_1B",
+    0x81C364: "PlayerState_0D",
+    0x81C395: "PlayerState_0C",
+    0x81C4EC: "PlayerState_0B",
+    0x81C51A: "PlayerState_0A",
+    0x81C86B: "PlayerState_03",
+    0x81C991: "PlayerState_04",
+    0x81C9DF: "PlayerState_05",
+    0x81CA36: "PlayerState_08",
     # actions.c: the player's actions $10-$57 (PlayerActionPointerTable)
     0x81D7C5: "PlayerAction_10",
     0x81D979: "PlayerAction_11",

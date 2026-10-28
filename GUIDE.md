@@ -1531,6 +1531,36 @@ and reads part of them as data; `actions.c` names them `PlayerAction_XX`:
 
 Action $35 is not rewritten: it waits frames (`ToolUsedSound2`, `UNK_Audio24`).
 
+
+### 5.29 The player each frame
+
+`SUB_81BFB7` runs once a frame. Without `$D2` bit 0 it only ends the
+frame; with bit 6 an action runs (5.28); otherwise it jumps by the
+player's action (`$D4`, table `DATA16_81C027`) to its step, in
+`playerstate.c`. Most steps set the player's animation (`$0901`, often +
+his facing) and play it (`CODE_81CFE6`); when it ends (`$0915 = $FFFF`)
+the action changes. All of them end through `ResetIdleAnimatioTimer`:
+
+| Action | Step |
+|---|---|
+| 0 | standing (`CODE_81C556`): the standing animation for the state (carrying $14, in snow $B0, $C0, $4F, $D0, $EA); with `$D2` bit 14 an idle timer (`$0925`) starts an idle animation (action 9) at $F0 |
+| 1, 2, $0E | walking, running (only with `$D2` bit 12, or bit 14 without 13) and being pushed: 1, 2 or 3 pixels (deep snow) with a step sound every 16 frames |
+| 3 | a jump: sound effect 6, 1 or 2 pixels |
+| 4, 5 | picking up (`SUB_818000` puts the item down / in hand) and throwing (sound effect 7) |
+| 8 | eating; item 8 also gives +10 happiness and 10 more maximum stamina |
+| 9 | an idle animation |
+| $0A | using a tool: `SUB_829260` at the animation's end, its sound at frame $18 |
+| $0C | the watch: a text by the hour ($046A-$0478) |
+| $0B, $0D, $0F-$1B | other animations and what follows them (events, flags) |
+| $1C | swapping the tools (waits frames; not rewritten) |
+
+`CODE_81CB77` moves the player `$1E` pixels in his facing: the event
+objects (`CBBBB`) or a solid tile (`CEEEE`) stop him; when only one of
+the front corners is blocked he slides sideways round it (always on tile
+types 0 and $A0-$AF, otherwise by which half of the tile he is in); a
+door ($C0-$CF) stops him at once; then the camera follows and every 8
+moves a footprint is left (`CODE_81A58F`).
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1743,3 +1773,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 23-Oct-2026 | 66.97 % | putting down what is carried |
 | 27-Oct-2026 | 71.73 % | what each item does once put down: eating, throwing, shipping, buying |
 | 27-Oct-2026 | 79.88 % | the player's actions: TVs, bed, shops, dealers, carpenter, bar |
+| 28-Oct-2026 | 83.43 % | the player each frame: walking, running, jumping, the animations, moving round corners |

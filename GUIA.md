@@ -1574,6 +1574,37 @@ llama `PlayerAction_XX`:
 
 La acción $35 no está reescrita: espera cuadros (`ToolUsedSound2`, `UNK_Audio24`).
 
+
+### 5.29 El jugador cada cuadro
+
+`SUB_81BFB7` corre una vez por cuadro. Sin el bit 0 de `$D2` solo termina
+el cuadro; con el bit 6 corre una acción (5.28); si no, salta según la
+acción del jugador (`$D4`, tabla `DATA16_81C027`) a su paso, en
+`playerstate.c`. Casi todos ponen la animación del jugador (`$0901`, a
+menudo + su dirección) y la reproducen (`CODE_81CFE6`); cuando termina
+(`$0915 = $FFFF`) cambia la acción. Todos terminan por
+`ResetIdleAnimatioTimer`:
+
+| Acción | Paso |
+|---|---|
+| 0 | quieto (`CODE_81C556`): la animación de estar parado según el estado (cargando $14, en nieve $B0, $C0, $4F, $D0, $EA); con el bit 14 de `$D2` un contador de ocio (`$0925`) arranca una animación de espera (acción 9) al llegar a $F0 |
+| 1, 2, $0E | caminar, correr (solo con el bit 12 de `$D2`, o el 14 sin el 13) y ser empujado: 1, 2 o 3 píxeles (nieve honda) con un sonido de paso cada 16 cuadros |
+| 3 | un salto: efecto de sonido 6, 1 o 2 píxeles |
+| 4, 5 | levantar (`SUB_818000` deja / toma el objeto) y tirar (efecto 7) |
+| 8 | comer; el objeto 8 da además +10 de felicidad y 10 más de aguante máximo |
+| 9 | una animación de espera |
+| $0A | usar una herramienta: `SUB_829260` al final de la animación, su sonido en el cuadro $18 |
+| $0C | el reloj: un texto según la hora ($046A-$0478) |
+| $0B, $0D, $0F-$1B | otras animaciones y lo que sigue (eventos, banderas) |
+| $1C | cambiar de herramienta (espera cuadros; sin reescribir) |
+
+`CODE_81CB77` mueve al jugador `$1E` píxeles hacia donde mira: los objetos
+de evento (`CBBBB`) o una casilla sólida (`CEEEE`) lo paran; cuando solo
+una de las esquinas del frente está bloqueada se desliza de lado para
+rodearla (siempre en los tipos 0 y $A0-$AF; si no, según en qué mitad de
+la casilla está); una puerta ($C0-$CF) lo para enseguida; luego la cámara
+lo sigue y cada 8 movimientos deja una huella (`CODE_81A58F`).
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1792,3 +1823,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 23-oct-2026 | 66,97 % | dejar en el suelo lo que se carga |
 | 27-oct-2026 | 71,73 % | lo que hace cada objeto ya dejado: comer, tirar, enviar, comprar |
 | 27-oct-2026 | 79,88 % | las acciones del jugador: teles, cama, tiendas, tratantes, carpintero, bar |
+| 28-oct-2026 | 83,43 % | el jugador cada cuadro: caminar, correr, saltar, las animaciones, rodear esquinas |

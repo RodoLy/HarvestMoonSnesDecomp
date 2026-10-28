@@ -329,6 +329,35 @@ void hm_LoadGameObjectComponents(uint8_t *ram, HmRegs *r);
 void hm_CreateGameObject(uint8_t *ram, HmRegs *r);
 void hm_SpawnMapObject(uint8_t *ram, HmRegs *r);
 void hm_SUB_8180B7(uint8_t *ram, HmRegs *r);   /* items.c */
+void hm_PlayerState_00(uint8_t *ram, HmRegs *r);   /* playerstate.c */
+void hm_ResetIdleAnimatioTimer(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_1A(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_17(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_18(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_16(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_15(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_14(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_0F(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_10(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_11(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_12(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_13(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_1B(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_0D(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_0C(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_0B(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_0A(uint8_t *ram, HmRegs *r);
+void hm_CODE_81C556(uint8_t *ram, HmRegs *r);
+void hm_CODE_81C66E(uint8_t *ram, HmRegs *r);
+void hm_CODE_81C736(uint8_t *ram, HmRegs *r);
+void hm_CODE_81C83B(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_03(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_04(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_05(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_08(uint8_t *ram, HmRegs *r);
+void hm_CODE_81CB14(uint8_t *ram, HmRegs *r);
+void hm_CODE_81CB5E(uint8_t *ram, HmRegs *r);
+void hm_CODE_81CB77(uint8_t *ram, HmRegs *r);
 void hm_CODE_81D716(uint8_t *ram, HmRegs *r);   /* actions.c */
 void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r);
 void hm_PlayerAction_40(uint8_t *ram, HmRegs *r);

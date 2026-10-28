@@ -2249,6 +2249,125 @@ static void prep_player_action(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   r->x = (uint16_t)rnd(); r->y = (uint16_t)(rnd() % 0x400);
 }
 
+/* playerstate.c: the player at any of his steps: the tool he may be using,
+ * text boxes, the camera and the scroll, the collision checks and the
+ * tile map, his game object, putting an item down, the sound chip; the
+ * action, the state bits and the counters each step looks at. A = the
+ * action x 2, as SUB_81BFB7 leaves it. */
+static void prep_player_state_as(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), int action)
+{
+  prep_text_box(ram, r, rnd);
+  prep_scroll(ram, r, rnd);
+  prep_camera(ram, r, rnd);
+  prep_collision(ram, r, rnd);
+  prep_put_down(ram, r, rnd);
+  prep_player_object(ram, r, rnd);
+  /* every animation a step may set: their sprites' pieces ready (a sprite
+   * the fuzz did not prepare can send CODE_81CFE6 off the rails) */
+  static uint8_t done_sprite[0x450 / 8];
+  memset(done_sprite, 0, sizeof done_sprite);
+  for (unsigned anim = 0; anim < 0x100; anim++) {
+    uint16_t sprite = hm_bus_rd16(ram, 0x81D210u + 3u * anim);
+    if (sprite >= 0x450 || (done_sprite[sprite >> 3] & (1 << (sprite & 7)))) continue;
+    done_sprite[sprite >> 3] |= (uint8_t)(1 << (sprite & 7));
+    prep_sprite(ram, sprite, rnd);
+  }
+  for (unsigned g = 0; g < 0x40; g++)
+    if (hm_rd16(ram, 0x0A320 + 4 * g) < 40) hm_wr16(ram, 0x0A320 + 4 * g, (uint16_t)(40 + rnd() % 200));
+  prep_audio(ram, r, rnd);
+  /* inside the map, as prep_collision wants it (CEEEE reads tiles around) */
+  hm_wr16(ram, 0xD6, (uint16_t)(0x40 + rnd() % 0x380));
+  hm_wr16(ram, 0xD8, (uint16_t)(0x40 + rnd() % 0x380));
+  static const uint16_t actions[] = { 0, 0, 1, 2, 3, 9, 0x0E, 0x17, 0x18, 0x0A, 0x08 };
+  uint16_t act = (uint16_t)((rnd() % 4) ? actions[rnd() % sizeof actions] : rnd() % 0x1C);
+  static const uint16_t on_foot[] = { 0, 1, 2, 6, 7, 0x0E };
+  if (action == -2) act = on_foot[rnd() % 6];               /* PlayerState_00, CODE_81CB14 */
+  else if (action >= 0) act = (uint16_t)action;             /* the step's own action */
+  hm_wr16(ram, 0xD4, act);
+  static const uint16_t bits[] = { 0x0002, 0x0004, 0x0010, 0x0020, 0x0080, 0x0100, 0x0200, 0x0800,
+                                   0x1000, 0x2000, 0x4000, 0x8000 };
+  uint16_t st = (uint16_t)((rnd() % 2) ? rnd() : 0);
+  if (rnd() % 2) st = (uint16_t)(st | bits[rnd() % 12]);
+  if (rnd() % 2) st = (uint16_t)(st & ~(bits[rnd() % 12] | bits[rnd() % 12]));
+  hm_wr16(ram, 0xD2, st);
+  static const uint8_t idle[] = { 0xEF, 0xF0, 0x00, 0x77 };
+  ram[0x0925] = (uint8_t)((rnd() % 2) ? idle[rnd() % 4] : rnd());
+  ram[0x091A] = (uint8_t)((rnd() % 2) ? 0x0F : rnd());
+  ram[0x091B] = (uint8_t)((rnd() % 2) ? 0x17 : rnd());
+  ram[0x0919] = (uint8_t)((rnd() % 2) ? 0x07 : rnd() % 8);
+  ram[0x0971] = (uint8_t)rnd();
+  static const uint8_t items[] = { 2, 8, 1, 5 };
+  ram[0x0984] = (uint8_t)((rnd() % 2) ? items[rnd() % 4] : rnd() % 0x5B);
+  static const uint8_t maps[] = { 0x15, 0x16, 0x17, 0x29, 0x00, 0x10 };
+  if (rnd() % 2) ram[0x22] = maps[rnd() % sizeof maps];
+  hm_wr16(ram, 0x0911, (uint16_t)(rnd() % 4));
+  hm_wr16(ram, 0x0913, (uint16_t)(rnd() % 4));
+  hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
+  hm_wr16(ram, 0x1E, (uint16_t)(1 + rnd() % 3));
+  for (unsigned a = 0x11F5A; a < 0x11F70; a++) ram[a] = (uint8_t)rnd();
+  ram[0x11F1C] = (uint8_t)(rnd() % 24);
+  ram[0x0921] = (uint8_t)(rnd() % 0x1C);
+  ram[0x0924] = (uint8_t)rnd();
+  hm_wr16(ram, 0x11F2C, (uint16_t)(rnd() % 0x400)); hm_wr16(ram, 0x11F2E, (uint16_t)(rnd() % 0x400));
+  if (action == -2 && rnd() % 2) hm_wr16(ram, 0xD2, (uint16_t)(hm_rd16(ram, 0xD2) | 0x0004));
+  /* the steps that move him call CODE_81CB77 compiled: on a map of mixed
+   * tiles its corner slides can turn him back and forth for ever (the
+   * original does too). A map of one tile type, solid or free as a whole
+   * (no half bits), cannot; CODE_81CB77 itself is fuzzed on mixed maps in
+   * the interpreter, which gives up on such a run. */
+  if (action == -3) {                                      /* CODE_81CB77: tile types at the slide / door limits */
+    static const uint8_t edge[] = { 0x00, 0x9F, 0xA0, 0xAF, 0xB0, 0xBF, 0xC0, 0xCF, 0xD0 };
+    for (unsigned i = 0; i < 4096; i++)
+      if (rnd() % 2) ram[0x09B6 + i] = edge[rnd() % sizeof edge];
+  }
+  if (action == 0x13 && rnd() % 2) {                       /* the animation it ends with */
+    static const uint16_t last[] = { 0x008B, 0x008C, 0x008A };
+    hm_wr16(ram, 0x0901, last[rnd() % 3]);
+  }
+  if (action == 0x11 && rnd() % 2) {                       /* a state whose next two rolls are 0 */
+    for (int tries = 0; tries < 100000; tries++) {
+      uint8_t st[3] = { (uint8_t)rnd(), (uint8_t)rnd(), (uint8_t)rnd() }, roll[2];
+      uint8_t first[3] = { st[0], st[1], st[2] };
+      for (int k = 0; k < 2; k++) {                       /* GetRNG */
+        uint8_t c = ((st[1] ^ st[0]) & 0x02) != 0, n;
+        n = (uint8_t)((st[1] >> 1) | (c << 7)); c = st[1] & 1; st[1] = n;
+        n = (uint8_t)((st[0] >> 1) | (c << 7)); c = st[0] & 1; st[0] = n;
+        n = (uint8_t)((st[2] >> 1) | (c << 7)); c = st[2] & 1; st[2] = n;
+        unsigned sum = st[1] + 0x47u;
+        uint8_t a = (uint8_t)sum; c = sum > 0xFF;
+        n = (uint8_t)((a >> 1) | (c << 7)); c = a & 1; a = n;
+        n = (uint8_t)((a >> 1) | (c << 7)); c = a & 1; a = n;
+        a ^= st[0];
+        sum = a + st[2] + c;
+        st[0] = (uint8_t)sum;
+        roll[k] = (uint8_t)sum;
+      }
+      if (roll[0] <= 1 && roll[1] <= 63) {
+        ram[HM_RNG_STATE] = first[0]; ram[HM_RNG_STATE + 1] = first[1]; ram[HM_RNG_STATE + 2] = first[2];
+        break;
+      }
+    }
+  }
+  if (action != -3) {
+    uint32_t table = (uint32_t)ram[0x0F] << 16 | hm_rd16(ram, 0x0D);
+    uint8_t type = 0;
+    for (int tries = 0; tries < 64; tries++) {
+      type = (uint8_t)rnd();
+      if (!(hm_bus_rd8(ram, table + 4u * type + 2) & 0x1E)) break;
+    }
+    memset(&ram[0x09B6], type, 4096);
+  }
+  r->a = (uint16_t)(2 * act);
+  r->x = (uint16_t)rnd(); r->y = (uint16_t)rnd();
+}
+#define PREP_PS(name, action) \
+  static void prep_ps_##name(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void)) { prep_player_state_as(ram, r, rnd, action); }
+PREP_PS(any, -1) PREP_PS(move, -3) PREP_PS(foot, -2) PREP_PS(1A, 0x1A) PREP_PS(17, 0x17) PREP_PS(18, 0x18) PREP_PS(16, 0x16)
+PREP_PS(15, 0x15) PREP_PS(14, 0x14) PREP_PS(0F, 0x0F) PREP_PS(10, 0x10) PREP_PS(11, 0x11) PREP_PS(12, 0x12)
+PREP_PS(13, 0x13) PREP_PS(1B, 0x1B) PREP_PS(0D, 0x0D) PREP_PS(0C, 0x0C) PREP_PS(0B, 0x0B) PREP_PS(0A, 0x0A)
+PREP_PS(00, 0x00) PREP_PS(01, 0x01) PREP_PS(02, 0x02) PREP_PS(0E, 0x0E) PREP_PS(03, 0x03) PREP_PS(04, 0x04)
+PREP_PS(05, 0x05) PREP_PS(08, 0x08) PREP_PS(09, 0x09)
+
 /* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
  * or winter, an ordinary weekday) */
 static void prep_map_event_dc4a(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -2869,6 +2988,64 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/actions.c", 0x81FA69, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
   { "PlayerAction_57", hm_PlayerAction_57, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/actions.c", 0x81FA84, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerState_00", hm_PlayerState_00, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+    "src/playerstate.c", 0x81BFDC, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_foot },
+  { "ResetIdleAnimatioTimer", hm_ResetIdleAnimatioTimer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C002, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_any },
+  { "PlayerState_1A", hm_PlayerState_1A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C0B5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_1A },
+  { "PlayerState_17", hm_PlayerState_17, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C111, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_17 },
+  { "PlayerState_18", hm_PlayerState_18, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C153, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_18 },
+  { "PlayerState_16", hm_PlayerState_16, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C1A1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_16 },
+  { "PlayerState_15", hm_PlayerState_15, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C1F0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_15 },
+  { "PlayerState_14", hm_PlayerState_14, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C211, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_14 },
+  { "PlayerState_0F", hm_PlayerState_0F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C232, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_0F },
+  { "PlayerState_10", hm_PlayerState_10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C242, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_10 },
+  { "PlayerState_11", hm_PlayerState_11, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C263, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_11 },
+  { "PlayerState_12", hm_PlayerState_12, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C28E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_12 },
+  { "PlayerState_13", hm_PlayerState_13, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C2AF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_13 },
+  { "PlayerState_1B", hm_PlayerState_1B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C333, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_1B },
+  { "PlayerState_0D", hm_PlayerState_0D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C364, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_0D },
+  { "PlayerState_0C", hm_PlayerState_0C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C395, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_0C },
+  { "PlayerState_0B", hm_PlayerState_0B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C4EC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_0B },
+  { "PlayerState_0A", hm_PlayerState_0A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+    "src/playerstate.c", 0x81C51A, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_0A },
+  { "CODE_81C556", hm_CODE_81C556, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C556, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_00 },
+  { "CODE_81C66E", hm_CODE_81C66E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+    "src/playerstate.c", 0x81C66E, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_01 },
+  { "CODE_81C736", hm_CODE_81C736, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+    "src/playerstate.c", 0x81C736, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_02 },
+  { "CODE_81C83B", hm_CODE_81C83B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81C83B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_0E },
+  { "PlayerState_03", hm_PlayerState_03, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+    "src/playerstate.c", 0x81C86B, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_03 },
+  { "PlayerState_04", hm_PlayerState_04, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+    "src/playerstate.c", 0x81C991, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_04 },
+  { "PlayerState_05", hm_PlayerState_05, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+    "src/playerstate.c", 0x81C9DF, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_05 },
+  { "PlayerState_08", hm_PlayerState_08, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81CA36, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_08 },
+  { "CODE_81CB14", hm_CODE_81CB14, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81CB14, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_foot },
+  { "CODE_81CB5E", hm_CODE_81CB5E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+    "src/playerstate.c", 0x81CB5E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_09 },
+  { "CODE_81CB77", hm_CODE_81CB77, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_JSR,
+    "src/playerstate.c", 0x81CB77, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_move },
   { "SpawnMapObject", hm_SpawnMapObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x81A500, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_spawn },
   { "ToolUsedNoAction", hm_ToolUsedNoAction, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
