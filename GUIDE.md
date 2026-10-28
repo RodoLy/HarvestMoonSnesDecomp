@@ -220,6 +220,20 @@ Some tricks that were needed:
   since the chip's clock cannot go back, for these routines the CPU's clock
   never goes back either: each call starts where the previous one ended,
   as if the game called the routine again and again.
+- **Waiting for the next frame, solved by bringing the NMI forward.** A
+  routine that waits for the NMI (`WaitForNMI`: clear `$00` and loop until
+  the NMI sets it) never completes as one call in the recompiled game: at
+  the loop the compiled code hands control to the frame scheduler, the
+  frame goes on, and the rest runs later in the interpreter. So the live
+  checker skips those calls, and the random test is the verification
+  (flag `HM_WAIT`): it runs the original in the interpreter and, when it
+  reaches the loop's `LDA $00` with `$00` still 0, makes the NMI happen
+  right there, as the CPU would (push the bank, the address and the flags,
+  set I, clear decimal mode, jump to the handler `$00:867B`; its RTI comes
+  back to the loop). The rewrite does exactly the same at the same point
+  (`hm_nmi`). Everything the NMI does (the prepared DMAs, the sprite
+  table, the pads, a random number, the scroll) is compared as usual,
+  stack bytes included.
 - **What runs in the interpreter.** Some routines have no compiled
   version: the recompilation runs them in an interpreter. The live
   checker does not see those calls, so the random test is the
@@ -293,6 +307,7 @@ whose count included it (56.14 % → 56.10 %).
 | `src/shipping.c` | the shipping at 5 pm |
 | `src/hm_decomp.c` | the checker and the preparations |
 | `src/hm_io.c` | the checker's part for the chips (HM_IO) |
+| `src/nmi.c` | the interrupts and the waits for the next frame |
 
 ---
 
@@ -1725,6 +1740,20 @@ not on days with `$0196` bits 1, 3, 4):
   drawing and sending the new column or row: the screen is built the way
   scrolling builds it.
 
+### 5.32 Interrupts and waiting for a frame
+
+- **The NMI** (`NMI_Interrupt`, the vector at `$FFEA`, `$00:867B`): saves
+  A, X, Y, D and the data bank, keeps the NMI on (`$4200` = `$A1`: NMI,
+  the line IRQ and the automatic pad reading), lets interrupts in again
+  and runs `UpdateGraphics` (5.31) with the interrupted code's direct page
+  and data bank; then RTI. The COP and BRK vectors point at its last RTI.
+- **The line IRQ** (`COP_Interrupt` in HM-Decomp, but it is the IRQ
+  vector, `$80:8699`): only reads TIMEUP (`$4211`), which lets the IRQ go,
+  and calls a routine that only returns.
+- **Waiting** (`WaitForNMI`): turn the NMI on, clear `$00` and loop until
+  the NMI has set it; A and the flags come back as they were.
+  `WaitForNMIATimes` does it A times (A = 0 would be 65,536 frames).
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1962,3 +1991,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 28-Oct-2026 | 86.59 % | the picture chip in the NMI: the sprite pieces, one DMA at once, the frame's update; the automatic scroll; the text box's graphics |
 | 28-Oct-2026 | 88.12 % | the title and file screens (bars of tiles, a saved game's line), tools back on the shelf, the sprite table |
 | 28-Oct-2026 | 88.80 % | a map's picture (BackgroundsManager: tilemaps, layer pictures and the camera walk); two fuzz preparations made realistic (a saved game's year, a wandering slot's steps and direction) |
+| 28-Oct-2026 | 88.94 % | the interrupts (NMI, line IRQ) and the waits for the next frame, with the NMI brought forward by the random test (HM_WAIT) |

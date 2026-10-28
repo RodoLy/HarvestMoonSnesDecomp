@@ -13,6 +13,31 @@
 #include "mod_runtime.h"
 
 void interp_bridge_set_master_deadline(uint64_t master_clock);  /* snes/interp_bridge.h */
+typedef void (*InterpPreOpcodeHook)(CpuState *cpu, uint32_t pc24);           /* snes/interp_bridge.h */
+bool interp_bridge_add_pre_opcode_hook(uint32_t pc24, InterpPreOpcodeHook hook);
+void interp_bridge_pre_opcode_redirect(uint32_t pc24);
+int interp_bridge_run_interrupt(CpuState *cpu, uint32_t entry_pc24);
+
+/* HM_WAIT: while one is fuzzed, the original (in the interpreter) gets its
+ * NMI when it reaches a wait loop's LDA $00 with $00 still 0: the CPU
+ * pushes the bank, the address and the flags, sets I, clears decimal mode
+ * and jumps to the vector ($00:867B, NMI_Interrupt), whose RTI comes back
+ * to the LDA. Nothing else interrupts the run, so the C side (hm_nmi) can
+ * do exactly the same. */
+static int s_nmi_sim;
+static void nmi_at_wait(CpuState *cpu, uint32_t pc24)
+{
+  if (!s_nmi_sim || cpu->emulation || cpu->D >= 0x2000 || cpu->ram[cpu->D]) return;
+  cpu_mirrors_to_p(cpu);
+  cpu_write8(cpu, 0x00, cpu->S, cpu->PB); cpu->S = (uint16_t)(cpu->S - 1);
+  cpu_write8(cpu, 0x00, cpu->S, (uint8_t)(pc24 >> 8)); cpu->S = (uint16_t)(cpu->S - 1);
+  cpu_write8(cpu, 0x00, cpu->S, (uint8_t)pc24); cpu->S = (uint16_t)(cpu->S - 1);
+  cpu_write8(cpu, 0x00, cpu->S, cpu->P); cpu->S = (uint16_t)(cpu->S - 1);
+  cpu->P = (uint8_t)((cpu->P | 0x04) & ~0x08);
+  cpu_p_to_mirrors(cpu);
+  cpu->PB = 0x00;
+  interp_bridge_pre_opcode_redirect(0x00867B);
+}
 uint8_t ReadReg(uint16_t reg);                                    /* common_rtl.h */
 void RtlSetPadState(int slot, uint16_t buttons);
 uint16_t RtlGetPadState(int slot);
@@ -448,6 +473,22 @@ static void prep_shelf(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 }
 
 static void prep_sram(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+/* nmi.c: COP_Interrupt: the line IRQ (any data bank the game runs with) */
+static void prep_irq(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  (void)ram;
+  hm_io_quiet();
+  r->db = (rnd() % 2) ? 0x80 : 0x00;
+}
+/* nmi.c: WaitForNMIATimes: as for the NMI, and A = 1-3 frames (keeping A's
+ * range from the registry) */
+static void prep_update_graphics(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_wait_times(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  uint16_t a = r->a;
+  prep_update_graphics(ram, r, rnd);
+  r->a = a;
+}
 /* video.c: BackgroundsManager: any map (the title screens too); the
  * player's start a multiple of the step 8 (the word at $1E) or the walk
  * there never ends; bit 15 of $0196 (the picture stored unpacked) only
@@ -4168,6 +4209,14 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/video.c", 0x82EAB4, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_vram_fixed },
   { "SUB_82E742", hm_SUB_82E742, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR | HM_INTERP,
     "src/video.c", 0x82E742, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_vram_fixed },
+  { "NMI_Interrupt", hm_NMI_Interrupt, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP | HM_RTI,
+    "src/nmi.c", 0x80867B, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_update_graphics },
+  { "COP_Interrupt", hm_COP_Interrupt, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP | HM_RTI,
+    "src/nmi.c", 0x808699, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_irq },
+  { "WaitForNMI", hm_WaitForNMI, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
+    "src/nmi.c", 0x808645, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_update_graphics },
+  { "WaitForNMIATimes", hm_WaitForNMIATimes, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
+    "src/nmi.c", 0x80865D, 0, 0, 1, 3, { { 0 } }, 200, prep_wait_times },
   { "BackgroundsManager", hm_BackgroundsManager, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x80A7C6, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_backgrounds },
   { "CODE_82E405", hm_CODE_82E405, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR | HM_INTERP,
@@ -4580,6 +4629,8 @@ static void fuzz_at(unsigned frame)
    * the frame's deadline half-way, as they do in the game, and not be
    * comparable. The frame driver sets the deadline again every frame. */
   interp_bridge_set_master_deadline(0);
+  interp_bridge_add_pre_opcode_hook(0x808654, nmi_at_wait);   /* WaitForNMI */
+  interp_bridge_add_pre_opcode_hook(0x80866C, nmi_at_wait);   /* WaitForNMIATimes */
   if (only == 0)
     fprintf(stderr, "[decomp-fuzz] frames %u-%u: %d calls per routine\n", frame,
             frame + g_hm_decomp_count - 1, iters);
@@ -4672,9 +4723,22 @@ static void fuzz_at(unsigned frame)
       /* JSL enters the routine's bank; a JSR runs in its caller's bank,
        * which is the routine's own bank too */
       g_cpu.PB = (uint8_t)(f->pc24 >> 16);
-      if (f->out_mask & HM_JSR) cpu_push_jsr_return_frame(&g_cpu);
-      else cpu_push_jsl_return_frame(&g_cpu);
-      uint8_t frame_size = (f->out_mask & HM_JSR) ? 2 : 3;
+      uint8_t frame_size = 3;
+      if (f->out_mask & HM_RTI) {
+        /* an interrupt in the middle of the game's code: its bank, an
+         * address and the flags; the handler starts with I set, decimal
+         * clear and PB = 0 */
+        cpu_push_interrupt_frame_at(&g_cpu, 0x808654);
+        g_cpu.P = (uint8_t)((g_cpu.P | 0x04) & ~0x08);
+        cpu_p_to_mirrors(&g_cpu);
+        g_cpu.PB = 0x00;
+        frame_size = 4;
+      } else if (f->out_mask & HM_JSR) {
+        cpu_push_jsr_return_frame(&g_cpu);
+        frame_size = 2;
+      } else {
+        cpu_push_jsl_return_frame(&g_cpu);
+      }
       if (pick >= 0 && n != pick) continue;
       /* HM_DECOMP_FUZZ_DUMP=<file>: with HM_DECOMP_FUZZ_CALL, save that call's
        * WRAM (128 KB) and registers before it runs (debugging). */
@@ -4689,13 +4753,17 @@ static void fuzz_at(unsigned frame)
         }
       }
       unsigned bad_before = s_stats[i].bad;
-      if (f->out_mask & HM_INTERP) {
-        /* No wrapper around it: check this call here. */
+      s_nmi_sim = (f->out_mask & HM_WAIT) != 0;
+      if (f->out_mask & (HM_INTERP | HM_WAIT | HM_RTI)) {
+        /* No wrapper around it (or, waiting for the NMI, never a complete
+         * call in the compiled code): check this call here. */
         void *snap = hm_decomp_check_begin(&g_cpu, f->name);
         /* No compiled body: run the original in the recompiler's
          * interpreter, as the game itself does. */
         uint16_t s_in = g_cpu.S;
-        RecompReturn rr = interp_tier_dispatch(&g_cpu, f->pc24);
+        RecompReturn rr = (f->out_mask & HM_RTI)
+          ? (interp_bridge_run_interrupt(&g_cpu, f->pc24 & 0x7FFFFF) ? RECOMP_RETURN_NORMAL : RECOMP_RETURN_SKIP_1)
+          : interp_tier_dispatch(&g_cpu, f->pc24);
         /* The interpreter gives up on very long runs and still answers
          * NORMAL: only a run that returned (its frame popped) is complete. */
         hm_decomp_check_end(f->name, snap, &g_cpu,
@@ -4703,6 +4771,7 @@ static void fuzz_at(unsigned frame)
       } else {
         cpu_dispatch_pc_paired(&g_cpu, f->pc24, frame_size);
       }
+      s_nmi_sim = 0;
       if (s_stats[i].bad != bad_before && s_stats[i].bad <= 5)
         fprintf(stderr, "[decomp-fuzz]   (that was %s call %d)\n", f->name, n);
       if (apu) apu_clock = g_cpu.master_cycles;

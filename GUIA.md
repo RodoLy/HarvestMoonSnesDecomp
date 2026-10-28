@@ -223,6 +223,21 @@ Algunos trucos que fueron necesarios:
   reloj del chip no puede volver atrás, en estas rutinas el reloj de la CPU
   tampoco vuelve: cada llamada empieza donde terminó la anterior, como si
   el juego llamara a la rutina una y otra vez.
+- **Esperar al cuadro siguiente, resuelto adelantando el NMI.** Una
+  rutina que espera al NMI (`WaitForNMI`: borra `$00` y da vueltas hasta
+  que el NMI lo pone) nunca se completa como una sola llamada en el juego
+  recompilado: en el bucle el código compilado le pasa el control al
+  planificador de cuadros, el cuadro sigue y el resto corre después en el
+  intérprete. Así que el control en vivo se salta esas llamadas y la
+  prueba al azar es la verificación (bandera `HM_WAIT`): corre el original
+  en el intérprete y, cuando llega al `LDA $00` del bucle con `$00` todavía
+  a 0, hace que el NMI llegue justo ahí, como lo haría la CPU (mete el
+  banco, la dirección y los flags, pone I, quita el modo decimal y salta
+  al manejador `$00:867B`; su RTI vuelve al bucle). La reescritura hace
+  exactamente lo mismo en el mismo punto (`hm_nmi`). Todo lo que hace el
+  NMI (los DMA preparados, la tabla de sprites, los mandos, un número al
+  azar, el desplazamiento) se compara como siempre, bytes de la pila
+  incluidos.
 - **Lo que corre en el intérprete.** Algunas rutinas no tienen versión
   compilada: la recompilación las corre en un intérprete. El comprobador
   en vivo no ve esas llamadas, y entonces la prueba al azar es la
@@ -297,6 +312,7 @@ $80:9553), cuya cuenta lo incluía (56,14 % → 56,10 %).
 | `src/ending.c` | el puntaje del final |
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 | `src/hm_io.c` | la parte del comprobador para los chips (HM_IO) |
+| `src/nmi.c` | las interrupciones y las esperas al cuadro siguiente |
 
 ---
 
@@ -1783,6 +1799,21 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   entrada (`$017D`, `$017F`), dibujando y enviando en cada paso la columna
   o fila nueva: la pantalla se construye igual que al desplazarse.
 
+### 5.32 Las interrupciones y esperar un cuadro
+
+- **El NMI** (`NMI_Interrupt`, el vector de `$FFEA`, `$00:867B`): guarda
+  A, X, Y, D y el banco de datos, deja el NMI encendido (`$4200` = `$A1`:
+  NMI, la IRQ por línea y la lectura automática de los mandos), vuelve a
+  dejar pasar interrupciones y corre `UpdateGraphics` (5.31) con la página
+  directa y el banco de datos del código interrumpido; después RTI. Los
+  vectores de COP y BRK apuntan a su último RTI.
+- **La IRQ por línea** (`COP_Interrupt` en HM-Decomp, pero es el vector de
+  IRQ, `$80:8699`): solo lee TIMEUP (`$4211`), que suelta la IRQ, y llama a
+  una rutina que solo vuelve.
+- **Esperar** (`WaitForNMI`): enciende el NMI, borra `$00` y da vueltas
+  hasta que el NMI lo pone; A y los flags vuelven como estaban.
+  `WaitForNMIATimes` lo hace A veces (A = 0 serían 65.536 cuadros).
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -2030,3 +2061,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 28-oct-2026 | 86,59 % | el chip de imagen en el NMI: las piezas de sprite, un DMA de inmediato, la actualización del cuadro; el desplazamiento automático; los gráficos de la caja de texto |
 | 28-oct-2026 | 88,12 % | las pantallas de título y de partidas (barras de casillas, la línea de una partida), herramientas de vuelta al estante, la tabla de sprites |
 | 28-oct-2026 | 88,80 % | el dibujo de un mapa (BackgroundsManager: tilemaps, dibujos de capa y el paseo de la cámara); dos preparaciones del fuzz más realistas (el año de una partida, los pasos y la dirección de un slot que pasea) |
+| 28-oct-2026 | 88,94 % | las interrupciones (NMI, IRQ por línea) y las esperas al cuadro siguiente, con el NMI adelantado por la prueba al azar (HM_WAIT) |

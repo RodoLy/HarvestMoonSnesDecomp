@@ -142,6 +142,7 @@ en el README (`tools/progress.py`).
 | CODE_81A94A (herramienta al estante), SUB_82EAB4, SUB_82E742 (barras de casillas), CODE_82E405 (línea de una partida guardada) | $81:A94A, $82:EAB4, $82:E742, $82:E405 | src/items.c, video.c |
 | PrepareOAMData (la tabla de sprites de cada cuadro; comprobada con el intérprete: la recompilación amplía a propósito la prueba de pantalla para la pantalla ancha) | $85:83E0 | src/objects.c |
 | BackgroundsManager (el dibujo de un mapa al entrar: tilemaps, dibujos de capa, la cámara hasta la entrada; en vivo siempre la corta el NMI, se comprueba con el fuzz) | $80:A7C6 | src/video.c |
+| NMI_Interrupt, COP_Interrupt (las interrupciones), WaitForNMI, WaitForNMIATimes (esperar cuadros; solo con el fuzz: en vivo el código compilado cede el cuadro en el bucle) | $80:867B, $80:8699, $80:8645, $80:865D | src/nmi.c |
 | GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |

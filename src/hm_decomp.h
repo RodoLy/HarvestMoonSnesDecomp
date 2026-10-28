@@ -219,7 +219,21 @@ enum { HM_OUT_A = 1, HM_OUT_X = 2, HM_OUT_Y = 4, HM_OUT_C = 8,
        /* Writes the console's chips (PPU, DMA, WRAM port, $42xx): checked
         * by running the rewrite on the real machine from the state before
         * and comparing the chips' state (hm_io.c). */
-       HM_IO = 256 };
+       HM_IO = 256,
+       /* An interrupt handler (RTI): fuzzed with an interrupt's 4-byte frame
+        * (bank, address, flags) on the stack. */
+       HM_RTI = 512,
+       /* Waits for the NMI (WaitForNMI and what calls it). In the game the
+        * compiled code yields to the frame scheduler there, so live calls
+        * are never complete; the fuzzer runs the original in the
+        * interpreter and, when it reaches the wait loop with $00 = 0, makes
+        * the NMI happen right there (hm_nmi below does the same in C). */
+       HM_WAIT = 1024 };
+
+/* video.c: the NMI arriving at `pc` (the wait loop) with the flags `p`:
+ * pushes bank, address and flags as the CPU does, runs NMI_Interrupt with
+ * PB = 0, I set and decimal clear, and returns through its RTI. */
+void hm_nmi(uint8_t *ram, HmRegs *r, uint16_t pc, uint8_t p);
 
 /* hm_io.c: the chips' state for HM_IO checks. */
 typedef struct HmIoState HmIoState;
@@ -412,6 +426,10 @@ void hm_ZeroesPartialVRAM(uint8_t *ram, HmRegs *r);
 void hm_StartLastPreparedDMA(uint8_t *ram, HmRegs *r);
 void hm_LoadsFromVRAMwithOffset(uint8_t *ram, HmRegs *r);
 void hm_BackgroundsManager(uint8_t *ram, HmRegs *r);
+void hm_NMI_Interrupt(uint8_t *ram, HmRegs *r);   /* nmi.c */
+void hm_COP_Interrupt(uint8_t *ram, HmRegs *r);
+void hm_WaitForNMI(uint8_t *ram, HmRegs *r);
+void hm_WaitForNMIATimes(uint8_t *ram, HmRegs *r);
 void hm_CopiesWRAMtoOBJVGRAM(uint8_t *ram, HmRegs *r);
 void hm_UpdateGraphics(uint8_t *ram, HmRegs *r);
 void hm_AutoMapScrolling(uint8_t *ram, HmRegs *r);
