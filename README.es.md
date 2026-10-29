@@ -61,7 +61,7 @@ internet. En Linux: ver [Cómo funciona la versión nativa](#cómo-funciona-la-v
 Una granja de noche bajo la luna de la cosecha, marcos de madera, pergamino
 y la mano que señala, todo dibujado a la resolución del SNES, así que sus
 píxeles son del tamaño de los del juego. Se maneja con teclado, mando o
-ratón, en **español, inglés o italiano**. En el juego se abre con **Esc**
+ratón, en **inglés (por defecto), español o italiano**. En el juego se abre con **Esc**
 (o L3 / Guía en el mando, o OPTIONS en el título) y el juego queda en pausa
 mientras la música sigue.
 

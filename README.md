@@ -60,8 +60,7 @@ downloaded from the internet. On Linux: see [How the native build works](#how-th
 
 A farm at night under the harvest moon, wooden frames, parchment and the
 pointing hand, all drawn at the SNES's resolution, so its pixels are the
-game's size. Keyboard, gamepad or mouse, in **Spanish, English or
-Italian**. In the game it opens with **Esc** (or L3 / Guide on a gamepad,
+game's size. Keyboard, gamepad or mouse, in **English (the default), Spanish or Italian**. In the game it opens with **Esc** (or L3 / Guide on a gamepad,
 or OPTIONS on the title screen), with the game paused and the music
 playing on.
 
