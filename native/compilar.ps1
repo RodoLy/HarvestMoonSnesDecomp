@@ -78,7 +78,7 @@ Push-Location $root
 try {
   $cc  = "$llvmDir\bin\x86_64-w64-mingw32-clang.exe"
   $sdl = "$sdlDir\x86_64-w64-mingw32"
-  $src = @('native\main.c', 'native\hw.c')
+  $src = @(Get-ChildItem 'native\*.c' | ForEach-Object { "native\$($_.Name)" })
   $src += Get-ChildItem 'src\*.c' | Where-Object { $_.Name -ne 'hm_decomp.c' -and $_.Name -ne 'hm_io.c' } | ForEach-Object { "src\$($_.Name)" }
   $src += Get-ChildItem 'native\chips\snes\*.c' | ForEach-Object { "native\chips\snes\$($_.Name)" }
   $src += 'native\chips\audio_trace.c'

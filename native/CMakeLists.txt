@@ -61,7 +61,9 @@ if(NOT MSVC)
   target_compile_options(hm_chips PRIVATE -w)
 endif()
 
-add_executable(HarvestMoonNative ${CMAKE_CURRENT_SOURCE_DIR}/main.c ${CMAKE_CURRENT_SOURCE_DIR}/hw.c ${GAME_SOURCES})
+# the host: the window, the launcher, the improvements (native/*.c)
+file(GLOB HOST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+add_executable(HarvestMoonNative ${HOST_SOURCES} ${GAME_SOURCES})
 target_include_directories(HarvestMoonNative PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../src ${HM_RECOMP}/src
   ${RUNNER} ${RUNNER}/snes)

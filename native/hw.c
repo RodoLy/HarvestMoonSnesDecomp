@@ -24,6 +24,7 @@
 #include "dma.h"
 #include "apu.h"
 #include "dsp.h"
+#include "saveload.h"
 
 #include "hm_decomp.h"
 #include "native.h"
@@ -247,11 +248,27 @@ void native_set_pads(uint16_t pad1, uint16_t pad2) { s_pad[0] = pad1; s_pad[1] =
 
 /* The field: from the PPU's state as the frame's code left it, HDMA
  * started from $420C, lines 1-224 (the visible ones) into `pixels`
- * (256 x 224, 32-bit BGRX). Then the vertical blank's own work. */
-void native_draw_frame(uint8_t *pixels)
+ * (field_w x 224, 32-bit BGRX). field_w is 256, or wider for widescreen:
+ * then the 256 are in the middle and `left` / `right` columns of the
+ * margins are drawn (the rest of them black). Then the vertical blank's
+ * own work. */
+void native_draw_frame(uint8_t *pixels, int field_w, int left, int right)
 {
-  PpuBeginDrawing(g_ppu, pixels, 256 * 4, g_native_ppu_flags);
-  PpuSetExtraSpace(g_ppu, 0);
+  int budget = (field_w - 256) / 2;
+  uint32_t flags = g_native_ppu_flags | (budget ? 1u : 0u);   /* the margins need the fast renderer */
+  PpuBeginDrawing(g_ppu, pixels, (size_t)field_w * 4, flags);
+  PpuSetExtraSpace(g_ppu, (uint16_t)budget);
+  if (budget) {
+    PpuSetExtraSideSpace(g_ppu, left, right, 0);
+    /* the renderer writes only the columns it is given: black the closed
+     * part of the margins, which would keep an older frame */
+    for (int y = 0; y < 224; y++) {
+      uint32_t *row = (uint32_t *)(pixels + (size_t)y * field_w * 4);
+      for (int x = 0; x < budget - left; x++) row[x] = 0;
+      for (int x = budget + 256 + right; x < field_w; x++) row[x] = 0;
+    }
+    if (left || right) PpuSetWidescreenLayerClamp(g_ppu, 1u << 2);   /* BG3: the text, the clock */
+  }
   Dma *dma = g_snes->dma;
   dma_startDma(dma, g_snesrecomp_last_hdmaen, true);
   dma_initHdma(dma);
@@ -267,4 +284,64 @@ void native_draw_frame(uint8_t *pixels)
   s_nmi_flag = true;
   s_wait = 0;
   snes_frame_counter++;
+}
+
+/* ── The whole machine in memory (save states, the endless game) ─────────
+ * WRAM, the picture chip, the DMA unit, the sound chip (its RAM, SPC700 and
+ * DSP) and the CPU's own registers. The CPU registers of the game's code
+ * (HmRegs) are the host's to keep. */
+typedef struct { SaveLoadInfo sli; uint8_t *p; size_t pos, cap; bool load, err; } MemSli;
+static void mem_func(SaveLoadInfo *i, void *data, size_t n)
+{
+  MemSli *m = (MemSli *)i;
+  if (m->p && m->pos + n > m->cap) { m->err = true; return; }
+  if (m->p) { if (m->load) memcpy(data, m->p + m->pos, n); else memcpy(m->p + m->pos, data, n); }
+  m->pos += n;
+}
+#define SL(m, x) mem_func(&(m)->sli, &(x), sizeof(x))
+static void machine_saveload(MemSli *m)
+{
+  Snes *s = g_snes;
+  mem_func(&m->sli, g_ram, sizeof g_ram);
+  SL(m, s->ramAdr); SL(m, s->nmiEnabled); SL(m, s->hIrqEnabled); SL(m, s->vIrqEnabled);
+  SL(m, s->autoJoyRead); SL(m, s->hTimer); SL(m, s->vTimer); SL(m, s->multiplyA);
+  SL(m, s->multiplyResult); SL(m, s->divideA); SL(m, s->divideResult);
+  SL(m, s_nmi_flag); SL(m, s_wait); SL(m, g_snesrecomp_last_hdmaen);
+  ppu_saveload(g_ppu, &m->sli);
+  dma_saveload(s->dma, &m->sli);
+  apu_saveload(s->apu, &m->sli);
+}
+size_t native_state_size(void)
+{
+  MemSli m = { { mem_func, NULL }, NULL, 0, 0, false, false };
+  machine_saveload(&m);
+  return m.pos;
+}
+bool native_state_save(uint8_t *buf, size_t cap)
+{
+  MemSli m = { { mem_func, NULL }, buf, 0, cap, false, false };
+  machine_saveload(&m);
+  return !m.err;
+}
+bool native_state_load(const uint8_t *buf, size_t size)
+{
+  if (size != native_state_size()) return false;
+  MemSli m = { { mem_func, NULL }, (uint8_t *)buf, 0, size, true, false };
+  machine_saveload(&m);
+  return !m.err;
+}
+
+/* A new start (another ROM, a reset): the chips as at power on. */
+void native_hw_reset(const uint8_t *rom, uint32_t rom_size)
+{
+  g_rom = rom; s_rom_size = rom_size;
+  memset(g_ram, 0, sizeof g_ram);
+  ppu_reset(g_ppu);
+  apu_reset(g_snes->apu);
+  dma_reset(g_snes->dma);
+  Snes *s = g_snes;
+  s->ramAdr = 0; s->nmiEnabled = s->hIrqEnabled = s->vIrqEnabled = s->autoJoyRead = false;
+  s->multiplyA = 0; s->multiplyResult = 0; s->divideA = 0; s->divideResult = 0;
+  s_nmi_flag = false; s_wait = 0; g_snesrecomp_last_hdmaen = 0;
+  s_pad[0] = s_pad[1] = 0;
 }
