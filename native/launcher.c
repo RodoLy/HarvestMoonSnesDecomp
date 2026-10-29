@@ -175,7 +175,7 @@ static void scan_games(void)
 }
 /* ── Values ──────────────────────────────────────────────────────────── */
 static const int kFF[4] = { 2, 3, 4, 6 };
-static const char *kLangs[3] = { "es", "en", "it" };
+static const char *kLangs[3] = { "en", "es", "it" };
 static int get_value(int id)
 {
   const Config *c = &g_cfg;
@@ -320,7 +320,7 @@ static void build(void)
     choice(V_FF, "Fast forward (Tab)", "How fast the game goes while Tab (or the gamepad's right trigger) is held. The music speeds up with it.",
            4, "×2", "×3", "×4", "×6");
     choice(V_LANG, "Language", "The language of these menus and of the pause menu (the game's own text is the ROM's).",
-           3, "Español", "English", "Italiano");
+           3, "English", "Español", "Italiano");
     toggle(V_SHOWLAUNCHER, "Show this menu at start", "Off: the game starts at once with the chosen ROM (this menu is still on Escape).");
     add(K_ACTION, A_DEFAULT_OPTIONS, T("Default options"), T("Put every option on this page back as it first was."));
     break;

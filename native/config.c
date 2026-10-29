@@ -42,20 +42,9 @@ void config_default_pad(Config *c)
     SDL_GAMEPAD_BUTTON_DPAD_LEFT, SDL_GAMEPAD_BUTTON_DPAD_RIGHT };
   memcpy(c->pad, p, sizeof p);
 }
-static void default_language(Config *c)
-{
-  snprintf(c->language, sizeof c->language, "es");
-  int n = 0;
-  SDL_Locale **loc = SDL_GetPreferredLocales(&n);
-  if (loc) {
-    for (int i = 0; i < n; i++) {
-      const char *l = loc[i]->language;
-      if (!l) continue;
-      if (!strcmp(l, "es") || !strcmp(l, "en") || !strcmp(l, "it")) { snprintf(c->language, sizeof c->language, "%s", l); break; }
-    }
-    SDL_free(loc);
-  }
-}
+/* English unless the player picks another language in the launcher
+ * (Options, Language), as the recompilation does */
+static void default_language(Config *c) { snprintf(c->language, sizeof c->language, "en"); }
 void config_defaults(Config *c)
 {
   memset(c, 0, sizeof *c);
