@@ -184,11 +184,40 @@ SHA-256, toma los chips de `native/chips` o de la recompilación que esté
 junto a esta carpeta, y deja aquí `HarvestMoonNative.exe` y `SDL3.dll`.
 Para Windows desde Linux: añadir `-DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake`
 (MinGW-w64). SDL3 se compila desde el código si no hay uno instalado.
+Al abrirlo aparece un launcher con el aspecto del juego (una granja de
+noche bajo la luna de la cosecha, marcos de madera y pergamino, la mano que
+señala): **Juegos** (las ROM junto al programa o en `roms/`, o cualquier
+otra con la ventana de archivos del sistema; cada una se revisa por su
+cabecera y su CRC), **Opciones** (ventana, pantalla completa, imagen nítida
+o píxeles exactos, vsync, pantalla ancha, sprites, volumen, avance rápido,
+idioma: español, inglés, italiano), **Controles** (teclas y botones del
+mando para cada botón de la SNES; los mandos conectados, cuál juega) y
+**Mejoras**. En el juego se abre con Escape (o L3 / Guía en el mando, o
+la opción OPTIONS del título) con el juego en pausa, y suma **Estados
+guardados** (10 ranuras; F1-F10 cargar, Shift+F1-F10 guardar) y Reiniciar.
+Todo se guarda en `config.ini` y `keybinds.ini` junto al programa.
+
+Las mejoras son las de la recompilación, portadas: texto rápido, días más
+largos (1.5× a 4×), el menú de pausa estilo Harvest Moon 64 (M o R3:
+herramientas, corazones, granja), OPTIONS en la pantalla de título, juego
+sin fin (después del final del año 3 sigues en el otoño, año 4, 5...),
+pantalla ancha 16:9 y los trucos (dinero, energía, reloj detenido, madera y
+forraje, semillas y alimento, clima). Con todas apagadas el juego es el
+mismo de la consola; el C descompilado solo tiene tres ganchos, con los
+valores de la ROM por defecto (`g_hm_oam_right/left`, `g_hm_no_ending`,
+`g_hm_year_suffix`).
+
 Teclas: flechas, X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start,
-Shift derecho = Select, F11 pantalla completa, Tab rápido; un control
-también funciona. `--headless --script archivo --dump-dir carpeta` juega un
-guion (los mismos comandos que el `--script` de la recompilación) sin
-ventana y guarda la imagen y la WRAM.
+Shift derecho = Select, Escape el launcher, M el menú de pausa, F11
+pantalla completa, Tab (o el gatillo derecho) avance rápido, con la música
+acelerada. `--headless --script archivo --dump-dir carpeta` juega un guion
+(los mismos comandos que el `--script` de la recompilación) sin ventana y
+guarda la imagen y la WRAM; ahí las mejoras están apagadas salvo con
+`--mods`.
+
+Las letras del launcher y del menú de pausa son Pixelify Sans y Tiny5
+(SIL Open Font License, `native/fonts/`); los iconos y la granja de noche
+están dibujados para este proyecto, sin gráficos del juego.
 
 ## Licencia
 

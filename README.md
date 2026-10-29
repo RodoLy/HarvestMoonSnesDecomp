@@ -177,11 +177,38 @@ their SHA-256, takes the chips from `native/chips` or from the
 recompilation next to this folder, and leaves `HarvestMoonNative.exe` and
 `SDL3.dll` here. For Windows from Linux: add `-DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake`
 (MinGW-w64). SDL3 is built from source when no installed one is found.
+It opens on a launcher in the look of the game (a farm at night under the
+harvest moon, wooden frames and parchment, the pointing hand): **Games**
+(the ROMs next to the program or in `roms/`, or any other through the
+system's file window; each is checked by its header and CRC), **Options**
+(window, full screen, sharp or exact pixels, vsync, widescreen, sprites,
+volume, fast forward, language: Spanish, English, Italian), **Controls**
+(the keys and gamepad buttons for each SNES button; the gamepads connected
+and which one plays) and **Improvements**. In the game it opens with
+Escape (or L3 / Guide on a gamepad, or OPTIONS on the title screen) with
+the game paused, and adds **Save states** (10 slots; F1-F10 load,
+Shift+F1-F10 save) and Restart. Everything is kept in `config.ini` and
+`keybinds.ini` next to the program.
+
+The improvements are the recompilation's, ported: fast text, longer days
+(1.5x to 4x), the Harvest Moon 64-style pause menu (M or R3: tools, hearts,
+farm), OPTIONS on the title screen, an endless game (after the Year 3
+ending you carry on into Fall, Year 4, 5...), 16:9 widescreen and the
+cheats (money, stamina, a stopped clock, lumber and fodder, seeds and feed,
+weather). With all of them off the game is the console's own; the
+decompiled C has only three hooks, with the ROM's values by default
+(`g_hm_oam_right/left`, `g_hm_no_ending`, `g_hm_year_suffix`).
+
 Keys: arrows, X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start,
-Right Shift = Select, F11 full screen, Tab fast; a gamepad works too.
-`--headless --script file --dump-dir dir` plays a script (the same commands
-as the recompilation's `--script`) without a window and dumps the picture
-and the WRAM.
+Right Shift = Select, Escape the launcher, M the pause menu, F11 full
+screen, Tab (or the right trigger) fast forward, the music sped up with
+it. `--headless --script file --dump-dir dir` plays a script (the same
+commands as the recompilation's `--script`) without a window and dumps the
+picture and the WRAM; there the improvements are off unless `--mods`.
+
+The launcher's and the pause menu's type is Pixelify Sans and Tiny5 (SIL
+Open Font License, `native/fonts/`); the icons and the night farm are drawn
+for this project, with no game graphics.
 
 ## License
 

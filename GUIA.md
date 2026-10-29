@@ -390,7 +390,11 @@ $80:9553), cuya cuenta lo incluía (56,14 % → 56,10 %).
 | `src/intro.c` | la pantalla de título, su menú y las pantallas de partidas |
 | `src/reset.c` | el encendido |
 | `native/main.c` | la versión nativa: la ventana, los controles, el sonido, el orden de las rutinas |
-| `native/hw.c` | la versión nativa: los chips de la consola alrededor del C (mapa de memoria, registros) |
+| `native/hw.c` | la versión nativa: los chips de la consola alrededor del C (mapa de memoria, registros, estados guardados) |
+| `native/launcher.c` | el launcher: juegos, opciones, controles y mandos, mejoras, estados |
+| `native/mods.c` | las mejoras de la recompilación: trucos, texto rápido, días largos, OPTIONS en el título, pantalla ancha, juego sin fin |
+| `native/pause.c` | el menú de pausa estilo Harvest Moon 64 |
+| `native/ui.c`, `native/i18n.c`, `native/config.c` | el dibujo de los menús, los textos en español / inglés / italiano, `config.ini` y `keybinds.ini` |
 
 ---
 
@@ -2034,6 +2038,24 @@ Con todas las rutinas reescritas, el juego corre sin el código recompilado
   recompilación en los mismos puntos de la pantalla de título (el comienzo
   de cada etapa), toda la WRAM coincide salvo los números al azar, los
   bytes que deciden y la pila.
+- **Alrededor del juego.** `launcher.c` (Juegos, Opciones, Controles,
+  Mejoras, Estados guardados) y `pause.c` (el menú de pausa) se dibujan en
+  un lienzo de 256x224 (`ui.c`) y corren dentro de `g_hm_frame_hook`: el
+  juego queda parado al final de un cuadro mientras el chip de sonido
+  sigue tocando. `mods.c` son las mejoras de la recompilación; tocan la
+  WRAM entre cuadros y solo con valores que el juego mismo pone, y tres
+  ganchos en el C (`g_hm_oam_right/left` en PrepareOAMData para la
+  pantalla ancha, `g_hm_no_ending` en MapEvent_DED3 para el juego sin fin,
+  `g_hm_year_suffix` en CODE_82E405 para "4th", "5th"...) que por defecto
+  valen lo de la ROM, así que el comprobador no ve diferencia.
+- **El punto limpio.** Al empezar cada cuadro de GameLoop (`main` está por
+  llamar a `hm_GameLoop`) no hay ninguna rutina a medias, solo la WRAM, los
+  registros y los chips: ahí se guardan los estados (`hw.c`,
+  `native_state_save`) y se vuelve a ellos con un `longjmp` desde donde sea
+  (un cuadro dentro de una espera, el launcher). El juego sin fin usa lo
+  mismo: guarda la máquina en la tarde del 29 de verano del año 3, deja
+  correr el final, y vuelve a ese punto con `$0973 = 2` (pasar al día
+  siguiente, como al dormir) y la fecha del final apagada una vez.
 
 ---
 

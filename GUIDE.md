@@ -379,7 +379,11 @@ whose count included it (56.14 % → 56.10 %).
 | `src/intro.c` | the title screen, its menu and the file screens |
 | `src/reset.c` | the power-on |
 | `native/main.c` | the native build: the window, the pads, the sound, the order of the routines |
-| `native/hw.c` | the native build: the console's chips around the C (memory map, registers) |
+| `native/hw.c` | the native build: the console's chips around the C (memory map, registers, save states) |
+| `native/launcher.c` | the launcher: games, options, controls and gamepads, improvements, states |
+| `native/mods.c` | the recompilation's improvements: cheats, fast text, long days, OPTIONS on the title, widescreen, endless game |
+| `native/pause.c` | the Harvest Moon 64-style pause menu |
+| `native/ui.c`, `native/i18n.c`, `native/config.c` | drawing the menus, the Spanish / English / Italian text, `config.ini` and `keybinds.ini` |
 
 ---
 
@@ -1959,6 +1963,24 @@ With every routine rewritten, the game runs without the recompiled code
   recompilation at the same points of the title screen (the start of each
   stage), the whole WRAM matches except the random numbers, the bytes they
   decide and the stack.
+- **Around the game.** `launcher.c` (Games, Options, Controls,
+  Improvements, Save states) and `pause.c` (the pause menu) are drawn on a
+  256x224 canvas (`ui.c`) and run inside `g_hm_frame_hook`: the game stands
+  still at a frame's end while the sound chip goes on playing. `mods.c` is
+  the recompilation's improvements; they touch the WRAM between frames,
+  only with values the game itself writes, plus three hooks in the C
+  (`g_hm_oam_right/left` in PrepareOAMData for widescreen, `g_hm_no_ending`
+  in MapEvent_DED3 for the endless game, `g_hm_year_suffix` in CODE_82E405
+  for "4th", "5th"...) whose defaults are the ROM's, so the checker sees no
+  difference.
+- **The clean point.** At the start of every GameLoop frame (`main` is
+  about to call `hm_GameLoop`) no routine is half done, only the WRAM, the
+  registers and the chips: save states are made there (`hw.c`,
+  `native_state_save`) and loaded back with a `longjmp` from anywhere (a
+  frame inside a wait, the launcher). The endless game uses the same: it
+  keeps the machine on the evening of Summer 29, Year 3, lets the ending
+  play, and goes back there with `$0973 = 2` (on to the next day, as when
+  sleeping) and the ending's date check off once.
 
 ---
 
