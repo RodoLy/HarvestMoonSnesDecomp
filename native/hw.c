@@ -241,6 +241,8 @@ bool native_hw_init(const uint8_t *rom, uint32_t rom_size, uint8_t *sram, uint32
   return true;
 }
 
+/* kPpuRenderFlags_*: 1 the fast renderer, 8 no limit of sprites per line */
+uint32_t g_native_ppu_flags = 1 | 8;
 void native_set_pads(uint16_t pad1, uint16_t pad2) { s_pad[0] = pad1; s_pad[1] = pad2; }
 
 /* The field: from the PPU's state as the frame's code left it, HDMA
@@ -248,7 +250,7 @@ void native_set_pads(uint16_t pad1, uint16_t pad2) { s_pad[0] = pad1; s_pad[1] =
  * (256 x 224, 32-bit BGRX). Then the vertical blank's own work. */
 void native_draw_frame(uint8_t *pixels)
 {
-  PpuBeginDrawing(g_ppu, pixels, 256 * 4, 0);
+  PpuBeginDrawing(g_ppu, pixels, 256 * 4, g_native_ppu_flags);
   PpuSetExtraSpace(g_ppu, 0);
   Dma *dma = g_snes->dma;
   dma_startDma(dma, g_snesrecomp_last_hdmaen, true);

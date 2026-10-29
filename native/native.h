@@ -13,3 +13,4 @@ void native_apu_run_to(uint64_t target);
 uint32_t native_audio_samples(int16_t *out, int frames);
 bool native_nmi_enabled(void);
 extern void (*g_native_lag_frame)(void);
+extern uint32_t g_native_ppu_flags;

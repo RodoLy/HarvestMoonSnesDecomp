@@ -8,7 +8,7 @@
  * a frame: it is drawn, the pads are read, the sound chip catches up with
  * the frame's time, and the window waits for the next 1/60 s.
  *
- *   HarvestMoonNative [rom.sfc] [--scale N] [--fullscreen]
+ *   HarvestMoonNative [rom.sfc] [--scale N] [--fullscreen] [--no-vsync] [--sprite-limits]
  *                     [--script file --headless --dump-dir dir]
  *
  * The saved games go next to the ROM (<rom>.srm), as the cartridge's
@@ -50,9 +50,12 @@ static uint64_t s_next_tick;
 static SDL_Texture *s_up;           /* the picture enlarged by a whole number (sharp scaling) */
 static int s_up_k;
 static double s_hz = 60.0988;       /* frames a second: the console's, or the screen's with vsync */
-static bool s_vsync, s_want_vsync, s_soft;
+static bool s_vsync, s_want_vsync = true, s_soft;
 static char s_log_path[1024];
-static uint64_t s_t0, s_busy_ns, s_last_wake;    /* for the log: real time, time spent working */
+static uint64_t s_period_ns = 16639267;         /* a frame: 1/60.0988 s, or the screen's refresh */
+static uint64_t s_t0, s_last_wake, s_paced;      /* for the log and the vsync check */
+static uint64_t s_work_ns, s_work_max, s_present_ns, s_late;
+static uint64_t s_check_t; static int s_check_n;
 static const char *s_dump_dir = "";
 static FILE *s_wav;            /* --wav: the sound, raw 32 kHz stereo 16-bit */
 
@@ -296,9 +299,12 @@ static void quit_now(void)
     FILE *lg = fopen(s_log_path, "a");
     double secs = (SDL_GetTicksNS() - s_t0) / 1e9;
     if (lg) {
-      fprintf(lg, "%llu frames in %.1f s: %.2f a second; %.2f ms of work a frame\n",
-              (unsigned long long)s_frame, secs, secs > 0 ? s_frame / secs : 0,
-              s_frame ? s_busy_ns / 1e6 / s_frame : 0);
+      fprintf(lg, "%llu frames in %.1f s (%.2f a second, fast forward left out); work %.2f ms a frame"
+                  " (at most %.1f), showing it %.2f ms; %llu frames late; vsync %s\n",
+              (unsigned long long)s_paced, secs, secs > 0 ? s_paced / secs : 0,
+              s_paced ? s_work_ns / 1e6 / s_paced : 0, s_work_max / 1e6,
+              s_paced ? s_present_ns / 1e6 / s_paced : 0, (unsigned long long)s_late,
+              s_vsync ? "on" : "off");
       fclose(lg);
     }
   }
@@ -374,7 +380,14 @@ static void end_of_frame(uint8_t *ram)
   if (!s_headless) {
     poll_events();
     pad = read_pad();
+    uint64_t t = SDL_GetTicksNS();
+    if (s_last_wake && !s_fast) {
+      uint64_t w = t - s_last_wake;
+      s_work_ns += w;
+      if (w > s_work_max) s_work_max = w;
+    }
     present();
+    if (!s_fast) s_present_ns += SDL_GetTicksNS() - t;
   }
   { static long d0 = -1, d1 = -1;                     /* HM_DUMP_FRAMES=a:b: every frame's picture and WRAM */
     if (d0 < 0) { const char *e = getenv("HM_DUMP_FRAMES"); d0 = 0; if (e) sscanf(e, "%ld:%ld", &d0, &d1); }
@@ -385,18 +398,34 @@ static void end_of_frame(uint8_t *ram)
   if (s_quit) quit_now();
 
   if (!s_headless) {
-    if (s_fast) { s_next_tick = 0; if (s_audio) SDL_ClearAudioStream(s_audio); return; }
-    uint64_t woke = SDL_GetTicksNS();
-    if (s_last_wake) s_busy_ns += woke - s_last_wake;
-    if (!s_t0) s_t0 = woke;
-    if (s_vsync) { s_last_wake = SDL_GetTicksNS(); return; }   /* --vsync: the screen's refresh paces the frames */
-    /* an even 60.0988 frames a second from the clock, never nudged, so
-     * movement stays smooth */
-    const uint64_t frame_ns = 16639267;
+    if (s_fast) { s_next_tick = 0; s_last_wake = 0; s_check_n = 0; if (s_audio) SDL_ClearAudioStream(s_audio); return; }
     uint64_t now = SDL_GetTicksNS();
-    if (s_next_tick == 0 || now > s_next_tick + 4 * frame_ns) s_next_tick = now;
-    s_next_tick += frame_ns;
-    now = SDL_GetTicksNS();
+    if (!s_t0) s_t0 = now;
+    s_paced++;
+    if (s_vsync) {
+      /* the screen's refresh paces the frames (the present waited for
+       * it). If they fall behind (under 55 a second over two seconds:
+       * frames missing the refresh and waiting a whole one), the clock
+       * takes over */
+      if (s_check_n == 0) s_check_t = now;
+      if (++s_check_n == 121) {
+        double fps = 120e9 / (double)(now - s_check_t);
+        s_check_n = 0;
+        if (fps < 55.0) {
+          SDL_SetRenderVSync(s_renderer, 0);
+          s_vsync = false;
+          FILE *lg = s_log_path[0] ? fopen(s_log_path, "a") : NULL;
+          if (lg) { fprintf(lg, "frame %llu: %.1f frames a second with vsync: now the clock\n", (unsigned long long)s_frame, fps); fclose(lg); }
+        }
+      }
+      if (s_last_wake && now - s_last_wake > s_period_ns * 3 / 2) s_late++;
+      s_last_wake = now;
+      return;
+    }
+    /* an even pace from the clock, never nudged, so movement stays smooth */
+    if (s_next_tick == 0 || now > s_next_tick + 4 * s_period_ns) s_next_tick = now;
+    if (now > s_next_tick + s_period_ns / 2) s_late++;
+    s_next_tick += s_period_ns;
     if (s_next_tick > now) SDL_DelayPrecise(s_next_tick - now);
     s_last_wake = SDL_GetTicksNS();
   }
@@ -463,7 +492,8 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[i], "--dump-dir") && i + 1 < argc) s_dump_dir = argv[++i];
     else if (!strcmp(argv[i], "--scale") && i + 1 < argc) scale = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--fullscreen")) fullscreen = true;
-    else if (!strcmp(argv[i], "--vsync")) s_want_vsync = true;
+    else if (!strcmp(argv[i], "--no-vsync")) s_want_vsync = false;
+    else if (!strcmp(argv[i], "--sprite-limits")) g_native_ppu_flags &= ~8u;   /* the console's 32 sprites / 34 pieces a line */
     else if (!strcmp(argv[i], "--wav") && i + 1 < argc) s_wav = fopen(argv[++i], "wb");
     else if (argv[i][0] != '-') rom_path = argv[i];
   }
@@ -495,6 +525,7 @@ int main(int argc, char **argv)
   memcpy(s_sram_saved, s_sram, SRAM_SIZE);
   if (script) script_load(script);
 
+  { const char *e = getenv("HM_PPU_FLAGS"); if (e) g_native_ppu_flags = (uint32_t)strtoul(e, NULL, 0); }
   if (!native_hw_init(rom, rom_size, s_sram, SRAM_SIZE)) { fprintf(stderr, "out of memory\n"); return 1; }
 
   if (!s_headless) {
@@ -512,8 +543,17 @@ int main(int argc, char **argv)
      * a whole refresh) */
     const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(s_window));
     float hz = mode ? mode->refresh_rate : 0;
-    if (s_want_vsync && hz >= 58.5f && hz <= 61.5f && SDL_SetRenderVSync(s_renderer, 1)) { s_vsync = true; s_hz = hz; }
-    else SDL_SetRenderVSync(s_renderer, 0);
+    if (hz >= 58.5f && hz <= 61.5f) {
+      /* a 60 Hz screen: the game at the screen's own rate (each frame
+       * shown once, evenly; the sound follows, 0.16 % off at most), with
+       * vsync unless --no-vsync */
+      s_hz = hz;
+      s_period_ns = (uint64_t)(1e9 / hz);
+      if (s_want_vsync && (SDL_SetRenderVSync(s_renderer, -1) || SDL_SetRenderVSync(s_renderer, 1))) s_vsync = true;
+      else SDL_SetRenderVSync(s_renderer, 0);
+    } else {
+      SDL_SetRenderVSync(s_renderer, 0);
+    }
     const char *rname = SDL_GetRendererName(s_renderer);
     s_soft = rname && !strcmp(rname, "software");
     /* what was chosen, next to the program (for reporting problems) */
