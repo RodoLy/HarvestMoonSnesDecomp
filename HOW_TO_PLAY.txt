@@ -1,0 +1,51 @@
+Harvest Moon (SNES) - native build, v0.1.0 beta
+================================================
+
+The game runs on its decompiled C code, built on your own computer.
+No ROM, no generated code and no ready-made program are included:
+you need your own legal copy of Harvest Moon (USA).
+
+WINDOWS 10/11 (x64 or ARM)
+ 1. Double-click build.bat. The first time it downloads a C compiler
+    (llvm-mingw) and SDL3, about 190 MB, checked by their SHA-256.
+    Then it builds the game in about a minute.
+ 2. Open HarvestMoonNative.exe.
+ 3. The first time, choose your ROM (Harvest Moon USA, .sfc or .smc).
+    It is checked and remembered.
+
+LINUX
+    cmake -S native -B build/native && cmake --build build/native
+    build/native/HarvestMoonNative /path/to/your/rom.sfc
+
+Everything starts OFF: the game is the console's. Turn on what you like
+in the launcher (Esc): Improvements (fast text, longer days, the
+Harvest Moon 64-style pause menu, OPTIONS on the title screen, the
+endless game, widescreen, cheats) and Options.
+
+Keys: arrows, X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start,
+Right Shift = Select. Esc launcher, M pause menu, Tab fast forward,
+F11 full screen, F1-F10 load a state, Shift+F1-F10 save one.
+A gamepad works too. Everything can be changed in Controls.
+
+This is a beta: please report problems in the repository's Issues.
+https://github.com/RodriLoy/HarvestMoonSnesDecomp
+
+----------------------------------------------------------------------
+
+Harvest Moon (SNES) - version nativa, v0.1.0 beta
+
+El juego corre sobre su codigo C descompilado, compilado en tu propia
+computadora. No incluye la ROM, ni codigo generado, ni un programa ya
+hecho: necesitas tu propia copia legal de Harvest Moon (USA).
+
+WINDOWS 10/11 (x64 o ARM)
+ 1. Doble clic en build.bat (o compilar_nativo.bat). La primera vez
+    descarga un compilador de C (llvm-mingw) y SDL3, unos 190 MB,
+    revisados por su SHA-256. Luego compila el juego en un minuto.
+ 2. Abre HarvestMoonNative.exe.
+ 3. La primera vez elige tu ROM (Harvest Moon USA, .sfc o .smc). Se
+    revisa y se recuerda.
+
+Todo viene APAGADO: el juego es el de la consola. Activa lo que quieras
+en el launcher (Esc): Mejoras y Opciones. El idioma se cambia en
+Options > Language.
