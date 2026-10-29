@@ -17,6 +17,38 @@ typedef void (*InterpPreOpcodeHook)(CpuState *cpu, uint32_t pc24);           /* 
 bool interp_bridge_add_pre_opcode_hook(uint32_t pc24, InterpPreOpcodeHook hook);
 void interp_bridge_pre_opcode_redirect(uint32_t pc24);
 int interp_bridge_run_interrupt(CpuState *cpu, uint32_t entry_pc24);
+size_t RtlSaveSnapshotToMemory(void *data, size_t capacity);      /* common_rtl.h */
+bool RtlLoadSnapshotFromMemory(const void *data, size_t size);
+void WatchdogFrameStart(void);   /* common_cpu_infra.h */
+extern jmp_buf g_watchdog_jmp;
+extern int g_recomp_stack_top;
+/* HM_WAIT: the interpreter runs the compiled body of a routine it calls
+ * when there is one; the compiled WaitForNMI would spin (the fuzzer has no
+ * frame scheduler), so while one is fuzzed the waiting routines are kept in
+ * the interpreter (at most 16). */
+static const HmDecompFn *find(const char *name, int *index);
+static void keep_waits_interpreted(int on, const HmDecompFn *fuzzed)
+{
+  /* first the ones other routines call (the fuzzed routine itself is
+   * entered in the interpreter anyway), then the rest while there is room */
+  static const char *const called[] = {
+    "WaitForNMI", "WaitForNMIATimes", "UNK_Audio18", "ToolUsedSound2", "ScreenFadein",
+    "ScreenFadeout", "UNK_Audio24", "UNK_Audio20", "CODE_8187C3", "UNK_Audio26" };
+  uint32_t list[16];
+  size_t n = 0;
+  for (size_t k = 0; on && k < sizeof called / sizeof called[0]; k++) {
+    int index = 0;
+    const HmDecompFn *f = find(called[k], &index);
+    if (f && f != fuzzed && n < 16) list[n++] = f->pc24;
+  }
+  for (int i = 0; on && i < g_hm_decomp_count && n < 16; i++) {
+    const HmDecompFn *f = &g_hm_decomp_fns[i];
+    int already = 0;
+    for (size_t k = 0; k < n; k++) already |= list[k] == f->pc24;
+    if ((f->out_mask & HM_WAIT) && f != fuzzed && !already) list[n++] = f->pc24;
+  }
+  interp_bridge_set_lle_bounce_exclusions(list, n);
+}
 
 /* HM_WAIT: while one is fuzzed, the original (in the interpreter) gets its
  * NMI when it reaches a wait loop's LDA $00 with $00 still 0: the CPU
@@ -487,8 +519,243 @@ static void prep_wait_times(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   uint16_t a = r->a;
   prep_update_graphics(ram, r, rnd);
+  ram[0x28] = 0;
   r->a = a;
 }
+/* nmi.c: WaitForNMI: the NMI with no other channel waiting (random
+ * channels could copy from the I/O area; UpdateGraphics's own test has
+ * them) */
+static void prep_wait_frame(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_update_graphics(ram, r, rnd);
+  ram[0x28] = 0;
+}
+/* audio.c: UNK_Audio18: the uploads' inputs (prep_upload) and a frame's
+ * NMI (prep_update_graphics) */
+static void prep_upload(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_sound_wait(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_update_graphics(ram, r, rnd);
+  prep_upload(ram, r, rnd);
+  ram[0x28] = 0;
+}
+/* eventcmds.c: the fade commands: a script position and a frame's NMI */
+static void prep_event_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_event_fade(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_cmd(ram, r, rnd);
+  prep_update_graphics(ram, r, rnd);
+  hm_wr16(ram, 0x11F5A, (uint16_t)rnd());
+  ram[0x28] = 0;
+}
+/* eventcmds.c: Event_AudioRelated3: a real noise (as for UNK_Audio24) and
+ * 1-3 frames in the command's arguments, the item in hand 0-$1B */
+static void prep_effect_wait(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_event_sound_wait(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_event_cmd(ram, r, rnd);
+  prep_effect_wait(ram, r, rnd);
+  uint16_t at = hm_rd16(ram, 0xC9);
+  ram[0x10000 + at + 1] = (uint8_t)r->a;
+  hm_wr16(ram, 0x10000u + at + 2, r->x);
+  hm_wr16(ram, 0x10000u + at + 4, r->y);
+  ram[0x0921] = (uint8_t)(rnd() % 0x1C);
+}
+/* interact.c: CODE_81D670: its first frame ($096F != 1) or a later one
+ * ($0970 often about to reach $20), an item in hand 0-$1B */
+static void prep_action_sound(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  uint8_t keep[13];
+  memcpy(keep, &ram[0x0103], sizeof keep);
+  prep_sound_wait(ram, r, rnd);
+  memcpy(&ram[0x0103], keep, sizeof keep);
+  ram[0x096F] = (uint8_t)((rnd() % 2) ? 1 : (rnd() % 2) ? 0 : rnd());
+  ram[0x0970] = (uint8_t)((rnd() % 2) ? 0x1F : rnd());
+  ram[0x0921] = (uint8_t)(rnd() % 0x1C);
+  hm_wr16(ram, 0xD2, (uint16_t)rnd());
+  hm_wr16(ram, 0x11F5A, (uint16_t)rnd());
+}
+/* items.c: a tool taken off the shed's wall (item $2A-$43): a shelf, a
+ * shop map (prep_shelf), the map's extras (prep_map_tiles), the game
+ * objects (prep_destroy; the item's own in $0978), the sound chip and a
+ * frame's NMI */
+static void prep_map_tiles(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_destroy(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_tool_item(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_sound_wait(ram, r, rnd);
+  prep_map_tiles(ram, r, rnd);
+  prep_shelf(ram, r, rnd);
+  prep_destroy(ram, r, rnd);
+  ram[0x0984] = (uint8_t)(0x2A + rnd() % 26);
+  hm_wr16(ram, 0x0978, (uint16_t)(rnd() % 40));
+  ram[0x28] = 0;
+}
+/* items.c: SUB_81809A: any item 1-$5A, prepared as for its own routine */
+static void prep_item(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_item_food(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_item_shop(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_items_dispatch(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  switch (rnd() % 4) {
+  case 0: prep_item(ram, r, rnd); break;
+  case 1: prep_item_food(ram, r, rnd); break;
+  case 2: prep_item_shop(ram, r, rnd); break;
+  default: prep_tool_item(ram, r, rnd); break;
+  }
+  hm_io_quiet();
+  hm_wr16(ram, 0x11F5E, (uint16_t)rnd());
+}
+/* items.c: BAAAA: the ten records of items left on the map, about three
+ * in use, all with the item prepared (prep_items_dispatch) or no routine,
+ * real sprites, positions near it */
+static void prep_sprite(uint8_t *ram, uint16_t sprite, uint32_t (*rnd)(void));
+static void prep_item_records(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_items_dispatch(ram, r, rnd);
+  for (unsigned i = 0; i < 10; i++) {
+    uint8_t *rec = &ram[0x0B4E6 + 16 * i];
+    if (rnd() % 10 >= 3) { rec[0] = (uint8_t)(rnd() & 0xFE); continue; }
+    rec[0] = (uint8_t)(1 | (rnd() & 0x06) | ((rnd() % 4) ? 0 : rnd() & 0xF8));
+    rec[1] = (uint8_t)((rnd() % 4) ? 1 : 0);
+    rec[2] = (uint8_t)((rnd() % 2) ? ram[0x0976] : rnd() % 9);
+    rec[3] = ram[0x0984];
+    uint16_t object = (uint16_t)(rnd() % 40);
+    rec[4] = (uint8_t)object; rec[5] = 0;
+    for (unsigned k = 0; k < 2; k++) {
+      uint16_t sprite = (uint16_t)(rnd() % 0x450);
+      prep_sprite(ram, sprite, rnd);
+      rec[6 + 2 * k] = (uint8_t)sprite; rec[7 + 2 * k] = (uint8_t)(sprite >> 8);
+    }
+    if (rnd() % 2) { rec[8] = rec[6]; rec[9] = rec[7]; }
+    rec[10] = (uint8_t)((rnd() % 2) ? 0 : 0x40); rec[11] = 0;
+    uint16_t x = (uint16_t)(hm_rd16(ram, 0xDF) - 0x40 + rnd() % 0x80);
+    uint16_t y = (uint16_t)(hm_rd16(ram, 0xE1) - 0x40 + rnd() % 0x80);
+    rec[12] = (uint8_t)x; rec[13] = (uint8_t)(x >> 8); rec[14] = (uint8_t)y; rec[15] = (uint8_t)(y >> 8);
+  }
+  for (unsigned g = 0; g < 0x40; g++)
+    if (hm_rd16(ram, 0x0A320 + 4 * g) < 40) hm_wr16(ram, 0x0A320 + 4 * g, (uint16_t)(40 + rnd() % 200));
+}
+/* events.c: EventInstructionInterpreter: a command 0-89 prepared as for
+ * its own entry, its position also in the slot (+30, +32) */
+static void prep_one_command(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  uint8_t cmd = (uint8_t)(rnd() % 90);
+  uint32_t at = hm_bus_rd16(ram, 0x849419u + 2u * cmd) | 0x840000u;
+  const HmDecompFn *f = NULL;
+  for (int i = 0; i < g_hm_decomp_count && !f; i++)
+    if (g_hm_decomp_fns[i].pc24 == at) f = &g_hm_decomp_fns[i];
+  if (f && f->prep) f->prep(ram, r, rnd);
+  else prep_event_cmd(ram, r, rnd);
+  if (f)
+    for (int v = 0; v < HM_FUZZ_MAX_VARS && f->vars[v].size; v++) {
+      uint16_t x = (uint16_t)(f->vars[v].lo + rnd() % ((uint32_t)f->vars[v].hi - f->vars[v].lo + 1));
+      ram[f->vars[v].addr] = (uint8_t)x;
+      if (f->vars[v].size == 2) ram[f->vars[v].addr + 1] = (uint8_t)(x >> 8);
+    }
+  uint16_t pc = hm_rd16(ram, 0xC9);
+  uint8_t bank = ram[0xCB];
+  uint32_t cmd_at = ((uint32_t)bank << 16 | pc);
+  if (bank == 0x7E || bank == 0x7F) ram[(cmd_at - 0x7E0000) & 0x1FFFF] = cmd;
+  uint16_t slot = hm_rd16(ram, 0xCC);
+  ram[slot + 0x30] = (uint8_t)pc; ram[slot + 0x31] = (uint8_t)(pc >> 8); ram[slot + 0x32] = bank;
+}
+/* events.c: IterateCCStructures: the game's own scripts as they are, the
+ * waits about to end, the text box and the action sometimes stopping it */
+static void prep_scripts(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_update_graphics(ram, r, rnd);
+  ram[0x28] = 0;
+  for (unsigned s = 0; s < 0x31; s++) {
+    uint8_t *slot = &ram[0xB586 + 64 * s];
+    if ((slot[0] & 1) && rnd() % 2) { slot[0x10] = (uint8_t)(rnd() % 3); slot[0x11] = 0; }
+    if (rnd() % 4 == 0) { slot[0x03] = (uint8_t)rnd(); slot[0x04] = (uint8_t)rnd(); }
+  }
+  /* the one-frame bits it clears at the end */
+  if (rnd() % 2) {
+    ram[0x11F5B] |= 0x01; ram[0x11F5A] |= 0xD0; ram[0x11F5D] |= 0x04;
+    ram[0x11F5E] |= 0x40; ram[0x11F60] |= 0x10;
+  }
+  ram[0x019A] = (uint8_t)((rnd() % 8) ? 0 : (rnd() % 2) ? 2 : 6);
+  if (rnd() % 8 == 0) hm_wr16(ram, 0xD4, 3);
+  for (unsigned i = 0; i < 3; i++) ram[HM_RNG_STATE + i] = (uint8_t)rnd();
+}
+/* audio.c: UNK_Audio20: a song as prep_music gives it */
+static void prep_music(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_song_wait(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_sound_wait(ram, r, rnd);
+  prep_music(ram, r, rnd);
+  r->a = (uint16_t)((r->a & 0xFF00) | ram[0x0110]);
+  /* UNK_Audio20 called alone: the same song (a new one first waits until
+   * the chip is not busy, which with the music playing it never is; the
+   * other way is tested through UNK_Audio26, which fades the music first) */
+  /* songs 0-$19 (or $FF: none): the table $80:B8CD of their instrument
+   * counts has 26 entries, and a count past 10 would make UNK_Audio10 clear
+   * memory round the whole bank */
+  ram[0x0110] = (uint8_t)((rnd() % 8) ? rnd() % 26 : 0xFF);
+  ram[0x0117] = ram[0x0110];
+  ram[0x28] = 0;
+}
+/* audio.c: UNK_Audio26: song A, often a new one, and the map entered for
+ * UNK_Audio5 */
+static void prep_new_song_wait(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  /* the song playing ($0117) as the chip has it: if it said nothing plays
+   * while something does, the old song would not fade and the chip would
+   * stay busy for ever */
+  uint8_t playing = ram[0x0117];
+  prep_sound_wait(ram, r, rnd);
+  prep_music(ram, r, rnd);
+  ram[0x0117] = playing;
+  ram[0x0110] = (uint8_t)((rnd() % 8) ? rnd() % 26 : (rnd() % 2) ? 0 : 0xFF);
+  r->a = (uint16_t)((r->a & 0xFF00) | ram[0x0110]);
+  ram[0x0110] = (uint8_t)rnd();
+  ram[0x098B] = (uint8_t)(rnd() % 0x60);
+  ram[0x11F1C] = (uint8_t)(rnd() % 24);
+  ram[0x28] = 0;
+}
+/* audio.c: UNK_Audio24: effect A (0-$28) of bank X (6 or 7, the tools'
+ * banks: with another one the sound program stops answering), then Y =
+ * 1-3 frames */
+static void prep_effect_wait(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_sound_wait(ram, r, rnd);
+  /* a real noise: one of the tools' (Tool_Noise_Table: bank, two effects) */
+  uint8_t bank = 6, effect = 0x14;
+  for (int tries = 0; tries < 16; tries++) {
+    uint32_t at = 0x829054u + 3u * (rnd() % 28);
+    uint8_t b = hm_bus_rd8(ram, at), e = hm_bus_rd8(ram, at + 1 + rnd() % 2);
+    if (b && e) { bank = b; effect = e; break; }
+  }
+  r->a = (uint16_t)((r->a & 0xFF00) | effect);
+  r->x = (uint16_t)((rnd() & 0xFF00) | bank);
+  r->y = (uint16_t)(1 + rnd() % 3);
+}
+/* toolsound.c: ToolUsedSound2: an item 0-$1B ($0921), the one noted
+ * ($0119) often the same */
+static void prep_tool_noise_wait(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_sound_wait(ram, r, rnd);
+  ram[0x0921] = (uint8_t)(rnd() % 0x1C);
+  ram[0x0119] = (uint8_t)((rnd() % 4) ? rnd() % 0x1C : ram[0x0921]);
+}
+/* nmi.c: the fades: from $92 (or $FF: from $25) to $94, 1-2 frames a
+ * level ($93 = 0 would be 256), the target on the right side (else the
+ * brightness byte goes round, 256 levels) */
+static void prep_fade(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), int up)
+{
+  prep_update_graphics(ram, r, rnd);
+  ram[0x25] = (uint8_t)(rnd() % 16);
+  ram[0x92] = (uint8_t)((rnd() % 8) ? rnd() % 16 : 0xFF);
+  uint8_t from = ram[0x92] == 0xFF ? ram[0x25] : ram[0x92];
+  ram[0x94] = up ? (uint8_t)(from + rnd() % (16 - from)) : (uint8_t)(rnd() % (from + 1));
+  ram[0x93] = (uint8_t)(1 + rnd() % 2);
+  hm_wr16(ram, 0x11F5A, (uint16_t)rnd());
+  ram[0x28] = 0;
+}
+static void prep_fade_in(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void)) { prep_fade(ram, r, rnd, 1); }
+static void prep_fade_out(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void)) { prep_fade(ram, r, rnd, 0); }
 /* video.c: BackgroundsManager: any map (the title screens too); the
  * player's start a multiple of the step 8 (the word at $1E) or the walk
  * there never ends; bit 15 of $0196 (the picture stored unpacked) only
@@ -517,7 +784,10 @@ static void prep_file_line(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   /* the year picks its suffix ("st", "nd", "rd") from a table of three:
    * a garbage year would read letters, and DMA sources, from past it */
   if (g_sram && g_sram_size >= 0x2000)
-    for (unsigned s = 0; s < 2; s++) g_sram[0x1000 * s] = (uint8_t)(rnd() % 3);
+    for (unsigned s = 0; s < 2; s++) {
+      g_sram[0x1000 * s] = (uint8_t)(rnd() % 3);
+      g_sram[0x1000 * s + 1] = (uint8_t)(rnd() % 4);     /* the season names, 4 */
+    }
   hm_io_quiet();
   ram[0x28] = 0;
   r->a = (uint16_t)(rnd() % 3);
@@ -2788,6 +3058,35 @@ PREP_PS(15, 0x15) PREP_PS(14, 0x14) PREP_PS(0F, 0x0F) PREP_PS(10, 0x10) PREP_PS(
 PREP_PS(13, 0x13) PREP_PS(1B, 0x1B) PREP_PS(0D, 0x0D) PREP_PS(0C, 0x0C) PREP_PS(0B, 0x0B) PREP_PS(0A, 0x0A)
 PREP_PS(00, 0x00) PREP_PS(01, 0x01) PREP_PS(02, 0x02) PREP_PS(0E, 0x0E) PREP_PS(03, 0x03) PREP_PS(04, 0x04)
 PREP_PS(05, 0x05) PREP_PS(08, 0x08) PREP_PS(09, 0x09)
+/* playerstate.c: $1C, swapping the tools: as the other steps, and the
+ * sound chip with a frame's NMI (ToolUsedSound2); tools 0-$1B */
+static void prep_sound_wait(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+/* playerstate.c: SUB_81BFB7 / PlayerInteractionSelector: any step (as
+ * prep_ps_any) or a pending action (as prep_player_action), the sound chip
+ * and a frame's NMI */
+static void prep_player_action(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_player_frame(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  int step = rnd() % 2;
+  if (step) prep_player_state_as(ram, r, rnd, (int)(rnd() % 29));
+  else prep_player_action(ram, r, rnd);
+  prep_sound_wait(ram, r, rnd);
+  ram[0x0921] = (uint8_t)(rnd() % 0x1C);
+  ram[0x0923] = (uint8_t)(rnd() % 0x1C);
+  /* the step of the action, or the pending action; sometimes neither */
+  if (step) { ram[0xD2] |= 0x01; ram[0xD2] &= (uint8_t)~0x40; }
+  else ram[0xD2] |= 0x41;
+  if (rnd() % 8 == 0) ram[0xD2] &= (uint8_t)~0x01;
+  if (hm_rd16(ram, 0xD4) > 0x1C) hm_wr16(ram, 0xD4, 0);
+  if (ram[0x096E] >= 0x58) ram[0x096E] = (uint8_t)(rnd() % 0x58);
+}
+static void prep_ps_swap(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_player_state_as(ram, r, rnd, 0x1C);
+  prep_sound_wait(ram, r, rnd);
+  ram[0x0921] = (uint8_t)(rnd() % 0x1C);
+  ram[0x0923] = (uint8_t)(rnd() % 0x1C);
+}
 
 /* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
  * or winter, an ordinary weekday) */
@@ -2902,7 +3201,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     0x83C9A7, 0, 0, 0, 0xFFFF, { { 0 } } },
   { "GetChickenPointer", hm_GetChickenPointer, HM_OUT_A, "src/animals.c",
     0x83C995, 0, 0, 0, 0xFFFF, { { 0 } } },
-  { "DivisionUnsigned", hm_DivisionUnsigned, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/math.c",
+  { "DivisionUnsigned", hm_DivisionUnsigned, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO, "src/math.c",
     0x838082, 0, 0, 0, 0xFFFF,
     /* small and large divisors: both paths, and divisor 0 */
     { W16(0x7E, 0, 0xFFFF), W16(0x80, 0, 600) } },
@@ -3339,6 +3638,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/actions.c", 0x81E2D9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
   { "PlayerAction_34", hm_PlayerAction_34, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/actions.c", 0x81E349, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
+  { "PlayerAction_35", hm_PlayerAction_35, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/actions.c", 0x81E36E, 0, 0, 0, 0xFFFF, { { 0 } }, 4, prep_action_sound },
   { "PlayerAction_36", hm_PlayerAction_36, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/actions.c", 0x81E394, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
   { "PlayerAction_37", hm_PlayerAction_37, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
@@ -3419,6 +3720,12 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/playerstate.c", 0x81BFDC, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_foot },
   { "ResetIdleAnimatioTimer", hm_ResetIdleAnimatioTimer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C002, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_any },
+  { "SUB_81BFB7", hm_SUB_81BFB7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
+    "src/playerstate.c", 0x81BFB7, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_player_frame },
+  { "PlayerInteractionSelector", hm_PlayerInteractionSelector, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/playerstate.c", 0x81D570, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_player_frame },
+  { "PlayerState_1C", hm_PlayerState_1C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/playerstate.c", 0x81C061, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_ps_swap },
   { "PlayerState_1A", hm_PlayerState_1A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C0B5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_1A },
   { "PlayerState_17", hm_PlayerState_17, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
@@ -4056,7 +4363,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/farm.c", 0x82A65A, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_map_copy },
   { "ClearsofAllCCStructs", hm_ClearsofAllCCStructs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/events.c", 0x848000, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_copy },
-  { "MultiplicationUnsigned", hm_MultiplicationUnsigned, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MultiplicationUnsigned", hm_MultiplicationUnsigned, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_IO,
     "src/math.c", 0x838067, 1, 0, 0, 0xFFFF, { B8(0x011A, 0, 255), B8(0x011B, 0, 255) }, 0, NULL },
   { "SUB_81A7CE", hm_SUB_81A7CE, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/maptiles.c", 0x81A7CE, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_stamp },
@@ -4136,7 +4443,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/maptiles.c", 0x81AFBF, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
   { "ReplaceTilesWitchHouse", hm_ReplaceTilesNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/maptiles.c", 0x81B063, 0, 0, 0, 0xFFFF, { { 0 } }, 50, prep_map_tiles },
-  { "Unk_Audio23", hm_Unk_Audio23, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "Unk_Audio23", hm_Unk_Audio23, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
     "src/math.c", 0x838000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_multiply16 },
   { "UNK_Audio6", hm_UNK_Audio6, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
     "src/audio.c", 0x838D8B, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music },
@@ -4214,9 +4521,93 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "COP_Interrupt", hm_COP_Interrupt, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP | HM_RTI,
     "src/nmi.c", 0x808699, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_irq },
   { "WaitForNMI", hm_WaitForNMI, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
-    "src/nmi.c", 0x808645, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_update_graphics },
+    "src/nmi.c", 0x808645, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_wait_frame },
   { "WaitForNMIATimes", hm_WaitForNMIATimes, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
     "src/nmi.c", 0x80865D, 0, 0, 1, 3, { { 0 } }, 200, prep_wait_times },
+  { "ScreenFadein", hm_ScreenFadein, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
+    "src/nmi.c", 0x8087CE, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_fade_in },
+  { "ScreenFadeout", hm_ScreenFadeout, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
+    "src/nmi.c", 0x80880A, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_fade_out },
+  { "UNK_Audio18", hm_UNK_Audio18, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
+    "src/audio.c", 0x83833E, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_sound_wait },
+  { "UNK_Audio20", hm_UNK_Audio20, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
+    "src/audio.c", 0x8383A4, 1, 0, 0, 0xFFFF, { { 0 } }, 30, prep_song_wait },
+  { "UNK_Audio24", hm_UNK_Audio24, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
+    "src/audio.c", 0x8382FE, 1, 0, 0, 0xFFFF, { { 0 } }, 30, prep_effect_wait },
+  { "UNK_Audio26", hm_UNK_Audio26, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
+    "src/audio.c", 0x8382C6, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_new_song_wait },
+  { "ToolUsedSound2", hm_ToolUsedSound2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
+    "src/toolsound.c", 0x828FF3, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_tool_noise_wait },
+  { "Event_ScreenFadein", hm_Event_ScreenFadein, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_IO | HM_WAIT,
+    "src/eventcmds.c", 0x848B83, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_event_fade },
+  { "Event_ScreenFadeout", hm_Event_ScreenFadeout, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_IO | HM_WAIT,
+    "src/eventcmds.c", 0x848CB9, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_event_fade },
+  { "Event_AudioRelated3", hm_Event_AudioRelated3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/eventcmds.c", 0x8495E8, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_event_sound_wait },
+  { "CODE_81D670", hm_CODE_81D670, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/interact.c", 0x81D670, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_action_sound },
+  { "EventInstructionInterpreter", hm_EventInstructionInterpreter, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_APU | HM_IO | HM_WAIT,
+    "src/events.c", 0x848249, 0, 0, 0, 0xFFFF, { { 0 } }, 60, prep_one_command },
+  { "IterateCCStructures", hm_IterateCCStructures, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
+    "src/events.c", 0x84816F, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_scripts },
+  { "BAAAA", hm_BAAAA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x81A383, 1, 0, 0, 0xFFFF, { { 0 } }, 30, prep_item_records },
+  { "SUB_81809A", hm_SUB_81809A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x81809A, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_items_dispatch },
+  { "CODE_8187C3", hm_CODE_8187C3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x8187C3, 1, 0, 0, 0xFF, { { 0 } }, 30, prep_tool_item },
+  { "ItemObject_2A", hm_ItemObject_2A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x8183C9, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_2B", hm_ItemObject_2B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x8183D1, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_2C", hm_ItemObject_2C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x8183D9, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_2D", hm_ItemObject_2D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x8183E1, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_2E", hm_ItemObject_2E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x8183E9, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_2F", hm_ItemObject_2F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x8183F1, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_30", hm_ItemObject_30, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x8183F9, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_31", hm_ItemObject_31, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818401, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_32", hm_ItemObject_32, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818409, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_33", hm_ItemObject_33, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818411, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_34", hm_ItemObject_34, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818419, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_35", hm_ItemObject_35, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818421, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_36", hm_ItemObject_36, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818429, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_37", hm_ItemObject_37, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818431, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_38", hm_ItemObject_38, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818439, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_39", hm_ItemObject_39, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818441, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_3A", hm_ItemObject_3A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818449, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_3B", hm_ItemObject_3B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818451, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_3C", hm_ItemObject_3C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818459, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_3D", hm_ItemObject_3D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818461, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_3E", hm_ItemObject_3E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818469, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_3F", hm_ItemObject_3F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818471, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_40", hm_ItemObject_40, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818479, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_41", hm_ItemObject_41, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818481, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_42", hm_ItemObject_42, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818489, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
+  { "ItemObject_43", hm_ItemObject_43, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+    "src/items.c", 0x818491, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
   { "BackgroundsManager", hm_BackgroundsManager, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x80A7C6, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_backgrounds },
   { "CODE_82E405", hm_CODE_82E405, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR | HM_INTERP,
@@ -4660,16 +5051,31 @@ static void fuzz_at(unsigned frame)
     const char *one_call = getenv("HM_DECOMP_FUZZ_CALL");
     int pick = one_call && *one_call ? atoi(one_call) : -1;
     /* A routine that talks to the sound chip changes the chip too, and the
-     * chip only runs up to the CPU's time: for these the CPU clock never
-     * goes back. Each call starts where the previous one ended (the chip
-     * goes on as if the game called the routine again and again), and the
-     * game resumes after the last one, like after a long frame. Before each
-     * call, wait (outside the check) until the chip says "ready" (port 3 =
-     * 1), as the game would before sending anything; if it does not (busy
-     * loading music), the call is skipped. */
+     * chip only runs up to the CPU's time. Before each call, wait (outside
+     * the check) until the chip says "ready" (port 3 = 1), as the game
+     * would before sending anything; if it does not (busy loading music),
+     * the call is skipped. */
     int apu = (f->out_mask & HM_APU) != 0;
     uint64_t apu_clock = saved_cpu.master_cycles;
+    /* The sound routines: with the chip going on from call to call while
+     * the WRAM that keeps count is put back every time, what each call
+     * sends piles up in the chip (instruments in its memory, a song
+     * changing) until the sound program stops answering or stays busy.
+     * So for them the whole machine is saved once and put back before
+     * every call (and after the last), the chip included: every call
+     * starts from the same moment. */
+    static uint8_t *machine;
+    size_t machine_size = 0;
+    if (apu && !(f->out_mask & HM_LIVE)) {
+      if (!machine) machine = malloc(4u << 20);
+      if (machine) machine_size = RtlSaveSnapshotToMemory(machine, 4u << 20);
+    }
+    volatile int hangs = 0;
     for (int n = 0; n < n_calls; n++) {
+      if (machine_size) {
+        RtlLoadSnapshotFromMemory(machine, machine_size);
+        apu_clock = saved_cpu.master_cycles;
+      }
       /* Between frames nothing is being checked: a check left open by a
        * call that never came back (a sound routine waiting for the chip
        * when the frame was cut) would make every later call look nested,
@@ -4753,7 +5159,34 @@ static void fuzz_at(unsigned frame)
         }
       }
       unsigned bad_before = s_stats[i].bad;
+      /* the frame watchdog (5 s of real time per frame): the waiting
+       * routines run many frames' worth of work in the interpreter, so each
+       * call gets its own budget (the frame's guest code is over here: the
+       * fuzzer runs after it, from the frame tick) */
+      if ((f->out_mask & HM_WAIT) && g_recomp_stack_top == 0) WatchdogFrameStart();
+      /* A sound routine can wait for ever for a chip that stays busy (with
+       * the music playing it never gets free): the watchdog then cuts the
+       * call, which counts as skipped, and the machine is put back. */
+      jmp_buf keep;
+      int guard = machine_size && g_recomp_stack_top == 0;
+      if (guard) {
+        memcpy(keep, g_watchdog_jmp, sizeof keep);
+        WatchdogFrameStart();
+        if (setjmp(g_watchdog_jmp)) {
+          memcpy(g_watchdog_jmp, keep, sizeof keep);
+          WatchdogFrameStart();
+          g_hm_io_live = 0; g_hm_apu = NULL; g_hm_dma_regs = NULL; g_hm_sram = NULL;
+          s_check_depth = 0; s_apu_recording = 0;
+          if (s_nmi_sim) keep_waits_interpreted(0, NULL);
+          s_nmi_sim = 0;
+          skip_why(f->name, "hung: the chip never answered");
+          s_stats[i].calls++; s_stats[i].skipped++;
+          if (++hangs == 3) break;                   /* it stays busy: give up */
+          continue;
+        }
+      }
       s_nmi_sim = (f->out_mask & HM_WAIT) != 0;
+      keep_waits_interpreted(s_nmi_sim, f);
       if (f->out_mask & (HM_INTERP | HM_WAIT | HM_RTI)) {
         /* No wrapper around it (or, waiting for the NMI, never a complete
          * call in the compiled code): check this call here. */
@@ -4771,10 +5204,16 @@ static void fuzz_at(unsigned frame)
       } else {
         cpu_dispatch_pc_paired(&g_cpu, f->pc24, frame_size);
       }
+      if (s_nmi_sim) keep_waits_interpreted(0, NULL);
       s_nmi_sim = 0;
+      if (guard) memcpy(g_watchdog_jmp, keep, sizeof keep);
       if (s_stats[i].bad != bad_before && s_stats[i].bad <= 5)
         fprintf(stderr, "[decomp-fuzz]   (that was %s call %d)\n", f->name, n);
       if (apu) apu_clock = g_cpu.master_cycles;
+    }
+    if (machine_size) {
+      RtlLoadSnapshotFromMemory(machine, machine_size);
+      apu_clock = saved_cpu.master_cycles;
     }
     if (apu) saved_cpu.master_cycles = apu_clock;       /* time only goes forward */
   }

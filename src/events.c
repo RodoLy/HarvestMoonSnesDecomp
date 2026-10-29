@@ -586,3 +586,144 @@ void hm_SUB_848286(uint8_t *ram, HmRegs *r)
   hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x18), r->a);
   put8(ram, r, 0x01, slot8(ram, r, 0x01) & 0xE9);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * EventInstructionInterpreter ($84:8249, JSR, RTS): one command of the
+ * script of the slot at $CC: $C9-$CB = its position (+30, +32), the
+ * command's routine from EventInstructionPointers ($84:9419, 90 words,
+ * JSR (abs,X)); then the new position goes back to the slot.
+ * Leftovers: A = $CB (8-bit A), Y = $32, X and C those of the command.
+ * ───────────────────────────────────────────────────────────────────────── */
+static void (*const EVENT_COMMANDS[90])(uint8_t *, HmRegs *) = {
+  hm_Event_AudioRelated, hm_Event_TimeRunning, hm_Event_TimeStopped, hm_Event_SetHour,
+  hm_Event_Empty, hm_Event_SetPlayerPosition, hm_Event_SetTransitionDest, hm_Event_SetPlayerDirection,
+  hm_Event_UNKChangesGameState, hm_Event_NewCCStructure, hm_Event_ScreenFadein, hm_Event_UNKset7Aflag,
+  hm_Event_UNKCompareset7Aflag, hm_Event_UNKCCchanges2, hm_Event_AudioRelated2, hm_Event_ScreenFadeout,
+  hm_Event_UNKDisableCCstruct, hm_Event_UNKChangesGameState2, hm_Event_JumptoInstruction, hm_Event_UNKSetsCC10,
+  hm_Event_JumpifFlagSet, hm_Event_JumpifEquals, hm_Event_JumpifBetween, hm_Event_GetRNG,
+  hm_Event_JumpIfEqualsRNG, hm_Event_UNKSetAnimation, hm_Event_UNKCCchanges3, hm_Event_UNKCCchanges4,
+  hm_Event_StartTextBox, hm_Event_StartTextBoxCopy, hm_Event_UNKCCchanges5, hm_Event_UNKCCchanges5,
+  hm_Event_UNKJumpif018F, hm_Event_UNKTextrelated, hm_Event_UNKCCchanges6, hm_Event_SetFlag,
+  hm_Event_TimeofDayPalette, hm_Event_UNKCCchanges7, hm_Event_ResetFlag, hm_Event_ResetFlag,
+  hm_Event_ResetFlag, hm_Event_MapScrolling, hm_Event_UNKCFD1, hm_Event_UNKCCchanges8,
+  hm_Event_AudioRelated3, hm_Event_UNKCCchanges9, hm_Event_UNKCCchanges10, hm_Event_UNKCCchanges11,
+  hm_Event_UNKChickenRelated, hm_Event_UNKCowRelated, hm_Event_StoreValue, hm_Event_UNKPickupMole,
+  hm_Event_UNKFishing, hm_Event_UNKPlayerPos, hm_Event_UNKDogRelated, hm_Event_UNK1,
+  hm_Event_UNK2, hm_Event_UNKCCchanges12, hm_Event_UNKCCchanges13, hm_Event_ChangeItemonHand,
+  hm_Event_TransitiontoHouse, hm_Event_TransitiontoX, hm_Event_SetItemonHand, hm_Event_DropItemAnimation,
+  hm_Event_UNKSet5C, hm_Event_UNKCCchanges14, hm_Event_ChangeMoney, hm_Event_JumpifEqualsValue,
+  hm_Event_JumpifEqualsValueLong, hm_Event_JumpifBetweenValue, hm_Event_JumpifBetweenValueLong, hm_Event_SetValueSort,
+  hm_Event_SetValueLong, hm_Event_UNKCCchanges15, hm_Event_UNK3, hm_Event_EditTileonMap,
+  hm_Event_UNKCCchanges16, hm_Event_UNKCCchanges17, hm_Event_UNKReset5C, hm_Event_UNKSet60,
+  hm_Event_UNKChickenRelated2, hm_Event_Cmd51, hm_Event_Cmd52, hm_Event_Cmd53,
+  hm_Event_Cmd54, hm_Event_Cmd55, hm_Event_Cmd56, hm_Event_Cmd57,
+  hm_Event_Cmd58, hm_Event_Cmd59,
+};
+
+void hm_EventInstructionInterpreter(uint8_t *ram, HmRegs *r)
+{
+  r->y = 0x30;
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x30));
+  hm_dp_w16(ram, r, 0xC9, r->a);
+  r->y = 0x32;
+  uint8_t bank = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x32));
+  r->a = (uint16_t)((r->a & 0xFF00) | bank);
+  *hm_dp(ram, r, 0xCB) = bank;
+  uint8_t cmd = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xC9, 0));   /* LDA #0; XBA; LDA [$C9] */
+  r->a = (uint16_t)(cmd << 1);                                    /* REP #$20; ASL; TAX */
+  r->c = 0;
+  r->x = r->a;
+  if (cmd < 90) jsr(ram, r, 0x826C, EVENT_COMMANDS[cmd]);
+  r->a = hm_dp_r16(ram, r, 0xC9);                                 /* REP #$30 */
+  r->y = 0x30;
+  hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x30), r->a);
+  r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, 0xCB));
+  r->y = 0x32;
+  hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x32), (uint8_t)r->a);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * IterateCCStructures ($84:816F, JSL, RTL): every frame, unless a text box
+ * waits ($019A = 2 or 6) or the player is in action 3: a random number to
+ * $DE (GetRNG) and then each of the 49 slots in use (+00 bit 0): while its
+ * wait (+10) is 0 its script runs one command after another
+ * (EventInstructionInterpreter; +03/+04 cleared first unless +01 bit 3),
+ * else the wait goes down by one (and at 0 the script runs this same
+ * frame); $DE + $33 for the next slot; a slot with a sprite (+01 bit 0)
+ * gets it updated (SUB_848286). At the end the one-frame bits are cleared:
+ * $7F1F5A bits 4, 6, 7, 8; $7F1F5C bit 10; $7F1F5E bit 6; $7F1F60 bit 4.
+ * Leftovers: A = the new $7F1F60, C = 1 (or that of the compare that
+ * stopped it), X = $31 after the slots.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_IterateCCStructures(uint8_t *ram, HmRegs *r)
+{
+  uint8_t input = hm_bus_rd8(ram, (uint32_t)r->db << 16 | 0x019A);
+  r->a = (uint16_t)((r->a & 0xFF00) | input);
+  r->c = input >= 2;
+  bool skip = input == 2;
+  if (!skip) { r->c = input >= 6; skip = input == 6; }
+  if (!skip) {
+    r->a = hm_dp_r16(ram, r, 0xD4);
+    r->c = r->a >= 3;
+    skip = r->a == 3;
+  }
+  if (!skip) {
+    hm_jsl(ram, r, 0x8193, 0x83);
+    hm_GetRNG(ram, r);
+    hm_rtl(ram, r);
+    *hm_dp(ram, r, 0xDE) = (uint8_t)r->a;
+    hm_dp_w16(ram, r, 0xCC, 0xB586);
+    r->a = 0xB57E;                                              /* SEP #$20; LDA #$7E */
+    *hm_dp(ram, r, 0xCE) = 0x7E;
+    r->x = 0;
+    do {
+      hm_push8(ram, r, (uint8_t)(r->x >> 8));                   /* PHX */
+      hm_push8(ram, r, (uint8_t)r->x);
+      r->y = 0;
+      uint8_t used = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0));
+      r->a = (uint16_t)((r->a & 0xFF00) | (used & 0x01));
+      if (used & 0x01) {
+        r->y = 0x10;
+        r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x10));
+        if (r->a) {                                             /* DEC A; STA */
+          r->a = (uint16_t)(r->a - 1);
+          hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x10), r->a);
+        }
+        for (;;) {
+          r->y = 0x10;
+          r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x10));
+          if (r->a) break;
+          r->y = 1;
+          uint8_t flags = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 1));
+          r->a = (uint16_t)((r->a & 0xFF00) | (flags & 0x08));
+          if (!(flags & 0x08)) {
+            r->y = 3;
+            r->a = 0;
+            hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 3), 0);
+          }
+          jsr(ram, r, 0x81DC, hm_EventInstructionInterpreter);
+        }
+        uint32_t de = (uint32_t)*hm_dp(ram, r, 0xDE) + 0x33;   /* SEP #$20; CLC; ADC */
+        r->c = de > 0xFF;
+        r->a = (uint16_t)((r->a & 0xFF00) | (uint8_t)de);
+        *hm_dp(ram, r, 0xDE) = (uint8_t)de;
+        r->y = 1;
+        uint8_t flags = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 1));
+        r->a = (uint16_t)((r->a & 0xFF00) | (flags & 0x01));
+        if (flags & 0x01) jsr(ram, r, 0x8208, hm_SUB_848286);
+      }
+      uint32_t next = (uint32_t)hm_dp_r16(ram, r, 0xCC) + 0x40;  /* REP #$30; CLC; ADC */
+      r->a = (uint16_t)next;
+      hm_dp_w16(ram, r, 0xCC, r->a);
+      uint8_t lo = hm_pull8(ram, r);                            /* PLX; INX */
+      r->x = (uint16_t)((lo | hm_pull8(ram, r) << 8) + 1);
+      r->c = r->x >= 0x31;
+    } while (r->x != 0x31);
+  }
+  static const struct { uint32_t at; uint16_t keep; } clear[4] = {
+    { 0x7F1F5A, 0xFE2F }, { 0x7F1F5C, 0xFBFF }, { 0x7F1F5E, 0xFFBF }, { 0x7F1F60, 0xFFEF } };
+  for (int i = 0; i < 4; i++) {
+    r->a = (uint16_t)(hm_bus_rd16(ram, clear[i].at) & clear[i].keep);
+    hm_bus_wr16(ram, clear[i].at, r->a);
+  }
+}

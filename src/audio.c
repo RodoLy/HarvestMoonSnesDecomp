@@ -731,3 +731,183 @@ void hm_UNUSED2(uint8_t *ram, HmRegs *r)
   set_a8(r, n);
   hm_bus_wr8(ram, db_addr(r, 0x0103), n);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNK_Audio18 ($83:833E, JSL, RTL): a sound effect, $0114. If the
+ * instrument slot $0104 + $0103 is taken, the instruments from $0103 + 1
+ * on are dropped first (UNK_Audio10) and a frame is waited (WaitForNMI);
+ * then, if the effect has an instrument (Table2), it is sent
+ * (UNK_Audio12).
+ * WaitForNMI saves the flags: there they are those UNK_Audio10 leaves
+ * (8-bit A, 16-bit indexes, Z and C set, N clear) with V, D and I of the
+ * entry.
+ * Leftovers: those of UNK_Audio12, or A = 0 and X = $0114 (C as it was, or
+ * 1 after UNK_Audio10).
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_UNK_Audio18(uint8_t *ram, HmRegs *r)
+{
+  uint8_t entry = r->p;
+  r->a = rd8(ram, r, 0x0103);                              /* LDA #0; XBA; LDA $0103 */
+  r->x = r->a;                                             /* TAX */
+  set_a8(r, rd8(ram, r, (uint16_t)(0x0104 + r->x)));
+  if ((uint8_t)r->a) {
+    r->a = (uint16_t)(r->x + 1);                           /* TXA; INC A */
+    hm_jsl(ram, r, 0x8359, 0x83);
+    hm_UNK_Audio10(ram, r);
+    hm_rtl(ram, r);
+    r->p = (uint8_t)((entry & 0x4C) | 0x23);
+    hm_jsl(ram, r, 0x835D, 0x80);
+    hm_WaitForNMI(ram, r);
+    hm_rtl(ram, r);
+    r->p = entry;
+  }
+  r->a = rd8(ram, r, 0x0114);                              /* LDA #0; XBA; LDA $0114 */
+  r->x = r->a;
+  set_a8(r, rom8(ram, AUDIO_TABLE2 + r->x));
+  if (!(uint8_t)r->a) return;
+  hm_jsl(ram, r, 0x8374, 0x83);
+  hm_UNK_Audio12(ram, r);
+  hm_rtl(ram, r);
+}
+
+/* JSL to a routine of bank $83 (`ret` = the JSL's last byte) */
+static void call83(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmRegs *))
+{
+  hm_jsl(ram, r, ret, 0x83);
+  fn(ram, r);
+  hm_rtl(ram, r);
+}
+/* JSL WaitForNMIATimes with the flags `p` (it saves them) */
+static void wait_frames(uint8_t *ram, HmRegs *r, uint16_t ret, uint8_t p)
+{
+  uint8_t keep = r->p;
+  r->p = p;
+  hm_jsl(ram, r, ret, 0x80);
+  hm_WaitForNMIATimes(ram, r);
+  hm_rtl(ram, r);
+  r->p = keep;
+}
+/* the flags after a 16-bit load of `a` (REP #$30): N, Z, the carry `c`,
+ * and V, D, I of `p` */
+static uint8_t flags16(uint8_t p, uint16_t a, uint8_t c)
+{
+  return (uint8_t)((p & 0x4C) | (a & 0x8000 ? 0x80 : 0) | (a ? 0 : 0x02) | (c & 1));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNK_Audio20 ($83:83A4, JSL, RTL): the song changes to $0110. If it is
+ * not the one playing ($0117): the instruments from 0 on are dropped
+ * (UNK_Audio10 with 0, which first waits until the chip is not busy) and,
+ * unless the song is 0 or $FF, the song is sent (UNK_Audio11) with its
+ * instruments (UNK_Audio9). Then the sound effect 3 of bank 6 with the
+ * song's instrument ($0118 = the song, 0 for $FF; $0103 from the table
+ * $80:B8CD), UNK_Audio18.
+ * The bytes $83:83C9-$83:83CF (clear $0110) are never reached.
+ * UNK_Audio18 keeps V, D and I of its entry flags: V is 0 after
+ * UNK_Audio9 (its ADC), as it was otherwise.
+ * Leftovers: those of UNK_Audio18.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define SONG_INSTRUMENTS 0x80B8CD
+
+void hm_UNK_Audio20(uint8_t *ram, HmRegs *r)
+{
+  uint8_t entry = r->p, p = entry;
+  uint8_t want = rd8(ram, r, 0x0110), playing = rd8(ram, r, 0x0117);
+  set_a8(r, want);
+  r->c = want >= playing;
+  if (want != playing) {
+    set_a8(r, 0);
+    call83(ram, r, 0x83B3, hm_UNK_Audio10);
+    uint8_t v = rd8(ram, r, 0x0110);
+    set_a8(r, v);
+    if (v) {
+      r->c = v >= 0xFF;
+      if (v != 0xFF) {
+        call83(ram, r, 0x83C2, hm_UNK_Audio11);
+        call83(ram, r, 0x83C6, hm_UNK_Audio9);
+        p &= (uint8_t)~0x40;
+      }
+    }
+  }
+  hm_bus_wr8(ram, db_addr(r, 0x0115), 0x06);
+  hm_bus_wr8(ram, db_addr(r, 0x0114), 0x03);
+  uint8_t song = rd8(ram, r, 0x0110);
+  r->a = song;                                               /* LDA #0; XBA; LDA */
+  hm_bus_wr8(ram, db_addr(r, 0x0118), song);
+  r->c = song >= 0xFF;
+  if (song == 0xFF) {
+    set_a8(r, 0);
+    hm_bus_wr8(ram, db_addr(r, 0x0118), 0);
+  }
+  r->x = r->a;                                               /* TAX */
+  set_a8(r, rom8(ram, SONG_INSTRUMENTS + r->x));
+  hm_bus_wr8(ram, db_addr(r, 0x0103), (uint8_t)r->a);
+  r->p = p;
+  call83(ram, r, 0x83FF, hm_UNK_Audio18);
+  r->p = entry;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNK_Audio24 ($83:82FE, JSL, RTL): sound effect A of bank X with the
+ * instrument of the song playing ($0118: table $80:B8CD + 1), UNK_Audio18,
+ * played (UNK_Audio19); then Y frames are waited (WaitForNMIATimes; Y = 0
+ * would be 65536).
+ * Leftovers: A = 0, Y as it came, X from UNK_Audio19, the flags of
+ * WaitForNMIATimes's entry (PLP): 16-bit, N and Z of Y, the carry of
+ * UNK_Audio19.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_UNK_Audio24(uint8_t *ram, HmRegs *r)
+{
+  uint8_t entry = r->p;
+  hm_bus_wr8(ram, db_addr(r, 0x0114), (uint8_t)r->a);       /* SEP #$20; REP #$10 */
+  hm_push8(ram, r, (uint8_t)(r->y >> 8));                    /* PHY */
+  hm_push8(ram, r, (uint8_t)r->y);
+  r->a = r->x;                                               /* REP #$20; TXA */
+  hm_bus_wr8(ram, db_addr(r, 0x0115), (uint8_t)r->a);
+  r->a = rd8(ram, r, 0x0118);
+  r->x = r->a;
+  set_a8(r, (uint8_t)(rom8(ram, SONG_INSTRUMENTS + r->x) + 1));
+  hm_bus_wr8(ram, db_addr(r, 0x0103), (uint8_t)r->a);
+  call83(ram, r, 0x8324, hm_UNK_Audio18);
+  call83(ram, r, 0x8328, hm_UNK_Audio19);
+  uint8_t lo = hm_pull8(ram, r);                             /* REP #$30; PLY; TYA */
+  r->y = (uint16_t)(lo | hm_pull8(ram, r) << 8);
+  r->a = r->y;
+  wait_frames(ram, r, 0x8330, flags16(entry, r->a, r->c));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UNK_Audio26 ($83:82C6, JSL, RTL): the music changes to song A: the old
+ * one fades (UNK_Audio21), the new one is set ($0110, UNK_Audio20,
+ * UNK_Audio22) and noted as playing ($0117); after 180 frames
+ * (WaitForNMIATimes $B4) the music of the map being entered ($098B, to
+ * $22) is chosen (UNK_Audio5) and faded in (UNK_Audio25).
+ * Leftovers: those of UNK_Audio25.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_UNK_Audio26(uint8_t *ram, HmRegs *r)
+{
+  uint8_t entry = r->p, p = entry;
+  hm_push8(ram, r, (uint8_t)r->a);                           /* SEP #$20; REP #$10; PHA */
+  call83(ram, r, 0x82CE, hm_UNK_Audio21);
+  set_a8(r, hm_pull8(ram, r));                               /* PLA */
+  uint8_t song = (uint8_t)r->a;
+  hm_bus_wr8(ram, db_addr(r, 0x0110), song);
+  /* UNK_Audio20 sends the song (and its ADC clears V) when it changes */
+  if (song != rd8(ram, r, 0x0117) && song != 0 && song != 0xFF) p &= (uint8_t)~0x40;
+  call83(ram, r, 0x82D8, hm_UNK_Audio20);
+  call83(ram, r, 0x82DC, hm_UNK_Audio22);
+  set_a8(r, rd8(ram, r, 0x0110));
+  hm_bus_wr8(ram, db_addr(r, 0x0117), (uint8_t)r->a);
+  r->a = 0x00B4;                                             /* REP #$30; LDA #$B4 */
+  uint8_t pw = flags16(p, r->a, r->c);
+  wait_frames(ram, r, 0x82ED, pw);
+  uint8_t map = rd8(ram, r, 0x098B);                         /* SEP #$20 */
+  set_a8(r, map);
+  *hm_dp(ram, r, 0x22) = map;
+  r->p = (uint8_t)((pw & ~0x82) | 0x20 | (map & 0x80) | (map ? 0 : 0x02));
+  hm_jsl(ram, r, 0x82F8, 0x80);
+  hm_UNK_Audio5(ram, r);
+  hm_rtl(ram, r);
+  call83(ram, r, 0x82FC, hm_UNK_Audio25);
+  r->p = entry;
+}

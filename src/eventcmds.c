@@ -2420,3 +2420,73 @@ static void talk_to_slot(uint8_t *ram, HmRegs *r, unsigned addresses, uint16_t r
 }
 void hm_Event_UNKCCchanges5(uint8_t *ram, HmRegs *r) { talk_to_slot(ram, r, 1, 0x9145); }
 void hm_Event_UNKCCchanges9(uint8_t *ram, HmRegs *r) { talk_to_slot(ram, r, 2, 0x971F); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Event_ScreenFadein ($84:8B83) and Event_ScreenFadeout ($84:8CB9) (JSR,
+ * RTS): skip the command's 2 bytes and fade the screen in (from 3 to 15)
+ * or out (from 15 to 0), 3 frames a level (ScreenFadein / ScreenFadeout).
+ * The fades save the flags (PHP in SetsBrightness and WaitForNMI), so
+ * they are followed: 8-bit A, 16-bit indexes, N clear, Z from the last
+ * load (the target: set only for the fade-out's 0), V and C of the second
+ * ADC, D and I of the entry.
+ * Leftovers: those of the fade.
+ * ───────────────────────────────────────────────────────────────────────── */
+static void event_fade(uint8_t *ram, HmRegs *r, uint8_t from, uint8_t to, uint16_t ret,
+                       void (*fade)(uint8_t *, HmRegs *))
+{
+  uint8_t entry = r->p;
+  advance(ram, r, 1);
+  uint16_t before = hm_dp_r16(ram, r, 0xC9);
+  advance(ram, r, 1);
+  uint8_t v = before == 0x7FFF ? 0x40 : 0;                 /* the ADC's overflow */
+  *hm_dp(ram, r, 0x92) = from;
+  *hm_dp(ram, r, 0x93) = 3;
+  *hm_dp(ram, r, 0x94) = to;
+  r->a = (uint16_t)((r->a & 0xFF00) | to);
+  r->p = (uint8_t)((entry & 0x0C) | 0x20 | v | r->c | (to ? 0 : 0x02));
+  hm_jsl(ram, r, ret, 0x80);
+  fade(ram, r);
+  hm_rtl(ram, r);
+  r->p = entry;
+}
+void hm_Event_ScreenFadein(uint8_t *ram, HmRegs *r) { event_fade(ram, r, 0x03, 0x0F, 0x8BAA, hm_ScreenFadein); }
+void hm_Event_ScreenFadeout(uint8_t *ram, HmRegs *r) { event_fade(ram, r, 0x0F, 0x00, 0x8CE0, hm_ScreenFadeout); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Event_AudioRelated3 ($84:95E8, JSR, RTS; HM-Decomp's comment gives bank
+ * $80): command [effect] [bank, word] [frames, word]: plays the sound
+ * effect and waits the frames (UNK_Audio24), then reloads the noises of
+ * the item in hand ($0119 = 0 forgets the last one, ToolUsedSound2).
+ * UNK_Audio24 keeps V, D and I of its entry flags; V is the third ADC's.
+ * Leftovers: A = $C9 (past the command), C from that ADC, X and Y from
+ * ToolUsedSound2 / UNK_Audio24.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_Event_AudioRelated3(uint8_t *ram, HmRegs *r)
+{
+  uint8_t entry = r->p;
+  advance(ram, r, 1);
+  uint8_t effect = arg8(ram, r);
+  hm_push8(ram, r, effect);                                /* PHA (8-bit) */
+  advance(ram, r, 1);
+  uint16_t bank = arg16(ram, r);
+  hm_push8(ram, r, (uint8_t)(bank >> 8));                  /* PHA (16-bit) */
+  hm_push8(ram, r, (uint8_t)bank);
+  uint16_t before = hm_dp_r16(ram, r, 0xC9);
+  advance(ram, r, 2);
+  uint8_t v = (before == 0x7FFE || before == 0x7FFF) ? 0x40 : 0;
+  r->y = arg16(ram, r);                                    /* TAY */
+  uint8_t lo = hm_pull8(ram, r);                           /* PLX */
+  r->x = (uint16_t)(lo | hm_pull8(ram, r) << 8);
+  r->a = (uint16_t)((r->a & 0xFF00) | hm_pull8(ram, r));   /* SEP #$20; PLA */
+  r->p = (uint8_t)((entry & 0x0C) | v);
+  hm_jsl(ram, r, 0x961E, 0x83);
+  hm_UNK_Audio24(ram, r);
+  hm_rtl(ram, r);
+  hm_bus_wr8(ram, (uint32_t)r->db << 16 | 0x0119, 0);      /* STZ $0119 */
+  r->p = (uint8_t)(entry & 0x0C);
+  hm_jsl(ram, r, 0x9627, 0x82);
+  hm_ToolUsedSound2(ram, r);
+  hm_rtl(ram, r);
+  r->p = entry;
+  advance(ram, r, 2);
+}

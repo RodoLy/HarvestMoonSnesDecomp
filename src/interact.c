@@ -233,3 +233,61 @@ void hm_CODE_81D6F8(uint8_t *ram, HmRegs *r) { map_animation_action(ram, r, 0x12
  * ($80:972B, RTL), ShippingReturn ($82:81BF, RTL; the end ShippingScene
  * and the next routine share) and CODE_83F4D7 ($83:F4D7, RTS). */
 void hm_ActionNothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_81D670 ($81:D670, JSR, RTS): action 4, run every frame while it
+ * lasts. The first time ($096F != 1): the sound effect $19 of bank 6 with
+ * the song's instrument (UNK_Audio18, played by UNK_Audio19), $7F1F5A
+ * bit 4, the map animation $44 (StartMapAnimation), $096F + 1. Then it
+ * counts $0970 up to $20: there the action is over ($D2 bit 6 cleared) and
+ * the noises of the item in hand are loaded again ($0119 = 0,
+ * ToolUsedSound2).
+ * UNK_Audio18 keeps V, D and I of the entry flags (nothing here changes
+ * them).
+ * Leftovers: those of StartMapAnimation / ToolUsedSound2, or A = the
+ * counter and C from its compare.
+ * ───────────────────────────────────────────────────────────────────────── */
+static uint32_t db_at(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
+
+void hm_CODE_81D670(uint8_t *ram, HmRegs *r)
+{
+  uint8_t entry = r->p;
+  uint8_t state = hm_bus_rd8(ram, db_at(r, 0x096F));
+  r->a = (uint16_t)((r->a & 0xFF00) | state);
+  r->c = state >= 1;
+  if (state != 1) {
+    hm_bus_wr8(ram, db_at(r, 0x0114), 0x19);
+    hm_bus_wr8(ram, db_at(r, 0x0115), 0x06);
+    r->a = hm_bus_rd8(ram, db_at(r, 0x0118));              /* LDA #0; XBA; LDA */
+    r->x = r->a;
+    uint8_t n = (uint8_t)(hm_bus_rd8(ram, (0x80B8CDu + r->x) & 0xFFFFFF) + 1);
+    r->a = (uint16_t)((r->a & 0xFF00) | n);
+    hm_bus_wr8(ram, db_at(r, 0x0103), n);
+    hm_jsl(ram, r, 0xD69D, 0x83);
+    hm_UNK_Audio18(ram, r);
+    hm_rtl(ram, r);
+    hm_jsl(ram, r, 0xD6A1, 0x83);
+    hm_UNK_Audio19(ram, r);
+    hm_rtl(ram, r);
+    r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5A) | 0x0010);
+    hm_bus_wr16(ram, 0x7F1F5A, r->a);
+    r->a = 0x0044;
+    hm_jsl(ram, r, 0xD6B7, 0x81);
+    hm_StartMapAnimation(ram, r);
+    hm_rtl(ram, r);
+    hm_bus_wr8(ram, db_at(r, 0x096F), (uint8_t)(hm_bus_rd8(ram, db_at(r, 0x096F)) + 1));
+    return;
+  }
+  uint8_t count = (uint8_t)(hm_bus_rd8(ram, db_at(r, 0x0970)) + 1);
+  hm_bus_wr8(ram, db_at(r, 0x0970), count);
+  r->a = (uint16_t)((r->a & 0xFF00) | count);
+  r->c = count >= 0x20;
+  if (count != 0x20) return;
+  action_done(ram, r);                                       /* REP #$30 */
+  hm_bus_wr8(ram, db_at(r, 0x0119), 0);
+  r->p = entry;
+  hm_jsl(ram, r, 0xD6DF, 0x82);
+  hm_ToolUsedSound2(ram, r);
+  hm_rtl(ram, r);
+  r->p = entry;
+}

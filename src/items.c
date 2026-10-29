@@ -1379,3 +1379,219 @@ void hm_CODE_81A94A(uint8_t *ram, HmRegs *r)
   r->a = v;
   r->c = 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * CODE_8187C3 ($81:87C3, JSR, RTS): a tool taken off the shelf (items
+ * $29 + n, n = 1-$1A: the tools as shop articles). If the bag is empty
+ * ($0923) the tool in hand goes into it; the new one is in hand ($0921 =
+ * item - $29) and its bit in the shed's rows is cleared (the entry at
+ * $81:BE0F, as for CODE_81A94A). The player's action ends ($D4 = 0, $D2
+ * bit 1 cleared), the item's game object goes (CODE_8581A2) with the
+ * extra drawing of the map refreshed (CODE_81A4F1), nothing is held
+ * ($091D = 0) and the new tool's noises are loaded (ToolUsedSound2).
+ * Leftovers: those of ToolUsedSound2.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_CODE_8187C3(uint8_t *ram, HmRegs *r)
+{
+  uint8_t entry = r->p;
+  set_a8(r, rd8(ram, r, 0x0923));
+  if (!rd8(ram, r, 0x0923)) {
+    set_a8(r, rd8(ram, r, 0x0921));
+    wr8(ram, r, 0x0923, (uint8_t)r->a);
+  }
+  uint8_t item = rd8(ram, r, ITEM);
+  uint8_t tool = (uint8_t)(item - 0x29);                     /* SEC; SBC #$29 */
+  r->c = item >= 0x29;
+  wr8(ram, r, 0x0921, tool);
+  uint16_t x = (uint16_t)((tool << 3) + 6);                  /* ASL x3; CLC; ADC #6 */
+  r->c = 0;
+  uint8_t row = hm_bus_rd8(ram, (SHELVES + x) & 0xFFFFFF);
+  uint8_t bit = hm_bus_rd8(ram, (SHELVES + x + 1) & 0xFFFFFF);
+  hm_push8(ram, r, row);                                     /* PHA ... PLA */
+  *hm_dp(ram, r, 0x92) = (uint8_t)~bit;
+  hm_pull8(ram, r);
+  r->x = row;                                                /* XBA; LDA #0; XBA; TAX */
+  uint8_t v = (uint8_t)(hm_bus_rd8(ram, SHED_ROWS + row) & ~bit);
+  hm_bus_wr8(ram, SHED_ROWS + row, v);
+  hm_dp_w16(ram, r, ACTION, 0);                              /* REP #$30 */
+  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) & ~0x0002);
+  hm_dp_w16(ram, r, GAME_STATE, r->a);
+  r->a = rd16(ram, r, OBJECT);
+  hm_dp_w16(ram, r, 0xA5, r->a);
+  jsl(ram, r, 0x8828, 0x85, hm_CODE_8581A2);
+  jsl(ram, r, 0x882C, 0x81, hm_CODE_81A4F1);
+  wr8(ram, r, IN_HAND, 0);                                   /* SEP #$20; STZ $091D */
+  r->p = entry;
+  jsl(ram, r, 0x8835, 0x82, hm_ToolUsedSound2);
+  r->p = entry;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * The 26 tools as items ($2A-$43, $81:83C9 + 8 n): each frame the tool in
+ * hand goes back on its shelf (CODE_81A94A) and this one is taken
+ * (CODE_8187C3): picking a tool off the shed's wall swaps it.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define TOOL_ITEM(name, at)                                   \
+  void hm_##name(uint8_t *ram, HmRegs *r)                     \
+  {                                                           \
+    jsl(ram, r, at, 0x81, hm_CODE_81A94A);                    \
+    jsr(ram, r, (uint16_t)((at) + 4), hm_CODE_8187C3);        \
+  }
+TOOL_ITEM(ItemObject_2A, 0x83C9) TOOL_ITEM(ItemObject_2B, 0x83D1) TOOL_ITEM(ItemObject_2C, 0x83D9)
+TOOL_ITEM(ItemObject_2D, 0x83E1) TOOL_ITEM(ItemObject_2E, 0x83E9) TOOL_ITEM(ItemObject_2F, 0x83F1)
+TOOL_ITEM(ItemObject_30, 0x83F9) TOOL_ITEM(ItemObject_31, 0x8401) TOOL_ITEM(ItemObject_32, 0x8409)
+TOOL_ITEM(ItemObject_33, 0x8411) TOOL_ITEM(ItemObject_34, 0x8419) TOOL_ITEM(ItemObject_35, 0x8421)
+TOOL_ITEM(ItemObject_36, 0x8429) TOOL_ITEM(ItemObject_37, 0x8431) TOOL_ITEM(ItemObject_38, 0x8439)
+TOOL_ITEM(ItemObject_39, 0x8441) TOOL_ITEM(ItemObject_3A, 0x8449) TOOL_ITEM(ItemObject_3B, 0x8451)
+TOOL_ITEM(ItemObject_3C, 0x8459) TOOL_ITEM(ItemObject_3D, 0x8461) TOOL_ITEM(ItemObject_3E, 0x8469)
+TOOL_ITEM(ItemObject_3F, 0x8471) TOOL_ITEM(ItemObject_40, 0x8479) TOOL_ITEM(ItemObject_41, 0x8481)
+TOOL_ITEM(ItemObject_42, 0x8489) TOOL_ITEM(ItemObject_43, 0x8491)
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_81809A ($81:809A, JSR, RTS): each frame, the routine of the item
+ * being worked on ($0984), through the table DATA8_8197C0 (JSR (abs,X),
+ * X = 2 item, A's high byte 0); then bit 0 of $7F1F5E (an item shipped
+ * this frame) is cleared. Items 1-$5A have a routine; the table's entry
+ * for item 0 points at $81:FFFF and the game never has it here.
+ * Leftovers: A = the new $7F1F5E, X and Y those of the item's routine.
+ * ───────────────────────────────────────────────────────────────────────── */
+static Step *const ITEM_ROUTINES[0x5A] = {
+  hm_ItemObject_01, hm_ItemObject_02, hm_ItemObject_03, hm_ItemObject_04,
+  hm_ItemObject_05, hm_ItemObject_06, hm_ItemObject_07, hm_ItemObject_08,
+  hm_ItemObject_09, hm_ItemObject_0A, hm_ItemObject_09, hm_ItemObject_09,
+  hm_ItemObject_0D, hm_ItemObject_0E, hm_ItemObject_0F, hm_ItemObject_10,
+  hm_ItemObject_11, hm_ItemObject_12, hm_ItemObject_13, hm_ItemObject_14,
+  hm_ItemObject_15, hm_ItemObject_16, hm_ItemObject_17, hm_ItemObject_18,
+  hm_ItemObject_19, hm_ItemObject_1A, hm_ItemObject_1B, hm_ItemObject_1C,
+  hm_ItemObject_1D, hm_ItemObject_1E, hm_ItemObject_1F, hm_ItemObject_20,
+  hm_ItemObject_21, hm_ItemObject_22, hm_ItemObject_23, hm_ItemObject_24,
+  hm_ItemObject_25, hm_ItemObject_26, hm_ItemObject_27, hm_ItemObject_28,
+  hm_ItemObject_29, hm_ItemObject_2A, hm_ItemObject_2B, hm_ItemObject_2C,
+  hm_ItemObject_2D, hm_ItemObject_2E, hm_ItemObject_2F, hm_ItemObject_30,
+  hm_ItemObject_31, hm_ItemObject_32, hm_ItemObject_33, hm_ItemObject_34,
+  hm_ItemObject_35, hm_ItemObject_36, hm_ItemObject_37, hm_ItemObject_38,
+  hm_ItemObject_39, hm_ItemObject_3A, hm_ItemObject_3B, hm_ItemObject_3C,
+  hm_ItemObject_3D, hm_ItemObject_3E, hm_ItemObject_3F, hm_ItemObject_40,
+  hm_ItemObject_41, hm_ItemObject_42, hm_ItemObject_43, hm_ItemObject_44,
+  hm_ItemObject_45, hm_ItemObject_46, hm_ItemObject_47, hm_ItemObject_48,
+  hm_ItemObject_49, hm_ItemObject_4A, hm_ItemObject_4B, hm_ItemObject_4C,
+  hm_ItemObject_4D, hm_ItemObject_4E, hm_ItemObject_4F, hm_ItemObject_50,
+  hm_ItemObject_51, hm_ItemObject_52, hm_ItemObject_53, hm_ItemObject_54,
+  hm_ItemObject_55, hm_ItemObject_56, hm_ItemObject_0F, hm_ItemObject_58,
+  hm_ItemObject_59, hm_ItemObject_5A,
+};
+
+void hm_SUB_81809A(uint8_t *ram, HmRegs *r)
+{
+  uint8_t item = rd8(ram, r, ITEM);
+  r->a = (uint8_t)(item << 1);                               /* LDA #0; XBA; LDA; ASL */
+  r->c = item >> 7;
+  r->x = r->a;
+  if (item >= 1 && item <= 0x5A) jsr(ram, r, 0x80A6, ITEM_ROUTINES[item - 1]);
+  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5E) & 0xFFFE);    /* REP #$30 */
+  hm_bus_wr16(ram, 0x7F1F5E, r->a);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * BAAAA ($81:A383, JSL, RTL; HM-Decomp's name): the items left on the map,
+ * every frame. Ten records of 16 bytes at $7E:B4E6 ($07-$09 points at the
+ * one worked on): +0 flags (bit 0 in use, bit 1 drawn on the map, bit 2
+ * kept off screen), +1 the routine (1 = SUB_81809A, through the table
+ * $81:A58B; 0 = none), +2 the state, +3 the item, +4 its game object,
+ * +6 / +8 its sprite and the last one, +$A-$E the flip and the position.
+ * For each record in use the fields are copied to $0974-$0982 (the item
+ * being worked on), the object is placed (CODE_8581CB: $A7 = $FFFD when
+ * it fell out of the map, $FFFF when it is on screen); out of the map it
+ * is destroyed (CODE_8581A2) and, if drawn on the map, the map's extras
+ * are redrawn (CODE_81A4F1); off screen it is skipped unless bit 2. Then
+ * the routine runs and everything is copied back; the object follows
+ * (CODE_8580B9) and gets the new sprite if it changed (CODE_858100).
+ * Only routine 1 exists: the table's other words are the bytes of the
+ * code after it.
+ * Leftovers: A = $B586 (the pointer past the last record), X = $0A, C = 1.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define ITEM_RECORDS 0x7EB4E6
+
+static uint32_t rec_at(uint8_t *ram, HmRegs *r, uint16_t y) { r->y = y; return hm_dp_long(ram, r, 0x07, y); }
+
+void hm_BAAAA(uint8_t *ram, HmRegs *r)
+{
+  static const uint16_t bytes[4] = { 0x0974, 0x0975, 0x0976, ITEM };
+  static const uint16_t words[6] = { OBJECT, 0x097A, 0x097C, 0x097E, 0x0980, 0x0982 };
+  hm_dp_w16(ram, r, 0x07, 0xB4E6);
+  r->a = 0xB47E;                                             /* SEP #$20; LDA #$7E */
+  *hm_dp(ram, r, 0x09) = 0x7E;
+  r->x = 0;
+  for (;;) {
+    hm_push8(ram, r, (uint8_t)(r->x >> 8));                  /* PHX */
+    hm_push8(ram, r, (uint8_t)r->x);
+    uint8_t flags = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x07, 0));
+    set_a8(r, flags & 0x01);
+    if (flags & 0x01) {
+      for (int i = 0; i < 4; i++) {
+        set_a8(r, hm_bus_rd8(ram, rec_at(ram, r, (uint16_t)i)));
+        wr8(ram, r, bytes[i], (uint8_t)r->a);
+      }
+      for (int i = 0; i < 6; i++) {
+        r->a = hm_bus_rd16(ram, rec_at(ram, r, (uint16_t)(4 + 2 * i)));
+        wr16(ram, r, words[i], r->a);
+        if (i == 0) hm_dp_w16(ram, r, 0xA5, r->a);
+      }
+      jsl(ram, r, 0xA3F5, 0x85, hm_CODE_8581CB);
+      r->a = hm_dp_r16(ram, r, 0xA7);
+      bool run = true;
+      r->c = r->a >= 0xFFFD;
+      if (r->a == 0xFFFD) {                                  /* out of the map */
+        r->a = rd16(ram, r, OBJECT);
+        hm_dp_w16(ram, r, 0xA5, r->a);
+        jsl(ram, r, 0xA420, 0x85, hm_CODE_8581A2);
+        set_a8(r, rd8(ram, r, 0x0974) & 0x02);
+        if (r->a & 0xFF) jsl(ram, r, 0xA42D, 0x81, hm_CODE_81A4F1);
+      } else {
+        r->c = r->a >= 0xFFFF;
+        if (r->a != 0xFFFF) {                                /* off screen */
+          set_a8(r, rd8(ram, r, 0x0974) & 0x04);
+          run = (r->a & 0xFF) != 0;
+        }
+      }
+      if (run) {
+        r->a = hm_bus_rd8(ram, rec_at(ram, r, 1));           /* LDA #0; XBA; LDA */
+        r->c = (r->a & 0x8000) != 0;                          /* ASL (16-bit) */
+        r->a = (uint16_t)(r->a << 1);
+        r->x = r->a;
+        r->c = 1;                                            /* CPX #0 */
+        if (r->x) {
+          if (r->x == 2) jsr(ram, r, 0xA444, hm_SUB_81809A);
+          static const uint16_t back8[3][2] = { { 0, 0x0974 }, { 2, 0x0976 }, { 3, ITEM } };
+          for (int i = 0; i < 3; i++) {
+            set_a8(r, rd8(ram, r, back8[i][1]));
+            hm_bus_wr8(ram, rec_at(ram, r, back8[i][0]), (uint8_t)r->a);
+          }
+          static const uint8_t to_dp[6] = { 0xA5, 0, 0, 0x9F, 0x9B, 0x9D };
+          for (int i = 0; i < 6; i++) {
+            r->a = rd16(ram, r, words[i]);
+            hm_bus_wr16(ram, rec_at(ram, r, (uint16_t)(4 + 2 * i)), r->a);
+            if (to_dp[i]) hm_dp_w16(ram, r, to_dp[i], r->a);
+          }
+          jsl(ram, r, 0xA49B, 0x85, hm_CODE_8580B9);
+          r->a = rd16(ram, r, 0x097A);
+          uint16_t last = rd16(ram, r, 0x097C);
+          r->c = r->a >= last;
+          if (r->a != last) {
+            hm_dp_w16(ram, r, 0xA1, r->a);
+            hm_bus_wr16(ram, rec_at(ram, r, 8), r->a);
+            jsl(ram, r, 0xA4AE, 0x85, hm_CODE_858100);
+          }
+        }
+      }
+    }
+    uint8_t lo = hm_pull8(ram, r);                           /* REP #$30; PLX */
+    r->x = (uint16_t)(lo | hm_pull8(ram, r) << 8);
+    uint32_t next = (uint32_t)hm_dp_r16(ram, r, 0x07) + 0x10;
+    r->a = (uint16_t)next;
+    hm_dp_w16(ram, r, 0x07, r->a);
+    r->x++;
+    r->c = r->x >= 0x0A;
+    if (r->x == 0x0A) return;
+  }
+}

@@ -219,10 +219,16 @@ Algunos trucos que fueron necesarios:
   (mismo puerto, mismo valor, mismo orden). Una diferencia y la prueba
   falla. En la prueba al azar, estas rutinas se prueban en un momento más
   tranquilo del juego (900 cuadros antes), porque a veces el chip está
-  ocupado cargando música mucho tiempo y nunca dice "listo". Y como el
-  reloj del chip no puede volver atrás, en estas rutinas el reloj de la CPU
-  tampoco vuelve: cada llamada empieza donde terminó la anterior, como si
-  el juego llamara a la rutina una y otra vez.
+  ocupado cargando música mucho tiempo y nunca dice "listo". Desde el 28
+  de octubre se guarda la máquina entera (chip incluido, la misma
+  instantánea que una partida guardada rápida) antes de la primera llamada
+  y se repone antes de cada una: con el chip siguiendo de una llamada a
+  otra mientras la WRAM que lleva la cuenta se reponía, lo que mandaban
+  las llamadas se amontonaba en el chip hasta que dejaba de contestar, y
+  todas las rutinas de después se quedaban sin probar. Una llamada que aun
+  así espera para siempre (a un chip que sigue ocupado mientras suena la
+  música) la corta el vigilante de cuadros y cuenta como saltada; a las
+  tres, se deja esa rutina.
 - **Esperar al cuadro siguiente, resuelto adelantando el NMI.** Una
   rutina que espera al NMI (`WaitForNMI`: borra `$00` y da vueltas hasta
   que el NMI lo pone) nunca se completa como una sola llamada en el juego
@@ -237,7 +243,18 @@ Algunos trucos que fueron necesarios:
   exactamente lo mismo en el mismo punto (`hm_nmi`). Todo lo que hace el
   NMI (los DMA preparados, la tabla de sprites, los mandos, un número al
   azar, el desplazamiento) se compara como siempre, bytes de la pila
-  incluidos.
+  incluidos. Hizo falta algo más. Los flags hay que seguirlos exactos en
+  las reescrituras que esperan: `WaitForNMI` los guarda (PHP) y el NMI los
+  mete en la pila, y los dos bytes se quedan ahí. Y las rutinas que esperan
+  son las que tocan efectos de sonido y cargan instrumentos en el chip de
+  sonido: con el chip siguiendo de una llamada a otra mientras la WRAM que
+  lleva la cuenta se repone, los instrumentos se amontonaban en la memoria
+  del chip hasta que el programa de sonido dejaba de contestar. Por eso la prueba al
+  azar ahora repone la máquina entera antes de cada llamada de una rutina
+  de sonido (ver el chip de sonido, arriba). Además, el multiplicador y el
+  divisor ($4202-$4206) también son registros de chip:
+  `MultiplicationUnsigned` y `DivisionUnsigned` ahora los escriben como el
+  original, y la comparación de chips lo revisa.
 - **Lo que corre en el intérprete.** Algunas rutinas no tienen versión
   compilada: la recompilación las corre en un intérprete. El comprobador
   en vivo no ve esas llamadas, y entonces la prueba al azar es la
@@ -671,12 +688,11 @@ va. Algunos comandos:
 | `UNKCFD1` (2A) | empieza una animación de mapa (`StartMapAnimation`, el número del argumento) |
 | `AudioRelated2` (0E) | cambia la música a la pedida en `$0110` (`UNK_Audio25`) |
 
-De los 90 comandos solo quedan tres en el original: los dos fundidos de
-pantalla (0A, 0F) y `AudioRelated3` (2C, un efecto de sonido). Los tres
-esperan cuadros enteros (`WaitForNMI`), y una rutina que espera al cuadro
-siguiente no se puede comprobar llamada por llamada. Por eso el
-intérprete de comandos y el bucle de los slots (`IterateCCStructures`)
-también se quedan en el original.
+Los 90 comandos están reescritos. Los tres últimos fueron los dos
+fundidos de pantalla (0A, 0F) y `AudioRelated3` (2C, un efecto de
+sonido), que esperan cuadros enteros (`WaitForNMI`): se comprueban con el
+NMI adelantado (3.4), igual que el intérprete de comandos y el bucle de
+los slots (más abajo).
 | `UNK1`, `UNKCCchanges7` | destruyen el objeto del propio slot, o otro slot con su objeto |
 
 **Cosas que se levantan.** Varios comandos usan la misma prueba de "manos
@@ -726,6 +742,16 @@ $7F1F5C:
 - bit 5: lo toman en brazos ($D2 bit 4: cargando; el objeto se va);
 - A sobre él con las manos libres y lugar enfrente: el jugador lo levanta
   (acción $17); el bit 4 dice "tocado en este cuadro".
+
+- **Correr los guiones** (`IterateCCStructures`, en cada cuadro): salvo
+  que espere una caja de texto o el jugador esté en la acción 3, un número
+  al azar va a `$DE` y cada uno de los 49 slots en uso corre su guion:
+  mientras su espera (+10) sea 0, un comando tras otro
+  (`EventInstructionInterpreter`: el byte del comando elige una de 90
+  rutinas, `$84:9419`); si no, la espera baja en uno. `$DE` avanza $33 por
+  slot, así que los slots que tiran el dado en el mismo cuadro sacan
+  números distintos; los slots con sprite lo actualizan (`SUB_848286`). Al
+  final se borran los bits que duran un cuadro.
 
 ### 5.11 Los mapas
 
@@ -1633,7 +1659,7 @@ llama `PlayerAction_XX`:
 | $51, $52 | un trago en el bar (200 / 300 G, +1 / +3 de felicidad) |
 | $53 | un huevo de un nido del gallinero (`$7F1F45`) |
 
-La acción $35 no está reescrita: espera cuadros (`ToolUsedSound2`, `UNK_Audio24`).
+La acción $35 toca el efecto $24 del banco 7 y espera 120 cuadros (`UNK_Audio24`); después recarga los ruidos del objeto (`ToolUsedSound2`).
 
 
 ### 5.29 El jugador cada cuadro
@@ -1657,7 +1683,7 @@ menudo + su dirección) y la reproducen (`CODE_81CFE6`); cuando termina
 | $0A | usar una herramienta: `SUB_829260` al final de la animación, su sonido en el cuadro $18 |
 | $0C | el reloj: un texto según la hora ($046A-$0478) |
 | $0B, $0D, $0F-$1B | otras animaciones y lo que sigue (eventos, banderas) |
-| $1C | cambiar de herramienta (espera cuadros; sin reescribir) |
+| $1C | cambiar de herramienta: animación $90 + la herramienta de la bolsa; después se cambian de lugar y se cargan los ruidos de la nueva (ToolUsedSound2) |
 
 `CODE_81CB77` mueve al jugador `$1E` píxeles hacia donde mira: los objetos
 de evento (`CBBBB`) o una casilla sólida (`CEEEE`) lo paran; cuando solo
@@ -1813,6 +1839,29 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
 - **Esperar** (`WaitForNMI`): enciende el NMI, borra `$00` y da vueltas
   hasta que el NMI lo pone; A y los flags vuelven como estaban.
   `WaitForNMIATimes` lo hace A veces (A = 0 serían 65.536 cuadros).
+- **Fundidos** (`ScreenFadein` / `ScreenFadeout`): un nivel de brillo
+  cada `$93` cuadros desde `$92` (o, con `$FF`, desde donde esté, `$25`)
+  hasta `$94`; después el bit 15 de `$7F1F5A` dice si la pantalla está
+  encendida. Los comandos de guion `Event_ScreenFadein` /
+  `Event_ScreenFadeout` funden de 3 a 15 y de 15 a 0, 3 cuadros por nivel.
+- **Sonidos que esperan** (5.15): `UNK_Audio18` hace sitio para el
+  instrumento de un efecto (quita los de después con `UNK_Audio10` y espera
+  un cuadro) y lo manda; `UNK_Audio24` toca el efecto A del banco X y
+  espera Y cuadros; `UNK_Audio20` cambia la canción (quita todos los
+  instrumentos, lo que primero espera a que el chip no esté ocupado, y
+  manda los de la canción); `UNK_Audio26` apaga la canción vieja, pone la
+  nueva, espera 180 cuadros y elige la música del mapa; `ToolUsedSound2`
+  carga los ruidos del objeto en la mano cuando cambia. El comando de
+  guion `Event_AudioRelated3` toca un efecto y espera, y luego recarga los
+  ruidos del objeto; la acción 4 (`CODE_81D670`) toca el efecto $19 y
+  arranca la animación de mapa $44, y 32 cuadros después termina.
+- **Los objetos en el mapa** (5.27): en cada cuadro `BAAAA` recorre los
+  diez registros de `$7E:B4E6`: coloca el objeto de cada uno
+  (`CODE_8581CB`), lo destruye si se salió del mapa y corre su rutina
+  (`SUB_81809A`: la del objeto, tabla `$81:97C0`); las 26 herramientas
+  que se toman de la pared del cobertizo se cambian por la de la mano
+  (`CODE_81A94A` la devuelve a su estante, `CODE_8187C3` toma la nueva y
+  carga sus ruidos).
 
 ---
 
@@ -2062,3 +2111,4 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 28-oct-2026 | 88,12 % | las pantallas de título y de partidas (barras de casillas, la línea de una partida), herramientas de vuelta al estante, la tabla de sprites |
 | 28-oct-2026 | 88,80 % | el dibujo de un mapa (BackgroundsManager: tilemaps, dibujos de capa y el paseo de la cámara); dos preparaciones del fuzz más realistas (el año de una partida, los pasos y la dirección de un slot que pasea) |
 | 28-oct-2026 | 88,94 % | las interrupciones (NMI, IRQ por línea) y las esperas al cuadro siguiente, con el NMI adelantado por la prueba al azar (HM_WAIT) |
+| 28-oct-2026 | 90,73 % | lo que espera cuadros: los fundidos, los sonidos que esperan (UNK_Audio18/20/24/26, ToolUsedSound2), dos comandos de guion, la acción 4, los objetos en el mapa (BAAAA, SUB_81809A) y las 26 herramientas del cobertizo, el intérprete de guiones y su bucle, el cambio de herramienta (estado $1C del jugador), el cuadro del jugador (SUB_81BFB7, PlayerInteractionSelector) y la acción $35; la prueba al azar ahora repone la máquina entera antes de cada llamada de una rutina de sonido |

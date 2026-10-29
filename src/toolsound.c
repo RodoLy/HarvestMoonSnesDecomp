@@ -47,3 +47,68 @@ void hm_ToolUsedSound1(uint8_t *ram, HmRegs *r)
   hm_UNK_Audio19(ram, r);
   hm_rtl(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * ToolUsedSound2 ($82:8FF3, JSL, RTL): when the item in hand ($0921) is
+ * not the last one noted ($0119), its noises' instruments are loaded: the
+ * bank ($0115) and, for each of the two effects that is not 0, the effect
+ * ($0114) with UNK_Audio18 (the first also with the instrument of the song
+ * playing, $0103 = table $80:B8CD + 1). Then $0119 = the item.
+ * The game calls it with 16-bit indexes (PHX / PLX around the first
+ * effect would not match otherwise). The ADC that makes 3 x item clears V,
+ * which UNK_Audio18 keeps.
+ * Leftovers: A = the item (8-bit), X where it last read the table, C = 0
+ * from the ADC or that of the compare / UNK_Audio18.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define SONG_INSTRUMENTS 0x80B8CD
+
+void hm_ToolUsedSound2(uint8_t *ram, HmRegs *r)
+{
+  uint8_t entry = r->p;
+  uint8_t tool = hm_bus_rd8(ram, db_(r, 0x0921));
+  r->a = tool;                                             /* LDA #0; XBA; LDA $0921 */
+  uint8_t noted = hm_bus_rd8(ram, db_(r, 0x0119));
+  r->c = tool >= noted;
+  if (tool != noted) {
+    hm_dp_w16(ram, r, 0x7E, tool);                         /* REP #$20; STA $7E */
+    r->x = (uint16_t)(tool * 3);                           /* ASL; CLC; ADC $7E; TAX */
+    r->c = 0;
+    r->a = r->x;
+    uint8_t bank = noise(ram, r->x);
+    r->a = (uint16_t)((r->a & 0xFF00) | bank);
+    if (bank) {
+      hm_bus_wr8(ram, db_(r, 0x0115), bank);
+      r->x++;
+      hm_push8(ram, r, (uint8_t)(r->x >> 8));              /* PHX */
+      hm_push8(ram, r, (uint8_t)r->x);
+      uint8_t first = noise(ram, r->x);
+      r->a = (uint16_t)((r->a & 0xFF00) | first);
+      if (first) {
+        hm_bus_wr8(ram, db_(r, 0x0114), first);
+        r->a = hm_bus_rd8(ram, db_(r, 0x0118));
+        r->x = r->a;
+        uint8_t ins = (uint8_t)(hm_bus_rd8(ram, (SONG_INSTRUMENTS + r->x) & 0xFFFFFF) + 1);
+        r->a = (uint16_t)((r->a & 0xFF00) | ins);
+        hm_bus_wr8(ram, db_(r, 0x0103), ins);
+        r->p = (uint8_t)(entry & ~0x40);
+        hm_jsl(ram, r, 0x9037, 0x83);
+        hm_UNK_Audio18(ram, r);
+        hm_rtl(ram, r);
+      }
+      uint8_t lo = hm_pull8(ram, r);                       /* SEP #$20; REP #$10; PLX; INX */
+      r->x = (uint16_t)((lo | hm_pull8(ram, r) << 8) + 1);
+      uint8_t second = noise(ram, r->x);
+      r->a = (uint16_t)((r->a & 0xFF00) | second);
+      if (second) {
+        hm_bus_wr8(ram, db_(r, 0x0114), second);
+        r->p = (uint8_t)(entry & ~0x40);
+        hm_jsl(ram, r, 0x904A, 0x83);
+        hm_UNK_Audio18(ram, r);
+        hm_rtl(ram, r);
+      }
+      r->p = entry;
+    }
+  }
+  r->a = (uint16_t)((r->a & 0xFF00) | hm_bus_rd8(ram, db_(r, 0x0921)));
+  hm_bus_wr8(ram, db_(r, 0x0119), (uint8_t)r->a);
+}

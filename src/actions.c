@@ -1493,3 +1493,22 @@ void hm_PlayerAction_57(uint8_t *ram, HmRegs *r)
   text_x(ram, r, 0xFAA3);
   done(ram, r);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * $35 ($81:E36E): a sound: effect $24 of bank 7, then 120 frames of wait
+ * (UNK_Audio24); the noises of the item in hand loaded again ($0119 = 0,
+ * ToolUsedSound2); the action is over.
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_PlayerAction_35(uint8_t *ram, HmRegs *r)
+{
+  uint8_t entry = r->p;
+  set_a8(r, 0x24);                                         /* SEP #$20; REP #$10 */
+  r->x = 0x0007;
+  r->y = 0x0078;
+  jsl(ram, r, 0xE37A, 0x83, hm_UNK_Audio24);
+  wr8(ram, r, 0x0119, 0);
+  r->p = entry;
+  jsl(ram, r, 0xE383, 0x82, hm_ToolUsedSound2);
+  r->p = entry;
+  done(ram, r);
+}

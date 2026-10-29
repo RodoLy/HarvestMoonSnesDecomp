@@ -430,6 +430,52 @@ void hm_NMI_Interrupt(uint8_t *ram, HmRegs *r);   /* nmi.c */
 void hm_COP_Interrupt(uint8_t *ram, HmRegs *r);
 void hm_WaitForNMI(uint8_t *ram, HmRegs *r);
 void hm_WaitForNMIATimes(uint8_t *ram, HmRegs *r);
+void hm_ScreenFadein(uint8_t *ram, HmRegs *r);
+void hm_ScreenFadeout(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio18(uint8_t *ram, HmRegs *r);   /* audio.c */
+void hm_UNK_Audio20(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio24(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio26(uint8_t *ram, HmRegs *r);
+void hm_ToolUsedSound2(uint8_t *ram, HmRegs *r);   /* toolsound.c */
+void hm_Event_ScreenFadein(uint8_t *ram, HmRegs *r);   /* eventcmds.c */
+void hm_Event_ScreenFadeout(uint8_t *ram, HmRegs *r);
+void hm_Event_AudioRelated3(uint8_t *ram, HmRegs *r);
+void hm_CODE_81D670(uint8_t *ram, HmRegs *r);   /* interact.c */
+void hm_CODE_8187C3(uint8_t *ram, HmRegs *r);   /* items.c */
+void hm_SUB_81809A(uint8_t *ram, HmRegs *r);
+void hm_BAAAA(uint8_t *ram, HmRegs *r);
+void hm_EventInstructionInterpreter(uint8_t *ram, HmRegs *r);   /* events.c */
+void hm_IterateCCStructures(uint8_t *ram, HmRegs *r);
+void hm_PlayerState_1C(uint8_t *ram, HmRegs *r);   /* playerstate.c */
+void hm_PlayerAction_35(uint8_t *ram, HmRegs *r);   /* actions.c */
+void hm_SUB_81BFB7(uint8_t *ram, HmRegs *r);   /* playerstate.c */
+void hm_PlayerInteractionSelector(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_2A(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_2B(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_2C(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_2D(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_2E(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_2F(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_30(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_31(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_32(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_33(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_34(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_35(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_36(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_37(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_38(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_39(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_3A(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_3B(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_3C(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_3D(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_3E(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_3F(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_40(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_41(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_42(uint8_t *ram, HmRegs *r);
+void hm_ItemObject_43(uint8_t *ram, HmRegs *r);
 void hm_CopiesWRAMtoOBJVGRAM(uint8_t *ram, HmRegs *r);
 void hm_UpdateGraphics(uint8_t *ram, HmRegs *r);
 void hm_AutoMapScrolling(uint8_t *ram, HmRegs *r);

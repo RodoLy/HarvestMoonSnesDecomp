@@ -161,3 +161,75 @@ void hm_WaitForNMIATimes(uint8_t *ram, HmRegs *r)
   } while (r->a);
   flags_back(r, hm_pull8(ram, r));                         /* PLP */
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * ScreenFadein ($80:87CE) and ScreenFadeout ($80:880A) (JSL, RTL): the
+ * brightness goes, one level at a time, from $92 (or, if $92 = $FF, from
+ * where it is, $25) to $94, up or down, $93 frames per level
+ * (SetsBrightness, then WaitForNMI $93 times; $26 counts them). At the end
+ * bit 15 of $7F1F5A is set (faded in) or cleared (faded out).
+ * The flags are followed exactly (`p`), since SetsBrightness and
+ * WaitForNMI save them (PHP) and the NMI pushes them.
+ * Leftovers: A = the new $7F1F5A (16-bit), C = 1, X and Y 8-bit.
+ * ───────────────────────────────────────────────────────────────────────── */
+#define FADE_BRIGHTNESS 0x25   /* DP */
+#define FADE_FRAME      0x26   /* DP */
+#define FLAGS_5A        0x7F1F5A
+
+static uint8_t nz8(uint8_t p, uint8_t v) { return (uint8_t)((p & ~0x82) | (v & 0x80) | (v ? 0 : 0x02)); }
+static uint8_t lda8(HmRegs *r, uint8_t p, uint8_t v) { set_a8(r, v); return nz8(p, v); }
+static uint8_t cmp8(HmRegs *r, uint8_t p, uint8_t a, uint8_t m)
+{
+  r->c = a >= m;
+  return (uint8_t)((nz8(p, (uint8_t)(a - m)) & ~0x01) | r->c);
+}
+static void call_with_flags(uint8_t *ram, HmRegs *r, uint8_t p, uint16_t at,
+                            void (*fn)(uint8_t *, HmRegs *))
+{
+  r->p = p;
+  hm_jsl(ram, r, (uint16_t)(at + 3), 0x80);
+  fn(ram, r);
+  hm_rtl(ram, r);
+}
+
+static void fade(uint8_t *ram, HmRegs *r, int up)
+{
+  uint8_t entry = r->p;
+  uint8_t p = (uint8_t)(r->p | 0x30);                      /* SEP #$30 */
+  r->x &= 0x00FF; r->y &= 0x00FF;
+  uint16_t at = up ? 0x87CE : 0x880A;                      /* the routine's start */
+  p = lda8(r, p, *hm_dp(ram, r, 0x92));
+  p = cmp8(r, p, (uint8_t)r->a, 0xFF);
+  if ((uint8_t)r->a != 0xFF) {
+    p = lda8(r, p, *hm_dp(ram, r, 0x92));
+    *hm_dp(ram, r, FADE_BRIGHTNESS) = (uint8_t)r->a;
+  }
+  p = lda8(r, p, *hm_dp(ram, r, 0x93));
+  *hm_dp(ram, r, FADE_FRAME) = (uint8_t)r->a;
+  for (;;) {
+    p = lda8(r, p, *hm_dp(ram, r, FADE_BRIGHTNESS));
+    call_with_flags(ram, r, p, (uint16_t)(at + 0x12), hm_SetsBrightness);
+    p = lda8(r, p, *hm_dp(ram, r, FADE_BRIGHTNESS));
+    p = cmp8(r, p, (uint8_t)r->a, *hm_dp(ram, r, 0x94));
+    if ((uint8_t)r->a == *hm_dp(ram, r, 0x94)) break;
+    uint8_t b = (uint8_t)(*hm_dp(ram, r, FADE_BRIGHTNESS) + (up ? 1 : -1));
+    *hm_dp(ram, r, FADE_BRIGHTNESS) = b;                   /* INC / DEC $25 */
+    p = nz8(p, b);
+    do {
+      call_with_flags(ram, r, p, (uint16_t)(at + 0x1E), hm_WaitForNMI);
+      uint8_t f = (uint8_t)(*hm_dp(ram, r, FADE_FRAME) - 1);
+      *hm_dp(ram, r, FADE_FRAME) = f;                      /* DEC $26; LDA $26 */
+      p = lda8(r, p, f);
+    } while (*hm_dp(ram, r, FADE_FRAME));
+    p = lda8(r, p, *hm_dp(ram, r, 0x93));
+    *hm_dp(ram, r, FADE_FRAME) = (uint8_t)r->a;
+  }
+  uint16_t v = hm_bus_rd16(ram, FLAGS_5A);                 /* REP #$20 */
+  v = up ? (uint16_t)(v | 0x8000) : (uint16_t)(v & 0x7FFF);
+  r->a = v;
+  hm_bus_wr16(ram, FLAGS_5A, v);
+  r->n = (uint8_t)(v >> 15);
+  r->p = entry;
+}
+void hm_ScreenFadein(uint8_t *ram, HmRegs *r) { fade(ram, r, 1); }
+void hm_ScreenFadeout(uint8_t *ram, HmRegs *r) { fade(ram, r, 0); }

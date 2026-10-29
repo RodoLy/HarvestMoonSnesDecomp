@@ -8,8 +8,8 @@
  *
  *   0, 1, 2, 6, 7, $0E  on foot (PlayerState_00: walking, running, ...)
  *   3 jumping, 4 picking up, 5 throwing, 8 eating, 9 an idle animation,
- *   $0A using a tool, $0B, $0C (the watch), $0D, $0F-$1B other animations
- *   ($1C, swapping the tools, waits frames and stays in the original).
+ *   $0A using a tool, $0B, $0C (the watch), $0D, $0F-$1B other animations,
+ *   $1C swapping the tools.
  *
  * Most steps set the player's animation ($0901, often + his facing) and
  * play it (CODE_81CFE6); when it ends ($0915 = $FFFF) the action changes.
@@ -1120,4 +1120,119 @@ void hm_SUB_809A64(uint8_t *ram, HmRegs *r)
   }
   r->a = (uint16_t)(rd16(ram, r, 0x0196) | 0x4000);
   wr16(ram, r, 0x0196, r->a);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * $1C ($81:C061): swapping the tool in hand and the one in the bag. The
+ * first frame ($D2 bit 15 off, then on) the animation is $90 + the bag's
+ * tool; when it is over: action 0, the two tools change places ($0921 /
+ * $0923) and the new tool's noises are loaded (ToolUsedSound2, which waits
+ * a frame when it changes instruments).
+ * ───────────────────────────────────────────────────────────────────────── */
+void hm_PlayerState_1C(uint8_t *ram, HmRegs *r)
+{
+  uint8_t entry = r->p;
+  r->a = (uint16_t)(dp16(ram, r, GAME_STATE) & 0x8000);
+  if (!r->a) {
+    state_on(ram, r, 0x8000);
+    uint8_t bag = rd8(ram, r, 0x0923);
+    uint32_t sum = (uint32_t)bag + 0x90;                   /* LDA #0; XBA; LDA; CLC; ADC #$90 */
+    r->c = sum > 0xFF;
+    r->a = (uint8_t)sum;
+    wr16(ram, r, ANIMATION, r->a);                         /* REP #$20; STA */
+  }
+  animate(ram, r, 0xC08A);
+  if (anim_over(ram, r)) {
+    set_action(ram, r, 0);
+    uint8_t hand = rd8(ram, r, 0x0921), bag = rd8(ram, r, 0x0923);
+    hm_push8(ram, r, hand);                                /* SEP #$20; PHA */
+    set_a8(r, bag);
+    wr8(ram, r, 0x0921, bag);
+    set_a8(r, hm_pull8(ram, r));                           /* PLA */
+    wr8(ram, r, 0x0923, hand);
+    r->p = entry;
+    jsl(ram, r, 0xC0AE, 0x82, hm_ToolUsedSound2);
+    r->p = entry;
+  }
+  END(ram, r);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * SUB_81BFB7 ($81:BFB7, JSL, RTL): the player each frame (see the top of
+ * this file). Without $D2 bit 0 only the frame's end; with bit 6 the
+ * pending action (PlayerInteractionSelector); otherwise the step of action
+ * $D4 (JMP (DATA16_81C027,X): 29 words; $19 goes straight to the frame's
+ * end).
+ * ───────────────────────────────────────────────────────────────────────── */
+static void not_idle_step(uint8_t *ram, HmRegs *r) { not_idle(ram, r); }
+static Fn *const PLAYER_STEPS[29] = {
+  hm_PlayerState_00, hm_PlayerState_00, hm_PlayerState_00, hm_PlayerState_03, hm_PlayerState_04,
+  hm_PlayerState_05, hm_PlayerState_00, hm_PlayerState_00, hm_PlayerState_08, hm_CODE_81CB5E,
+  hm_PlayerState_0A, hm_PlayerState_0B, hm_PlayerState_0C, hm_PlayerState_0D, hm_PlayerState_00,
+  hm_PlayerState_0F, hm_PlayerState_10, hm_PlayerState_11, hm_PlayerState_12, hm_PlayerState_13,
+  hm_PlayerState_14, hm_PlayerState_15, hm_PlayerState_16, hm_PlayerState_17, hm_PlayerState_18,
+  not_idle_step, hm_PlayerState_1A, hm_PlayerState_1B, hm_PlayerState_1C };
+
+static void step_of_action(uint8_t *ram, HmRegs *r)        /* CODE_81BFD3 */
+{
+  uint16_t action = dp16(ram, r, ACTION);
+  r->c = (action & 0x8000) != 0;                           /* ASL; TAX */
+  r->a = (uint16_t)(action << 1);
+  r->x = r->a;
+  if (action < 29) PLAYER_STEPS[action](ram, r);
+}
+
+void hm_SUB_81BFB7(uint8_t *ram, HmRegs *r)
+{
+  r->a = (uint16_t)(dp16(ram, r, GAME_STATE) & 0x0001);
+  if (!r->a) { hm_ResetIdleAnimatioTimer(ram, r); return; }
+  r->a = (uint16_t)(dp16(ram, r, GAME_STATE) & 0x0040);
+  if (r->a) { hm_PlayerInteractionSelector(ram, r); return; }
+  step_of_action(ram, r);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * PlayerInteractionSelector ($81:D570, JMP from SUB_81BFB7): the pending
+ * action $096E (JSR through PlayerActionPointerTable, $81:D593: 88 words,
+ * actions.c and interact.c); then the idle timer is cleared and, if the
+ * time is stopped for the day's end ($0973 bit 1), only the frame's end
+ * follows, else the step of the player's action too.
+ * ───────────────────────────────────────────────────────────────────────── */
+static Fn *const PLAYER_ACTIONS[0x58] = {
+  hm_ActionNothing, hm_GetFenceFromStack, hm_ActionNothing, hm_CODE_81D670,
+  hm_ActionNothing, hm_CODE_81D6E2, hm_CODE_81D6F8, hm_ActionNothing,
+  hm_ActionNothing, hm_ActionNothing, hm_ActionNothing, hm_ActionNothing,
+  hm_ActionNothing, hm_ActionNothing, hm_ActionNothing, hm_CODE_81D716,
+  hm_PlayerAction_10, hm_PlayerAction_11, hm_PlayerAction_12, hm_PlayerAction_13,
+  hm_PlayerAction_14, hm_PlayerAction_15, hm_ActionNothing, hm_ActionNothing,
+  hm_ActionNothing, hm_ActionNothing, hm_ActionNothing, hm_ActionNothing,
+  hm_ActionNothing, hm_PlayerAction_1D, hm_PlayerAction_1E, hm_ActionNothing,
+  hm_ActionNothing, hm_ActionNothing, hm_ActionNothing, hm_ActionNothing,
+  hm_ActionNothing, hm_ActionNothing, hm_PlayerAction_26, hm_PlayerAction_27,
+  hm_PlayerAction_28, hm_PlayerAction_29, hm_PlayerAction_2A, hm_PlayerAction_2B,
+  hm_PlayerAction_2C, hm_PlayerAction_2D, hm_PlayerAction_2E, hm_PlayerAction_2F,
+  hm_PlayerAction_30, hm_PlayerAction_31, hm_PlayerAction_32, hm_PlayerAction_33,
+  hm_PlayerAction_34, hm_PlayerAction_35, hm_PlayerAction_36, hm_PlayerAction_37,
+  hm_PlayerAction_38, hm_PlayerAction_39, hm_PlayerAction_3A, hm_PlayerAction_3B,
+  hm_PlayerAction_3C, hm_PlayerAction_3D, hm_PlayerAction_3E, hm_PlayerAction_3F,
+  hm_PlayerAction_40, hm_PlayerAction_41, hm_PlayerAction_42, hm_PlayerAction_43,
+  hm_PlayerAction_44, hm_PlayerAction_45, hm_PlayerAction_46, hm_PlayerAction_47,
+  hm_PlayerAction_48, hm_PlayerAction_49, hm_PlayerAction_4A, hm_PlayerAction_4B,
+  hm_PlayerAction_4C, hm_PlayerAction_4D, hm_PlayerAction_4E, hm_PlayerAction_4F,
+  hm_PlayerAction_50, hm_PlayerAction_51, hm_PlayerAction_52, hm_PlayerAction_53,
+  hm_PlayerAction_54, hm_PlayerAction_55, hm_PlayerAction_56, hm_PlayerAction_57,
+};
+
+void hm_PlayerInteractionSelector(uint8_t *ram, HmRegs *r)
+{
+  uint8_t action = rd8(ram, r, 0x096E);                    /* LDA #0; XBA; LDA; ASL */
+  r->c = action >> 7;
+  r->a = (uint8_t)(action << 1);
+  r->x = r->a;                                             /* REP #$20; TAX */
+  if (action < 0x58) jsr(ram, r, 0xD57E, PLAYER_ACTIONS[action]);
+  wr8(ram, r, IDLE_TIMER, 0);                              /* SEP #$20; STZ $0925 */
+  uint8_t time = rd8(ram, r, 0x0973);
+  set_a8(r, time & 0x02);
+  if (time & 0x02) not_idle(ram, r);
+  else step_of_action(ram, r);
 }

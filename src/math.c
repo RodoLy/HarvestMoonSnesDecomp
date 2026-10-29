@@ -36,6 +36,8 @@ void hm_DivisionUnsigned(uint8_t *ram, HmRegs *r)
   if (divisor < 0xFF) {
     /* Hardware divider: 16-bit dividend / 8-bit divisor. */
     uint8_t d = (uint8_t)divisor;
+    hm_bus_wr16(ram, 0x004204, dividend);  /* WRDIVL/H */
+    hm_bus_wr8(ram, 0x004206, d);          /* WRDIVB: starts it */
     uint16_t quotient = d ? (uint16_t)(dividend / d) : 0xFFFF;
     uint16_t remainder = d ? (uint16_t)(dividend % d) : dividend;
     hm_dp_w16(ram, r, DIVIDEND, remainder);
@@ -118,13 +120,15 @@ void hm_DivisionSigned(uint8_t *ram, HmRegs *r)
  * MultiplicationUnsigned ($83:8067, JSR, RTS): A = $011A x $011B (two
  * bytes, a 16-bit product), with the console's multiplier ($4202/$4203,
  * the answer in $4216 after a few cycles: the four NOPs). Nothing else
- * changes.
+ * changes but the multiplier's registers (compared by the chip checks).
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_MultiplicationUnsigned(uint8_t *ram, HmRegs *r)
 {
   uint8_t a = hm_bus_rd8(ram, (uint32_t)r->db << 16 | 0x011A);
+  hm_bus_wr8(ram, 0x004202, a);                         /* WRMPYA */
   uint8_t b = hm_bus_rd8(ram, (uint32_t)r->db << 16 | 0x011B);
-  r->a = (uint16_t)(a * b);
+  hm_bus_wr8(ram, 0x004203, b);                         /* WRMPYB: starts it */
+  r->a = (uint16_t)(a * b);                             /* RDMPY ($4216) */
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

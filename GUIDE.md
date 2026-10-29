@@ -216,10 +216,15 @@ Some tricks that were needed:
   original made (same port, same value, same order). One difference and
   the check fails. In the random test, these routines are tested in a
   calmer moment of the game (900 frames earlier), because sometimes the
-  chip is busy loading music for a long time and never says "ready". And
-  since the chip's clock cannot go back, for these routines the CPU's clock
-  never goes back either: each call starts where the previous one ended,
-  as if the game called the routine again and again.
+  chip is busy loading music for a long time and never says "ready".
+  Since October 28 the whole machine (the chip included, the same snapshot
+  a save state is) is saved before the first call and put back before each
+  one: with the chip going on from call to call while the WRAM that keeps
+  count was put back, what the calls sent piled up in the chip until it
+  stopped answering, and every routine after that one went untested. A
+  call that still waits for ever (for a chip that stays busy while the
+  music plays) is cut by the frame watchdog and counted as skipped; after
+  three, that routine is left.
 - **Waiting for the next frame, solved by bringing the NMI forward.** A
   routine that waits for the NMI (`WaitForNMI`: clear `$00` and loop until
   the NMI sets it) never completes as one call in the recompiled game: at
@@ -233,7 +238,17 @@ Some tricks that were needed:
   back to the loop). The rewrite does exactly the same at the same point
   (`hm_nmi`). Everything the NMI does (the prepared DMAs, the sprite
   table, the pads, a random number, the scroll) is compared as usual,
-  stack bytes included.
+  stack bytes included. Two more things were needed. The flags must be
+  followed exactly in the rewrites that wait: `WaitForNMI` saves them
+  (PHP) and the NMI pushes them, and both bytes stay on the stack. And the
+  routines that wait are the ones that play sound effects and load
+  instruments into the sound chip: with the chip going on from call to
+  call while the WRAM that keeps count is put back, the instruments piled
+  up in the chip's memory until the sound program stopped answering. So the random test now
+  puts the whole machine back before every call of a sound routine (see
+  the sound chip, above). Also, the multiplier and divider ($4202-$4206)
+  are chip registers too: `MultiplicationUnsigned` and `DivisionUnsigned`
+  now write them like the original, which the chip comparison checks.
 - **What runs in the interpreter.** Some routines have no compiled
   version: the recompilation runs them in an interpreter. The live
   checker does not see those calls, so the random test is the
@@ -661,11 +676,10 @@ at where it is. Some commands:
 | `UNKCFD1` (2A) | starts a map animation (`StartMapAnimation`, the number in the argument) |
 | `AudioRelated2` (0E) | changes the music to the one asked for in `$0110` (`UNK_Audio25`) |
 
-Of the 90 commands only three are left in the original: the two screen
-fades (0A, 0F) and `AudioRelated3` (2C, a sound effect). All three wait
-whole frames (`WaitForNMI`), and a routine that waits for the next frame
-cannot be checked call by call. So the command interpreter and the slot
-loop (`IterateCCStructures`) stay in the original too.
+All 90 commands are rewritten. The last three were the two screen fades
+(0A, 0F) and `AudioRelated3` (2C, a sound effect), which wait whole frames
+(`WaitForNMI`): they are checked with the NMI brought forward (3.4), and
+so are the command interpreter and the slot loop (below).
 | `UNK1`, `UNKCCchanges7` | destroy the slot's own object, or another slot and its object |
 
 **Things you pick up.** Several commands use the same "free hands" test:
@@ -715,6 +729,16 @@ down, script $17/$14 starts). Its requests are bits of $7F1F5C:
   away);
 - A pressed on it with free hands and room in front: the player picks it
   up (action $17); bit 4 says "touched this frame".
+
+- **Running the scripts** (`IterateCCStructures`, every frame): unless a
+  text box waits or the player is in action 3, a random number goes to
+  `$DE` and each of the 49 slots in use runs its script: while its wait
+  (+10) is 0, one command after another (`EventInstructionInterpreter`:
+  the command byte picks one of 90 routines, `$84:9419`); otherwise the
+  wait goes down by one. `$DE` moves on by $33 for each slot, so slots
+  that roll the same frame get different numbers; slots with a sprite get
+  it updated (`SUB_848286`). At the end the bits that last one frame are
+  cleared.
 
 ### 5.11 Maps
 
@@ -1585,7 +1609,7 @@ and reads part of them as data; `actions.c` names them `PlayerAction_XX`:
 | $51, $52 | a drink at the bar (200 / 300 G, +1 / +3 happiness) |
 | $53 | an egg from a nest of the coop (`$7F1F45`) |
 
-Action $35 is not rewritten: it waits frames (`ToolUsedSound2`, `UNK_Audio24`).
+Action $35 plays effect $24 of bank 7 and waits 120 frames (`UNK_Audio24`), then reloads the item's noises (`ToolUsedSound2`).
 
 
 ### 5.29 The player each frame
@@ -1608,7 +1632,7 @@ the action changes. All of them end through `ResetIdleAnimatioTimer`:
 | $0A | using a tool: `SUB_829260` at the animation's end, its sound at frame $18 |
 | $0C | the watch: a text by the hour ($046A-$0478) |
 | $0B, $0D, $0F-$1B | other animations and what follows them (events, flags) |
-| $1C | swapping the tools (waits frames; not rewritten) |
+| $1C | swapping the tools: animation $90 + the bag's tool; then they change places and the new one's noises are loaded (ToolUsedSound2) |
 
 `CODE_81CB77` moves the player `$1E` pixels in his facing: the event
 objects (`CBBBB`) or a solid tile (`CEEEE`) stop him; when only one of
@@ -1753,6 +1777,28 @@ not on days with `$0196` bits 1, 3, 4):
 - **Waiting** (`WaitForNMI`): turn the NMI on, clear `$00` and loop until
   the NMI has set it; A and the flags come back as they were.
   `WaitForNMIATimes` does it A times (A = 0 would be 65,536 frames).
+- **Fades** (`ScreenFadein` / `ScreenFadeout`): one brightness level
+  every `$93` frames from `$92` (or, with `$FF`, from where it is, `$25`)
+  to `$94`; then bit 15 of `$7F1F5A` says whether the screen is lit. The
+  script commands `Event_ScreenFadein` / `Event_ScreenFadeout` fade from 3
+  to 15 and from 15 to 0, 3 frames a level.
+- **Sounds that wait** (5.15): `UNK_Audio18` makes room for a sound
+  effect's instrument (drops the ones after it with `UNK_Audio10` and
+  waits a frame) and sends it; `UNK_Audio24` plays effect A of bank X and
+  waits Y frames; `UNK_Audio20` changes the song (dropping all the
+  instruments, which first waits until the chip is not busy, and sending
+  the song's own); `UNK_Audio26` fades the old song out, sets the new one,
+  waits 180 frames and picks the map's music; `ToolUsedSound2` loads the
+  noises of the item in hand when it changes. The script command
+  `Event_AudioRelated3` plays an effect and waits, then reloads the
+  item's noises; action 4 (`CODE_81D670`) plays effect $19 and starts
+  map animation $44, and 32 frames later ends.
+- **Items on the map** (5.27): every frame `BAAAA` goes through the ten
+  records at `$7E:B4E6`: places each item's object (`CODE_8581CB`),
+  destroys it if it fell out of the map, and runs its routine
+  (`SUB_81809A`: the item's own, table `$81:97C0`); the 26 tools picked off
+  the shed's wall swap with the one in hand (`CODE_81A94A` puts it back on
+  its shelf, `CODE_8187C3` takes the new one and loads its noises).
 
 ---
 
@@ -1992,3 +2038,4 @@ Things the game does wrong or oddly, found while decompiling:
 | 28-Oct-2026 | 88.12 % | the title and file screens (bars of tiles, a saved game's line), tools back on the shelf, the sprite table |
 | 28-Oct-2026 | 88.80 % | a map's picture (BackgroundsManager: tilemaps, layer pictures and the camera walk); two fuzz preparations made realistic (a saved game's year, a wandering slot's steps and direction) |
 | 28-Oct-2026 | 88.94 % | the interrupts (NMI, line IRQ) and the waits for the next frame, with the NMI brought forward by the random test (HM_WAIT) |
+| 28-Oct-2026 | 90.73 % | what waits for frames: the fades, the sounds that wait (UNK_Audio18/20/24/26, ToolUsedSound2), two script commands, action 4, the items on the map (BAAAA, SUB_81809A) and the 26 tools of the shed, the script interpreter and its loop, swapping the tools (player state $1C), the player's frame (SUB_81BFB7, PlayerInteractionSelector) and action $35; the random test now puts the whole machine back before each call of a sound routine |

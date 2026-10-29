@@ -143,6 +143,12 @@ en el README (`tools/progress.py`).
 | PrepareOAMData (la tabla de sprites de cada cuadro; comprobada con el intérprete: la recompilación amplía a propósito la prueba de pantalla para la pantalla ancha) | $85:83E0 | src/objects.c |
 | BackgroundsManager (el dibujo de un mapa al entrar: tilemaps, dibujos de capa, la cámara hasta la entrada; en vivo siempre la corta el NMI, se comprueba con el fuzz) | $80:A7C6 | src/video.c |
 | NMI_Interrupt, COP_Interrupt (las interrupciones), WaitForNMI, WaitForNMIATimes (esperar cuadros; solo con el fuzz: en vivo el código compilado cede el cuadro en el bucle) | $80:867B, $80:8699, $80:8645, $80:865D | src/nmi.c |
+| ScreenFadein, ScreenFadeout, Event_ScreenFadein, Event_ScreenFadeout (fundidos) | $80:87CE, $80:880A, $84:8B83, $84:8CB9 | src/nmi.c, eventcmds.c |
+| UNK_Audio18, UNK_Audio20, UNK_Audio24, UNK_Audio26, ToolUsedSound2, Event_AudioRelated3, CODE_81D670 (sonidos que esperan cuadros) | $83:833E, $83:83A4, $83:82FE, $83:82C6, $82:8FF3, $84:95E8, $81:D670 | src/audio.c, toolsound.c, eventcmds.c, interact.c |
+| BAAAA, SUB_81809A, CODE_8187C3, ItemObject_2A-43 (los objetos en el mapa; las herramientas del cobertizo) | $81:A383, $81:809A, $81:87C3, $81:83C9-$81:8491 | src/items.c |
+| EventInstructionInterpreter, IterateCCStructures (el intérprete de guiones y el bucle de los 49 slots) | $84:8249, $84:816F | src/events.c |
+| PlayerState_1C (cambiar la herramienta de la mano y la de la bolsa) | $81:C061 | src/playerstate.c |
+| SUB_81BFB7, PlayerInteractionSelector (el cuadro del jugador: paso de la acción o acción pendiente), PlayerAction_35 | $81:BFB7, $81:D570, $81:E36E | src/playerstate.c, actions.c |
 | GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
