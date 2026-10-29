@@ -45,16 +45,24 @@ recompilación y un launcher nuevo.
 
 ### Cómo jugarlo en Windows
 
-1. Descarga este repositorio (*Code → Download ZIP*) y descomprímelo.
-2. Doble clic en **`compilar_nativo.bat`**. La primera vez descarga un
-   compilador de C (llvm-mingw) y SDL3 (unos 190 MB, revisados por su
-   SHA-256); después compila en menos de un minuto y deja
-   `HarvestMoonNative.exe` y `SDL3.dll` en la carpeta.
-3. Ábrelo. La primera vez te pide **tu ROM** de *Harvest Moon (USA)*; la
-   revisa y la recuerda.
+**[⬇ Descargar la última versión (beta)](https://github.com/RodriLoy/HarvestMoonSnesDecomp/releases/latest)**
 
-Como lo compilas tú, Windows no lo trata como un programa descargado de
-internet. En Linux: ver [Cómo funciona la versión nativa](#cómo-funciona-la-versión-nativa).
+1. Descarga `HarvestMoonNative-…-beta.zip` del release y descomprímelo
+   donde quieras.
+2. Doble clic en **`build.bat`** (o `compilar_nativo.bat`, es lo mismo). La
+   primera vez descarga un compilador de C (llvm-mingw) y SDL3 (unos 190 MB,
+   revisados por su SHA-256); después compila el juego en un minuto más o
+   menos y deja `HarvestMoonNative.exe` y `SDL3.dll` en la carpeta. Sirve
+   en Windows 10/11, x64 y ARM.
+3. Abre `HarvestMoonNative.exe`. La primera vez te pide **tu propia ROM**
+   de *Harvest Moon (USA)*; la revisa y la recuerda.
+
+Por qué funciona así: la descarga es el código fuente con un script para
+compilarlo, no un programa ya hecho, y el juego se arma en tu computadora
+con él y tu copia del juego. Como lo compilas tú, Windows no lo trata como
+un programa descargado de internet. **Todo viene apagado**: el juego es el
+de la consola hasta que actives lo que quieras en Mejoras y Opciones. En
+Linux: ver [Cómo funciona la versión nativa](#cómo-funciona-la-versión-nativa).
 
 ### Launcher con el aspecto del juego
 
@@ -90,7 +98,7 @@ mientras la música sigue.
 |---|
 | ![Launcher en el juego](docs/screenshots/launcher_ingame.png) |
 
-### Pantalla ancha 16:9 *(activada por defecto)*
+### Pantalla ancha 16:9 *(apagada por defecto)*
 
 Muestra más mapa a los lados en lugar de barras negras, con personajes y
 animales también en los márgenes. Al borde de un mapa, en cuartos pequeños
@@ -115,7 +123,7 @@ el clima de mañana). La música sigue sonando.
 
 ### Las demás mejoras (las de la recompilación)
 
-- **Juego sin fin** *(activado por defecto)* — ves el final del año 3
+- **Juego sin fin** *(apagado por defecto)* — ves el final del año 3
   completo y luego sigues con tu granja: otoño, año 4, 5 y más; el diario
   dice "4th", "5th"…
 - **OPTIONS en la pantalla de título** — una cuarta opción debajo de HOW TO
@@ -132,7 +140,7 @@ el clima de mañana). La música sigue sonando.
 |---|---|---|
 | ![OPTIONS](docs/screenshots/title_options.png) | ![Mejoras](docs/screenshots/improvements.png) | ![Trucos](docs/screenshots/cheats.png) |
 
-Con todas las mejoras apagadas, el juego es exactamente el de la consola.
+**Todo viene apagado**, así que el juego es exactamente el de la consola: activa lo que quieras en Mejoras y Opciones.
 
 ### Controles
 

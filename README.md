@@ -45,16 +45,24 @@ a new launcher.
 
 ### How to play it on Windows
 
-1. Download this repository (*Code → Download ZIP*) and unzip it.
-2. Double-click **`compilar_nativo.bat`**. The first time it downloads a C
-   compiler (llvm-mingw) and SDL3 (about 190 MB, checked by their SHA-256);
-   then it builds in under a minute and leaves `HarvestMoonNative.exe` and
-   `SDL3.dll` in the folder.
-3. Open it. The first time it asks for **your ROM** of *Harvest Moon
-   (USA)*; it checks it and remembers it.
+**[⬇ Download the latest version (beta)](https://github.com/RodriLoy/HarvestMoonSnesDecomp/releases/latest)**
 
-Since you build it yourself, Windows does not treat it as a program
-downloaded from the internet. On Linux: see [How the native build works](#how-the-native-build-works).
+1. Download `HarvestMoonNative-…-beta.zip` from the release and unzip it
+   anywhere.
+2. Double-click **`build.bat`**. The first time it downloads a C compiler
+   (llvm-mingw) and SDL3 (about 190 MB, checked by their SHA-256); then it
+   builds the game in about a minute and leaves `HarvestMoonNative.exe`
+   and `SDL3.dll` in the folder. Works on Windows 10/11, x64 and ARM.
+3. Open `HarvestMoonNative.exe`. The first time it asks for **your own ROM**
+   of *Harvest Moon (USA)*; it checks it and remembers it.
+
+Why it works this way: the download is the source code plus a build
+script, not a ready-made program, and the game is put together on your
+computer from it and your copy of the game. Since you build it yourself,
+Windows does not treat it as a program downloaded from the internet.
+**Everything starts off**: the game is the console's until you turn on
+what you like in Improvements and Options. On Linux: see
+[How the native build works](#how-the-native-build-works).
 
 ### A launcher in the look of the game
 
@@ -91,7 +99,7 @@ playing on.
 |---|
 | ![Launcher in the game](docs/screenshots/launcher_ingame.png) |
 
-### 16:9 widescreen *(on by default)*
+### 16:9 widescreen *(off by default)*
 
 Shows more of the map at the sides instead of black bars, with people and
 animals drawn in the margins too. At a map's edge, in small rooms and on
@@ -116,7 +124,7 @@ keeps playing.
 
 ### The other improvements (the recompilation's)
 
-- **Endless game** *(on by default)* — you watch the whole Year 3 ending,
+- **Endless game** *(off by default)* — you watch the whole Year 3 ending,
   then carry on with your farm: Fall, Year 4, 5 and beyond; the diary says
   "4th", "5th"…
 - **OPTIONS on the title screen** — a fourth entry below HOW TO PLAY that
@@ -133,7 +141,7 @@ keeps playing.
 |---|---|---|
 | ![OPTIONS](docs/screenshots/title_options.png) | ![Improvements](docs/screenshots/improvements.png) | ![Cheats](docs/screenshots/cheats.png) |
 
-With every improvement off, the game is exactly the console's.
+**Everything starts off**, so the game is exactly the console's: turn on what you like in Improvements and Options.
 
 ### Controls
 
