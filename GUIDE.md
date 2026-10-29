@@ -253,6 +253,53 @@ Some tricks that were needed:
   version: the recompilation runs them in an interpreter. The live
   checker does not see those calls, so the random test is the
   verification (it calls the original through the interpreter).
+- **Routines that never return, solved by stopping them (flag
+  `HM_TOLOOP`).** The game loop (`GameLoop`, `$80:8083`) goes round for
+  ever, and so do the title screen, the names screen and the demos; the
+  routines before them (the names' routines, the start of a day, RESET)
+  jump into them and never come back. Their checks stop the original
+  where it goes into the loop, or, for a loop itself, at the jump back to
+  its frame's start (one frame), or where it goes on to another of these
+  routines: a hook on that instruction sends it to an RTL (`$80:972B`) that
+  pops the checker's frame, and the rewrite returns at the same place.
+  Two of them needed more: `Unk_NamesInput` leaves a stray byte on the
+  stack (bug 30, below), which the stop takes off first; and RESET clears
+  all of the WRAM, the stack too, so the checker keeps its own frame and
+  stack pointer at RESET's first instruction and puts them back at the
+  stop (the rewrite does the same at its end). RESET also uploads the
+  sound program through the chip's boot ROM, so, like `UNK_Audio1`, it is
+  tested once at frame 1 (`HM_LIVE`). The one-instruction loop
+  `SUB_82878E` (`BRA` to itself) is stopped on its second turn.
+- **Long routines made of others (flag `HM_LOOSE`).** The waits these
+  routines call save the flags (PHP), and the NMI pushes them: those
+  bytes depend on N, Z and V left by everything before, which a rewrite
+  made of calls does not follow. So for them the stack below the final
+  stack pointer (bytes left there, never read again) is not compared;
+  everything else is, the carry and the index width included.
+- **Waits deep inside.** While one of the routines that wait is tested,
+  the original runs in the interpreter, which hands the calls it meets to
+  their compiled versions; a compiled routine that waits for the NMI there
+  would never see it (the interpreter's NMI is the checker's). There is
+  room for 16 such routines in the interpreter's list of "keep these
+  interpreted", and there are more than 40 now, so the check wrappers
+  (`tools/decomp_overrides.py`) ask first: while a waiting routine is
+  tested, a call of another waiting routine from compiled code runs it in
+  the interpreter instead (`hm_decomp_wait_interp`).
+- **Inputs a long routine must not get.** A routine made of many others
+  meets what each of them meets, so its preparation has to keep the
+  inputs real for all of them. The ones found: a map entered through
+  `SUB_80972C` must be one with a sprite palette (maps $4B-$56 have none:
+  their entry in `UNK_Table11` points past the palettes' table, at open
+  bus); bit 15 of `$0196` (a picture stored as it is) only comes with the
+  farm, the town and the mountain, and with it the title's packed
+  pictures would be copied raw, $8000 bytes, into the I/O area; the saved
+  games' year must be 0-2; HDMA must be off (an HDMA copying into WRAM
+  while the original runs has no counterpart in the rewrite's run, which
+  does not move the beam); a farm drawn by `UNK_PartialMap` must have real
+  tile codes; and `ChangeStamina` reads the caller's N flag (bug 11),
+  which a rewrite calling it must set as the original's `LDA` would.
+  `HM_DECOMP_WATCH=<WRAM index>` prints every instruction of the original
+  after which that byte changed, which is how these were found.
 - **Reads outside the cartridge.** If a random test makes a routine read
   a table so far away that it leaves the ROM, it lands on addresses with
   nothing there (the "open bus": you get whatever was last on the wires).
@@ -323,6 +370,16 @@ whose count included it (56.14 % → 56.10 %).
 | `src/hm_decomp.c` | the checker and the preparations |
 | `src/hm_io.c` | the checker's part for the chips (HM_IO) |
 | `src/nmi.c` | the interrupts and the waits for the next frame |
+| `src/transition.c` | going from one map to another (loading the new one) |
+| `src/mapevents.c` | who appears when a map is entered |
+| `src/day.c` | the clock, the night and the first morning |
+| `src/game.c` | the game loop and the start of a loaded game |
+| `src/names.c` | the names screen and where each name goes |
+| `src/demo.c` | the title screen's demos |
+| `src/intro.c` | the title screen, its menu and the file screens |
+| `src/reset.c` | the power-on |
+| `native/main.c` | the native build: the window, the pads, the sound, the order of the routines |
+| `native/hw.c` | the native build: the console's chips around the C (memory map, registers) |
 
 ---
 
@@ -1800,6 +1857,109 @@ not on days with `$0196` bits 1, 3, 4):
   the shed's wall swap with the one in hand (`CODE_81A94A` puts it back on
   its shelf, `CODE_8187C3` takes the new one and loads its noises).
 
+### 5.33 From the power-on to the farm
+
+- **RESET** (`$80:8428`): native mode, the stack at `$1F00`, every CPU and
+  picture chip register to its start value, all the WRAM cleared, the
+  sound program uploaded and started (`UNK_Audio1`-`4`), VRAM, OAM and
+  CGRAM cleared, the saved games checked (`CheckSRAMIntegrity`), the NMI
+  on, and the title (`IntroScreen`, JML).
+- **The title screen** (`IntroScreen`, `$82:D75E`): the Natsume logo,
+  then a frame at a time (`$82:D80D`: the NMI, the colour cycles, the
+  joypad) the stage in `$95`: 0 the logo (2 s, 120 frames); 1 the
+  parents' scene, a small game of its own (script 0 of group 9) played on
+  its own frames until the script ends; 2 the title slides in; 3 it goes
+  up; 6 and 9 the title screen's background, faded in; 4 the menu's marks;
+  5 the menu (after 600 frames, 10 s, the demos); 7 the new game's file
+  screen; 8 the saved game's (`SUB_82E1F1`); 10 the first demo. A failed
+  check of the saved games starts the menu on "continue" (`$098D` = 2).
+- **The file screens**: the two files' frames and lines (name, year,
+  season, day), the chosen one lit, the background drifting a pixel every
+  other frame; back to the title (`$94` = 1) or into the game (`$94` =
+  2): `StartFromNewGame` (`NewGameSetup`) or `StartFromLoad`
+  (`LoadGameSlot`), then `SpawnAfterLoad`.
+- **The demos** (`SUB_82D1C0`, `DemoPresentation`): a fresh game on the
+  farm played by the event script of group $47 (the demo's step in
+  `$7F1F48` picks the next one, 12 in turn) on the game's own frames,
+  until the script ends.
+- **The first morning** (`SpawnAfterLoad`, `$80:8000`): the house's music,
+  the screen cleared, the day's state from zero (`FirstNightReset`), the
+  player in his chair (136, 120) in the house (`UNK_ScreenTransition`);
+  after the first day, the breakfast. Then the game loop.
+- **The game loop** (`GameLoop`, `$80:8083`), one frame each time round:
+  wait for the NMI; `$C7` = `$1800`; unless a name is to be written
+  (`$0196` bit 13: the names screen); `SetScreenTransition`, `SUB_809A64`,
+  `UpdateTime`, `PrintTextFrame`, `TransitionTimeofDayPalettes`,
+  `UNK_BigLoop`, `InputTypeSelector`, `BAAAA`, `SUB_81BFB7`,
+  `AutoMapScrolling`, `IterateCCStructures`, `CODE_81A600`,
+  `CODE_8582C7`, `CODE_858CB2`, `PrepareOAMData`; `$00` cleared.
+- **The clock** (`UpdateTime`): a second a frame, 60 seconds a minute
+  and 15 minutes an hour, so an hour of the game is 900 frames (15 s);
+  it stops at 18:00 (the music stops too). Each hour the lunch and the
+  shipping; `$7F1F5A` bit 10 the shipping box's talk instead.
+- **The night** (`NightReset`, when the player goes to bed): the
+  calendar, the special days, 6:00, the night's work (the date's names,
+  the field, the climate damage, the cows, tomorrow's weather, the
+  favourite girl, the wife and the children), the stamina full, the
+  shipped money paid, the story's events of the night (the house built
+  on the 4th night, the gold tools), the diary, and the morning in the
+  house. Holding L, R and Select as the night ends makes it summer 30 of
+  the third year, the last day (bug 33).
+- **Going to another map** (`SetScreenTransition`, every frame): with
+  `$0196` bit 14, the new map's music, the fade out, the screen blanked;
+  `UNK_ScreenTransition` clears the old map's things, starts the new map's
+  people (`RunsFunctionbyIndex`, 5.26) and loads it (`SUB_80972C`: the
+  picture, the colours, the player and what he holds, the animals, the
+  music, the fade in).
+- **The house** (`MapEvent_DED3`, maps $15-$17): the ending on summer 30
+  of the third year; the house's music after the extensions; the night's
+  leftovers (songs, noises, the new tiles of an extension); then the
+  first scene that fits: one of group $1F, a cow's (its name in the
+  text), the wife's at 6:00 or her own group, the children's, group $0A
+  on its days, group $28 on spring 1, group $0F on winter 24.
+- **The names screen** (`Unk_NamesInput`, `$82:E80C`): the letters' grid,
+  the cursor's sprite, the name's frame; a frame at a time the cursor
+  blinks and moves, until "done"; then the name goes where `$099F` says:
+  `SetPlayerName`, `SetCowNameBought` (a new cow), `SetCowNameBorn` (a
+  calf), `SetDogName`, `SetHorseName`, `SetKid1Name`, `SetKid2Name`, and
+  back into the game loop.
+
+### 5.34 The game on the C alone (the native build)
+
+With every routine rewritten, the game runs without the recompiled code
+(`native/`):
+
+- **Who calls whom.** RESET and the routines after it never return: each
+  one ends by jumping on (JML / JMP) to the next: the title screen, a frame
+  of it, the demos, the file screens, a new or loaded game, the game loop,
+  the names screen. Their rewrites end at that jump and leave its target in
+  `g_hm_next`; the native `main` calls the routine at that address, and so
+  on for ever. Everything else is the rewrites calling one another.
+- **A frame.** Every wait for the next frame goes through `hm_nmi`, which
+  calls `g_hm_frame_hook` first: the picture chip draws the frame from its
+  registers and memory (lines 1-224, HDMA included), the window shows it,
+  the pads are read for the next one, and the sound chip runs the frame's
+  share of its cycles (1,024,000 a second); then the NMI handler runs as on
+  the console.
+- **Waiting for the sound chip.** A loop that waits for the chip's answer
+  (`hm_apu_read`) runs the chip about 4 cycles a turn; when the waiting
+  adds up to a whole frame, the frame ends right there and the NMI
+  interrupts the wait, as on the console (the start-up upload of the sound
+  program takes about 160 frames, almost 3 seconds, like the real thing).
+- **The chips.** The picture chip (PPU), the DMA unit and the sound chip
+  (its SPC700 and DSP) are the recompilation runner's, compiled unchanged;
+  `native/hw.c` is the memory map (LoROM: the ROM, the WRAM, the battery
+  RAM) and the CPU's registers (NMI, multiplier and divider, pads, DMA).
+- **What differs from the console.** The C takes no time, so a frame
+  whose work would not fit in 1/60 s on the console (loading a map,
+  the night) does not drop frames here; the NMI comes only at the waits.
+  The NMI draws a random number every frame (`UpdateGraphics` calls
+  `GetRNG`), so the random numbers drift from the console's after the
+  first slow frame; everything else follows. Measured against the
+  recompilation at the same points of the title screen (the start of each
+  stage), the whole WRAM matches except the random numbers, the bytes they
+  decide and the stack.
+
 ---
 
 ## 6. Bugs and quirks of the original game
@@ -1903,6 +2063,20 @@ Things the game does wrong or oddly, found while decompiling:
     (`CopiesWRAMtoOBJVGRAM` returns with a 16-bit A), `UpdateGraphics`
     clears `$9A` and `$420B` with 16-bit stores: they also clear `$9B` and
     `$420C`, HDMAEN, so every frame with work to do ends with HDMA off.
+30. **A JSL to a routine that ends with RTS.** The names screen
+    (`Unk_NamesInput`, `$82:E8E7`) calls `SUB_82EAB4` with JSL, but it
+    returns with RTS: the bank byte the JSL pushed stays on the stack. The
+    names screen never returns, so it does no harm.
+31. **A loop of one instruction.** `SUB_82878E` is a BRA to itself. Nothing
+    calls it.
+32. **Unreachable code in the title screen.** After the parents' scene's
+    loop (`$82:D99A`-`$82:D9B2`), a count of `$168` frames and a fade out
+    that no jump reaches.
+33. **The last day by hand.** Holding L, R and Select (`$0124` =
+    `$2030`) when the night ends sets the date to summer 30 of the third
+    year: the next morning is the ending.
+34. **A name with nowhere to go.** If `$099F` is not 0-6 when a name is
+    done, the names screen goes round for ever looking for its routine.
 
 ## 7. Differences found in the recompilation
 
@@ -2039,3 +2213,5 @@ Things the game does wrong or oddly, found while decompiling:
 | 28-Oct-2026 | 88.80 % | a map's picture (BackgroundsManager: tilemaps, layer pictures and the camera walk); two fuzz preparations made realistic (a saved game's year, a wandering slot's steps and direction) |
 | 28-Oct-2026 | 88.94 % | the interrupts (NMI, line IRQ) and the waits for the next frame, with the NMI brought forward by the random test (HM_WAIT) |
 | 28-Oct-2026 | 90.73 % | what waits for frames: the fades, the sounds that wait (UNK_Audio18/20/24/26, ToolUsedSound2), two script commands, action 4, the items on the map (BAAAA, SUB_81809A) and the 26 tools of the shed, the script interpreter and its loop, swapping the tools (player state $1C), the player's frame (SUB_81BFB7, PlayerInteractionSelector) and action $35; the random test now puts the whole machine back before each call of a sound routine |
+| 29-Oct-2026 | 100.00 % | the rest: from the power-on to the farm (RESET, the title screen and its menu, the file screens, the demos, the first morning, the game loop), the clock and the night, going to another map and loading it, the house (who appears there), the names screen and where each name goes; the random test stops the routines that never return where they go into their loop (HM_TOLOOP) |
+| 29-Oct-2026 | 100.00 % | the native build: the game plays on the rewritten C alone (`native/`), with the console's picture and sound chips around it |

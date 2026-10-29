@@ -1,4 +1,4 @@
-# Estado de la descompilación (al 21-oct-2026)
+# Estado de la descompilación (al 29-oct-2026)
 
 Memoria del proyecto para retomarlo sin perder nada. El clima y el daño
 del clima a la granja ya están reescritos y verificados. Porcentaje actual
@@ -13,7 +13,7 @@ en el README (`tools/progress.py`).
 - **Comprobador**: cada rutina reescrita se compara byte por byte con la
   original, en partidas reales (`HM_DECOMP_CHECK=1`) y con entradas al azar
   (`HM_DECOMP_FUZZ=<cuadro>:<veces>`).
-- **430 rutinas reescritas y verificadas** (0 diferencias):
+- **Todas las rutinas reescritas y verificadas (778)** (0 diferencias):
 
 | Rutina | Dirección | Archivo |
 |---|---|---|
@@ -149,6 +149,14 @@ en el README (`tools/progress.py`).
 | EventInstructionInterpreter, IterateCCStructures (el intérprete de guiones y el bucle de los 49 slots) | $84:8249, $84:816F | src/events.c |
 | PlayerState_1C (cambiar la herramienta de la mano y la de la bolsa) | $81:C061 | src/playerstate.c |
 | SUB_81BFB7, PlayerInteractionSelector (el cuadro del jugador: paso de la acción o acción pendiente), PlayerAction_35 | $81:BFB7, $81:D570, $81:E36E | src/playerstate.c, actions.c |
+| SUB_80972C, UNK_ScreenTransition, SetScreenTransition (ir a otro mapa y cargarlo) | $80:972C, $80:96D3, $80:9671 | src/transition.c |
+| MapEvent_DED3 (quién aparece en la casa), RunsFunctionbyIndex (la rutina de cada mapa) | $83:DED3, $83:CA98 | src/mapevents.c |
+| UpdateTime, NightReset, FirstNightReset, SUB_82878E (el reloj, la noche, el primer día; error 31: un BRA a sí mismo) | $82:8000, $82:82AC, $83:ABF0, $82:878E | src/day.c |
+| SpawnAfterLoad, GameLoop (la primera mañana y el bucle del juego) | $80:8000, $80:8083 | src/game.c |
+| Unk_NamesInput, SetPlayerName, SetCowNameBought, SetCowNameBorn, SetDogName, SetHorseName, SetKid1Name, SetKid2Name (la pantalla de los nombres; error 30) | $82:E80C, $80:80ED-$80:83AE | src/names.c |
+| SUB_82D1C0, DemoPresentation (las demos) | $82:D1C0, $82:D3C7 | src/demo.c |
+| IntroScreen, SUB_82E1F1, StartFromLoad, StartFromNewGame, SUB_UNUSED_1 (la pantalla de título, su menú y las pantallas de partidas) | $82:D75E, $82:E1F1, $82:E7E9, $82:E7F9, $82:E801 | src/intro.c |
+| RESET (el encendido) | $80:8428 | src/reset.c |
 | GetFenceFromStack, CODE_81D6E2/D6F8, Unused01-11 (acciones), CODE_81D1C5 (corazones), GetBackgroundData, UNK_PresetsMemory3 | bancos $80/$81 | src/interact.c, people.c, maptiles.c, objects.c |
 | SaveGameSlot, LoadGameSlotResume, CheckSRAMIntegrity | $83:B68E, $83:BA45, $83:BAD4 | src/save.c |
 | UNK_Audio17, 7, 8, 15, 19, 16, 2 | $83:8EE4, 8EC9, 8E8B, 8DDF, 8332, 8E7F, 8E32 | src/audio.c |
@@ -532,14 +540,11 @@ sistema de texto).
 
 ## Lo siguiente
 
-Más comandos de evento (`python3 tools/candidates.py | grep Event_`);
-SUB_829260 (el despachador de herramientas: ya están todas); el
-ShippingScene y UpdateTime (ya está todo el texto); el resto
-de los eventos de animales (`Event_UNKCowRelated`, $84:9AD4).
-
-Otras hojas candidatas (no llaman a nada): LoadsDamageProbabilities,
-SetTimeofDayPalette, CalculateTileinFront, SUB_809EBC (cámara al cambiar de
-pantalla), y los comandos de eventos `Event_*` del banco 84.
+Todo el código del juego está reescrito (100 %, `tools/progress.py`). Lo
+que queda es mejorar el texto: poner nombres claros a las rutinas que aún
+tienen el de HM-Decomp (`UNK_*`, `SUB_*`, `CODE_*`) y a las variables de
+la WRAM, y seguir usando la descompilación para las ideas de la sección 7
+de MEMORIA.md (minimapa, objetos y animales nuevos).
 
 ## Cómo retomarlo
 

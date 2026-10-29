@@ -259,6 +259,57 @@ Algunos trucos que fueron necesarios:
   compilada: la recompilación las corre en un intérprete. El comprobador
   en vivo no ve esas llamadas, y entonces la prueba al azar es la
   verificación (llama al original por el intérprete).
+- **Rutinas que nunca vuelven, resueltas parándolas (bandera
+  `HM_TOLOOP`).** El bucle del juego (`GameLoop`, `$80:8083`) da vueltas
+  para siempre, y también la pantalla de título, la de los nombres y las
+  demos; las rutinas de antes (las de los nombres, el comienzo de un día,
+  RESET) saltan a ellas y no regresan. Sus comprobaciones paran el
+  original donde entra al bucle o, para un bucle mismo, en el salto de
+  vuelta al comienzo de su cuadro (un cuadro), o donde sigue a otra de
+  estas rutinas: un gancho en esa instrucción lo manda a un RTL
+  (`$80:972B`) que saca el marco del comprobador, y la reescritura vuelve
+  en el mismo lugar. Dos necesitaron más: `Unk_NamesInput` deja un byte
+  suelto en la pila (error 30, abajo), que la parada quita primero; y RESET
+  borra toda la WRAM, la pila también, así que el comprobador guarda su
+  marco y el puntero de pila en la primera instrucción de RESET y los
+  repone en la parada (la reescritura hace lo mismo al final). RESET además
+  sube el programa de sonido por la ROM de arranque del chip, así que,
+  como `UNK_Audio1`, se prueba una vez en el cuadro 1 (`HM_LIVE`). El bucle
+  de una sola instrucción `SUB_82878E` (`BRA` a sí mismo) se para en su
+  segunda vuelta.
+- **Rutinas largas hechas de otras (bandera `HM_LOOSE`).** Las esperas que
+  llaman estas rutinas guardan las banderas (PHP), y el NMI las empuja:
+  esos bytes dependen de N, Z y V dejadas por todo lo anterior, que una
+  reescritura hecha de llamadas no sigue. Por eso en ellas no se compara la
+  pila por debajo del puntero de pila final (bytes que quedan ahí y nadie
+  vuelve a leer); todo lo demás sí, el acarreo y el ancho de los índices
+  incluidos.
+- **Esperas muy adentro.** Mientras se prueba una de las rutinas que
+  esperan, el original corre en el intérprete, que pasa las llamadas que
+  encuentra a sus versiones compiladas; una rutina compilada que espera el
+  NMI ahí no lo vería nunca (el NMI del intérprete es el del comprobador).
+  La lista del intérprete de "estas déjalas interpretadas" tiene sitio
+  para 16, y ya hay más de 40, así que los envoltorios de comprobación
+  (`tools/decomp_overrides.py`) preguntan primero: mientras se prueba una
+  rutina que espera, una llamada a otra rutina que espera desde el código
+  compilado la corre en el intérprete (`hm_decomp_wait_interp`).
+- **Entradas que una rutina larga no debe recibir.** Una rutina hecha de
+  muchas otras se encuentra con lo que encuentra cada una, así que su
+  preparación tiene que dejar las entradas reales para todas. Las
+  encontradas: un mapa que se entra por `SUB_80972C` debe tener paleta de
+  sprites (los mapas $4B-$56 no la tienen: su entrada en `UNK_Table11`
+  apunta más allá de la tabla de paletas, al bus abierto); el bit 15 de
+  `$0196` (un dibujo guardado tal cual) solo viene con la granja, el
+  pueblo y la montaña, y con él los dibujos comprimidos del título se
+  copiarían tal cual, $8000 bytes, a la zona de E/S; el año de las
+  partidas guardadas debe ser 0-2; el HDMA debe estar apagado (un HDMA que
+  copia a la WRAM mientras corre el original no tiene igual en la corrida
+  de la reescritura, que no mueve el haz); una granja que dibuja
+  `UNK_PartialMap` debe tener códigos de casilla reales; y `ChangeStamina`
+  lee la bandera N de quien la llama (error 11), que una reescritura que
+  la llama debe poner como la pondría el `LDA` del original.
+  `HM_DECOMP_WATCH=<índice de WRAM>` imprime cada instrucción del original
+  tras la que ese byte cambió, y así se encontraron.
 - **Lecturas fuera del cartucho.** Si una prueba al azar hace que una
   rutina lea una tabla tan lejos que se sale de la ROM, cae en direcciones
   donde no hay nada (el "bus abierto": se lee lo último que pasó por los
@@ -330,6 +381,16 @@ $80:9553), cuya cuenta lo incluía (56,14 % → 56,10 %).
 | `src/hm_decomp.c` | el comprobador y las preparaciones |
 | `src/hm_io.c` | la parte del comprobador para los chips (HM_IO) |
 | `src/nmi.c` | las interrupciones y las esperas al cuadro siguiente |
+| `src/transition.c` | ir de un mapa a otro (cargar el nuevo) |
+| `src/mapevents.c` | quién aparece al entrar a un mapa |
+| `src/day.c` | el reloj, la noche y la primera mañana |
+| `src/game.c` | el bucle del juego y el comienzo de una partida cargada |
+| `src/names.c` | la pantalla de los nombres y adónde va cada nombre |
+| `src/demo.c` | las demos de la pantalla de título |
+| `src/intro.c` | la pantalla de título, su menú y las pantallas de partidas |
+| `src/reset.c` | el encendido |
+| `native/main.c` | la versión nativa: la ventana, los controles, el sonido, el orden de las rutinas |
+| `native/hw.c` | la versión nativa: los chips de la consola alrededor del C (mapa de memoria, registros) |
 
 ---
 
@@ -1863,6 +1924,117 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   (`CODE_81A94A` la devuelve a su estante, `CODE_8187C3` toma la nueva y
   carga sus ruidos).
 
+### 5.33 Del encendido a la granja
+
+- **RESET** (`$80:8428`): modo nativo, la pila en `$1F00`, cada registro de
+  la CPU y del chip de imagen a su valor inicial, toda la WRAM borrada, el
+  programa de sonido subido y arrancado (`UNK_Audio1`-`4`), la VRAM, la
+  OAM y la CGRAM borradas, las partidas guardadas revisadas
+  (`CheckSRAMIntegrity`), el NMI encendido, y el título (`IntroScreen`,
+  JML).
+- **La pantalla de título** (`IntroScreen`, `$82:D75E`): el logo de
+  Natsume y luego, un cuadro a la vez (`$82:D80D`: el NMI, los ciclos de
+  color, el control), la etapa de `$95`: 0 el logo (2 s, 120 cuadros); 1 la
+  escena de los padres, un pequeño juego propio (el guion 0 del grupo 9)
+  que corre en sus propios cuadros hasta que el guion acaba; 2 el título
+  entra deslizándose; 3 sube; 6 y 9 el fondo de la pantalla de título,
+  con fundido; 4 las marcas del menú; 5 el menú (tras 600 cuadros, 10 s,
+  las demos); 7 la pantalla de partida nueva; 8 la de partida guardada
+  (`SUB_82E1F1`); 10 la primera demo. Si la revisión de las partidas
+  falla, el menú empieza en "continuar" (`$098D` = 2).
+- **Las pantallas de partidas**: los marcos y las líneas de las dos
+  partidas (nombre, año, estación, día), la elegida encendida, el fondo
+  moviéndose un píxel cada dos cuadros; de vuelta al título (`$94` = 1) o
+  al juego (`$94` = 2): `StartFromNewGame` (`NewGameSetup`) o
+  `StartFromLoad` (`LoadGameSlot`), y luego `SpawnAfterLoad`.
+- **Las demos** (`SUB_82D1C0`, `DemoPresentation`): una partida nueva en la
+  granja jugada por el guion de evento del grupo $47 (el paso de la demo
+  en `$7F1F48` elige la siguiente, 12 por turno) en los cuadros del propio
+  juego, hasta que el guion acaba.
+- **La primera mañana** (`SpawnAfterLoad`, `$80:8000`): la música de la
+  casa, la pantalla borrada, el estado del día desde cero
+  (`FirstNightReset`), el jugador en su silla (136, 120) de la casa
+  (`UNK_ScreenTransition`); después del primer día, el desayuno. Luego el
+  bucle del juego.
+- **El bucle del juego** (`GameLoop`, `$80:8083`), un cuadro por vuelta:
+  esperar el NMI; `$C7` = `$1800`; salvo que haya que escribir un nombre
+  (bit 13 de `$0196`: la pantalla de los nombres); `SetScreenTransition`,
+  `SUB_809A64`, `UpdateTime`, `PrintTextFrame`,
+  `TransitionTimeofDayPalettes`, `UNK_BigLoop`, `InputTypeSelector`,
+  `BAAAA`, `SUB_81BFB7`, `AutoMapScrolling`, `IterateCCStructures`,
+  `CODE_81A600`, `CODE_8582C7`, `CODE_858CB2`, `PrepareOAMData`; `$00`
+  borrado.
+- **El reloj** (`UpdateTime`): un segundo por cuadro, 60 segundos por
+  minuto y 15 minutos por hora, así que una hora del juego son 900 cuadros
+  (15 s); se para a las 18:00 (también la música). Cada hora, el almuerzo
+  y el envío; con el bit 10 de `$7F1F5A`, la charla de la caja de envíos.
+- **La noche** (`NightReset`, cuando el jugador se acuesta): el
+  calendario, los días especiales, las 6:00, el trabajo de la noche (los
+  nombres de la fecha, el campo, los daños del clima, las vacas, el clima
+  de mañana, la chica favorita, la esposa y los hijos), la energía llena,
+  el dinero de lo enviado, los eventos de la historia de esa noche (la
+  casa construida la 4.ª noche, las herramientas de oro), el diario y la
+  mañana en la casa. Si se tienen L, R y Select apretados al acabar la
+  noche, pasa a ser el verano 30 del tercer año, el último día (error 33).
+- **Ir a otro mapa** (`SetScreenTransition`, cada cuadro): con el bit 14 de
+  `$0196`, la música del mapa nuevo, el fundido de salida, la pantalla en
+  blanco; `UNK_ScreenTransition` borra lo del mapa viejo, pone la gente
+  del nuevo (`RunsFunctionbyIndex`, 5.26) y lo carga (`SUB_80972C`: el
+  dibujo, los colores, el jugador y lo que lleva, los animales, la música,
+  el fundido de entrada).
+- **La casa** (`MapEvent_DED3`, mapas $15-$17): el final en el verano 30
+  del tercer año; la música de la casa tras las ampliaciones; lo que dejó
+  la noche (canciones, ruidos, las casillas nuevas de una ampliación); y
+  luego la primera escena que encaja: una del grupo $1F, la de una vaca
+  (su nombre en el texto), la de la esposa a las 6:00 o su propio grupo,
+  la de los hijos, el grupo $0A en sus días, el grupo $28 en la primavera
+  1 y el grupo $0F en el invierno 24.
+- **La pantalla de los nombres** (`Unk_NamesInput`, `$82:E80C`): la
+  cuadrícula de letras, el sprite del cursor, el marco del nombre; un
+  cuadro a la vez el cursor parpadea y se mueve, hasta "fin"; entonces el
+  nombre va adonde dice `$099F`: `SetPlayerName`, `SetCowNameBought` (una
+  vaca nueva), `SetCowNameBorn` (un ternero), `SetDogName`,
+  `SetHorseName`, `SetKid1Name`, `SetKid2Name`, y de vuelta al bucle del
+  juego.
+
+### 5.34 El juego solo con el C (la versión nativa)
+
+Con todas las rutinas reescritas, el juego corre sin el código recompilado
+(`native/`):
+
+- **Quién llama a quién.** RESET y las rutinas que vienen después nunca
+  vuelven: cada una termina saltando (JML / JMP) a la siguiente: la
+  pantalla de título, un cuadro de ella, las demos, las pantallas de
+  partidas, una partida nueva o cargada, el bucle del juego, la pantalla de
+  los nombres. Sus reescrituras terminan en ese salto y dejan su destino en
+  `g_hm_next`; el `main` nativo llama a la rutina de esa dirección, y así
+  para siempre. Todo lo demás son las reescrituras llamándose entre sí.
+- **Un cuadro.** Cada espera del cuadro siguiente pasa por `hm_nmi`, que
+  primero llama a `g_hm_frame_hook`: el chip de imagen dibuja el cuadro con
+  sus registros y su memoria (líneas 1-224, HDMA incluido), la ventana lo
+  muestra, se leen los controles para el siguiente y el chip de sonido
+  corre la parte de sus ciclos que le toca a un cuadro (1.024.000 por
+  segundo); luego corre el manejador del NMI como en la consola.
+- **Esperar al chip de sonido.** Un bucle que espera la respuesta del chip
+  (`hm_apu_read`) corre el chip unos 4 ciclos por vuelta; cuando la espera
+  suma un cuadro entero, el cuadro termina ahí mismo y el NMI interrumpe la
+  espera, como en la consola (la subida del programa de sonido al
+  encender tarda unos 160 cuadros, casi 3 segundos, como en la real).
+- **Los chips.** El chip de imagen (PPU), la unidad de DMA y el chip de
+  sonido (su SPC700 y su DSP) son los del runner de la recompilación,
+  compilados sin cambios; `native/hw.c` es el mapa de memoria (LoROM: la
+  ROM, la WRAM, la RAM con pila) y los registros del CPU (NMI,
+  multiplicador y divisor, controles, DMA).
+- **En qué difiere de la consola.** El C no tarda nada, así que un cuadro
+  cuyo trabajo no cabría en 1/60 s en la consola (cargar un mapa, la
+  noche) aquí no pierde cuadros; el NMI llega solo en las esperas. El NMI
+  saca un número al azar en cada cuadro (`UpdateGraphics` llama a
+  `GetRNG`), así que los números al azar se separan de los de la consola
+  tras el primer cuadro lento; todo lo demás sigue igual. Medido contra la
+  recompilación en los mismos puntos de la pantalla de título (el comienzo
+  de cada etapa), toda la WRAM coincide salvo los números al azar, los
+  bytes que deciden y la pila.
+
 ---
 
 ## 6. Errores y rarezas del juego original
@@ -1972,6 +2144,21 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     borra `$9A` y `$420B` con escrituras de 16 bits: borran también `$9B` y
     `$420C`, HDMAEN, así que cada cuadro con trabajo termina con el HDMA
     apagado.
+30. **Un JSL a una rutina que acaba en RTS.** La pantalla de los nombres
+    (`Unk_NamesInput`, `$82:E8E7`) llama a `SUB_82EAB4` con JSL, pero esta
+    vuelve con RTS: el byte de banco que empujó el JSL se queda en la
+    pila. La pantalla de los nombres nunca vuelve, así que no hace daño.
+31. **Un bucle de una instrucción.** `SUB_82878E` es un BRA a sí mismo.
+    Nadie la llama.
+32. **Código al que no se llega en la pantalla de título.** Tras el bucle
+    de la escena de los padres (`$82:D99A`-`$82:D9B2`), una cuenta de
+    `$168` cuadros y un fundido de salida a los que ningún salto llega.
+33. **El último día a mano.** Tener L, R y Select apretados (`$0124` =
+    `$2030`) cuando acaba la noche pone la fecha en el verano 30 del tercer
+    año: la mañana siguiente es el final.
+34. **Un nombre sin destino.** Si `$099F` no es 0-6 cuando se termina un
+    nombre, la pantalla de los nombres da vueltas para siempre buscando su
+    rutina.
 
 ## 7. Diferencias encontradas en la recompilación
 
@@ -2112,3 +2299,5 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 28-oct-2026 | 88,80 % | el dibujo de un mapa (BackgroundsManager: tilemaps, dibujos de capa y el paseo de la cámara); dos preparaciones del fuzz más realistas (el año de una partida, los pasos y la dirección de un slot que pasea) |
 | 28-oct-2026 | 88,94 % | las interrupciones (NMI, IRQ por línea) y las esperas al cuadro siguiente, con el NMI adelantado por la prueba al azar (HM_WAIT) |
 | 28-oct-2026 | 90,73 % | lo que espera cuadros: los fundidos, los sonidos que esperan (UNK_Audio18/20/24/26, ToolUsedSound2), dos comandos de guion, la acción 4, los objetos en el mapa (BAAAA, SUB_81809A) y las 26 herramientas del cobertizo, el intérprete de guiones y su bucle, el cambio de herramienta (estado $1C del jugador), el cuadro del jugador (SUB_81BFB7, PlayerInteractionSelector) y la acción $35; la prueba al azar ahora repone la máquina entera antes de cada llamada de una rutina de sonido |
+| 29-oct-2026 | 100,00 % | todo lo demás: del encendido a la granja (RESET, la pantalla de título y su menú, las pantallas de partidas, las demos, la primera mañana, el bucle del juego), el reloj y la noche, ir a otro mapa y cargarlo, la casa (quién aparece ahí), la pantalla de los nombres y adónde va cada nombre; la prueba al azar para las rutinas que nunca vuelven donde entran a su bucle (HM_TOLOOP) |
+| 29-oct-2026 | 100,00 % | la versión nativa: el juego se juega solo con el C reescrito (`native/`), con los chips de imagen y de sonido de la consola alrededor |
