@@ -5,9 +5,10 @@
  * night under the harvest moon; in the game it opens over the last picture
  * (Escape, the pad's L3 or Guide button, or OPTIONS on the title screen)
  * with the game standing still. Its pages:
- *   Games         the ROMs found next to the program (and in roms/), or any
- *                 other picked with the system's file window; each is
- *                 checked (its header, its CRC) before it is played.
+ *   (the first time, when no ROM is found) Choose your ROM: the ROMs
+ *                 found next to the program (and in roms/), or any other
+ *                 picked with the system's file window; each is checked
+ *                 (its header, its CRC) and the choice is remembered.
  *   Options       window, full screen, the picture, vsync, widescreen,
  *                 sprites, volume, fast forward, language.
  *   Controls      the keys and the gamepad's buttons for each SNES button,
@@ -286,9 +287,8 @@ static void build(void)
       add(K_ACTION, A_STATES, T("Save states"), T("Ten slots that keep the game exactly as it is, apart from the diaries. Also F1-F10 to load and Shift+F1-F10 to save."));
       add(K_ACTION, A_RESET, T("Restart"), T("Start the game again from its first screen (as the console's RESET button). Diaries saved in the game are kept."));
     } else {
-      add(K_ACTION, A_PLAY, T("Play"), T("Start Harvest Moon with the ROM chosen in Games."));
+      add(K_ACTION, A_PLAY, T("Play"), T("Start Harvest Moon with your ROM."));
     }
-    add(K_ACTION, A_GAMES, T("Games"), T("Choose the ROM to play: the ones next to the program, or any other file."));
     add(K_ACTION, A_OPTIONS, T("Options"), T("Window, full screen, the picture, widescreen, sound, fast forward and language."));
     add(K_ACTION, A_CONTROLS, T("Controls"), T("The keys and the gamepad's buttons. Connect a gamepad (USB or Bluetooth) at any time: it appears here."));
     add(K_ACTION, A_MODS, T("Improvements"), T("The recompilation's improvements: fast text, longer days, a pause menu, OPTIONS on the title, an endless game, and cheats."));
@@ -304,6 +304,7 @@ static void build(void)
       it->dim = g->verdict == 0;
     }
     add(K_ACTION, A_BROWSE, T("Look for another file..."), T("Open the system's file window to pick a ROM (.sfc or .smc) anywhere on this computer."));
+    add(K_ACTION, A_QUIT, T("Quit"), T("Close the program."));
     break;
   case P_OPTIONS:
     toggle(V_FULLSCREEN, "Full screen", "The game over the whole screen (also F11 or Alt+Enter).");
@@ -406,6 +407,7 @@ static void choose_game(int i)
   config_save();
   if (!L.in_game) { L.page = P_MAIN; L.sel[P_MAIN] = 0; }
 }
+static bool have_rom(void) { return g_cfg.rom[0] && launcher_rom_ok(g_cfg.rom, NULL, 0); }
 
 static void activate(Item *it, int dir)
 {
@@ -494,6 +496,8 @@ void launcher_open(bool in_game)
     scan_games();
     for (int i = 0; i < L.ngames; i++)
       if (L.games[i].verdict >= 1) { snprintf(g_cfg.rom, sizeof g_cfg.rom, "%s", L.games[i].path); config_save(); break; }
+    /* none at all: the first time, choose it */
+    if (!have_rom()) go(P_GAMES);
   }
 }
 int launcher_slot(void) { return L.slot; }
@@ -599,7 +603,8 @@ int launcher_update(const UiInput *in)
   }
   if (act_result) return act_result;
   if (in->back || in->rclick) {
-    if (L.page != P_MAIN) { L.page = P_MAIN; }
+    if (L.page == P_GAMES && !have_rom()) { /* there is nothing to go back to yet */ }
+    else if (L.page != P_MAIN) { L.page = P_MAIN; }
     else if (L.in_game) return LA_PLAY;
   }
   return LA_NONE;
@@ -811,7 +816,7 @@ void launcher_draw(uint32_t *dst, int w, int h, const uint32_t *game, uint32_t f
   switch (L.page) {
   case P_MAIN: draw_main(); break;
   case P_GAMES: {
-    draw_header(T("Games"), 0, NULL);
+    draw_header(T("Choose your ROM"), 0, NULL);
     draw_list(28);
     const Item *it = L.nitems ? &L.items[L.sel[P_GAMES]] : NULL;
     if (it && it->id >= A_GAME) {
@@ -820,7 +825,8 @@ void launcher_draw(uint32_t *dst, int w, int h, const uint32_t *game, uint32_t f
       snprintf(d, sizeof d, "%s\n\"%s\"  ·  %u KB  ·  CRC %08X\n%s", verdict_text(g->verdict), g->title,
                (unsigned)(g->size / 1024), (unsigned)g->crc, g->path);
       textbox(d, hint);
-    } else textbox(it ? it->desc : "", hint);
+    } else textbox(it && it->id == A_QUIT ? it->desc
+                   : T("First time: choose your own copy of Harvest Moon (USA). It is checked and remembered; next time the game opens with it."), hint);
     break;
   }
   case P_OPTIONS: draw_header(T("Options"), 0, NULL); draw_list(28); break;

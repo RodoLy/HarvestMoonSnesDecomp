@@ -380,7 +380,7 @@ whose count included it (56.14 % → 56.10 %).
 | `src/reset.c` | the power-on |
 | `native/main.c` | the native build: the window, the pads, the sound, the order of the routines |
 | `native/hw.c` | the native build: the console's chips around the C (memory map, registers, save states) |
-| `native/launcher.c` | the launcher: games, options, controls and gamepads, improvements, states |
+| `native/launcher.c` | the launcher: the ROM the first time, options, controls and gamepads, improvements, states |
 | `native/mods.c` | the recompilation's improvements: cheats, fast text, long days, OPTIONS on the title, widescreen, endless game |
 | `native/pause.c` | the Harvest Moon 64-style pause menu |
 | `native/ui.c`, `native/i18n.c`, `native/config.c` | drawing the menus, the Spanish / English / Italian text, `config.ini` and `keybinds.ini` |
@@ -1963,7 +1963,7 @@ With every routine rewritten, the game runs without the recompiled code
   recompilation at the same points of the title screen (the start of each
   stage), the whole WRAM matches except the random numbers, the bytes they
   decide and the stack.
-- **Around the game.** `launcher.c` (Games, Options, Controls,
+- **Around the game.** `launcher.c` (the ROM the first time, Options, Controls,
   Improvements, Save states) and `pause.c` (the pause menu) are drawn on a
   256x224 canvas (`ui.c`) and run inside `g_hm_frame_hook`: the game stands
   still at a frame's end while the sound chip goes on playing. `mods.c` is

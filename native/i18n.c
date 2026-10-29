@@ -256,6 +256,10 @@ static const Pair kEs[] = {
   { "Down", "Abajo" },
   { "Left", "Izquierda" },
   { "Right", "Derecha" },
+  { "Choose your ROM", "Elige tu ROM" },
+  { "First time: choose your own copy of Harvest Moon (USA). It is checked and remembered; next time the game opens with it.", "Primera vez: elige tu propia copia de Harvest Moon (USA). Se revisa y se recuerda; la próxima vez el juego abre con ella." },
+  { "Start Harvest Moon with your ROM.", "Empieza Harvest Moon con tu ROM." },
+  { "Close the program.", "Cierra el programa." },
 };
 static const Pair kIt[] = {
   { "Cheats", "Trucchi" },
@@ -503,6 +507,10 @@ static const Pair kIt[] = {
   { "Down", "Giù" },
   { "Left", "Sinistra" },
   { "Right", "Destra" },
+  { "Choose your ROM", "Scegli la tua ROM" },
+  { "First time: choose your own copy of Harvest Moon (USA). It is checked and remembered; next time the game opens with it.", "Prima volta: scegli la tua copia di Harvest Moon (USA). Viene verificata e ricordata; la prossima volta il gioco si apre con quella." },
+  { "Start Harvest Moon with your ROM.", "Avvia Harvest Moon con la tua ROM." },
+  { "Close the program.", "Chiude il programma." },
 };
 
 static const Pair *s_table;

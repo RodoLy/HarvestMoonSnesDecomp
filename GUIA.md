@@ -391,7 +391,7 @@ $80:9553), cuya cuenta lo incluía (56,14 % → 56,10 %).
 | `src/reset.c` | el encendido |
 | `native/main.c` | la versión nativa: la ventana, los controles, el sonido, el orden de las rutinas |
 | `native/hw.c` | la versión nativa: los chips de la consola alrededor del C (mapa de memoria, registros, estados guardados) |
-| `native/launcher.c` | el launcher: juegos, opciones, controles y mandos, mejoras, estados |
+| `native/launcher.c` | el launcher: la ROM la primera vez, opciones, controles y mandos, mejoras, estados |
 | `native/mods.c` | las mejoras de la recompilación: trucos, texto rápido, días largos, OPTIONS en el título, pantalla ancha, juego sin fin |
 | `native/pause.c` | el menú de pausa estilo Harvest Moon 64 |
 | `native/ui.c`, `native/i18n.c`, `native/config.c` | el dibujo de los menús, los textos en español / inglés / italiano, `config.ini` y `keybinds.ini` |
@@ -2038,7 +2038,7 @@ Con todas las rutinas reescritas, el juego corre sin el código recompilado
   recompilación en los mismos puntos de la pantalla de título (el comienzo
   de cada etapa), toda la WRAM coincide salvo los números al azar, los
   bytes que deciden y la pila.
-- **Alrededor del juego.** `launcher.c` (Juegos, Opciones, Controles,
+- **Alrededor del juego.** `launcher.c` (la ROM la primera vez, Opciones, Controles,
   Mejoras, Estados guardados) y `pause.c` (el menú de pausa) se dibujan en
   un lienzo de 256x224 (`ui.c`) y corren dentro de `g_hm_frame_hook`: el
   juego queda parado al final de un cuadro mientras el chip de sonido
