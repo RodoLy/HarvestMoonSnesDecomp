@@ -1,0 +1,64 @@
+# Publish a release of the native build: the source and the build script
+# in one zip (no ROM, no generated code, no executable: the player builds
+# the game on their own computer with build.bat), tagged vVERSION.
+#
+# Started by hand from the Actions page (Release -> Run workflow), never on
+# a push: a release is a decision. VERSION must match HM_NATIVE_VERSION in
+# native/native.h, which the launcher shows.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, as in native/native.h (e.g. 0.1.0-beta)'
+        type: string
+        default: '0.1.0-beta'
+      prerelease:
+        description: 'Mark it as a pre-release (beta)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The version is the launcher's
+        run: grep -q "HM_NATIVE_VERSION \"${{ inputs.version }}\"" native/native.h
+
+      - name: Nothing from the ROM in the tree
+        run: |
+          if git ls-files | grep -Ei '\.(sfc|smc|srm|exe|dll)$|^src/gen/|funcs\.h$'; then
+            echo "files that must not be published"; exit 1
+          fi
+
+      - name: The package
+        run: |
+          N=HarvestMoonNative-${{ inputs.version }}
+          git archive --format=tar --prefix=$N/ HEAD native src build.bat compilar_nativo.bat \
+            HOW_TO_PLAY.txt LICENSE README.md README.es.md | tar -x
+          rm "$N/src/hm_decomp.c" "$N/src/hm_io.c"      # the checker, not the game
+          zip -q -r "$N.zip" "$N"
+          echo "ZIP=$N.zip" >> "$GITHUB_ENV"
+
+      - name: It builds (Linux, from the package)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build libx11-dev libxext-dev libasound2-dev libpulse-dev > /dev/null
+          cd HarvestMoonNative-${{ inputs.version }}
+          cmake -S native -B ../b -G Ninja -DCMAKE_BUILD_TYPE=Release > /dev/null
+          cmake --build ../b > /dev/null
+          test -x ../b/HarvestMoonNative
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ inputs.version }}" "$ZIP" --target "$GITHUB_SHA" \
+            --title "v${{ inputs.version }}" --notes-file .github/release_notes.md \
+            ${{ inputs.prerelease && '--prerelease' || '' }}
