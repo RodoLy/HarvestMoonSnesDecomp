@@ -47,6 +47,10 @@ static SDL_Texture *s_texture;
 static SDL_AudioStream *s_audio;
 static SDL_Gamepad *s_gamepad;
 static uint64_t s_next_tick;
+static SDL_Texture *s_up;           /* the picture enlarged by a whole number (sharp scaling) */
+static int s_up_k;
+static double s_hz = 60.0988;       /* frames a second: the console's, or the screen's with vsync */
+static bool s_vsync;
 static const char *s_dump_dir = "";
 static FILE *s_wav;            /* --wav: the sound, raw 32 kHz stereo 16-bit */
 
@@ -291,49 +295,88 @@ static void quit_now(void)
   SDL_Quit();
   exit(0);
 }
+/* The picture on the window: first enlarged by a whole number with
+ * square pixels (nearest), then to the window's size smoothly. A plain
+ * nearest scale to a size that is not a whole multiple (full screen,
+ * a maximized window) makes some rows and columns of pixels wider than
+ * others, and fine patterns (the town's bricks and roofs) shimmer as
+ * they scroll; this keeps them steady and sharp. */
+static void present(void)
+{
+  SDL_UpdateTexture(s_texture, NULL, s_pixels, W * 4);
+  int ow = W, oh = H;
+  SDL_GetCurrentRenderOutputSize(s_renderer, &ow, &oh);
+  float scale = (float)ow / W < (float)oh / H ? (float)ow / W : (float)oh / H;
+  int k = (int)scale;
+  if (k < 1) k = 1;
+  if ((float)k != scale) k++;          /* enlarge past the window, then down smoothly */
+  if (k > 12) k = 12;
+  if (k != s_up_k) {
+    if (s_up) SDL_DestroyTexture(s_up);
+    s_up = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_TARGET, W * k, H * k);
+    if (s_up) SDL_SetTextureScaleMode(s_up, SDL_SCALEMODE_LINEAR);
+    s_up_k = k;
+  }
+  SDL_FRect dst = { (ow - W * scale) / 2, (oh - H * scale) / 2, W * scale, H * scale };
+  if (s_up && SDL_SetRenderTarget(s_renderer, s_up)) {
+    SDL_RenderTexture(s_renderer, s_texture, NULL, NULL);
+    SDL_SetRenderTarget(s_renderer, NULL);
+    SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
+    SDL_RenderClear(s_renderer);
+    SDL_RenderTexture(s_renderer, s_up, NULL, &dst);
+  } else {
+    SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
+    SDL_RenderClear(s_renderer);
+    SDL_RenderTexture(s_renderer, s_texture, NULL, &dst);
+  }
+  SDL_RenderPresent(s_renderer);
+}
+
 static void end_of_frame(uint8_t *ram)
 {
   (void)ram;
   native_draw_frame(s_pixels);
   s_frame++;
-  /* the sound chip: 1,024,000 cycles a second, 60.0988 frames */
-  s_apu_target += 1024000.0 / 60.0988;
+  /* the sound chip: 1,024,000 cycles a second (a frame's share: with
+   * vsync on a 60 Hz screen the game runs at the screen's rate, and the
+   * sound follows it, 0.16 % slower at most) */
+  s_apu_target += 1024000.0 / s_hz;
   native_apu_run_to((uint64_t)s_apu_target);
   if (getenv("HM_APU_DEBUG") && s_frame % 60 == 0) fprintf(stderr, "[apu] frame %llu: target %.0f run %llu\n", (unsigned long long)s_frame, s_apu_target, (unsigned long long)native_apu_cycles());
   int16_t samples[2 * 4096];
   uint32_t n = native_audio_samples(samples, 4096);
-  if (s_audio && !s_fast && n) SDL_PutAudioStreamData(s_audio, samples, (int)(n * 4));
+  if (s_audio && !s_fast && n) {
+    /* more than 0.2 s waiting: the screen runs slower than the sound
+     * (a slow monitor, a busy computer): drop this frame's samples */
+    if (SDL_GetAudioStreamQueued(s_audio) < 32000 * 4 / 5) SDL_PutAudioStreamData(s_audio, samples, (int)(n * 4));
+  }
   if (s_wav && n) fwrite(samples, 4, n, s_wav);
 
   uint16_t pad = 0;
   if (!s_headless) {
     poll_events();
     pad = read_pad();
-    SDL_UpdateTexture(s_texture, NULL, s_pixels, W * 4);
-    SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
-    SDL_RenderClear(s_renderer);
-    SDL_RenderTexture(s_renderer, s_texture, NULL, NULL);
-    SDL_RenderPresent(s_renderer);
+    present();
   }
+  { static long d0 = -1, d1 = -1;                     /* HM_DUMP_FRAMES=a:b: every frame's picture and WRAM */
+    if (d0 < 0) { const char *e = getenv("HM_DUMP_FRAMES"); d0 = 0; if (e) sscanf(e, "%ld:%ld", &d0, &d1); }
+    if ((long)s_frame >= d0 && (long)s_frame <= d1) { char t[32]; snprintf(t, sizeof t, "fr%06ld", (long)s_frame); dump(t); } }
   if (s_nsteps) pad |= script_tick();
   native_set_pads(pad, 0);
   if (s_frame % 60 == 0) sram_save();
   if (s_quit) quit_now();
 
   if (!s_headless) {
-    /* 60.0988 frames a second; the sound's queue keeps the pace honest */
+    if (s_fast) { s_next_tick = 0; if (s_audio) SDL_ClearAudioStream(s_audio); return; }
+    if (s_vsync) return;              /* the screen's refresh paces the frames (SDL_RenderPresent waits) */
+    /* no vsync (a screen that is not 60 Hz): an even 60.0988 frames a
+     * second from the clock, never nudged, so movement stays smooth */
     const uint64_t frame_ns = 16639267;
     uint64_t now = SDL_GetTicksNS();
-    if (s_fast) { s_next_tick = now; if (s_audio) SDL_ClearAudioStream(s_audio); return; }
     if (s_next_tick == 0 || now > s_next_tick + 4 * frame_ns) s_next_tick = now;
     s_next_tick += frame_ns;
-    if (s_audio) {
-      int queued = SDL_GetAudioStreamQueued(s_audio);
-      if (queued > 32000 * 4 / 5) s_next_tick += frame_ns / 4;      /* too much sound waiting: slow down */
-      else if (queued < 32000 * 4 / 30) s_next_tick -= frame_ns / 8; /* running dry */
-    }
     now = SDL_GetTicksNS();
-    if (s_next_tick > now) SDL_DelayNS(s_next_tick - now);
+    if (s_next_tick > now) SDL_DelayPrecise(s_next_tick - now);
   }
 }
 
@@ -441,15 +484,23 @@ int main(int argc, char **argv)
       fprintf(stderr, "SDL: %s\n", SDL_GetError());
       return 1;
     }
-    SDL_SetRenderVSync(s_renderer, 0);
+    /* a 60 Hz screen: vsync (each frame shown once, evenly); any other
+     * rate: our own clock */
+    const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(s_window));
+    float hz = mode ? mode->refresh_rate : 0;
+    if (hz >= 58.5f && hz <= 61.5f && SDL_SetRenderVSync(s_renderer, 1)) { s_vsync = true; s_hz = hz; }
+    else SDL_SetRenderVSync(s_renderer, 0);
     load_keys();
-    SDL_SetRenderLogicalPresentation(s_renderer, W, H, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     s_texture = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, W, H);
     SDL_SetTextureScaleMode(s_texture, SDL_SCALEMODE_NEAREST);
     if (fullscreen) SDL_SetWindowFullscreen(s_window, true);
     SDL_AudioSpec spec = { SDL_AUDIO_S16, 2, 32000 };
     s_audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
-    if (s_audio) SDL_ResumeAudioStreamDevice(s_audio);
+    if (s_audio) {
+      static int16_t quiet[2 * 1600];                   /* 50 ms of silence first: room for the pace to wobble */
+      SDL_PutAudioStreamData(s_audio, quiet, sizeof quiet);
+      SDL_ResumeAudioStreamDevice(s_audio);
+    }
     else fprintf(stderr, "no sound: %s\n", SDL_GetError());
   }
 
