@@ -8,6 +8,8 @@
 **100.00%** of the game's code decompiled and verified: 45176 of 45176 instructions, 778 of 778 routines (100.0%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
+![platform: Windows / Linux](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20Linux-blue)
+![ROM: not included](https://img.shields.io/badge/ROM-not%20included-red)
 
 The game rewritten, routine by routine, as C a person can read. Every
 rewritten routine is **checked against the original byte for byte**: the
@@ -23,8 +25,143 @@ DasK), where the routine names and the memory map come from.
 | | HarvestMoonSNESRecomp | HarvestMoonSnesDecomp (this one) |
 |---|---|---|
 | Purpose | Play: the PC port and its improvements | Understand the game: readable code |
-| Output | The game (`.exe`) | Routines in `src/`, a test executable, and the game built natively from them |
-| Needs | Your ROM | Your ROM and the recompilation project |
+| Output | The game (`.exe`) | Routines in `src/`, a test executable, and the playable game built on them alone |
+| Needs | Your ROM | Your ROM (the checker also needs the recompilation project) |
+
+## Playing it: the native build
+
+With 100 % rewritten, the game **plays on the decompiled C alone**: no
+recompiled code and no CPU emulation. Every routine of the game is a C
+function in `src/`, called directly. All that is still done in software is
+the console's picture and sound chips (the cartridge's graphics and music
+are in their formats), snesrecomp's runner unmodified, included in
+`native/chips/`. It also brings every improvement of the recompilation and
+a new launcher.
+
+> [!IMPORTANT]
+> **You need your own, legally obtained copy of the game.** This
+> repository contains neither the ROM nor anything generated from it, nor
+> executables: the game is built on your computer. Please don't ask for ROMs.
+
+### How to play it on Windows
+
+1. Download this repository (*Code → Download ZIP*) and unzip it.
+2. Double-click **`compilar_nativo.bat`**. The first time it downloads a C
+   compiler (llvm-mingw) and SDL3 (about 190 MB, checked by their SHA-256);
+   then it builds in under a minute and leaves `HarvestMoonNative.exe` and
+   `SDL3.dll` in the folder.
+3. Open it. The first time it asks for **your ROM** of *Harvest Moon
+   (USA)*; it checks it and remembers it.
+
+Since you build it yourself, Windows does not treat it as a program
+downloaded from the internet. On Linux: see [How the native build works](#how-the-native-build-works).
+
+### A launcher in the look of the game
+
+A farm at night under the harvest moon, wooden frames, parchment and the
+pointing hand, all drawn at the SNES's resolution, so its pixels are the
+game's size. Keyboard, gamepad or mouse, in **Spanish, English or
+Italian**. In the game it opens with **Esc** (or L3 / Guide on a gamepad,
+or OPTIONS on the title screen), with the game paused and the music
+playing on.
+
+| Launcher | First time: choosing the ROM |
+|---|---|
+| ![Launcher](docs/screenshots/launcher.png) | ![Choosing the ROM](docs/screenshots/first_rom.png) |
+
+- **Options** — full screen, window size (×1 to ×6), sharp or exact
+  pixels, vertical sync, widescreen, sprites without flicker or as the
+  console, volume, fast-forward speed, language, and whether this menu
+  shows at start.
+- **Controls** — each SNES button on the keyboard and on the gamepad (press
+  the new key or button); connected gamepads (Xbox, PlayStation, Switch
+  Pro… USB or Bluetooth) show up at once and you choose which one plays; the
+  button you press lights up to test it.
+- **Save states** — 10 slots (also F1–F10 load, Shift+F1–F10 save). They
+  never touch your diaries.
+- Everything is kept in `config.ini` and `keybinds.ini` (the
+  recompilation's format, so your keys work in both).
+
+*(The screenshots show the Spanish menus.)*
+
+| Options | Controls | Gamepad |
+|---|---|---|
+| ![Options](docs/screenshots/options.png) | ![Controls](docs/screenshots/controls.png) | ![Gamepad](docs/screenshots/gamepad.png) |
+
+| In the game |
+|---|
+| ![Launcher in the game](docs/screenshots/launcher_ingame.png) |
+
+### 16:9 widescreen *(on by default)*
+
+Shows more of the map at the sides instead of black bars, with people and
+animals drawn in the margins too. At a map's edge, in small rooms and on
+the title screen it goes back to the original 4:3, since the game has
+nothing to draw there. It can be turned off in Options or Improvements.
+
+| Original (4:3) | Widescreen (16:9) |
+|---|---|
+| ![4:3](docs/screenshots/widescreen_off.png) | ![16:9](docs/screenshots/widescreen.png) |
+
+### Harvest Moon 64-style pause menu *(M or R3)*
+
+Date and clock, money and stamina; **Tools** (hand, backpack and the tool
+shed: equip, swap and put away by the game's own rules); **Hearts** (each
+girl's face, her own sprite read from your ROM, with ten hearts); **Farm**
+(shipping, lumber, fodder, cows, happiness, tomorrow's weather). The music
+keeps playing.
+
+| Tools | Hearts | Farm |
+|---|---|---|
+| ![Tools](docs/screenshots/pause_tools.png) | ![Hearts](docs/screenshots/pause_hearts.png) | ![Farm](docs/screenshots/pause_farm.png) |
+
+### The other improvements (the recompilation's)
+
+- **Endless game** *(on by default)* — you watch the whole Year 3 ending,
+  then carry on with your farm: Fall, Year 4, 5 and beyond; the diary says
+  "4th", "5th"…
+- **OPTIONS on the title screen** — a fourth entry below HOW TO PLAY that
+  opens the launcher.
+- **Fast text** (4×) and **longer days** (1.5× to 4×).
+- **Cheats** *(off by default)* — infinite money, infinite stamina, stop
+  the clock, infinite lumber and fodder, infinite seeds and feed, control
+  the weather. They only write values the game can have, so your saves
+  stay valid when you turn them off.
+- **Fast forward** — hold Tab (or the right trigger): the game runs ×2 to
+  ×6 and the music speeds up with it.
+
+| OPTIONS on the title | Improvements | Cheats |
+|---|---|---|
+| ![OPTIONS](docs/screenshots/title_options.png) | ![Improvements](docs/screenshots/improvements.png) | ![Cheats](docs/screenshots/cheats.png) |
+
+With every improvement off, the game is exactly the console's.
+
+### Controls
+
+| Key | SNES / action |
+|---|---|
+| Arrows | D-pad |
+| X / Z / S / A | A / B / X / Y |
+| C / V | L / R |
+| Enter / Right Shift | Start / Select |
+| Esc (gamepad: L3 or Guide) | Launcher (game paused) |
+| M (gamepad: R3) | Pause menu |
+| Tab (gamepad: right trigger), held | Fast forward |
+| F1…F10 / Shift+F1…F10 | Load / save a state |
+| F11 or Alt+Enter | Full screen |
+
+All of them can be changed in Controls.
+
+### Why it exists
+
+Harvest Moon is one of my favourite games. After the recompilation I
+wanted to go further: understand the game routine by routine, and have it
+play on that code alone.
+
+**This project was made with the help of AI.** I directed it and
+supervised every step: what to do, how it should behave, testing it on my
+own PC and deciding what stays. If you don't like that it was made with
+AI's help, that's fine: just don't use it.
 
 ## Legal notice
 
@@ -155,56 +292,41 @@ checkers, and builds a test executable in `build/`. Without
 `HM_DECOMP_CHECK` / `HM_DECOMP_FUZZ` that executable plays exactly like the
 normal game.
 
-## Playing it natively
+## How the native build works
 
-With every routine rewritten, the game also runs on the C alone: no
-recompiled code, no CPU emulation. `native/` builds it. What is still
-reproduced in software is the console's picture chip and sound chip (the
-pictures and the music in the cartridge are in their formats; the
-music is a program for the sound chip's own processor), taken unmodified
-from the recompilation project's runner, as the native ports of other
-SNES games do.
+`native/` builds `src/*.c` (all but the checker) with snesrecomp's runner
+picture and sound chips, unmodified (`native/chips/`, with their licenses:
+PolyForm Noncommercial and the MIT / ISC ones they come from). Every wait
+for the next frame goes through `hm_nmi`, which draws the frame, reads the
+pads and lets the sound chip run; the routines that never return (RESET,
+the title, the demos, GameLoop…) leave in `g_hm_next` where they jump, and
+`main` calls the next one. The details are in section 5.34 of the
+[guide](GUIDE.md).
 
 ```
-cmake -S native -B build/native -DHM_RECOMP=../HarvestMoonSNESRecomp
+cmake -S native -B build/native
 cmake --build build/native
 build/native/HarvestMoonNative /path/to/your/rom.sfc
 ```
 
-On Windows, `compilar_nativo.bat` (double click) does it all: the first
-time it downloads a C compiler (llvm-mingw) and SDL3 into `build/`, checks
-their SHA-256, takes the chips from `native/chips` or from the
-recompilation next to this folder, and leaves `HarvestMoonNative.exe` and
-`SDL3.dll` here. For Windows from Linux: add `-DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake`
+For Windows from Linux: add `-DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake`
 (MinGW-w64). SDL3 is built from source when no installed one is found.
-It opens on a launcher in the look of the game (a farm at night under the
-harvest moon, wooden frames and parchment, the pointing hand): **Games**
-(the ROMs next to the program or in `roms/`, or any other through the
-system's file window; each is checked by its header and CRC), **Options**
-(window, full screen, sharp or exact pixels, vsync, widescreen, sprites,
-volume, fast forward, language: Spanish, English, Italian), **Controls**
-(the keys and gamepad buttons for each SNES button; the gamepads connected
-and which one plays) and **Improvements**. In the game it opens with
-Escape (or L3 / Guide on a gamepad, or OPTIONS on the title screen) with
-the game paused, and adds **Save states** (10 slots; F1-F10 load,
-Shift+F1-F10 save) and Restart. Everything is kept in `config.ini` and
-`keybinds.ini` next to the program.
+`--headless --script file --dump-dir dir` plays a script (the same commands
+as the recompilation's `--script`) without a window and dumps the picture
+and the WRAM; there the improvements are off unless `--mods`.
 
-The improvements are the recompilation's, ported: fast text, longer days
-(1.5x to 4x), the Harvest Moon 64-style pause menu (M or R3: tools, hearts,
-farm), OPTIONS on the title screen, an endless game (after the Year 3
-ending you carry on into Fall, Year 4, 5...), 16:9 widescreen and the
-cheats (money, stamina, a stopped clock, lumber and fodder, seeds and feed,
-weather). With all of them off the game is the console's own; the
-decompiled C has only three hooks, with the ROM's values by default
-(`g_hm_oam_right/left`, `g_hm_no_ending`, `g_hm_year_suffix`).
+| File | What it does |
+|---|---|
+| `native/main.c` | the window, sound, pads, pacing, save states |
+| `native/hw.c` | the console's chips around the C (memory map, registers) |
+| `native/launcher.c`, `native/ui.c` | the launcher and its drawing |
+| `native/mods.c`, `native/pause.c` | the recompilation's improvements and the pause menu |
+| `native/config.c`, `native/i18n.c` | `config.ini` / `keybinds.ini` and the text in three languages |
 
-Keys: arrows, X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start,
-Right Shift = Select, Escape the launcher, M the pause menu, F11 full
-screen, Tab (or the right trigger) fast forward, the music sped up with
-it. `--headless --script file --dump-dir dir` plays a script (the same
-commands as the recompilation's `--script`) without a window and dumps the
-picture and the WRAM; there the improvements are off unless `--mods`.
+The decompiled C has only three hooks for the improvements, with the
+ROM's values by default, so the checker sees no difference:
+`g_hm_oam_right/left` (widescreen), `g_hm_no_ending` (endless game) and
+`g_hm_year_suffix` ("4th", "5th"…).
 
 The launcher's and the pause menu's type is Pixelify Sans and Tiny5 (SIL
 Open Font License, `native/fonts/`); the icons and the night farm are drawn
@@ -220,5 +342,16 @@ only, not the game or its data.
 
 - [HM-Decomp](https://github.com/ElisaS-Codes/HM-Decomp) by ElisaS-Codes and
   DasK: the disassembly, the names and the RAM map.
-- [snesrecomp](https://github.com/RetroPortingToolKit/snesrecomp): the
-  static recompiler everything runs on.
+- [snesrecomp](https://github.com/RetroPortingToolKit/snesrecomp)
+  (RetroPortingToolKit / Matthew Stanley): the static recompiler the checker
+  runs on, and the native build's picture and sound chips (`native/chips/`,
+  with its license and its MIT / ISC credits).
+- [HarvestMoonSNESRecomp](https://github.com/RodriLoy/HarvestMoonSNESRecomp):
+  the improvements, the pause menu, its text and icons, and the RAM map
+  `hm_ram.h`, ported to the native build.
+- [SDL3](https://libsdl.org): window, sound and gamepads.
+- [Pixelify Sans](https://github.com/eifetx/Pixelify-Sans) and
+  [Tiny5](https://github.com/Gissio/font_tiny5) (SIL OFL): the menus' type.
+- **Harvest Moon** © 1996 Pack-In-Video / AMCCUS, © 1997 Natsume. All
+  names, characters and graphics belong to their owners; this is a
+  non-profit fan project, not affiliated with or endorsed by them.
