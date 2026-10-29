@@ -50,7 +50,9 @@ static uint64_t s_next_tick;
 static SDL_Texture *s_up;           /* the picture enlarged by a whole number (sharp scaling) */
 static int s_up_k;
 static double s_hz = 60.0988;       /* frames a second: the console's, or the screen's with vsync */
-static bool s_vsync;
+static bool s_vsync, s_want_vsync, s_soft;
+static char s_log_path[1024];
+static uint64_t s_t0, s_busy_ns, s_last_wake;    /* for the log: real time, time spent working */
 static const char *s_dump_dir = "";
 static FILE *s_wav;            /* --wav: the sound, raw 32 kHz stereo 16-bit */
 
@@ -290,6 +292,16 @@ static void poll_events(void)
 static void quit_now(void)
 {
   sram_save();
+  if (s_log_path[0] && s_t0) {
+    FILE *lg = fopen(s_log_path, "a");
+    double secs = (SDL_GetTicksNS() - s_t0) / 1e9;
+    if (lg) {
+      fprintf(lg, "%llu frames in %.1f s: %.2f a second; %.2f ms of work a frame\n",
+              (unsigned long long)s_frame, secs, secs > 0 ? s_frame / secs : 0,
+              s_frame ? s_busy_ns / 1e6 / s_frame : 0);
+      fclose(lg);
+    }
+  }
   if (s_wav) fclose(s_wav);
   if (s_audio) SDL_DestroyAudioStream(s_audio);
   SDL_Quit();
@@ -307,17 +319,23 @@ static void present(void)
   int ow = W, oh = H;
   SDL_GetCurrentRenderOutputSize(s_renderer, &ow, &oh);
   float scale = (float)ow / W < (float)oh / H ? (float)ow / W : (float)oh / H;
-  int k = (int)scale;
+  int k = (int)scale;                  /* the whole part; the rest, smoothly */
   if (k < 1) k = 1;
-  if ((float)k != scale) k++;          /* enlarge past the window, then down smoothly */
-  if (k > 12) k = 12;
+  if (k > 8) k = 8;
+  SDL_FRect dst = { (ow - W * scale) / 2, (oh - H * scale) / 2, W * scale, H * scale };
+  if (s_soft || (float)k == scale) {   /* a whole multiple (or no graphics card): straight */
+    SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
+    SDL_RenderClear(s_renderer);
+    SDL_RenderTexture(s_renderer, s_texture, NULL, &dst);
+    SDL_RenderPresent(s_renderer);
+    return;
+  }
   if (k != s_up_k) {
     if (s_up) SDL_DestroyTexture(s_up);
     s_up = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_TARGET, W * k, H * k);
     if (s_up) SDL_SetTextureScaleMode(s_up, SDL_SCALEMODE_LINEAR);
     s_up_k = k;
   }
-  SDL_FRect dst = { (ow - W * scale) / 2, (oh - H * scale) / 2, W * scale, H * scale };
   if (s_up && SDL_SetRenderTarget(s_renderer, s_up)) {
     SDL_RenderTexture(s_renderer, s_texture, NULL, NULL);
     SDL_SetRenderTarget(s_renderer, NULL);
@@ -368,15 +386,19 @@ static void end_of_frame(uint8_t *ram)
 
   if (!s_headless) {
     if (s_fast) { s_next_tick = 0; if (s_audio) SDL_ClearAudioStream(s_audio); return; }
-    if (s_vsync) return;              /* the screen's refresh paces the frames (SDL_RenderPresent waits) */
-    /* no vsync (a screen that is not 60 Hz): an even 60.0988 frames a
-     * second from the clock, never nudged, so movement stays smooth */
+    uint64_t woke = SDL_GetTicksNS();
+    if (s_last_wake) s_busy_ns += woke - s_last_wake;
+    if (!s_t0) s_t0 = woke;
+    if (s_vsync) { s_last_wake = SDL_GetTicksNS(); return; }   /* --vsync: the screen's refresh paces the frames */
+    /* an even 60.0988 frames a second from the clock, never nudged, so
+     * movement stays smooth */
     const uint64_t frame_ns = 16639267;
     uint64_t now = SDL_GetTicksNS();
     if (s_next_tick == 0 || now > s_next_tick + 4 * frame_ns) s_next_tick = now;
     s_next_tick += frame_ns;
     now = SDL_GetTicksNS();
     if (s_next_tick > now) SDL_DelayPrecise(s_next_tick - now);
+    s_last_wake = SDL_GetTicksNS();
   }
 }
 
@@ -441,6 +463,7 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[i], "--dump-dir") && i + 1 < argc) s_dump_dir = argv[++i];
     else if (!strcmp(argv[i], "--scale") && i + 1 < argc) scale = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--fullscreen")) fullscreen = true;
+    else if (!strcmp(argv[i], "--vsync")) s_want_vsync = true;
     else if (!strcmp(argv[i], "--wav") && i + 1 < argc) s_wav = fopen(argv[++i], "wb");
     else if (argv[i][0] != '-') rom_path = argv[i];
   }
@@ -484,12 +507,24 @@ int main(int argc, char **argv)
       fprintf(stderr, "SDL: %s\n", SDL_GetError());
       return 1;
     }
-    /* a 60 Hz screen: vsync (each frame shown once, evenly); any other
-     * rate: our own clock */
+    /* the pace: our own clock; with --vsync on a 60 Hz screen, the
+     * screen's refresh (smoother there, but a frame that misses it waits
+     * a whole refresh) */
     const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(s_window));
     float hz = mode ? mode->refresh_rate : 0;
-    if (hz >= 58.5f && hz <= 61.5f && SDL_SetRenderVSync(s_renderer, 1)) { s_vsync = true; s_hz = hz; }
+    if (s_want_vsync && hz >= 58.5f && hz <= 61.5f && SDL_SetRenderVSync(s_renderer, 1)) { s_vsync = true; s_hz = hz; }
     else SDL_SetRenderVSync(s_renderer, 0);
+    const char *rname = SDL_GetRendererName(s_renderer);
+    s_soft = rname && !strcmp(rname, "software");
+    /* what was chosen, next to the program (for reporting problems) */
+    const char *base = SDL_GetBasePath();
+    snprintf(s_log_path, sizeof s_log_path, "%sHarvestMoonNative.log", base ? base : "");
+    FILE *lg = fopen(s_log_path, "w");
+    if (lg) {
+      fprintf(lg, "renderer %s, screen %.2f Hz, vsync %s, rom %s\n", rname ? rname : "?", hz,
+              s_vsync ? "on" : "off", rom_path);
+      fclose(lg);
+    }
     load_keys();
     s_texture = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, W, H);
     SDL_SetTextureScaleMode(s_texture, SDL_SCALEMODE_NEAREST);
