@@ -171,7 +171,11 @@ cmake --build build/native
 build/native/HarvestMoonNative /path/to/your/rom.sfc
 ```
 
-For Windows from Linux: add `-DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake`
+On Windows, `compilar_nativo.bat` (double click) does it all: the first
+time it downloads a C compiler (llvm-mingw) and SDL3 into `build/`, checks
+their SHA-256, takes the chips from `native/chips` or from the
+recompilation next to this folder, and leaves `HarvestMoonNative.exe` and
+`SDL3.dll` here. For Windows from Linux: add `-DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake`
 (MinGW-w64). SDL3 is built from source when no installed one is found.
 Keys: arrows, X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start,
 Right Shift = Select, F11 full screen, Tab fast; a gamepad works too.
