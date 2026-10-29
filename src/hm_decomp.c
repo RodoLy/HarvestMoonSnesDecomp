@@ -57,6 +57,42 @@ static void keep_waits_interpreted(int on, const HmDecompFn *fuzzed)
  * to the LDA. Nothing else interrupts the run, so the C side (hm_nmi) can
  * do exactly the same. */
 static int s_nmi_sim;
+/* ...and a routine that waits for the NMI, called from compiled code (the
+ * fuzzed routine's callees that the bounce list has no room for), runs in
+ * the interpreter too (its wrapper asks, tools/decomp_overrides.py): the
+ * compiled wait loop would never see the NMI. */
+int g_hm_wait_sim;
+int hm_decomp_wait_interp(CpuState *cpu, const char *name, RecompReturn *ret)
+{
+  int index = 0;
+  const HmDecompFn *f = find(name, &index);
+  if (!f || !(f->out_mask & HM_WAIT)) return 0;
+  *ret = interp_tier_dispatch(cpu, f->pc24);
+  return 1;
+}
+/* Debugging: HM_DECOMP_WATCH=<WRAM index, hex> prints, while the original
+ * runs in the interpreter, each instruction (or bounce) after which that
+ * byte changed. */
+extern void (*g_interp_bridge_pc_hook)(uint32_t pc24, int m_flag, int x_flag);
+extern void (*g_interp_bridge_bounce_hook)(uint32_t pc24, int m_flag, int x_flag);
+static long s_watch = -1;
+static int s_watch_last = -1;
+static uint32_t s_watch_pc;
+static void watch_step(uint32_t pc24, int m, int x)
+{
+  (void)m; (void)x;
+  int v = g_cpu.ram[s_watch];
+  if (s_watch_last >= 0 && v != s_watch_last)
+    fprintf(stderr, "[watch] %05lX: %02X -> %02X before $%06X (last step $%06X)\n",
+            s_watch, s_watch_last, v, (unsigned)pc24, (unsigned)s_watch_pc);
+  s_watch_last = v;
+  s_watch_pc = pc24;
+}
+static void watch_bounce(uint32_t pc24, int m, int x)
+{
+  (void)m; (void)x;
+  fprintf(stderr, "[watch] bounce to $%06X\n", (unsigned)pc24);
+}
 static void nmi_at_wait(CpuState *cpu, uint32_t pc24)
 {
   if (!s_nmi_sim || cpu->emulation || cpu->D >= 0x2000 || cpu->ram[cpu->D]) return;
@@ -68,8 +104,71 @@ static void nmi_at_wait(CpuState *cpu, uint32_t pc24)
   cpu->P = (uint8_t)((cpu->P | 0x04) & ~0x08);
   cpu_p_to_mirrors(cpu);
   cpu->PB = 0x00;
+  WatchdogFrameStart();      /* a frame of the routine: its own 5 s again */
   interp_bridge_pre_opcode_redirect(0x00867B);
 }
+/* HM_TOLOOP: where the original is stopped (s_stops, while one is
+ * fuzzed): an RTL ($80:972B) pops its frame, after s_stop_drop stray
+ * bytes are taken off the stack (Unk_NamesInput's JSL / RTS bug). */
+static const uint32_t STOPS_GAME[] = { 0x808083 };                 /* into GameLoop */
+static const uint32_t STOPS_FRAME[] = { 0x8080DB, 0x8080E9 };      /* GameLoop: JMP back, JML names */
+static const uint32_t STOPS_NAMES[] = { 0x82E9CA, 0x82E9DF, 0x82E9E7, 0x82E9EF, 0x82E9F7,
+                                        0x82E9FF, 0x82EA07, 0x82EA0F };   /* JML back, JML Set...Name */
+static const uint32_t STOPS_DEMO1[] = { 0x82D3A3, 0x82D3C3 };      /* SUB_82D1C0: JMP back, JML */
+static const uint32_t STOPS_DEMO2[] = { 0x82D72E, 0x82D75A };      /* DemoPresentation */
+static const uint32_t STOPS_INTRO[] = { 0x82D881, 0x82D87E,       /* the intro's frame: BRA back, JMP demo */
+                                        0x82D85D, 0x82D86D,       /* JML SUB_82E1F1, SUB_82D1C0 */
+                                        0x82D997,                 /* the parents' scene: JMP back */
+                                        0x82E1ED, 0x82E1E5,       /* new game's file: JML back, JML start */
+                                        0x82E401, 0x82E3F9 };     /* saved game's file: JML back, JML start */
+static const uint32_t STOPS_RESET[] = { 0x808641 };              /* RESET: JML IntroScreen */
+static const uint32_t STOPS_SELF[] = { 0x82878E };               /* SUB_82878E: BRA itself, its second turn */
+static int s_stop_skip;
+/* RESET clears the WRAM, the stack too: its entry ($80:8428) keeps the
+ * checker's frame and S, and its stop puts them back */
+static int s_reset_keep;
+static uint16_t s_reset_s;
+static uint8_t s_reset_frame[3];
+static void reset_entry(CpuState *cpu, uint32_t pc24)
+{
+  (void)pc24;
+  if (!s_reset_keep) return;
+  s_reset_s = cpu->S;
+  for (int i = 0; i < 3; i++) s_reset_frame[i] = cpu->ram[(uint16_t)(cpu->S + 1 + i)];
+}
+static const uint32_t *s_stops;
+static int s_n_stops, s_stop_drop;
+static void stop_at_loop(CpuState *cpu, uint32_t pc24)
+{
+  for (int k = 0; k < s_n_stops; k++)
+    if ((pc24 & 0x7FFFFF) == (s_stops[k] & 0x7FFFFF)) {
+      if (s_stop_skip) { s_stop_skip--; return; }
+      cpu->S = (uint16_t)(cpu->S + s_stop_drop);
+      if (s_reset_keep) {
+        cpu->S = s_reset_s;
+        for (int i = 0; i < 3; i++) cpu_write8(cpu, 0x00, (uint16_t)(s_reset_s + 1 + i), s_reset_frame[i]);
+      }
+      interp_bridge_pre_opcode_redirect(0x80972B);
+      return;
+    }
+}
+static void set_stops(const HmDecompFn *f)
+{
+  s_stops = NULL; s_n_stops = 0; s_stop_drop = 0; s_reset_keep = 0; s_stop_skip = 0;
+  if (!f || !(f->out_mask & HM_TOLOOP)) return;
+  if (f->pc24 == 0x808083) { s_stops = STOPS_FRAME; s_n_stops = 2; }
+  else if (f->pc24 == 0x82E80C || f->pc24 == 0x82E95F) {
+    s_stops = STOPS_NAMES; s_n_stops = 8; s_stop_drop = f->pc24 == 0x82E80C;
+  } else if (f->pc24 == 0x82D1C0) { s_stops = STOPS_DEMO1; s_n_stops = 2; }
+  else if (f->pc24 == 0x82D3C7) { s_stops = STOPS_DEMO2; s_n_stops = 2; }
+  else if (f->pc24 == 0x82D75E || f->pc24 == 0x82D80D || f->pc24 == 0x82D93F || f->pc24 == 0x82E0EB ||
+           f->pc24 == 0x82E1F1 || f->pc24 == 0x82E337) { s_stops = STOPS_INTRO; s_n_stops = 9; }
+  else if (f->pc24 == 0x82E801) { s_stops = STOPS_NAMES; s_n_stops = 8; s_stop_drop = 1; }
+  else if (f->pc24 == 0x808428) { s_stops = STOPS_RESET; s_n_stops = 1; s_reset_keep = 1; }
+  else if (f->pc24 == 0x82878E) { s_stops = STOPS_SELF; s_n_stops = 1; s_stop_skip = 1; }
+  else { s_stops = STOPS_GAME; s_n_stops = 1; }
+}
+void interp_bridge_dump_recent_steps(int n, FILE *out);          /* snes/interp_bridge.h */
 uint8_t ReadReg(uint16_t reg);                                    /* common_rtl.h */
 void RtlSetPadState(int slot, uint16_t buttons);
 uint16_t RtlGetPadState(int slot);
@@ -102,8 +201,16 @@ static jmp_buf s_apu_abort;
 static void apu_log(uint16_t reg, uint8_t val, uint8_t write)
 {
   if (!s_apu_recording) return;
-  { static int tr = -1, k; if (tr < 0) tr = getenv("HM_APU_TRACE") != NULL;
-    if (tr && k < 60) { k++; fprintf(stderr, "[apu] %s %04X %02X clk=%llu\n", write ? "W" : "R", reg, val, (unsigned long long)g_cpu.master_cycles); } }
+  /* HM_APU_TRACE=<from>:<to>: print the recorded events from..to (of each
+   * recording), with the interpreter's last instruction */
+  { static int tr = -2, from, to;
+    if (tr == -2) {
+      const char *e = getenv("HM_APU_TRACE");
+      tr = e != NULL;
+      if (e) { from = atoi(e); const char *c = strchr(e, ':'); to = c ? atoi(c + 1) : from + 60; }
+    }
+    if (tr && s_apu_n >= from && s_apu_n <= to)
+      fprintf(stderr, "[apu] #%d %s %04X %02X pc=$%06X\n", s_apu_n, write ? "W" : "R", reg, val, (unsigned)s_watch_pc); }
   if (s_apu_n == APU_LOG) { s_apu_overflow = 1; return; }
   s_apu_log[s_apu_n++] = (HmApuEvent){ reg, val, write };
 }
@@ -2673,6 +2780,44 @@ static void prep_map_event_ending(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void)
   }
 }
 
+/* MapEvent_DED3, the house: the night's leftovers ($7F1F6E bits 5-9,
+ * each now and then: songs and noises that wait frames, with the chip as
+ * the game left it), the scenes' flags, the wife's heart around 200 at
+ * 6:00:00, the children around 60 days, the dates it tests */
+static void prep_map_event_house(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_map_event(ram, r, rnd);
+  uint8_t playing = ram[0x0117];
+  prep_sound_wait(ram, r, rnd);
+  ram[0x0117] = playing;
+  ram[0x098B] = (uint8_t)(rnd() % 0x60);
+  ram[0x0181] = (uint8_t)(1 + rnd() % 4);
+  ram[0x0937] = (uint8_t)(rnd() % 12);
+  for (unsigned c = 0; c < 12; c++) for (unsigned i = 0; i < 16; i++) ram[0x0C1C6 + 16 * c + i] = (uint8_t)rnd();
+  uint16_t night = (uint16_t)(rnd() & 0x000F);
+  static const uint16_t later[] = { 0x0080, 0x0100, 0x0200, 0x0020, 0x0010, 0x0040 };
+  for (unsigned i = 0; i < 6; i++) if (rnd() % 5 == 0) night |= later[i];
+  hm_wr16(ram, 0x11F6E, (uint16_t)((hm_rd16(ram, 0x11F6E) & ~0x03FFu) | night));
+  hm_wr16(ram, 0x11F64, (uint16_t)((hm_rd16(ram, 0x11F64) & ~0x00C0u) | (rnd() & 0x00C0)));
+  hm_wr16(ram, 0x11F6C, (uint16_t)((hm_rd16(ram, 0x11F6C) & ~0x6000u) | (rnd() & 0x6000)));
+  hm_wr16(ram, 0x11F5E, (uint16_t)((hm_rd16(ram, 0x11F5E) & ~0x7000u) | (rnd() & 0x7000)));
+  if (rnd() % 4) ram[0x11F60] &= (uint8_t)~0x20;
+  if (rnd() % 4) ram[0x11F68] |= 0x01;
+  ram[0x11F66] = (uint8_t)((ram[0x11F66] & ~0x1F) | ((rnd() % 4) ? 1 << (rnd() % 5) : rnd() & 0x1F));
+  for (unsigned i = 0; i < 5; i++) hm_wr16(ram, 0x11F1F + 2 * i, (uint16_t)((rnd() % 2) ? 199 + rnd() % 2 : rnd() % 1000));
+  if (rnd() % 2) { ram[0x11F1C] = 6; ram[0x11F1D] = 0; ram[0x11F1E] = (uint8_t)((rnd() % 4) ? 0 : 1); }
+  else { ram[0x11F1D] = (uint8_t)(rnd() % 60); ram[0x11F1E] = (uint8_t)(rnd() % 60); }
+  hm_wr16(ram, 0x11F37, (uint16_t)((rnd() % 2) ? 0x3B + rnd() % 3 : rnd() % 0x100));
+  hm_wr16(ram, 0x11F39, (uint16_t)((rnd() % 2) ? 0x3B + rnd() % 3 : rnd() % 0x100));
+  static const uint8_t dates[][3] = { { 2, 1, 0x1E }, { 1, 1, 0x01 }, { 2, 1, 0x1D }, { 0, 0, 0x01 },
+                                      { 1, 3, 0x18 }, { 2, 1, 0x1F }, { 1, 0, 0x01 } };
+  if (rnd() % 2) {
+    const uint8_t *d = dates[rnd() % 7];
+    ram[0x11F18] = d[0]; ram[0x11F19] = d[1]; ram[0x11F1B] = d[2];
+  }
+  ram[0x28] = 0;
+}
+
 /* MapEvent_CB69, the farm: often 6:00:00 sharp (or a second off), the
  * girls' hearts around 200, money around 30,000 G, 5-6 chickens, single */
 static void prep_map_event_farm(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -3080,6 +3225,250 @@ static void prep_player_frame(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (hm_rd16(ram, 0xD4) > 0x1C) hm_wr16(ram, 0xD4, 0);
   if (ram[0x096E] >= 0x58) ram[0x096E] = (uint8_t)(rnd() % 0x58);
 }
+/* transition.c: SUB_80972C: a map 0-$56 to load in the game's own state,
+ * the weather bits, the player holding an item or not; the camera walk's
+ * target a multiple of 8 (BackgroundsManager), the sound chip and the
+ * NMI */
+static void prep_map_load(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_sound_wait(ram, r, rnd);
+  ram[0x1F] = 0;
+  hm_wr16(ram, 0x017D, (uint16_t)(8 * (rnd() % 0x40)));
+  hm_wr16(ram, 0x017F, (uint16_t)(8 * (rnd() % 0x40)));
+  /* maps $4B-$56 have no sprite palette (their entry in UNK_Table11 points
+   * past the palettes' table): the game never enters them this way */
+  r->a = (uint16_t)((r->a & 0xFF00) | (rnd() % 0x4B));
+  hm_wr16(ram, 0x0196, (uint16_t)((hm_rd16(ram, 0x0196) & ~0x800Eu) | (rnd() & 0x000E)));
+  static const uint8_t held[] = { 0, 0, 1, 5, 0x0D, 0x0F, 0x10, 0x14, 0x57 };
+  ram[0x091D] = held[rnd() % sizeof held];
+  ram[0x11F1C] = (uint8_t)(rnd() % 24);
+  if (rnd() % 2) ram[0x11F5C] &= (uint8_t)~0x03;
+  ram[0x28] = 0;
+}
+/* mapevents.c: RunsFunctionbyIndex: the house's inputs and any map, the
+ * house often */
+static void prep_map_event_house(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_map_events(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_map_event_house(ram, r, rnd);
+  ram[0x22] = (uint8_t)((rnd() % 4) ? rnd() % 0x57 : 0x15 + rnd() % 3);
+}
+/* transition.c: UNK_ScreenTransition: map $098B (0-$56) as the house's
+ * and SUB_80972C's inputs have it */
+static void prep_enter_map(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_map_events(ram, r, rnd);
+  uint16_t a = r->a;
+  prep_map_load(ram, r, rnd);
+  ram[0x098B] = (uint8_t)((rnd() % 4) ? rnd() % 0x4B : 0x15 + rnd() % 3);
+  r->a = a;
+}
+/* transition.c: SetScreenTransition: often a map to go to ($0196 bit 14),
+ * $7F1F5E bit 15 and $7F1F60 bits 3, 6 and 8 now and then; the fade's
+ * brightness as a lit screen has it */
+static void prep_go_to_map(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_enter_map(ram, r, rnd);
+  hm_wr16(ram, 0x0196, (uint16_t)((hm_rd16(ram, 0x0196) & ~0x4000u) | ((rnd() % 8) ? 0x4000 : 0)));
+  hm_wr16(ram, 0x11F5E, (uint16_t)((hm_rd16(ram, 0x11F5E) & ~0x8000u) | ((rnd() % 4) ? 0 : 0x8000)));
+  uint16_t f60 = (uint16_t)(hm_rd16(ram, 0x11F60) & ~0x0148u);
+  if (rnd() % 2) f60 |= 0x0008;
+  if (rnd() % 4 == 0) f60 |= 0x0040;
+  if (rnd() % 4 == 0) f60 |= 0x0100;
+  hm_wr16(ram, 0x11F60, f60);
+}
+/* day.c: NightReset: a random farm and its animals, the map loads of the
+ * morning (the house), the calendar often at the end of a month, season
+ * or year, the day's story flags, the diary now and then (a slot 0-1),
+ * the trick's buttons now and then */
+static void prep_night(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_sram(ram, r, rnd);
+  prep_random_farm_and_date(ram, r, rnd);
+  /* only the tile codes a farm has: the night may end on the farm (the
+   * last day's trick starts the ending, whose script goes there), and
+   * drawing it (UNK_PartialMap, SUB_81A83A) with garbage codes does not
+   * end in the frame's 5 seconds */
+  static const uint8_t kinds[] = { 0x00, 0x02, 0x05, 0x06, 0x07, 0x08, 0x1D, 0x1E, 0x30,
+                                   0x6F, 0x70, 0x75, 0x79, 0x9F, 0xA0 };
+  for (int i = 0; i < 64 * 64; i++) {
+    int ok = 0;
+    for (unsigned k = 0; k < sizeof kinds; k++) ok |= ram[0x0A4E6 + i] == kinds[k];
+    if (!ok) ram[0x0A4E6 + i] = kinds[rnd() % sizeof kinds];
+  }
+  prep_family(ram, r, rnd);
+  uint16_t a = r->a;
+  prep_enter_map(ram, r, rnd);
+  r->a = a;
+  ram[0x11F1A] = (uint8_t)(rnd() % 7);
+  ram[0x11F1B] = (uint8_t)((rnd() % 2) ? 30 : 1 + rnd() % 30);
+  ram[0x11F19] = (uint8_t)((rnd() % 2) ? 3 : rnd() % 4);
+  ram[0x11F18] = (uint8_t)(rnd() % 3);
+  ram[0x0973] = (uint8_t)(0x02 | ((rnd() % 4) ? 0 : 0x04) | (rnd() & 0x01));
+  ram[0x098E] = (uint8_t)(rnd() % 2);
+  hm_wr16(ram, 0x0124, (uint16_t)((rnd() % 4) ? rnd() & ~0x2000u : 0x2030));
+  for (unsigned i = 0x11F64; i <= 0x11F6F; i++) ram[i] = (uint8_t)rnd();
+  ram[0x11F35] = (uint8_t)((rnd() % 2) ? 3 : rnd() % 8);
+  ram[0x09A3] = (uint8_t)((rnd() % 2) ? 2 : rnd() % 4);
+  ram[0x0921] = (uint8_t)(rnd() % 0x1C);
+  ram[0x0923] = (uint8_t)((rnd() % 2) ? 2 : rnd() % 0x1C);
+  hm_wr16(ram, 0x11F07, (uint16_t)rnd());
+  ram[0x11F09] = (uint8_t)(rnd() % 2);
+  ram[0x0917] = (uint8_t)(100 + rnd() % 156);
+  ram[0x28] = 0;
+}
+/* day.c: UpdateTime: the clock's bits ($0973: bed rarely), the seconds,
+ * minutes and hours often at their ends, the shipping and the palette
+ * inputs, the chip for the 6 pm music */
+static void prep_clock(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_shipping(ram, r, rnd);
+  prep_colour_anim(ram, r, rnd);
+  uint8_t playing = ram[0x0117];
+  prep_sound_wait(ram, r, rnd);
+  ram[0x0117] = playing;
+  palette_inputs(ram, r, rnd, false);
+  ram[0x11F5B] &= (uint8_t)~0x04;                           /* $7F1F5A bit 10: the talk */
+  if (rnd() % 8 == 0) ram[0x11F5B] |= 0x04;
+  ram[0x0973] = (uint8_t)((rnd() % 8) ? 0x01 : rnd() % 2);
+  ram[0x11F1E] = (uint8_t)((rnd() % 2) ? 59 : rnd() % 60);
+  ram[0x11F1D] = (uint8_t)((rnd() % 2) ? 14 : rnd() % 15);
+  ram[0x11F1C] = (uint8_t)((rnd() % 2) ? 17 : 6 + rnd() % 13);
+  if (rnd() % 4 == 0) ram[0x11F1C] = 11;
+  ram[0x11F5F] = (uint8_t)((rnd() % 4) ? ram[0x11F5F] & 0x7F : ram[0x11F5F] | 0x80);
+  ram[0x28] = 0;
+}
+/* names.c: the four letters typed (real ones, $00-$FF), the cow
+ * records (prep_new_animal) and a frame's NMI */
+static void prep_set_name(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_new_animal(ram, r, rnd);
+  prep_wait_frame(ram, r, rnd);
+  for (unsigned i = 0; i < 4; i++) ram[0x0885 + i] = (uint8_t)rnd();
+}
+/* names.c: Unk_NamesInput: the music's chip, a frame's NMI, where the
+ * name goes ($099F 0-6), the name screen's inputs */
+static void prep_names_screen(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_name_cursor(ram, r, rnd);
+  uint8_t playing = ram[0x0117];
+  prep_sound_wait(ram, r, rnd);
+  ram[0x0117] = playing;
+  ram[0x0110] = (uint8_t)((rnd() % 8) ? rnd() % 26 : 0xFF);
+  ram[0x099F] = (uint8_t)(rnd() % 7);
+  ram[0x28] = 0;
+}
+/* names.c: one frame of the names screen: the cursor on a cell, letters
+ * typed, the blink's count near $14, A pressed often (the "done" cell
+ * sometimes: then the name's routine) */
+static void prep_names_frame(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_names_screen(ram, r, rnd);
+  ram[0x019A] = 5;
+  ram[0x0994] = (uint8_t)(rnd() % 5);
+  ram[0x018B] = (uint8_t)((rnd() % 2) ? 0x13 + (rnd() % 2) + (rnd() & 0x80) : rnd());
+  ram[0x0993] = (uint8_t)(rnd() % 3);
+  ram[0x96] = (uint8_t)(rnd() % 3);
+  ram[0x00] = (uint8_t)(rnd() % 2);
+}
+/* demo.c: the demos: the map loads' inputs, the demo's step ($7F1F48,
+ * often 0-$0B), the script over now and then ($7F1F5C bit 2 or $7F1F60
+ * bit 7 after the frame: set here, the frame keeps them often) */
+static void prep_game_frame(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_demo(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_game_frame(ram, r, rnd);
+  ram[0x11F48] = (uint8_t)((rnd() % 8) ? rnd() % 0x0C : rnd());
+  hm_wr16(ram, 0x0196, (uint16_t)(hm_rd16(ram, 0x0196) & ~0x6000u));
+}
+/* intro.c: the title screen: its stage $95 (0-$0A), the stage's count
+ * ($94) often at its ends ($3C, 1, 2), the pause ($96 near $3C), the
+ * choice changed or not ($97), the menu's choice ($098D 0-2), the file
+ * ($098E 0-1) and the saved games (SRAM), the demo's count near 600, the
+ * scrolls near 0, the parents' scene over or not ($7F1F5C bit 2), and as
+ * a game frame's (the scene plays one) */
+static void prep_sram(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_intro(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_sram(ram, r, rnd);
+  prep_game_frame(ram, r, rnd);
+  ram[0x95] = (uint8_t)((rnd() % 8) ? rnd() % 0x0B : rnd());
+  static const uint8_t counts[] = { 0x3B, 0x3C, 0x00, 0x01, 0x02, 0x03 };
+  ram[0x94] = (uint8_t)((rnd() % 2) ? counts[rnd() % 6] : rnd());
+  ram[0x96] = (uint8_t)((rnd() % 2) ? 0x3A + rnd() % 3 : rnd() % 3);
+  ram[0x97] = (uint8_t)(rnd() % 2);
+  ram[0x098D] = (uint8_t)(rnd() % 3);
+  ram[0x098E] = (uint8_t)(rnd() % 2);
+  hm_wr16(ram, 0x90, (uint16_t)((rnd() % 2) ? 0x257 + rnd() % 2 : rnd() % 0x300));
+  for (unsigned i = 0; i < 6; i++) hm_wr16(ram, 0x013C + 2 * i, (uint16_t)((rnd() % 2) ? rnd() % 3 : rnd()));
+  /* now and then the title in place, at the end of its pause (stage 2,
+   * an even frame, BG2 at 0, $96 one before $3C or at it) */
+  if (rnd() % 4 == 0) {
+    ram[0x95] = 2;
+    ram[0x94] = (uint8_t)(rnd() & 0xFE);
+    hm_wr16(ram, 0x013C, (uint16_t)(rnd() % 2));
+    ram[0x96] = (uint8_t)(0x3A + rnd() % 3);
+  }
+  if (rnd() % 2) ram[0x11F5C] |= 0x04;
+  ram[0x11F60] = (uint8_t)rnd();
+  ram[0x11F61] = (uint8_t)rnd();
+  /* the saved games' year and season as a game writes them (CODE_82E405:
+   * a garbage year reads letters and DMA sources from past its tables) */
+  if (g_sram && g_sram_size >= 0x2000)
+    for (unsigned s = 0; s < 2; s++) {
+      g_sram[0x1000 * s] = (uint8_t)(rnd() % 3);
+      g_sram[0x1000 * s + 1] = (uint8_t)(rnd() % 4);
+    }
+  /* the title's pictures are packed: $0196 bit 15 (a picture stored as
+   * it is) only comes with the farm, the town and the mountain (maps 0-7,
+   * $10-$13), which the parents' scene leaves before its end; with it,
+   * BackgroundsManager copies $8000 bytes from past the picture, into the
+   * I/O area */
+  hm_wr16(ram, 0x0196, (uint16_t)(hm_rd16(ram, 0x0196) & 0x7FFF));
+  static const uint8_t scenes[] = { 0x08, 0x09, 0x0A, 0x0B, 0x15, 0x16, 0x17, 0x18, 0x1C, 0x22, 0x26, 0x29 };
+  ram[0x098B] = scenes[rnd() % sizeof scenes];
+  /* no HDMA running: the checker's rewrite does not move the beam, so
+   * what an HDMA would copy into WRAM on the way would not happen there */
+  hm_io_quiet();
+  ram[0x28] = 0;
+}
+/* intro.c: StartFromLoad / StartFromNewGame: the saved games and the
+ * morning's inputs */
+static void prep_after_load(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
+static void prep_start_game(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_sram(ram, r, rnd);
+  prep_after_load(ram, r, rnd);
+  ram[0x098E] = (uint8_t)(rnd() % 2);
+}
+/* game.c: SpawnAfterLoad: the morning's inputs (prep_night without the
+ * night's work) */
+static void prep_after_load(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_enter_map(ram, r, rnd);
+  if (rnd() % 2) ram[0x11F68] |= 0x01;
+  else ram[0x11F68] &= (uint8_t)~0x01;
+  ram[0x28] = 0;
+}
+/* game.c: GameLoop: one frame of the game as the map's inputs have it;
+ * the joypad; a name to write now and then ($0196 bit 13), the clock
+ * running (the night rarely) */
+static void prep_game_frame(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
+{
+  prep_enter_map(ram, r, rnd);
+  uint16_t a = r->a;
+  prep_inputs(ram, r, rnd);
+  r->a = a;
+  /* bit 15 ($0196: the map's picture stored as it is) only as the map
+   * entered gives it: the inputs' preparations set it at random, and a
+   * packed picture copied raw reads $8000 bytes from past it, into the I/O
+   * area (see prep_intro) */
+  hm_wr16(ram, 0x0196, (uint16_t)((hm_rd16(ram, 0x0196) & ~0xE000u) | ((rnd() % 8) ? 0 : 0x2000)));
+  ram[0x0973] = (uint8_t)((rnd() % 8) ? 0x01 : rnd() % 4);
+  ram[0x00] = (uint8_t)((rnd() % 2) ? 0 : 1);
+  hm_io_quiet();
+  ram[0x28] = 0;
+}
 static void prep_ps_swap(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_player_state_as(ram, r, rnd, 0x1C);
@@ -3309,6 +3698,8 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/mapevents.c", 0x83E76D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
   { "MapEvent_EBA6", hm_MapEvent_EBA6, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83EBA6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event_ending },
+  { "MapEvent_DED3", hm_MapEvent_DED3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
+    "src/mapevents.c", 0x83DED3, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_map_event_house },
   { "MapEvent_CB69", hm_MapEvent_CB69, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83CB69, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event_farm },
   { "CODE_83F4D8", hm_CODE_83F4D8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
@@ -3710,7 +4101,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/actions.c", 0x81FA69, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
   { "PlayerAction_57", hm_PlayerAction_57, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/actions.c", 0x81FA84, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
-  { "CODE_858CB2", hm_CODE_858CB2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "CODE_858CB2", hm_CODE_858CB2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/objects.c", 0x858CB2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_loader },
   { "SUB_809A64", hm_SUB_809A64, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x809A64, 0, 0, 0, 0xFFFF, { { 0 } }, 400, prep_doors },
@@ -3720,6 +4111,68 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/playerstate.c", 0x81BFDC, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_foot },
   { "ResetIdleAnimatioTimer", hm_ResetIdleAnimatioTimer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C002, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_any },
+  { "SetPlayerName", hm_SetPlayerName, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/names.c", 0x8080ED, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_set_name },
+  { "SetCowNameBought", hm_SetCowNameBought, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/names.c", 0x80815F, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_set_name },
+  { "SetCowNameBorn", hm_SetCowNameBorn, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/names.c", 0x8081D2, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_set_name },
+  { "SetDogName", hm_SetDogName, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/names.c", 0x808254, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_set_name },
+  { "SetHorseName", hm_SetHorseName, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/names.c", 0x8082C6, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_set_name },
+  { "SetKid1Name", hm_SetKid1Name, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/names.c", 0x808338, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_set_name },
+  { "SetKid2Name", hm_SetKid2Name, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/names.c", 0x8083AE, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_set_name },
+  { "Unk_NamesInput", hm_Unk_NamesInput, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/names.c", 0x82E80C, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_names_screen },
+  { "Unk_NamesInput_E95F", hm_Unk_NamesInput_E95F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/names.c", 0x82E95F, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_names_frame },
+  { "SUB_82D1C0", hm_SUB_82D1C0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/demo.c", 0x82D1C0, 1, 0, 0, 0xFFFF, { { 0 } }, 3, prep_demo },
+  { "DemoPresentation", hm_DemoPresentation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/demo.c", 0x82D3C7, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_demo },
+  { "IntroScreen", hm_IntroScreen, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/intro.c", 0x82D75E, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_intro },
+  { "IntroScreen_D80D", hm_IntroScreen_D80D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/intro.c", 0x82D80D, 1, 0, 0, 0xFFFF, { { 0 } }, 60, prep_intro },
+  { "IntroScreen_D93F", hm_IntroScreen_D93F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/intro.c", 0x82D93F, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_intro },
+  { "IntroScreen_E0EB", hm_IntroScreen_E0EB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/intro.c", 0x82E0EB, 1, 0, 0, 0xFFFF, { { 0 } }, 30, prep_intro },
+  { "SUB_82E1F1", hm_SUB_82E1F1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/intro.c", 0x82E1F1, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_intro },
+  { "SUB_82E1F1_E337", hm_SUB_82E1F1_E337, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/intro.c", 0x82E337, 1, 0, 0, 0xFFFF, { { 0 } }, 30, prep_intro },
+  { "StartFromLoad", hm_StartFromLoad, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/intro.c", 0x82E7E9, 1, 0, 0, 0xFFFF, { { 0 } }, 3, prep_start_game },
+  { "StartFromNewGame", hm_StartFromNewGame, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/intro.c", 0x82E7F9, 1, 0, 0, 0xFFFF, { { 0 } }, 3, prep_start_game },
+  { "SUB_82878E", hm_SUB_82878E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_TOLOOP | HM_INTERP,
+    "src/day.c", 0x82878E, 1, 0, 0, 0xFFFF, { { 0 } }, 50 },
+  { "RESET", hm_RESET, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_INTERP | HM_LIVE | HM_TOLOOP,
+    "src/reset.c", 0x808428, 1, 0, 0, 0xFFFF, { { 0 } }, 1 },
+  { "SUB_UNUSED_1", hm_SUB_UNUSED_1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+    "src/intro.c", 0x82E801, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_names_screen },
+  { "SpawnAfterLoad", hm_SpawnAfterLoad, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_APU | HM_INTERP,
+    "src/game.c", 0x808000, 1, 0, 0, 0xFFFF, { { 0 } }, 3, prep_after_load },
+  { "GameLoop", hm_GameLoop, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_APU | HM_INTERP,
+    "src/game.c", 0x808083, 1, 0, 0, 0xFFFF, { { 0 } }, 20, prep_game_frame },
+  { "FirstNightReset", hm_FirstNightReset, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
+    "src/day.c", 0x83ABF0, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_wait_frame },
+  { "NightReset", hm_NightReset, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
+    "src/day.c", 0x8282AC, 1, 0, 0, 0xFFFF, { { 0 } }, 3, prep_night },
+  { "UpdateTime", hm_UpdateTime, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
+    "src/day.c", 0x828000, 1, 0, 0, 0xFFFF, { { 0 } }, 60, prep_clock },
+  { "UNK_ScreenTransition", hm_UNK_ScreenTransition, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
+    "src/transition.c", 0x8096D3, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_enter_map },
+  { "SetScreenTransition", hm_SetScreenTransition, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
+    "src/transition.c", 0x809671, 1, 0, 0, 0xFFFF, { { 0 } }, 6, prep_go_to_map },
+  { "RunsFunctionbyIndex", hm_RunsFunctionbyIndex, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
+    "src/mapevents.c", 0x83CA98, 0, 0, 0, 0xFFFF, { { 0 } }, 60, prep_map_events },
+  { "SUB_80972C", hm_SUB_80972C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
+    "src/transition.c", 0x80972C, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_map_load },
   { "SUB_81BFB7", hm_SUB_81BFB7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
     "src/playerstate.c", 0x81BFB7, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_player_frame },
   { "PlayerInteractionSelector", hm_PlayerInteractionSelector, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
@@ -4920,9 +5373,15 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
         break;
       }
   }
+  /* HM_LOOSE: the stack below the final stack pointer is not compared */
+  size_t junk_lo = 1, junk_hi = 0;
+  if (f->out_mask & HM_LOOSE) {
+    junk_hi = cpu->S & 0x1FFF;
+    junk_lo = junk_hi >= 0x7FF ? junk_hi - 0x7FF : 0;
+  }
   if (!bad) {
     for (size_t i = 0; i < sizeof s->ram; i++)
-      if (s->ram[i] != cpu->ram[i]) {
+      if (s->ram[i] != cpu->ram[i] && !(i >= junk_lo && i <= junk_hi)) {
         bad = 1;
         snprintf(why, sizeof why, "WRAM %05zX = %02X, rom wrote %02X", i, s->ram[i], cpu->ram[i]);
         break;
@@ -4937,7 +5396,7 @@ void hm_decomp_check_end(const char *name, void *snapshot, const CpuState *cpu, 
       static int all = -1;
       if (all < 0) { const char *e = getenv("HM_DECOMP_DIFF_ALL"); all = e && *e && *e != '0'; }
       for (size_t i = 0, n = 0; all && i < sizeof s->ram && n < 24; i++)
-        if (s->ram[i] != cpu->ram[i]) {
+        if (s->ram[i] != cpu->ram[i] && !(i >= junk_lo && i <= junk_hi)) {
           fprintf(stderr, "[decomp-check]     %05zX: %02X / rom %02X\n", i, s->ram[i], cpu->ram[i]);
           n++;
         }
@@ -4958,6 +5417,17 @@ static uint16_t rnd_in(uint16_t lo, uint16_t hi)
   if (k == 0) return lo;
   if (k == 1) return hi;
   return (uint16_t)(lo + rnd() % ((uint32_t)hi - lo + 1));
+}
+
+/* HM_DECOMP_FUZZ_ONLY=a,b,c names it */
+static int named_in_only(const char *name)
+{
+  const char *only_name = getenv("HM_DECOMP_FUZZ_ONLY");
+  if (!only_name || !*only_name) return 0;
+  size_t len = strlen(name);
+  for (const char *s = only_name; (s = strstr(s, name)) != NULL; s += len)
+    if ((s == only_name || s[-1] == ',') && (s[len] == '\0' || s[len] == ',')) return 1;
+  return 0;
 }
 
 static void fuzz_at(unsigned frame)
@@ -4993,7 +5463,7 @@ static void fuzz_at(unsigned frame)
   /* HM_LIVE (the upload to the chip's boot ROM): frame 1, before the
    * game's own upload is done; only when named (below). */
   for (int i = 0; i < g_hm_decomp_count && only < 0; i++)
-    if ((g_hm_decomp_fns[i].out_mask & HM_LIVE) && frame == 1) only = i;
+    if ((g_hm_decomp_fns[i].out_mask & HM_LIVE) && frame == 1 && named_in_only(g_hm_decomp_fns[i].name)) only = i;
   for (int i = 0, k = 0; i < g_hm_decomp_count && only < 0; i++)
     if ((g_hm_decomp_fns[i].out_mask & HM_APU) && !(g_hm_decomp_fns[i].out_mask & HM_LIVE)) {
       if ((int)frame == apu_at + k) only = i;
@@ -5020,8 +5490,32 @@ static void fuzz_at(unsigned frame)
    * the frame's deadline half-way, as they do in the game, and not be
    * comparable. The frame driver sets the deadline again every frame. */
   interp_bridge_set_master_deadline(0);
+  {
+    const char *w = getenv("HM_DECOMP_WATCH");
+    if (w && *w) {
+      s_watch = strtol(w, NULL, 16);
+      g_interp_bridge_pc_hook = watch_step;
+      if (getenv("HM_DECOMP_WATCH_BOUNCE")) g_interp_bridge_bounce_hook = watch_bounce;
+    }
+  }
   interp_bridge_add_pre_opcode_hook(0x808654, nmi_at_wait);   /* WaitForNMI */
   interp_bridge_add_pre_opcode_hook(0x80866C, nmi_at_wait);   /* WaitForNMIATimes */
+  interp_bridge_add_pre_opcode_hook(0x808085, nmi_at_wait);   /* GameLoop */
+  interp_bridge_add_pre_opcode_hook(0x82E961, nmi_at_wait);   /* Unk_NamesInput */
+  interp_bridge_add_pre_opcode_hook(0x82D80F, nmi_at_wait);   /* the intro's loops */
+  interp_bridge_add_pre_opcode_hook(0x82D941, nmi_at_wait);
+  interp_bridge_add_pre_opcode_hook(0x82E0ED, nmi_at_wait);
+  interp_bridge_add_pre_opcode_hook(0x82E339, nmi_at_wait);
+  interp_bridge_add_pre_opcode_hook(0x82D34D, nmi_at_wait);   /* the demos */
+  interp_bridge_add_pre_opcode_hook(0x82D6CF, nmi_at_wait);
+  {                                                           /* HM_TOLOOP */
+    static const uint32_t *lists[8] = { STOPS_GAME, STOPS_FRAME, STOPS_NAMES, STOPS_DEMO1, STOPS_DEMO2, STOPS_INTRO,
+                                        STOPS_RESET, STOPS_SELF };
+    static const int sizes[8] = { 1, 2, 8, 2, 2, 9, 1, 1 };
+    interp_bridge_add_pre_opcode_hook(0x808428, reset_entry);
+    for (int l = 0; l < 8; l++)
+      for (int k = 0; k < sizes[l]; k++) interp_bridge_add_pre_opcode_hook(lists[l][k], stop_at_loop);
+  }
   if (only == 0)
     fprintf(stderr, "[decomp-fuzz] frames %u-%u: %d calls per routine\n", frame,
             frame + g_hm_decomp_count - 1, iters);
@@ -5179,6 +5673,9 @@ static void fuzz_at(unsigned frame)
           s_check_depth = 0; s_apu_recording = 0;
           if (s_nmi_sim) keep_waits_interpreted(0, NULL);
           s_nmi_sim = 0;
+          set_stops(NULL);
+          g_hm_wait_sim = 0;
+          if (getenv("HM_DECOMP_HANG_TRACE")) interp_bridge_dump_recent_steps(24, stderr);
           skip_why(f->name, "hung: the chip never answered");
           s_stats[i].calls++; s_stats[i].skipped++;
           if (++hangs == 3) break;                   /* it stays busy: give up */
@@ -5187,6 +5684,8 @@ static void fuzz_at(unsigned frame)
       }
       s_nmi_sim = (f->out_mask & HM_WAIT) != 0;
       keep_waits_interpreted(s_nmi_sim, f);
+      set_stops(f);
+      g_hm_wait_sim = s_nmi_sim;
       if (f->out_mask & (HM_INTERP | HM_WAIT | HM_RTI)) {
         /* No wrapper around it (or, waiting for the NMI, never a complete
          * call in the compiled code): check this call here. */
@@ -5206,6 +5705,8 @@ static void fuzz_at(unsigned frame)
       }
       if (s_nmi_sim) keep_waits_interpreted(0, NULL);
       s_nmi_sim = 0;
+      set_stops(NULL);
+      g_hm_wait_sim = 0;
       if (guard) memcpy(g_watchdog_jmp, keep, sizeof keep);
       if (s_stats[i].bad != bad_before && s_stats[i].bad <= 5)
         fprintf(stderr, "[decomp-fuzz]   (that was %s call %d)\n", f->name, n);

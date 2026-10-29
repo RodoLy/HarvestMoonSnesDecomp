@@ -106,9 +106,13 @@ void hm_COP_Interrupt(uint8_t *ram, HmRegs *r)
   flags_back(r, p);
 }
 
+uint32_t g_hm_next;
+void (*g_hm_frame_hook)(uint8_t *ram);
+
 /* The NMI arriving at `pc` with the flags `p` (hm_decomp.h). */
 void hm_nmi(uint8_t *ram, HmRegs *r, uint16_t pc, uint8_t p)
 {
+  if (g_hm_frame_hook) g_hm_frame_hook(ram);
   uint8_t keep = r->p;
   hm_push8(ram, r, r->pb);
   hm_push8(ram, r, (uint8_t)(pc >> 8));

@@ -611,6 +611,13 @@ void hm_UNK_Audio5(uint8_t *ram, HmRegs *r)
       return;
     }
   }
+  hm_UNK_Audio5_95F5(ram, r);
+}
+/* $80:95F5, UNK_Audio5 past its 6 pm test (NightReset calls it there: the
+ * new day's music even at night) */
+void hm_UNK_Audio5_95F5(uint8_t *ram, HmRegs *r)
+{
+  uint8_t map = *hm_dp(ram, r, 0x22);
   hm_bus_wr8(ram, db_addr(r, 0x0110), 0);
   uint16_t flags = hm_bus_rd16(ram, db_addr(r, 0x0196));
   if (flags & 0x0010) {

@@ -127,13 +127,17 @@ void hm_SetWeatherFlags(uint8_t *ram, HmRegs *r)
  * Quirks: the first-year winter storm is checked on any winter night that
  * is not a festival eve, but the guaranteed one only on day 7; on the 29th
  * of summer the summer storm skips the dice. A season above 3 (never
- * happens) would read past the chance tables; the rewrite assumes 0..3.
+ * happens) reads past the chance tables, here as in the original.
  * ───────────────────────────────────────────────────────────────────────── */
-static const uint8_t kHurricaneChance[4] = { 0, 30, 0, 0 };   /* $82:8EB2 */
-static const uint8_t kRainChance[4]      = { 6, 10, 10, 0 };  /* $82:8EB6 */
-static const uint8_t kSnowChance[4]      = { 0, 0, 0, 3 };    /* $82:8EBA */
-static const uint8_t kThunderChance[4]   = { 0, 30, 0, 0 };   /* $82:8EBE */
-static const uint8_t kSnowstormChance[4] = { 0, 0, 0, 8 };    /* $82:8EC2 */
+/* The chance tables, one byte per season, read from the ROM (a season
+ * above 3, which the game never has, reads on past them, as the
+ * original does) */
+#define kHurricaneChance 0x828EB2u   /* 0, 30, 0, 0 */
+#define kRainChance      0x828EB6u   /* 6, 10, 10, 0 */
+#define kSnowChance      0x828EBAu   /* 0, 0, 0, 3 */
+#define kThunderChance   0x828EBEu   /* 0, 30, 0, 0 */
+#define kSnowstormChance 0x828EC2u   /* 0, 0, 0, 8 */
+static uint8_t chance(uint8_t *ram, uint32_t table, uint8_t season) { return hm_bus_rd8(ram, table + season); }
 
 /* Where each JSL RNGReturn0toA returns to (its frame stays on the stack). */
 #define RET_SNOWSTORM  0x8DCD
@@ -153,14 +157,15 @@ static bool roll_zero(uint8_t *ram, HmRegs *r, uint8_t faces, uint16_t ret)
 }
 
 /* "1 chance in table[season]": LDA #0; XBA; LDA season; TAX; LDA table,X */
-static bool one_in(uint8_t *ram, HmRegs *r, const uint8_t *table, uint16_t ret)
+static bool one_in(uint8_t *ram, HmRegs *r, uint32_t table, uint16_t ret)
 {
   uint8_t season = ram[HM_SEASON];
   r->x = season;
-  r->a = table[season];
-  if (table[season] == 0)
+  uint8_t n = chance(ram, table, season);
+  r->a = n;
+  if (n == 0)
     return false;
-  return roll_zero(ram, r, table[season], ret);
+  return roll_zero(ram, r, n, ret);
 }
 
 static void set_weather(uint8_t *ram, HmRegs *r, uint8_t code, uint16_t a)
@@ -212,9 +217,9 @@ static void summer_night(uint8_t *ram, HmRegs *r)
   }
   uint8_t season = ram[HM_SEASON];
   r->x = season;
-  r->a = kHurricaneChance[season];
-  if (kHurricaneChance[season] != 0) {
-    uint16_t faces = kHurricaneChance[season];
+  r->a = chance(ram, kHurricaneChance, season);
+  if (chance(ram, kHurricaneChance, season) != 0) {
+    uint16_t faces = chance(ram, kHurricaneChance, season);
     if (hm_rd16(ram, ITEM_FLAGS_6C) & HAS_TURTLE_SHELL)
       faces = (uint16_t)(faces << 1);            /* the shell halves the chance */
     r->y = faces;

@@ -1059,3 +1059,238 @@ void hm_MapEvent_CB69(uint8_t *ram, HmRegs *r)
   hm_AddPlayerHappiness(ram, r);
   hm_rtl(ram, r);
 }
+
+/* ── DED3, the player's house (maps $15-$17, its three sizes) ───────────
+ *   - summer 30 of the third year (year 2): the ending (JMP CODE_83F4D8);
+ *   - the music of the house after the extensions ($098B = $17 with
+ *     $7F1F64 bit 7, $16 with bit 6);
+ *   - with $7F1F6C bit 13 (and not bit 14), a script at the tile (156,
+ *     144) (SUB_8480F8: slot $10, script $1F);
+ *   - things the night left to do, each one flag of $7F1F6E cleared:
+ *     bit 7, song $19 (UNK_Audio26) and the nine tiles from (576, 704)
+ *     to (608, 736) set to 2 (EditTileonMapandsets0181); bit 8, song $15;
+ *     bit 9, noise $22 of bank 7 twice (after 20 and 30 frames,
+ *     UNK_Audio24); bit 5, noise $20 and 60 frames;
+ *   - then one scene, the first that fits:
+ *       bit 4: group $1F (script 2 with $7F1F5E bit 14; else script 1
+ *              with bit 13, and $099F = 5 if the first child is 60 days
+ *              old, 6 if not; else script 0);
+ *       bit 6 (cleared): a cow's scene: the name of cow $0937 (bytes
+ *              $0C-$0F of its record, GetsCowPointer) at $0889-$088F,
+ *              one letter per word, and group $20;
+ *       the wife (first bit of $7F1F66): with her heart below 200 at
+ *              6:00:00, unless a child or bit 0 of $7F1F6E, group $22
+ *              ($7F1F6E bits 0-1 and $7F1F5E bit 12 set); otherwise
+ *              $7F1F5E bit 12 follows $7F1F6E bit 1, or her group $43
+ *              (slot $13, script = her number);
+ *   - and after the wife, every time: the children 60 days old or more
+ *     (group $45: slot $14 script 0, slot $15 script 3) and the man of
+ *     group $0A: script 3 with $7F1F60 bit 5, script 0 until $7F1F68 bit
+ *     0; script 4 on summer 1 of the second year at 6:00:00, 5 on
+ *     summer 29 of the third year at 6:00:00; then group $28 on spring 1,
+ *     group $0F on winter 24.
+ * The noises and songs wait frames (WaitForNMI): r->p as transition.c
+ * gives it (HM_LOOSE).
+ * ───────────────────────────────────────────────────────────────────── */
+#define YEAR 0x7F1F18
+
+typedef void HmFn(uint8_t *ram, HmRegs *r);
+/* a JSL to a routine that may wait frames: the carry as it is, 8-bit A,
+ * 16-bit indexes, D and I of the entry */
+static void call_waits(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bank, HmFn *fn)
+{
+  uint8_t keep = r->p;
+  r->p = (uint8_t)((keep & 0x0C) | 0x20 | (r->c & 1));
+  hm_jsl(ram, r, (uint16_t)(at + 3), bank);
+  fn(ram, r);
+  hm_rtl(ram, r);
+  r->p = keep;
+}
+/* SEP #$20; LDA #song; JSL UNK_Audio26 */
+static void song(uint8_t *ram, HmRegs *r, uint8_t s, uint16_t at)
+{
+  r->a = (uint16_t)((r->a & 0xFF00) | s);
+  call_waits(ram, r, at, 0x83, hm_UNK_Audio26);
+}
+/* SEP #$20; REP #$10; LDA #effect; LDX #7; LDY #frames; JSL UNK_Audio24 */
+static void noise(uint8_t *ram, HmRegs *r, uint8_t effect, uint16_t frames, uint16_t at)
+{
+  r->a = (uint16_t)((r->a & 0xFF00) | effect);
+  r->x = 7; r->y = frames;
+  call_waits(ram, r, at, 0x83, hm_UNK_Audio24);
+}
+/* LDA $7F1F6E; AND #~bit; STA $7F1F6E */
+static void flag_off(uint8_t *ram, HmRegs *r, uint32_t addr, uint16_t bit)
+{
+  r->a = (uint16_t)(hm_bus_rd16(ram, addr) & ~bit);
+  hm_bus_wr16(ram, addr, r->a);
+}
+static void house_tiles(uint8_t *ram, HmRegs *r)
+{
+  uint16_t at = 0xDF74;
+  for (uint16_t y = 0x02C0; y <= 0x02E0; y += 0x10)
+    for (uint16_t x = 0x0240; x <= 0x0260; x += 0x10, at += 0x10) {
+      r->a = (uint16_t)((r->a & 0xFF00) | 0x02);
+      r->x = x; r->y = y;
+      hm_jsl(ram, r, (uint16_t)(at + 3), 0x82);
+      hm_EditTileonMapandsets0181(ram, r);
+      hm_rtl(ram, r);
+    }
+}
+/* cow $0937's name: bytes $0C-$0F of its record to $0889-$088F */
+static void cow_scene(uint8_t *ram, HmRegs *r)
+{
+  r->a = hm_bus_rd8(ram, db(r, 0x0937));                     /* LDA #0; XBA; LDA */
+  hm_jsl(ram, r, 0xE100, 0x83);
+  hm_GetsCowPointer(ram, r);
+  hm_rtl(ram, r);
+  for (uint16_t i = 0; i < 4; i++) {
+    r->y = (uint16_t)(0x0C + i);
+    r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, r->y));  /* LDA #0; XBA; LDA [$72],Y */
+    if (i < 3) hm_bus_wr16(ram, db(r, (uint16_t)(0x0889 + 2 * i)), r->a);
+    else hm_bus_wr8(ram, db(r, 0x088F), (uint8_t)r->a);
+  }
+  spawn(ram, r, 0, 0x20, 0, 0xE13F);
+}
+/* the wife's scene; returns when it goes on to the children */
+static void wife(uint8_t *ram, HmRegs *r)
+{
+  static const uint32_t hearts[5] = { 0x7F1F1F, 0x7F1F21, 0x7F1F23, 0x7F1F25, 0x7F1F27 };
+  int girl = -1;
+  for (int i = 0; i < 5 && girl < 0; i++)
+    if (flag(ram, r, 0x7F1F66, (uint16_t)(1 << i))) girl = i;
+  if (girl < 0) return;
+  if (!word_at_least(ram, r, hearts[girl], 0x00C8) && six_sharp(ram, r) &&
+      !flag(ram, r, 0x7F1F6E, 0x000C) && !flag(ram, r, 0x7F1F6E, 0x0001)) {
+    spawn(ram, r, 0, 0x22, 0, 0xE1F1);
+    flag_on(ram, r, 0x7F1F6E, 0x0003);
+    flag_on(ram, r, 0x7F1F5E, 0x1000);
+    return;
+  }
+  flag_off(ram, r, 0x7F1F5E, 0x1000);
+  if (flag(ram, r, 0x7F1F6E, 0x0002)) { flag_on(ram, r, 0x7F1F5E, 0x1000); return; }
+  for (uint16_t i = 0; i < 5; i++)
+    if (flag(ram, r, 0x7F1F66, (uint16_t)(1 << i))) {
+      spawn(ram, r, 0x13, 0x43, i, (uint16_t)(0xE27C + 0x11 * i));
+      return;
+    }
+}
+/* SEP #$20; year, season, day; 6:00:00 */
+static bool morning_of(uint8_t *ram, HmRegs *r, uint8_t year, uint8_t season, uint8_t day)
+{
+  return byte_is(ram, r, YEAR, year) && byte_is(ram, r, SEASON, season) && byte_is(ram, r, DAY, day) &&
+         six_sharp(ram, r);
+}
+
+void hm_MapEvent_DED3(uint8_t *ram, HmRegs *r)
+{
+  if (byte_is(ram, r, YEAR, 2) && byte_is(ram, r, SEASON, 1) && byte_is(ram, r, DAY, 0x1E)) {
+    hm_CODE_83F4D8(ram, r);                                  /* JMP */
+    return;
+  }
+  if (flag(ram, r, 0x7F1F64, 0x0080)) {
+    r->a = (uint16_t)((r->a & 0xFF00) | 0x17);
+    hm_bus_wr8(ram, db(r, 0x098B), 0x17);
+  } else if (flag(ram, r, 0x7F1F64, 0x0040)) {
+    r->a = (uint16_t)((r->a & 0xFF00) | 0x16);
+    hm_bus_wr8(ram, db(r, 0x098B), 0x16);
+  }
+  if (flag(ram, r, 0x7F1F6C, 0x2000) && !flag(ram, r, 0x7F1F6C, 0x4000)) {
+    hm_bus_wr16(ram, db(r, 0x0985), 0x009C);
+    hm_bus_wr16(ram, db(r, 0x0987), 0x0090);
+    r->a = 0x0010; r->x = 0; r->y = 0x001F;
+    hm_jsl(ram, r, 0xDF46, 0x84);
+    hm_SUB_8480F8(ram, r);
+    hm_rtl(ram, r);
+  }
+  if (flag(ram, r, 0x7F1F6E, 0x0080)) {
+    flag_off(ram, r, 0x7F1F6E, 0x0080);
+    song(ram, r, 0x19, 0xDF64);
+    house_tiles(ram, r);
+  }
+  if (flag(ram, r, 0x7F1F6E, 0x0100)) {
+    flag_off(ram, r, 0x7F1F6E, 0x0100);
+    song(ram, r, 0x15, 0xE012);
+  }
+  if (flag(ram, r, 0x7F1F6E, 0x0200)) {
+    flag_off(ram, r, 0x7F1F6E, 0x0200);
+    noise(ram, r, 0x22, 0x0014, 0xE038);
+    noise(ram, r, 0x22, 0x001E, 0xE048);
+  }
+  if (flag(ram, r, 0x7F1F6E, 0x0020)) {
+    noise(ram, r, 0x20, 0x003C, 0xE063);
+    flag_off(ram, r, 0x7F1F6E, 0x0020);
+  }
+  if (flag(ram, r, 0x7F1F6E, 0x0010)) {
+    if (flag(ram, r, 0x7F1F5E, 0x4000)) { spawn(ram, r, 0, 0x1F, 2, 0xE0D6); return; }
+    if (!flag(ram, r, 0x7F1F5E, 0x2000)) { spawn(ram, r, 0, 0x1F, 0, 0xE09C); return; }
+    spawn(ram, r, 0, 0x1F, 1, 0xE0AC);
+    r->a = hm_bus_rd16(ram, KID1_AGE);
+    r->c = r->a >= 0x003C;
+    uint8_t v = r->a == 0x003C ? 5 : 6;
+    r->a = (uint16_t)((r->a & 0xFF00) | v);
+    hm_bus_wr8(ram, db(r, 0x099F), v);
+    return;
+  }
+  if (flag(ram, r, 0x7F1F6E, 0x0040)) {
+    flag_off(ram, r, 0x7F1F6E, 0x0040);
+    cow_scene(ram, r);
+    return;
+  }
+  wife(ram, r);
+  if (flag(ram, r, 0x7F1F6E, 0x0004) && word_at_least(ram, r, KID1_AGE, 0x003C))
+    spawn(ram, r, 0x14, 0x45, 0, 0xE2E5);
+  if (flag(ram, r, 0x7F1F6E, 0x0008) && word_at_least(ram, r, KID2_AGE, 0x003C))
+    spawn(ram, r, 0x15, 0x45, 3, 0xE308);
+  if (flag(ram, r, 0x7F1F60, 0x0020)) { spawn(ram, r, 0, 0x0A, 3, 0xE33B); return; }
+  if (!flag(ram, r, 0x7F1F68, 0x0001)) { spawn(ram, r, 0, 0x0A, 0, 0xE32B); return; }
+  if (morning_of(ram, r, 1, 1, 0x01)) { spawn(ram, r, 0, 0x0A, 4, 0xE37B); return; }
+  if (morning_of(ram, r, 2, 1, 0x1D)) { spawn(ram, r, 0, 0x0A, 5, 0xE3BB); return; }
+  if (!byte_of(ram, r, SEASON) && byte_is(ram, r, DAY, 0x01)) { spawn(ram, r, 0, 0x28, 0, 0xE3DD); return; }
+  if (byte_is(ram, r, SEASON, 3) && byte_is(ram, r, DAY, 0x18)) spawn(ram, r, 0, 0x0F, 0, 0xE401);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * RunsFunctionbyIndex ($83:CA98, JSL, RTL): the routine of map $22 from
+ * UNK_TableFunctionSelect ($83:CAA9), with A = X = $22 x 2. The table has
+ * $60 words (the maps go to $56; the rest, and $3B, $3E-$4A, $4C-$5F, are
+ * the empty E74C).
+ * ───────────────────────────────────────────────────────────────────────── */
+static void (*const MAP_EVENTS[0x60])(uint8_t *, HmRegs *) = {
+  hm_MapEvent_CB69, hm_MapEvent_CB69, hm_MapEvent_CB69, hm_MapEvent_CB69,     /* $00 the farm */
+  hm_MapEvent_D2E0, hm_MapEvent_D2E0, hm_MapEvent_D2E0, hm_MapEvent_D2E0,     /* $04 the town */
+  hm_MapEvent_E5DF, hm_MapEvent_E5F1, hm_MapEvent_E603, hm_MapEvent_E6B2,
+  hm_MapEvent_E407, hm_MapEvent_E407, hm_MapEvent_E407, hm_MapEvent_E407,     /* $0C the crossroads */
+  hm_MapEvent_DC4A, hm_MapEvent_DC4A, hm_MapEvent_DC4A, hm_MapEvent_DC4A,
+  hm_MapEvent_E661, hm_MapEvent_DED3, hm_MapEvent_DED3, hm_MapEvent_DED3,     /* $15 the house */
+  hm_MapEvent_D4D7, hm_MapEvent_D4D7, hm_MapEvent_D5E7, hm_MapEvent_D613,
+  hm_MapEvent_D74E, hm_MapEvent_D818, hm_MapEvent_DB8F, hm_MapEvent_DC1E,
+  hm_MapEvent_D955, hm_MapEvent_DA1F, hm_MapEvent_D844, hm_MapEvent_D929,
+  hm_MapEvent_DAED, hm_MapEvent_DA4B, hm_MapEvent_E6C4, hm_MapEvent_DE9B,
+  hm_MapEvent_E5B4, hm_MapEvent_E4CB, hm_MapEvent_DE64, hm_MapEvent_DD95,
+  hm_MapEvent_E5A2, hm_MapEvent_E5CD, hm_MapEvent_E5CD, hm_MapEvent_E5CD,
+  hm_MapEvent_E5CD, hm_MapEvent_E586, hm_MapEvent_E586, hm_MapEvent_E586,
+  hm_MapEvent_E586, hm_MapEvent_E586, hm_MapEvent_E586, hm_MapEvent_E586,
+  hm_MapEvent_E586, hm_MapEvent_E632, hm_MapEvent_E690, hm_MapEvent_E74C,
+  hm_MapEvent_E76D, hm_MapEvent_EBA6, hm_MapEvent_E74C, hm_MapEvent_E74C,
+  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
+  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
+  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_EBA6,
+  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
+  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
+  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
+  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
+};
+
+void hm_RunsFunctionbyIndex(uint8_t *ram, HmRegs *r)
+{
+  uint8_t map = *hm_dp(ram, r, 0x22);                        /* SEP #$20; LDA #0; XBA; LDA $22 */
+  r->a = (uint16_t)(map << 1);                               /* REP #$20; ASL; TAX */
+  r->c = 0;
+  r->x = r->a;
+  if (map < 0x60) {
+    hm_push8(ram, r, 0xCA); hm_push8(ram, r, 0xA7);          /* JSR ($CAA9,X) */
+    MAP_EVENTS[map](ram, r);
+    hm_pull8(ram, r); hm_pull8(ram, r);
+  }
+}

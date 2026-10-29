@@ -48,6 +48,7 @@ LOCAL = {
     0x81A801: ("SUB_81A801", "SUB_81A801"),
     0x81A83A: ("SUB_81A83A", "SUB_81A83A"),
     0x81A688: ("CODE_81A688", "ChangeMapTile"),
+    0x81A600: ("CODE_81A600", "CODE_81A600", "CODE_81A688"),   # with its tails $81:A65D / A667
     0x81A6C1: ("CODE_81A6C1", "QueueTileGraphicsDMA"),
     0x81A500: ("CODE_81A500", "SpawnMapObject"),
     0x858000: ("CODE_858000", "CreateGameObject"),
@@ -362,6 +363,14 @@ LOCAL = {
     0x83D2E0: ("@83D2E0", "MapEvent_D2E0", "@83D4D7"),
     0x83DE9B: ("@83DE9B", "MapEvent_DE9B", "@83DED3"),
     0x83E407: ("@83E407", "MapEvent_E407", "@83E4CB"),
+    0x83DED3: ("@83DED3", "MapEvent_DED3", "@83E407"),
+    0x83CA98: ("RunsFunctionbyIndex", "RunsFunctionbyIndex"),
+    0x82D3C7: ("DemoPresentation", "DemoPresentation", "IntroScreen"),   # no address comment
+    0x82E1F1: ("SUB_82E1F1", "SUB_82E1F1", "CODE_82E405"),   # with SUB_82E3D1, its frame's end
+    0x82E7E9: ("StartFromLoad", "StartFromLoad", "StartFromNewGame"),
+    0x82E7F9: ("StartFromNewGame", "StartFromNewGame", "SUB_UNUSED_1"),
+    0x82E801: ("SUB_UNUSED_1", "SUB_UNUSED_1", "Unk_NamesInput"),
+    0x82878E: ("SUB_82878E", "SUB_82878E", "WifePregnanacyandChilds"),   # BRA itself, no RTL
     0x83E4CB: ("@83E4CB", "MapEvent_E4CB", "@83E586"),
     0x83D844: ("@83D844", "MapEvent_D844", "@83D929"),
     0x83D929: ("@83D929", "MapEvent_D929", "@83D955"),
@@ -591,7 +600,10 @@ routines = routines_of
 
 # Routines HM-Decomp shows as data (`dw` lines): rewritten and verified, but
 # not counted, since the measure is HM-Decomp's own code.
-NOT_IN_DECOMP = {0x81B121, 0x81B1CF, 0x81B21E}   # ReplaceTilesCoop, MountainCave, ElfTunnel
+NOT_IN_DECOMP = {0x81B121, 0x81B1CF, 0x81B21E,   # ReplaceTilesCoop, MountainCave, ElfTunnel
+                 # extra checks of a part of a routine counted whole (a loop's
+                 # frame entered on its own): Unk_NamesInput's, the intro's
+                 0x82E95F, 0x82D80D, 0x82D93F, 0x82E0EB, 0x82E337}
 
 
 def registered(path):

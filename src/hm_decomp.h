@@ -228,12 +228,46 @@ enum { HM_OUT_A = 1, HM_OUT_X = 2, HM_OUT_Y = 4, HM_OUT_C = 8,
         * are never complete; the fuzzer runs the original in the
         * interpreter and, when it reaches the wait loop with $00 = 0, makes
         * the NMI happen right there (hm_nmi below does the same in C). */
-       HM_WAIT = 1024 };
+       HM_WAIT = 1024,
+       /* A long routine made of others that waits frames: the flags its
+        * waits save (PHP) and the NMI pushes depend on N, Z and V left by
+        * the routines before, which the rewrites do not follow, so the
+        * stack below the final stack pointer (what is left there, never
+        * read again) is not compared. Everything else is. */
+       HM_LOOSE = 2048,
+       /* Ends by going into the game loop (GameLoop, $80:8083), which never
+        * returns: the original is stopped when it gets there (an RTL takes
+        * it back as if it returned), and the rewrite returns there. For
+        * GameLoop itself the stop is its JMP back ($80:80DB, one frame
+        * done) or its JML into the names screen ($80:80E9); for the names
+        * screen (Unk_NamesInput) its JML back to the frame's start or to
+        * the name's routine; for RESET, which throws the stack away, its
+        * JML to the title, where the checker's frame is put back; for the
+        * loop of one BRA (SUB_82878E), its second turn. */
+       HM_TOLOOP = 4096 };
 
 /* video.c: the NMI arriving at `pc` (the wait loop) with the flags `p`:
  * pushes bank, address and flags as the CPU does, runs NMI_Interrupt with
  * PB = 0, I set and decimal clear, and returns through its RTI. */
 void hm_nmi(uint8_t *ram, HmRegs *r, uint16_t pc, uint8_t p);
+/* game.c: the fifteen JSLs of a game frame (GameLoop's, and the demos'),
+ * one every 4 bytes from `at` in the caller's bank */
+void hm_game_frame(uint8_t *ram, HmRegs *r, uint16_t at);
+
+/* ── Running the game on the rewrites alone (native/) ──────────────────────
+ * The routines that never return (RESET, the title screen, the demos, the
+ * names screen, GameLoop) end where the original jumps on (JML / JMP) to
+ * the next one; g_hm_next is that address, so a host can call the next
+ * routine itself. It changes nothing the checker compares.
+ * g_hm_frame_hook, when set, runs at every NMI before its handler: the end
+ * of a frame (draw it, read the pads, run the sound chip). NULL in the
+ * checking build. */
+extern uint32_t g_hm_next;
+extern void (*g_hm_frame_hook)(uint8_t *ram);
+/* the loops' own entries the host needs (not checked on their own) */
+void hm_IntroScreen_D871(uint8_t *ram, HmRegs *r);    /* intro.c: the demo check */
+void hm_SUB_82D1C0_D347(uint8_t *ram, HmRegs *r);     /* demo.c: a frame of each demo */
+void hm_DemoPresentation_D6C9(uint8_t *ram, HmRegs *r);
 
 /* hm_io.c: the chips' state for HM_IO checks. */
 typedef struct HmIoState HmIoState;
@@ -308,6 +342,8 @@ void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r);
 void hm_CODE_83F4D8(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_CB69(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_EBA6(uint8_t *ram, HmRegs *r);
+void hm_MapEvent_DED3(uint8_t *ram, HmRegs *r);
+void hm_RunsFunctionbyIndex(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_E76D(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_D2E0(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_DE9B(uint8_t *ram, HmRegs *r);
@@ -449,6 +485,36 @@ void hm_IterateCCStructures(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_1C(uint8_t *ram, HmRegs *r);   /* playerstate.c */
 void hm_PlayerAction_35(uint8_t *ram, HmRegs *r);   /* actions.c */
 void hm_SUB_81BFB7(uint8_t *ram, HmRegs *r);   /* playerstate.c */
+void hm_SUB_80972C(uint8_t *ram, HmRegs *r);
+void hm_UNK_ScreenTransition(uint8_t *ram, HmRegs *r);
+void hm_SetScreenTransition(uint8_t *ram, HmRegs *r);
+void hm_NightReset(uint8_t *ram, HmRegs *r);      /* day.c */
+void hm_UpdateTime(uint8_t *ram, HmRegs *r);
+void hm_FirstNightReset(uint8_t *ram, HmRegs *r);
+void hm_SetPlayerName(uint8_t *ram, HmRegs *r);   /* names.c */
+void hm_SetCowNameBought(uint8_t *ram, HmRegs *r);
+void hm_SetCowNameBorn(uint8_t *ram, HmRegs *r);
+void hm_SetDogName(uint8_t *ram, HmRegs *r);
+void hm_SetHorseName(uint8_t *ram, HmRegs *r);
+void hm_Unk_NamesInput(uint8_t *ram, HmRegs *r);
+void hm_Unk_NamesInput_E95F(uint8_t *ram, HmRegs *r);
+void hm_SetKid1Name(uint8_t *ram, HmRegs *r);
+void hm_SetKid2Name(uint8_t *ram, HmRegs *r);
+void hm_SpawnAfterLoad(uint8_t *ram, HmRegs *r);  /* game.c */
+void hm_GameLoop(uint8_t *ram, HmRegs *r);
+void hm_SUB_82D1C0(uint8_t *ram, HmRegs *r);    /* demo.c */
+void hm_DemoPresentation(uint8_t *ram, HmRegs *r);
+void hm_IntroScreen(uint8_t *ram, HmRegs *r);     /* intro.c */
+void hm_IntroScreen_D80D(uint8_t *ram, HmRegs *r);
+void hm_IntroScreen_D93F(uint8_t *ram, HmRegs *r);
+void hm_IntroScreen_E0EB(uint8_t *ram, HmRegs *r);
+void hm_SUB_82E1F1(uint8_t *ram, HmRegs *r);
+void hm_SUB_82E1F1_E337(uint8_t *ram, HmRegs *r);
+void hm_StartFromLoad(uint8_t *ram, HmRegs *r);
+void hm_StartFromNewGame(uint8_t *ram, HmRegs *r);
+void hm_SUB_UNUSED_1(uint8_t *ram, HmRegs *r);
+void hm_RESET(uint8_t *ram, HmRegs *r);          /* reset.c */
+void hm_SUB_82878E(uint8_t *ram, HmRegs *r);     /* day.c */   /* transition.c */
 void hm_PlayerInteractionSelector(uint8_t *ram, HmRegs *r);
 void hm_ItemObject_2A(uint8_t *ram, HmRegs *r);
 void hm_ItemObject_2B(uint8_t *ram, HmRegs *r);
@@ -884,6 +950,7 @@ void hm_UNK_Audio21(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio22(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio25(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio5(uint8_t *ram, HmRegs *r);
+void hm_UNK_Audio5_95F5(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio12(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio11(uint8_t *ram, HmRegs *r);
 void hm_UNK_Audio9(uint8_t *ram, HmRegs *r);

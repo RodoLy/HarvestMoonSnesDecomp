@@ -906,10 +906,14 @@ void hm_CODE_81CFE6(uint8_t *ram, HmRegs *r)
 
 static void trap(void) { for (;;) { } }
 
-/* the console's multiplier: 8 x 8 bits */
-static uint16_t graphics_times(uint8_t *ram, uint16_t index, uint8_t by)
+/* the console's multiplier: 8 x 8 bits (STA $4202; STA $4203, with the
+ * data bank; the product read back from $4216) */
+static uint16_t graphics_times(uint8_t *ram, HmRegs *r, uint16_t index, uint8_t by)
 {
-  return (uint16_t)((uint8_t)hm_bus_rd16(ram, PIECE_GRAPHICS + 2u * index) * by);
+  uint8_t a = (uint8_t)hm_bus_rd16(ram, PIECE_GRAPHICS + 2u * index);
+  hm_bus_wr8(ram, abs_db(r, 0x4202), a);
+  hm_bus_wr8(ram, abs_db(r, 0x4203), by);
+  return (uint16_t)(a * by);
 }
 
 void hm_CODE_858CB2(uint8_t *ram, HmRegs *r)
@@ -972,12 +976,12 @@ void hm_CODE_858CB2(uint8_t *ram, HmRegs *r)
     hm_dp_w16(ram, r, 0x7E, (uint16_t)((part >> 2) << 2));
     hm_dp_w16(ram, r, 0xC5, (uint16_t)((part >> 2) + 0x88));
     uint16_t low = (uint16_t)(piece - high);
-    uint16_t source = graphics_times(ram, low, 0x20);
+    uint16_t source = graphics_times(ram, r, low, 0x20);
     hm_dp_w16(ram, r, 0xC1, source);
     uint16_t base = (uint16_t)((part & 3) << 13);       /* Table_of_Multof2000 */
     uint16_t sum = (uint16_t)(source + base + 0x8000);
     hm_dp_w16(ram, r, 0xC3, sum);
-    hm_dp_w16(ram, r, 0x75, graphics_times(ram, slot & 0xFF, 0x10));
+    hm_dp_w16(ram, r, 0x75, graphics_times(ram, r, slot & 0xFF, 0x10));
 
     uint16_t bf = hm_dp_r16(ram, r, 0xBF);
     r->x = bf;
