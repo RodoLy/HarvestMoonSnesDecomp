@@ -264,6 +264,19 @@ void hm_game_frame(uint8_t *ram, HmRegs *r, uint16_t at);
  * checking build. */
 extern uint32_t g_hm_next;
 extern void (*g_hm_frame_hook)(uint8_t *ram);
+/* The native build's improvements (native/mods.c) reach into three places,
+ * through these; their values here are the ROM's own, so the checking
+ * build (and a native build with the improvements off) is untouched:
+ *   g_hm_oam_right / g_hm_oam_left: the screen X a sprite piece must be
+ *     under / from to be drawn (PrepareOAMData, $85:853B / $85:8540;
+ *     widescreen widens them);
+ *   g_hm_no_ending: the house's date check for the ending (Summer 30,
+ *     Year 3, $83:DEE7) fails while it is set (the endless game);
+ *   g_hm_year_suffix: the diary's year ordinal past the game's three
+ *     ("4th", "5th"... $82:F298). */
+extern uint16_t g_hm_oam_right, g_hm_oam_left;
+extern int g_hm_no_ending;
+extern uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 /* the loops' own entries the host needs (not checked on their own) */
 void hm_IntroScreen_D871(uint8_t *ram, HmRegs *r);    /* intro.c: the demo check */
 void hm_SUB_82D1C0_D347(uint8_t *ram, HmRegs *r);     /* demo.c: a frame of each demo */

@@ -697,9 +697,14 @@ void hm_CODE_82E405(uint8_t *ram, HmRegs *r)
   wr16(ram, r, 0x0193, 0);
   digit_now(ram, r, 0, 0xE481);
   next_letter(ram);
-  letter_now(ram, r, hm_bus_rd16(ram, 0x82F298u + 4u * year), 0xE4AE);
+  uint16_t suffix[2] = { hm_bus_rd16(ram, 0x82F298u + 4u * year), hm_bus_rd16(ram, 0x82F298u + 4u * year + 2) };
+  if (g_hm_year_suffix) {                                  /* past "3rd" (native: the endless game) */
+    suffix[0] = g_hm_year_suffix((uint16_t)(4u * year), suffix[0]);
+    suffix[1] = g_hm_year_suffix((uint16_t)(4u * year + 2), suffix[1]);
+  }
+  letter_now(ram, r, suffix[0], 0xE4AE);
   next_letter(ram);
-  letter_now(ram, r, hm_bus_rd16(ram, 0x82F298u + 4u * year + 2), 0xE4DF);
+  letter_now(ram, r, suffix[1], 0xE4DF);
   pull16(ram, r);
   entry = (uint16_t)(entry + 2);
   push16(ram, r, entry);

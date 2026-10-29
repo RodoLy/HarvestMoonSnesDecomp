@@ -1133,7 +1133,7 @@ void hm_PrepareOAMData(uint8_t *ram, HmRegs *r)
           hm_dp_w16(ram, r, 0xC3, high);
         }
         uint16_t fyv = hm_dp_r16(ram, r, 0xC1);
-        bool on_screen = (fx < 0x0100 || fx >= 0xFFF0) && (fyv < 0x00F0 || fyv >= 0xFFF0);
+        bool on_screen = (fx < g_hm_oam_right || fx >= g_hm_oam_left) && (fyv < 0x00F0 || fyv >= 0xFFF0);
         if (on_screen) {
           r->x = at;
           hm_bus_wr8(ram, (OAM_COPY + at) & 0xFFFFFF, (uint8_t)fx);

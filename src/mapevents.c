@@ -1184,7 +1184,7 @@ static bool morning_of(uint8_t *ram, HmRegs *r, uint8_t year, uint8_t season, ui
 
 void hm_MapEvent_DED3(uint8_t *ram, HmRegs *r)
 {
-  if (byte_is(ram, r, YEAR, 2) && byte_is(ram, r, SEASON, 1) && byte_is(ram, r, DAY, 0x1E)) {
+  if (byte_is(ram, r, YEAR, 2) && byte_is(ram, r, SEASON, 1) && byte_is(ram, r, DAY, 0x1E) && !g_hm_no_ending) {
     hm_CODE_83F4D8(ram, r);                                  /* JMP */
     return;
   }
