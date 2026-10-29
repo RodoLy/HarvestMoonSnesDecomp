@@ -3,9 +3,9 @@
 [English](README.md) · **Español**
 
 <!-- progress -->
-![Descompilado: 90.73%](https://img.shields.io/badge/descompilado-90.73%25-2f855a)
+![Descompilado: 100.00%](https://img.shields.io/badge/descompilado-100.00%25-2f855a)
 
-**90.73%** del código del juego descompilado y verificado: 40990 de 45176 instrucciones, 751 de 780 rutinas (96.3%).
+**100.00%** del código del juego descompilado y verificado: 45176 de 45176 instrucciones, 778 de 778 rutinas (100.0%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 
@@ -23,7 +23,7 @@ de donde vienen los nombres de las rutinas y el mapa de memoria.
 | | HarvestMoonSNESRecomp | HarvestMoonSnesDecomp (este) |
 |---|---|---|
 | Para qué | Jugar: el port de PC con sus mejoras | Entender el juego: código legible |
-| Resultado | El juego (`.exe`) | Rutinas en `src/` + un ejecutable de prueba |
+| Resultado | El juego (`.exe`) | Rutinas en `src/`, un ejecutable de prueba y el juego compilado nativo a partir de ellas |
 | Depende de | Tu ROM | Tu ROM y el proyecto de recompilación |
 
 ## Aviso legal
@@ -125,6 +125,9 @@ comentarios de cada archivo):
 ## Carpetas
 
 - `src/` — las rutinas reescritas y el comprobador (`hm_decomp.c/.h`).
+- `native/` — la versión nativa: el juego corriendo solo sobre las rutinas
+  reescritas (`main.c`: la ventana, los controles, el sonido; `hw.c`: los
+  chips de la consola alrededor del C).
 - `data/decomp_names.tsv` — nombres de 499 rutinas (de HM-Decomp).
 - `tools/build.sh` — genera, renombra y compila el ejecutable de prueba.
 - `tools/check.sh` — corre las pruebas (al azar, partida nueva y noches).
@@ -158,6 +161,30 @@ propia copia del código a partir de tu ROM, le pone los nombres y los
 comprobadores, y compila un ejecutable de prueba en `build/`. Sin
 `HM_DECOMP_CHECK` / `HM_DECOMP_FUZZ`, ese ejecutable juega exactamente igual
 que el juego normal.
+
+## Jugarlo nativo
+
+Con todas las rutinas reescritas, el juego también corre solo con el C: sin
+código recompilado y sin emular la CPU. `native/` lo compila. Lo que sigue
+reproducido en software son el chip de imagen y el de sonido de la consola
+(los dibujos y la música del cartucho están en sus formatos; la música es
+un programa para el procesador propio del chip de sonido), tomados sin
+modificar del runner del proyecto de recompilación, como hacen los ports
+nativos de otros juegos de SNES.
+
+```
+cmake -S native -B build/native -DHM_RECOMP=../HarvestMoonSNESRecomp
+cmake --build build/native
+build/native/HarvestMoonNative /ruta/a/tu/rom.sfc
+```
+
+Para Windows desde Linux: añadir `-DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake`
+(MinGW-w64). SDL3 se compila desde el código si no hay uno instalado.
+Teclas: flechas, X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start,
+Shift derecho = Select, F11 pantalla completa, Tab rápido; un control
+también funciona. `--headless --script archivo --dump-dir carpeta` juega un
+guion (los mismos comandos que el `--script` de la recompilación) sin
+ventana y guarda la imagen y la WRAM.
 
 ## Licencia
 

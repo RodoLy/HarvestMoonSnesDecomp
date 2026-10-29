@@ -3,9 +3,9 @@
 **English** · [Español](README.es.md)
 
 <!-- progress -->
-![Decompiled: 90.73%](https://img.shields.io/badge/decompiled-90.73%25-2f855a)
+![Decompiled: 100.00%](https://img.shields.io/badge/decompiled-100.00%25-2f855a)
 
-**90.73%** of the game's code decompiled and verified: 40990 of 45176 instructions, 751 of 780 routines (96.3%).
+**100.00%** of the game's code decompiled and verified: 45176 of 45176 instructions, 778 of 778 routines (100.0%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 
@@ -23,7 +23,7 @@ DasK), where the routine names and the memory map come from.
 | | HarvestMoonSNESRecomp | HarvestMoonSnesDecomp (this one) |
 |---|---|---|
 | Purpose | Play: the PC port and its improvements | Understand the game: readable code |
-| Output | The game (`.exe`) | Routines in `src/` + a test executable |
+| Output | The game (`.exe`) | Routines in `src/`, a test executable, and the game built natively from them |
 | Needs | Your ROM | Your ROM and the recompilation project |
 
 ## Legal notice
@@ -118,6 +118,9 @@ A few things found along the way (details in each file's comments):
 ## Layout
 
 - `src/` — the rewritten routines and the checker (`hm_decomp.c/.h`).
+- `native/` — the native build: the game run on the rewritten routines
+  alone (`main.c`: the window, the pads, the sound; `hw.c`: the console's
+  chips around the C).
 - `data/decomp_names.tsv` — names of 499 routines (from HM-Decomp).
 - `tools/build.sh` — generates, renames and builds the test executable.
 - `tools/check.sh` — runs the checks (random inputs, a new game, nights).
@@ -151,6 +154,30 @@ generates its own copy of the code from your ROM, applies the names and the
 checkers, and builds a test executable in `build/`. Without
 `HM_DECOMP_CHECK` / `HM_DECOMP_FUZZ` that executable plays exactly like the
 normal game.
+
+## Playing it natively
+
+With every routine rewritten, the game also runs on the C alone: no
+recompiled code, no CPU emulation. `native/` builds it. What is still
+reproduced in software is the console's picture chip and sound chip (the
+pictures and the music in the cartridge are in their formats; the
+music is a program for the sound chip's own processor), taken unmodified
+from the recompilation project's runner, as the native ports of other
+SNES games do.
+
+```
+cmake -S native -B build/native -DHM_RECOMP=../HarvestMoonSNESRecomp
+cmake --build build/native
+build/native/HarvestMoonNative /path/to/your/rom.sfc
+```
+
+For Windows from Linux: add `-DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake`
+(MinGW-w64). SDL3 is built from source when no installed one is found.
+Keys: arrows, X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start,
+Right Shift = Select, F11 full screen, Tab fast; a gamepad works too.
+`--headless --script file --dump-dir dir` plays a script (the same commands
+as the recompilation's `--script`) without a window and dumps the picture
+and the WRAM.
 
 ## License
 
