@@ -1,22 +1,28 @@
 # The native build: the game on the decompiled C alone.
 #
-#   cmake -S native -B build/native -DHM_RECOMP=../HarvestMoonSNESRecomp
+#   cmake -S native -B build/native
 #   cmake --build build/native
 #
-# It needs the recompilation project next to this one for two things it
-# does not copy: hm_ram.h (the WRAM names) and the console's picture and
-# sound chips (snesrecomp/runner/src/snes: PPU, DMA, APU with its SPC700
-# and DSP), compiled as they are. No generated code and no CPU emulator
-# are used. SDL3 is built from source if no installed one is found.
+# The console's picture and sound chips (snesrecomp's runner: PPU, DMA,
+# APU with its SPC700 and DSP) are in native/chips, unmodified, with their
+# licenses; HM_RECOMP (the recompilation project) can be given instead. No
+# generated code and no CPU emulator are used. SDL3 is built from source if
+# no installed one is found.
 cmake_minimum_required(VERSION 3.20)
 project(HarvestMoonNative C)
 
-set(HM_RECOMP "${CMAKE_CURRENT_SOURCE_DIR}/../../HarvestMoonSNESRecomp" CACHE PATH
-    "the recompilation project (for hm_ram.h and the chips)")
-get_filename_component(HM_RECOMP "${HM_RECOMP}" ABSOLUTE)
-set(RUNNER "${HM_RECOMP}/snesrecomp/runner/src")
-if(NOT EXISTS "${RUNNER}/snes/ppu.c")
-  message(FATAL_ERROR "HM_RECOMP=${HM_RECOMP} does not look like the recompilation project")
+set(HM_RECOMP "" CACHE PATH "the recompilation project (only if native/chips is missing)")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/chips/snes/ppu.c")
+  set(RUNNER "${CMAKE_CURRENT_SOURCE_DIR}/chips")
+else()
+  if(NOT HM_RECOMP)
+    set(HM_RECOMP "${CMAKE_CURRENT_SOURCE_DIR}/../../HarvestMoonSNESRecomp")
+  endif()
+  get_filename_component(HM_RECOMP "${HM_RECOMP}" ABSOLUTE)
+  set(RUNNER "${HM_RECOMP}/snesrecomp/runner/src")
+  if(NOT EXISTS "${RUNNER}/snes/ppu.c")
+    message(FATAL_ERROR "no native/chips and HM_RECOMP=${HM_RECOMP} does not look like the recompilation project")
+  endif()
 endif()
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -65,7 +71,7 @@ endif()
 file(GLOB HOST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
 add_executable(HarvestMoonNative ${HOST_SOURCES} ${GAME_SOURCES})
 target_include_directories(HarvestMoonNative PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../src ${HM_RECOMP}/src
+  ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../src
   ${RUNNER} ${RUNNER}/snes)
 target_link_libraries(HarvestMoonNative PRIVATE hm_chips SDL3::SDL3)
 if(NOT MSVC)
