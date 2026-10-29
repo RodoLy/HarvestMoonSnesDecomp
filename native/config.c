@@ -49,8 +49,10 @@ void config_defaults(Config *c)
 {
   memset(c, 0, sizeof *c);
   c->vsync = true; c->scale = 3; c->volume = 100; c->ff_speed = 3; c->show_launcher = true;
-  c->widescreen = true;
-  c->pause_menu = true; c->title_options = true; c->endless = true;
+  /* every improvement starts off: the game as the console runs it, and the
+   * player turns on what they like (Improvements, Options) */
+  c->widescreen = false;
+  c->pause_menu = false; c->title_options = false; c->endless = false;
   c->day_length = 0;
   config_default_keys(c);
   config_default_pad(c);

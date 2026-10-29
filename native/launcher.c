@@ -30,6 +30,7 @@
 #include "config.h"
 #include "i18n.h"
 #include "launcher.h"
+#include "native.h"
 #include "ui.h"
 
 enum { P_MAIN, P_GAMES, P_OPTIONS, P_CONTROLS, P_MODS, P_STATES, NPAGES };
@@ -632,6 +633,7 @@ static void draw_main(void)
   int cx = s_ox + 128;
   const char *title = "Harvest Moon";
   ui_text_big(cx - ui_text_big_w(title) / 2, 34, title, C_CREAM, C_WOOD_EDGE);
+  ui_text_sh(UI_SMALL, 3, 9, "v" HM_NATIVE_VERSION, C_CREAM);
   const char *sub = T("NATIVE EDITION · DECOMPILED C");
   ui_text_sh(UI_SMALL, cx - ui_text_w(UI_SMALL, sub) / 2, 47, sub, C_AMBER);
   int bw = 0;

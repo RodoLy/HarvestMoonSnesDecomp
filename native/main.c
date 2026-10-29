@@ -1141,7 +1141,7 @@ int main(int argc, char **argv)
     host_apply_sound();
     FILE *lg = fopen(s_log_path, "w");
     if (lg) {
-      fprintf(lg, "renderer %s, screen %.2f Hz, vsync %s\n", rname ? rname : "?", hz, s_vsync ? "on" : "off");
+      fprintf(lg, "HarvestMoonNative " HM_NATIVE_VERSION "\nrenderer %s, screen %.2f Hz, vsync %s\n", rname ? rname : "?", hz, s_vsync ? "on" : "off");
       fclose(lg);
     }
     int n = 0;
