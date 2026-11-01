@@ -1,4 +1,4 @@
-**The first playable beta of Harvest Moon (SNES) running on its decompiled C** — no CPU emulation, no recompiled code. / **La primera beta jugable de Harvest Moon (SNES) corriendo sobre su C descompilado** — sin emular la CPU ni código recompilado.
+**The first playable beta of Harvest Moon (SNES) running on its code rewritten in C** — no CPU emulation, no recompiled code. / **La primera beta jugable de Harvest Moon (SNES) corriendo sobre su código reescrito en C** — sin emular la CPU ni código recompilado.
 
 > [!IMPORTANT]
 > **You need your own legal copy of Harvest Moon (USA).** This download has no ROM, no code generated from it and no ready-made program: it is the source code plus a build script, and the game is built on your computer. / **Necesitas tu propia copia legal de Harvest Moon (USA).** La descarga no trae la ROM ni un programa ya hecho: es el código y un script que lo compila en tu computadora.

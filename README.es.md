@@ -2,10 +2,18 @@
 
 [English](README.md) · **Español**
 
-<!-- progress -->
-![Descompilado: 100.00%](https://img.shields.io/badge/descompilado-100.00%25-2f855a)
+> [!NOTE]
+> **Sobre el nombre.** El título dice descompilación, pero en sentido
+> estricto esto es una **reimplementación en C**, no una descompilación como tal:
+> Harvest Moon se escribió en ensamblador del 65816, así que nunca hubo un
+> código C original que recuperar. El juego se reescribió en C rutina por
+> rutina a partir del desensamblado de HM-Decomp, y cada rutina se
+> comprueba contra la original.
 
-**100.00%** del código del juego descompilado y verificado: 45176 de 45176 instrucciones, 778 de 778 rutinas (100.0%).
+<!-- progress -->
+![Reescrito en C: 100.00%](https://img.shields.io/badge/reescrito%20en%20C-100.00%25-2f855a)
+
+**100.00%** del código del juego reescrito en C y verificado: 45176 de 45176 instrucciones, 778 de 778 rutinas (100.0%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
 ![plataforma: Windows / Linux](https://img.shields.io/badge/plataforma-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20Linux-blue)
@@ -30,7 +38,7 @@ de donde vienen los nombres de las rutinas y el mapa de memoria.
 
 ## Jugarlo: la versión nativa
 
-Con el 100 % reescrito, el juego **se juega solo con el C descompilado**:
+Con el 100 % reescrito, el juego **se juega solo con este C**:
 sin código recompilado y sin emular la CPU. Cada rutina del juego es una
 función de C de `src/`, llamada directamente. Lo único que sigue en
 software son el chip de imagen y el de sonido de la consola (los gráficos y
@@ -176,7 +184,7 @@ Este repositorio **no contiene la ROM ni nada generado a partir de ella**
 copia legal de *Harvest Moon (USA)*:
 SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 
-## Qué está descompilado
+## Qué está reescrito
 
 | Sistema | Rutinas | Archivo |
 |---|---|---|
@@ -299,7 +307,7 @@ HM_ROM=/ruta/a/tu/rom.sfc tools/check.sh 2000 10   # 10 semillas x 2000 llamadas
 python3 tools/progress.py --decomp ../HM-Decomp --update-readme
 ```
 
-La descompilación **no modifica** el proyecto de recompilación: genera su
+Este proyecto **no modifica** el proyecto de recompilación: genera su
 propia copia del código a partir de tu ROM, le pone los nombres y los
 comprobadores, y compila un ejecutable de prueba en `build/`. Sin
 `HM_DECOMP_CHECK` / `HM_DECOMP_FUZZ`, ese ejecutable juega exactamente igual
@@ -336,7 +344,7 @@ imagen y la WRAM; ahí las mejoras están apagadas salvo con `--mods`.
 | `native/mods.c`, `native/pause.c` | las mejoras de la recompilación y el menú de pausa |
 | `native/config.c`, `native/i18n.c` | `config.ini` / `keybinds.ini` y los textos en tres idiomas |
 
-El C descompilado solo tiene tres ganchos para las mejoras, con los valores
+El C solo tiene tres ganchos para las mejoras, con los valores
 de la ROM por defecto, así que el comprobador no ve diferencia:
 `g_hm_oam_right/left` (pantalla ancha), `g_hm_no_ending` (juego sin fin) y
 `g_hm_year_suffix` ("4th", "5th"…).

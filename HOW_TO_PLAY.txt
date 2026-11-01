@@ -1,7 +1,7 @@
 Harvest Moon (SNES) - native build, v0.1.0 beta
 ================================================
 
-The game runs on its decompiled C code, built on your own computer.
+The game runs on its code rewritten in C, built on your own computer.
 No ROM, no generated code and no ready-made program are included:
 you need your own legal copy of Harvest Moon (USA).
 
@@ -34,7 +34,7 @@ https://github.com/RodriLoy/HarvestMoonSnesDecomp
 
 Harvest Moon (SNES) - version nativa, v0.1.0 beta
 
-El juego corre sobre su codigo C descompilado, compilado en tu propia
+El juego corre sobre su codigo reescrito en C, compilado en tu propia
 computadora. No incluye la ROM, ni codigo generado, ni un programa ya
 hecho: necesitas tu propia copia legal de Harvest Moon (USA).
 

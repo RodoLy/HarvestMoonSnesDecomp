@@ -636,15 +636,15 @@ def main():
     if a.update_readme:
         blocks = {
             "README.md": (
-                f"![Decompiled: {pct:.2f}%](https://img.shields.io/badge/decompiled-{pct:.2f}%25-2f855a)\n\n"
-                f"**{pct:.2f}%** of the game's code decompiled and verified: "
+                f"![Rewritten in C: {pct:.2f}%](https://img.shields.io/badge/rewritten%20in%20C-{pct:.2f}%25-2f855a)\n\n"
+                f"**{pct:.2f}%** of the game's code rewritten in C and verified: "
                 f"{done_insn} of {total_insn} instructions, "
                 f"{len(done)} of {len(all_r)} routines ({pct_r:.1f}%).\n"
                 f"Computed with `python3 tools/progress.py --decomp ../HM-Decomp` "
                 f"over the HM-Decomp disassembly."),
             "README.es.md": (
-                f"![Descompilado: {pct:.2f}%](https://img.shields.io/badge/descompilado-{pct:.2f}%25-2f855a)\n\n"
-                f"**{pct:.2f}%** del código del juego descompilado y verificado: "
+                f"![Reescrito en C: {pct:.2f}%](https://img.shields.io/badge/reescrito%20en%20C-{pct:.2f}%25-2f855a)\n\n"
+                f"**{pct:.2f}%** del código del juego reescrito en C y verificado: "
                 f"{done_insn} de {total_insn} instrucciones, "
                 f"{len(done)} de {len(all_r)} rutinas ({pct_r:.1f}%).\n"
                 f"Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` "

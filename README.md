@@ -2,10 +2,17 @@
 
 **English** · [Español](README.es.md)
 
-<!-- progress -->
-![Decompiled: 100.00%](https://img.shields.io/badge/decompiled-100.00%25-2f855a)
+> [!NOTE]
+> **About the name.** The title says decompilation, but strictly speaking
+> this is a **C reimplementation**, not a decompilation as such: Harvest
+> Moon was written in 65816 assembly, so there was never any original C
+> to recover. The game was rewritten in C routine by routine from the
+> HM-Decomp disassembly, and every routine is checked against the original.
 
-**100.00%** of the game's code decompiled and verified: 45176 of 45176 instructions, 778 of 778 routines (100.0%).
+<!-- progress -->
+![Rewritten in C: 100.00%](https://img.shields.io/badge/rewritten%20in%20C-100.00%25-2f855a)
+
+**100.00%** of the game's code rewritten in C and verified: 45176 of 45176 instructions, 778 of 778 routines (100.0%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
 ![platform: Windows / Linux](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20Linux-blue)
@@ -30,7 +37,7 @@ DasK), where the routine names and the memory map come from.
 
 ## Playing it: the native build
 
-With 100 % rewritten, the game **plays on the decompiled C alone**: no
+With 100 % rewritten, the game **plays on this C alone**: no
 recompiled code and no CPU emulation. Every routine of the game is a C
 function in `src/`, called directly. All that is still done in software is
 the console's picture and sound chips (the cartridge's graphics and music
@@ -177,7 +184,7 @@ generated code, no executables). To build it you need your own legal copy
 of *Harvest Moon (USA)*:
 SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 
-## What is decompiled
+## What is rewritten
 
 | System | Routines | File |
 |---|---|---|
@@ -293,7 +300,7 @@ HM_ROM=/path/to/your/rom.sfc tools/check.sh 2000 10   # 10 seeds x 2000 random c
 python3 tools/progress.py --decomp ../HM-Decomp --update-readme
 ```
 
-The decompilation **does not modify** the recompilation project: it
+This project **does not modify** the recompilation project: it
 generates its own copy of the code from your ROM, applies the names and the
 checkers, and builds a test executable in `build/`. Without
 `HM_DECOMP_CHECK` / `HM_DECOMP_FUZZ` that executable plays exactly like the
@@ -330,7 +337,7 @@ and the WRAM; there the improvements are off unless `--mods`.
 | `native/mods.c`, `native/pause.c` | the recompilation's improvements and the pause menu |
 | `native/config.c`, `native/i18n.c` | `config.ini` / `keybinds.ini` and the text in three languages |
 
-The decompiled C has only three hooks for the improvements, with the
+The C has only three hooks for the improvements, with the
 ROM's values by default, so the checker sees no difference:
 `g_hm_oam_right/left` (widescreen), `g_hm_no_ending` (endless game) and
 `g_hm_year_suffix` ("4th", "5th"…).
