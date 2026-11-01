@@ -15,6 +15,13 @@ uint16_t mods_pad(uint16_t pad, bool *open_launcher);
 /* Widescreen: the width of the picture (256, or 342 while it is on) and the
  * margins to draw this frame (0 on screens that are not a map). */
 int mods_field_width(void);
+/* the improvements' own marks over the picture (the seeds left; px NULL:
+ * only whether there are any); false: none */
+bool mods_hud(uint32_t *px, int w);
+/* mouse controls: the pointer on the field (-1: outside), a button (0 none,
+ * 1 left, 2 right) going down or up; the buttons it presses this frame */
+void mods_mouse(int fx, int fy, int button, bool down);
+uint16_t mods_mouse_pad(uint16_t pad);
 void mods_ws_margins(int *left, int *right);
 enum { WS_BUDGET = 43 };
 

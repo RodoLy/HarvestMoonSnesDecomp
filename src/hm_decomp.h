@@ -275,10 +275,16 @@ extern void (*g_hm_frame_hook)(uint8_t *ram);
  *   g_hm_year_suffix: the diary's year ordinal past the game's three
  *     ("4th", "5th"... $82:F298);
  *   g_hm_crops_passable: the player walks through the crops of the farm
- *     (CFFFF, the map's collision: a crop tile no longer blocks). */
+ *     (CFFFF, the map's collision: a crop tile no longer blocks);
+ *   g_hm_single_seed: a seed bag sows one tile at a time, 9 per bag
+ *     (the seeds' ToolUsed; g_hm_seeds_used, grass, corn, tomato, potato,
+ *     turnip: the seeds gone from each open bag, kept in the saved game's
+ *     unused bytes +20 to +25 by SaveGameSlot / LoadGameSlot). */
 extern uint16_t g_hm_oam_right, g_hm_oam_left;
 extern int g_hm_no_ending;
 extern int g_hm_crops_passable;
+extern int g_hm_single_seed;
+extern uint8_t g_hm_seeds_used[5];
 extern uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 /* the loops' own entries the host needs (not checked on their own) */
 void hm_IntroScreen_D871(uint8_t *ram, HmRegs *r);    /* intro.c: the demo check */

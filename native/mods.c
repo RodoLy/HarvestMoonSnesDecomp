@@ -17,6 +17,7 @@
 #include "native.h"
 #include "config.h"
 #include "mods.h"
+#include "ui.h"
 
 extern Ppu *g_ppu;
 
@@ -468,6 +469,7 @@ found:
 static void crops_frame(void)
 {
   g_hm_crops_passable = g_cfg.walk_crops;
+  g_hm_single_seed = g_cfg.single_seed;
   if (!g_cfg.walk_crops || g_ram[HM_MAP_ID] > 3) {
     memset(s_sway, 0, sizeof s_sway);
     s_crops.last_tx = s_crops.last_ty = -1;
@@ -497,6 +499,190 @@ static void crops_frame(void)
   }
   if (n) { PpuSetExtraObjects(g_ppu, s_crops.obj, (size_t)n); s_crops.shown = true; }
   else crops_hide();
+}
+
+/* ── Mouse controls (Stardew Valley style) ──────────────────────────────
+ * Only the buttons the game already has are pressed, as a player would:
+ *   - left click on the tile next to the player (up, down, left, right):
+ *     the player turns to it and uses the tool in hand (Y); on the
+ *     player's own tile: the tool, the way the player faces;
+ *   - left click farther away: the player walks there (holding the
+ *     button, the player follows the pointer);
+ *   - right click: the player walks next to that tile, turns to it and
+ *     presses A (talk, pick up, open, put in the shipping box...);
+ *   - with no control of the player (text, menus, the title): left click
+ *     is A and right click is B.
+ * The arrows or the pad take over at once. A square shows the tile under
+ * the pointer: solid within reach of the tool, faint farther away. */
+enum { MT_NONE, MT_WALK, MT_TOOL, MT_ACT };
+static struct {
+  int fx, fy;                 /* the pointer on the field, -1: outside */
+  bool left_held, follow;
+  int click;                  /* 1 left, 2 right: waiting for the next frame */
+  int task, tx, ty, stage, frames, still, lastx, lasty, axis_only, press_left;
+  uint16_t press;
+} s_mouse = { -1, -1 };
+
+void mods_mouse(int fx, int fy, int button, bool down)
+{
+  s_mouse.fx = fx; s_mouse.fy = fy;
+  if (button == 1) { s_mouse.left_held = down; if (down) s_mouse.click = 1; else s_mouse.follow = false; }
+  else if (button == 2 && down) s_mouse.click = 2;
+}
+static bool mouse_controls_player(void)
+{
+  return g_ram[HM_MAP_ID] < HM_MAP_FIRST_PICTURE && g_ram[HM_INPUT_STATE] == 1 && hm_diary_loaded(g_ram);
+}
+/* the world tile under the pointer */
+static bool mouse_tile(int *tx, int *ty)
+{
+  if (s_mouse.fx < 0) return false;
+  int gx = s_mouse.fx - (mods_field_width() - 256) / 2, gy = s_mouse.fy;
+  int wx = hm_rd16(g_ram, HM_CAM_X) + gx, wy = hm_rd16(g_ram, HM_CAM_Y) + gy;
+  if (wx < 0 || wy < 0) return false;
+  *tx = wx >> 4; *ty = wy >> 4;
+  return true;
+}
+static void player_tile(int *x, int *y) { *x = hm_rd16(g_ram, 0xD6) >> 4; *y = hm_rd16(g_ram, 0xD8) >> 4; }
+static int iabs(int v) { return v < 0 ? -v : v; }
+static bool next_to(int ax, int ay, int bx, int by) { return iabs(ax - bx) + iabs(ay - by) == 1; }
+/* toward the middle of tile (tx, ty): the arrows to hold, 0 there */
+static uint16_t steer(int tx, int ty)
+{
+  int px = hm_rd16(g_ram, 0xD6), py = hm_rd16(g_ram, 0xD8);
+  int dx = tx * 16 + 8 - px, dy = ty * 16 + 8 - py;
+  uint16_t m = 0;
+  if (dx > 2) m |= B_RIGHT; else if (dx < -2) m |= B_LEFT;
+  if (dy > 2) m |= B_DOWN; else if (dy < -2) m |= B_UP;
+  /* stuck on something: one axis at a time, the other first */
+  if (s_mouse.axis_only == 1 && (m & (B_UP | B_DOWN))) m &= (uint16_t)(B_UP | B_DOWN);
+  else if (s_mouse.axis_only == 2 && (m & (B_LEFT | B_RIGHT))) m &= (uint16_t)(B_LEFT | B_RIGHT);
+  return m;
+}
+static void mouse_task(int task, int tx, int ty)
+{
+  s_mouse.task = task; s_mouse.tx = tx; s_mouse.ty = ty;
+  s_mouse.stage = 0; s_mouse.frames = 0; s_mouse.still = 0; s_mouse.axis_only = 0;
+  s_mouse.lastx = s_mouse.lasty = -1;
+}
+/* the tile next to (tx, ty) closest to the player */
+static void beside(int tx, int ty, int *bx, int *by)
+{
+  static const int d[4][2] = { { 0, 1 }, { 0, -1 }, { 1, 0 }, { -1, 0 } };
+  int px = hm_rd16(g_ram, 0xD6), py = hm_rd16(g_ram, 0xD8), best = 1 << 30;
+  for (int i = 0; i < 4; i++) {
+    int x = tx + d[i][0], y = ty + d[i][1];
+    int e = iabs(x * 16 + 8 - px) + iabs(y * 16 + 8 - py);
+    if (e < best) { best = e; *bx = x; *by = y; }
+  }
+}
+uint16_t mods_mouse_pad(uint16_t pad)
+{
+  if (!g_cfg.mouse) { s_mouse.task = MT_NONE; s_mouse.click = 0; return pad; }
+  int click = s_mouse.click; s_mouse.click = 0;
+  if (s_mouse.press_left > 0) {                  /* a button being pressed */
+    s_mouse.press_left--;
+    return pad | s_mouse.press;
+  }
+  if (pad & (B_UP | B_DOWN | B_LEFT | B_RIGHT)) { s_mouse.task = MT_NONE; s_mouse.follow = false; return pad; }
+  if (!mouse_controls_player()) {
+    s_mouse.task = MT_NONE; s_mouse.follow = false;
+    if (click) { s_mouse.press = click == 1 ? B_A : B_B; s_mouse.press_left = 3; return pad | s_mouse.press; }
+    return pad;
+  }
+  int ptx, pty, tx, ty;
+  player_tile(&ptx, &pty);
+  if (click && mouse_tile(&tx, &ty)) {
+    if (click == 2) mouse_task(MT_ACT, tx, ty);
+    else if ((tx == ptx && ty == pty) || next_to(tx, ty, ptx, pty)) mouse_task(MT_TOOL, tx, ty);
+    else { mouse_task(MT_WALK, tx, ty); s_mouse.follow = true; }
+  }
+  if (s_mouse.task == MT_WALK && s_mouse.follow && s_mouse.left_held && mouse_tile(&tx, &ty) &&
+      (tx != s_mouse.tx || ty != s_mouse.ty)) { s_mouse.tx = tx; s_mouse.ty = ty; s_mouse.still = 0; s_mouse.axis_only = 0; }
+  if (s_mouse.task == MT_NONE) return pad;
+
+  uint16_t action = g_ram[HM_PLAYER_ACTION];
+  if (++s_mouse.frames > 60 * 8) { s_mouse.task = MT_NONE; return pad; }   /* never forever */
+  /* where to stand */
+  int gx = s_mouse.tx, gy = s_mouse.ty;
+  bool there;
+  if (s_mouse.task == MT_WALK) there = false;
+  else if ((ptx == gx && pty == gy) || next_to(ptx, pty, gx, gy)) there = true;
+  else { beside(gx, gy, &gx, &gy); there = false; }
+  if (!there) {
+    uint16_t m = steer(gx, gy);
+    if (!m) {                                   /* arrived */
+      if (s_mouse.task == MT_WALK) { if (!s_mouse.left_held) s_mouse.task = MT_NONE; return pad; }
+      return pad;                               /* next frame: turn and act */
+    }
+    int px = hm_rd16(g_ram, 0xD6), py = hm_rd16(g_ram, 0xD8);
+    if (px == s_mouse.lastx && py == s_mouse.lasty && action != 0x0A) {
+      if (++s_mouse.still == 10) s_mouse.axis_only = s_mouse.axis_only == 1 ? 2 : 1;
+      if (s_mouse.still >= 40) { s_mouse.task = MT_NONE; return pad; }   /* blocked: give up */
+    } else { s_mouse.still = 0; }
+    s_mouse.lastx = px; s_mouse.lasty = py;
+    return pad | m;
+  }
+  /* next to the tile (or on it): turn to it, then the button */
+  if (action != 0 && action != 1 && action != 2) return pad;     /* busy: wait */
+  int dx = s_mouse.tx - ptx, dy = s_mouse.ty - pty;
+  if (dx || dy) {
+    int want = dy > 0 ? 0 : dy < 0 ? 1 : dx > 0 ? 2 : 3;          /* $DA: down, up, right, left */
+    if (hm_rd16(g_ram, 0xDA) != want) {
+      static const uint16_t arrow[4] = { B_DOWN, B_UP, B_RIGHT, B_LEFT };
+      if (++s_mouse.stage > 6) { s_mouse.task = MT_NONE; return pad; }
+      return pad | arrow[want];
+    }
+  }
+  s_mouse.press = s_mouse.task == MT_ACT ? B_A : B_Y;
+  s_mouse.press_left = 3;
+  s_mouse.task = MT_NONE;
+  return pad | s_mouse.press;
+}
+
+/* ── One seed at a time (src/toolused.c, g_hm_single_seed) ──────────────
+ * The sowing itself is the game's (one tile per use, 9 per bag, the bag's
+ * seeds kept in the saved game). Here: while a seed bag is in hand on a
+ * map, a small box in the top-left corner says how many seeds are left. */
+static bool seeds_hud(uint32_t *px, int w)
+{
+  if (!g_cfg.single_seed || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE) return false;
+  uint8_t item = g_ram[HM_TOOL_SELECTED];
+  int k = item >= 5 && item <= 8 ? item - 4 : item == 12 ? 0 : -1;   /* grass, corn .. turnip */
+  if (k < 0) return false;
+  int bags = g_ram[HM_SEEDS_GRASS_N + k];
+  if (!bags) return false;
+  int left = bags * 9 - g_hm_seeds_used[k];
+  if (!px) return true;                                /* only asked */
+  char t[16]; snprintf(t, sizeof t, "x%d", left);
+  ui_target(px, w, 224);
+  int x = (w - 256) / 2 + 6, y = 6, bw = 16 + 6 + ui_text_w(UI_SMALL, t) + 8;
+  ui_frame(x, y, bw, 24, C_PAPER);
+  ui_icon(x + 4, y + 4, item);
+  ui_text(UI_SMALL, x + 4 + 16 + 3, y + 15, t, C_INK);
+  return true;
+}
+
+/* the square on the tile under the pointer */
+static bool mouse_hud(uint32_t *px, int w)
+{
+  int tx, ty, ptx, pty;
+  if (!g_cfg.mouse || !mouse_controls_player() || !mouse_tile(&tx, &ty)) return false;
+  if (!px) return true;
+  player_tile(&ptx, &pty);
+  bool reach = (tx == ptx && ty == pty) || next_to(tx, ty, ptx, pty);
+  int x = tx * 16 - hm_rd16(g_ram, HM_CAM_X) + (w - 256) / 2, y = ty * 16 - hm_rd16(g_ram, HM_CAM_Y);
+  ui_target(px, w, 224);
+  uint32_t c = reach ? C_CREAM : UI_RGB(0x8A6236);
+  ui_hline(x, y, 16, c); ui_hline(x, y + 15, 16, c);
+  ui_vline(x, y, 16, c); ui_vline(x + 15, y, 16, c);
+  if (reach) { ui_hline(x + 1, y + 1, 14, c); ui_hline(x + 1, y + 14, 14, c); ui_vline(x + 1, y + 1, 14, c); ui_vline(x + 14, y + 1, 14, c); }
+  return true;
+}
+bool mods_hud(uint32_t *px, int w)
+{
+  bool a = mouse_hud(px, w), b = seeds_hud(px, w);
+  return a || b;
 }
 
 /* ── Widescreen (hm_widescreen.c) ───────────────────────────────────────

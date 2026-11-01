@@ -19,6 +19,9 @@
 #define TOOL           0x0921
 #define CAN_WATER      0x0926
 #define FLAGS_5A       0x7F1F5A
+#ifndef SEED_TOSS
+#define SEED_TOSS      0x74
+#endif
 
 static uint32_t db_addr(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static void push16(uint8_t *ram, HmRegs *r, uint16_t v)
@@ -50,10 +53,18 @@ void hm_ToolAnimationSickle(uint8_t *ram, HmRegs *r)        { facing(ram, r, 0x5
 void hm_ToolAnimationHoe(uint8_t *ram, HmRegs *r)           { facing(ram, r, 0x54); }
 void hm_ToolAnimationHammer(uint8_t *ram, HmRegs *r)        { facing(ram, r, 0x58); }
 void hm_ToolAnimationAxe(uint8_t *ram, HmRegs *r)           { facing(ram, r, 0x5C); }
-void hm_ToolAnimationCornSeeds(uint8_t *ram, HmRegs *r)     { animation(ram, r, 0x46); }
-void hm_ToolAnimationTomatoSeeds(uint8_t *ram, HmRegs *r)   { animation(ram, r, 0x46); }
-void hm_ToolAnimationPotatoSeeds(uint8_t *ram, HmRegs *r)   { animation(ram, r, 0x46); }
-void hm_ToolAnimationTurnipSeeds(uint8_t *ram, HmRegs *r)   { animation(ram, r, 0x46); }
+/* the seeds: the spin that sows 9 tiles; with the native build's "one seed
+ * at a time" (g_hm_single_seed), a toss to the front instead (the
+ * animation of the feed, $74 + facing) */
+static void seeds(uint8_t *ram, HmRegs *r)
+{
+  if (g_hm_single_seed) { facing(ram, r, SEED_TOSS); return; }
+  animation(ram, r, 0x46);
+}
+void hm_ToolAnimationCornSeeds(uint8_t *ram, HmRegs *r)     { seeds(ram, r); }
+void hm_ToolAnimationTomatoSeeds(uint8_t *ram, HmRegs *r)   { seeds(ram, r); }
+void hm_ToolAnimationPotatoSeeds(uint8_t *ram, HmRegs *r)   { seeds(ram, r); }
+void hm_ToolAnimationTurnipSeeds(uint8_t *ram, HmRegs *r)   { seeds(ram, r); }
 void hm_ToolAnimationCowMedicine(uint8_t *ram, HmRegs *r)   { facing(ram, r, 0xAC); }
 void hm_ToolAnimationMiraclePotion(uint8_t *ram, HmRegs *r) { facing(ram, r, 0xAC); }
 /* the bell also calls the cows: $7F1F5A bit $10 */
@@ -63,7 +74,7 @@ void hm_ToolAnimationBell(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5A) | 0x0010);
   hm_bus_wr16(ram, FLAGS_5A, r->a);
 }
-void hm_ToolAnimationGrassSeeds(uint8_t *ram, HmRegs *r)    { animation(ram, r, 0x46); }
+void hm_ToolAnimationGrassSeeds(uint8_t *ram, HmRegs *r)    { seeds(ram, r); }
 void hm_ToolAnimationPaint(uint8_t *ram, HmRegs *r)         { animation(ram, r, 0x44); }
 void hm_ToolAnimationMilker(uint8_t *ram, HmRegs *r)        { facing(ram, r, 0x78); }
 void hm_ToolAnimationBrush(uint8_t *ram, HmRegs *r)         { facing(ram, r, 0x64); }

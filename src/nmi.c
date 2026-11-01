@@ -111,6 +111,8 @@ void (*g_hm_frame_hook)(uint8_t *ram);
 uint16_t g_hm_oam_right = 0x0100, g_hm_oam_left = 0xFFF0;
 int g_hm_no_ending;
 int g_hm_crops_passable;
+int g_hm_single_seed;
+uint8_t g_hm_seeds_used[5];
 uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 
 /* The NMI arriving at `pc` with the flags `p` (hm_decomp.h). */

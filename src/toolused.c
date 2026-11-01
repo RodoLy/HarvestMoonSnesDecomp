@@ -617,10 +617,31 @@ static void sow_step_done(uint8_t *ram, HmRegs *r, const Sowing *s)
   if (left == 0) ram[HM_TOOL_SELECTED] = 0;
   tool_finished(ram, r, 0xFF, s->ret_stamina);
 }
+/* The native build's "one seed at a time" (g_hm_single_seed, off in the
+ * checking build): each use sows only the tile in front, and a bag is 9
+ * seeds (g_hm_seeds_used: how many of the open bag are gone, kept in the
+ * saved game by SaveGameSlot). The bag goes, and the stamina is paid, at
+ * the 9th seed, as when the game sows the 9 tiles at once. */
+static bool sow_one_works(uint8_t *ram, HmRegs *r, const Sowing *s)
+{
+  return tool_works(ram, r, s->ret_check, hm_PreCheckToolSuccess);
+}
+static void sow_one_done(uint8_t *ram, HmRegs *r, const Sowing *s, bool sown)
+{
+  ram[HM_SOW_STEP] = 0;
+  uint8_t *used = &g_hm_seeds_used[s->bag - HM_SEEDS_GRASS];
+  if (!sown) { idle(ram, r); return; }               /* nothing sown: no seed spent */
+  if (++*used < 9) { idle(ram, r); return; }
+  *used = 0;
+  if (--ram[s->bag] == 0) ram[HM_TOOL_SELECTED] = 0;
+  tool_finished(ram, r, 0xFF, s->ret_stamina);
+}
 
 static void sow_crop(uint8_t *ram, HmRegs *r, const Sowing *s, uint16_t crop, uint8_t season)
 {
-  if (tool_works_at_step(ram, r, s->ret_check, hm_PreCheckToolSuccessSquare)) {
+  bool one = g_hm_single_seed;
+  bool works = one ? sow_one_works(ram, r, s) : tool_works_at_step(ram, r, s->ret_check, hm_PreCheckToolSuccessSquare);
+  if (works) {
     r->x = crop;
     /* corn / tomato: CMP #1; potato / turnip: just LDA (C unchanged) */
     uint8_t now = load8(r, ram[HM_SEASON]);
@@ -628,7 +649,8 @@ static void sow_crop(uint8_t *ram, HmRegs *r, const Sowing *s, uint16_t crop, ui
     if (!in_season) r->x = 0x00EB;
     change_tile_in_front(ram, r, r->x, s->ret_tile);
   }
-  sow_step_done(ram, r, s);
+  if (one) sow_one_done(ram, r, s, works);
+  else sow_step_done(ram, r, s);
 }
 
 void hm_ToolUsedCornSeeds(uint8_t *ram, HmRegs *r)
@@ -655,7 +677,9 @@ void hm_ToolUsedTurnipSeeds(uint8_t *ram, HmRegs *r)
 void hm_ToolUsedGrassSeeds(uint8_t *ram, HmRegs *r)
 {
   static const Sowing s = { HM_SEEDS_GRASS, 0x9B6D, 0x9B9C, 0x9BC9 };
-  if (tool_works_at_step(ram, r, s.ret_check, hm_PreCheckToolSuccessSquare)) {
+  bool one = g_hm_single_seed;
+  bool works = one ? sow_one_works(ram, r, &s) : tool_works_at_step(ram, r, s.ret_check, hm_PreCheckToolSuccessSquare);
+  if (works) {
     r->x = 0x00ED;
     if (below(r, load8(r, ram[HM_SEASON]), FALL)) {
       hm_wr16(ram, HM_PLANTED_GRASS, r->a = (uint16_t)(hm_rd16(ram, HM_PLANTED_GRASS) + 1));
@@ -663,7 +687,8 @@ void hm_ToolUsedGrassSeeds(uint8_t *ram, HmRegs *r)
     }
     change_tile_in_front(ram, r, r->x, s.ret_tile);
   }
-  sow_step_done(ram, r, &s);
+  if (one) sow_one_done(ram, r, &s, works);
+  else sow_step_done(ram, r, &s);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

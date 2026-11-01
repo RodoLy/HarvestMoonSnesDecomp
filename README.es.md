@@ -145,8 +145,17 @@ el clima de mañana). La música sigue sonando.
   ×6 y la música se acelera con él.
 - **Caminar entre cultivos** *(apagado por defecto)* — los cultivos de la
   granja ya no te bloquean el paso, así que puedes llegar al centro de un
-  cuadro de 3×3 para regarlo. Las plantas se mueven cuando pasas y sus
-  hojas quedan delante de tus piernas mientras estás entre ellas.
+  cuadro de 3×3 para regarlo. Las plantas se mueven cuando pasas.
+- **Semillas de una en una** *(apagado por defecto)* — una bolsa son 9
+  semillas y cada uso siembra solo la casilla de enfrente, así que puedes
+  plantar con la forma que quieras. La bolsa y la energía se gastan con la
+  9.ª semilla, como antes; un recuadro muestra las semillas que quedan y se
+  guardan en tu diario.
+- **Controles con ratón** *(apagado por defecto)* — como en Stardew
+  Valley: clic izquierdo junto a ti usa la herramienta ahí, clic izquierdo
+  más lejos camina hasta ahí (mantenlo para seguir al puntero), clic
+  derecho habla, recoge o abre. Un cuadro marca la casilla bajo el
+  puntero. En textos y menús, clic izquierdo es A y clic derecho es B.
 
 | OPTIONS en el título | Mejoras | Trucos |
 |---|---|---|
@@ -348,11 +357,13 @@ imagen y la WRAM; ahí las mejoras están apagadas salvo con `--mods`.
 | `native/mods.c`, `native/pause.c` | las mejoras de la recompilación y el menú de pausa |
 | `native/config.c`, `native/i18n.c` | `config.ini` / `keybinds.ini` y los textos en tres idiomas |
 
-El C solo tiene cuatro ganchos para las mejoras, con los valores
+El C solo tiene cinco ganchos para las mejoras, con los valores
 de la ROM por defecto, así que el comprobador no ve diferencia:
 `g_hm_oam_right/left` (pantalla ancha), `g_hm_no_ending` (juego sin fin),
-`g_hm_year_suffix` ("4th", "5th"…) y `g_hm_crops_passable` (caminar entre
-cultivos).
+`g_hm_year_suffix` ("4th", "5th"…), `g_hm_crops_passable` (caminar entre
+cultivos) y `g_hm_single_seed` (semillas de una en una; sus semillas van
+en bytes del diario que el juego nunca usa). El ratón solo pulsa los
+botones del propio juego.
 
 Las letras del launcher y del menú de pausa son Pixelify Sans y Tiny5
 (SIL Open Font License, `native/fonts/`); los iconos y la granja de noche

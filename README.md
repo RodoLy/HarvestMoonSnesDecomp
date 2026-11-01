@@ -145,8 +145,16 @@ keeps playing.
   ×6 and the music speeds up with it.
 - **Walk through crops** *(off by default)* — the crops on the farm no
   longer block your way, so you can reach the middle of a 3×3 patch to
-  water it. The plants sway as you pass and their leaves stay in front of
-  your legs while you stand among them.
+  water it. The plants sway as you pass.
+- **One seed at a time** *(off by default)* — a seed bag is 9 seeds and
+  each use sows only the tile in front of you, so you can plant in any
+  shape you like. The bag and the stamina go at the 9th seed, as before;
+  a small box shows the seeds left, and they are kept in your diary.
+- **Mouse controls** *(off by default)* — like Stardew Valley: left click
+  next to you uses the tool there, left click farther away walks there
+  (hold it to follow the pointer), right click talks, picks up or
+  opens. A square marks the tile under the pointer. In text and menus,
+  left click is A and right click is B.
 
 | OPTIONS on the title | Improvements | Cheats |
 |---|---|---|
@@ -341,11 +349,13 @@ and the WRAM; there the improvements are off unless `--mods`.
 | `native/mods.c`, `native/pause.c` | the recompilation's improvements and the pause menu |
 | `native/config.c`, `native/i18n.c` | `config.ini` / `keybinds.ini` and the text in three languages |
 
-The C has only four hooks for the improvements, with the
+The C has only five hooks for the improvements, with the
 ROM's values by default, so the checker sees no difference:
 `g_hm_oam_right/left` (widescreen), `g_hm_no_ending` (endless game),
-`g_hm_year_suffix` ("4th", "5th"…) and `g_hm_crops_passable` (walk
-through crops).
+`g_hm_year_suffix` ("4th", "5th"…), `g_hm_crops_passable` (walk
+through crops) and `g_hm_single_seed` (one seed at a time; its seeds go
+in bytes of the diary the game never uses). The mouse only presses the
+game's own buttons.
 
 The launcher's and the pause menu's type is Pixelify Sans and Tiny5 (SIL
 Open Font License, `native/fonts/`); the icons and the night farm are drawn

@@ -93,9 +93,10 @@ static void sram_save(void)
 
 /* ── Scripted input (the same commands as the recompilation's --script):
  *   wait N, press <button[+button]> N, dump <tag>, poke <addr> <hex>,
- *   until <addr> ==|!= <value> [timeout], turbo on|off, quit ─────────── */
+ *   until <addr> ==|!= <value> [timeout], turbo on|off, quit,
+ *   mouse <x> <y> [left|right|up]: the pointer on the field (mouse controls) ─────────── */
 typedef struct {
-  enum { S_PRESS, S_DUMP, S_POKE, S_UNTIL, S_QUIT, S_NOP } kind;
+  enum { S_PRESS, S_DUMP, S_POKE, S_UNTIL, S_QUIT, S_NOP, S_MOUSE } kind;
   uint16_t mask; int hold, wait;
   uint32_t addr; uint8_t bytes[64]; int nbytes;
   bool ne; uint16_t value; int width, timeout, waited;
@@ -131,6 +132,10 @@ static void script_load(const char *path)
     if (!strcmp(cmd, "press")) { e->kind = S_PRESS; e->mask = button(a1); e->hold = n >= 3 ? atoi(a2) : 1; }
     else if (!strcmp(cmd, "dump")) { e->kind = S_DUMP; snprintf(e->tag, sizeof e->tag, "%s", a1); }
     else if (!strcmp(cmd, "quit")) e->kind = S_QUIT;
+    else if (!strcmp(cmd, "mouse")) {
+      e->kind = S_MOUSE; e->addr = (uint32_t)atoi(a1); e->value = (uint16_t)atoi(a2);
+      e->width = !strcmp(a3, "left") ? 1 : !strcmp(a3, "right") ? 2 : !strcmp(a3, "up") ? -1 : 0;
+    }
     else if (!strcmp(cmd, "turbo")) e->kind = S_NOP;
     else if (!strcmp(cmd, "poke")) {
       e->kind = S_POKE; e->addr = (uint32_t)strtoul(a1, NULL, 16); e->hold = 1;
@@ -174,7 +179,7 @@ static uint16_t script_tick(void)
       if (s_count > 0) { s_count--; return 0; }
       s_phase = 0; s_count = e->hold;
     }
-    if (e->kind == S_DUMP || e->kind == S_QUIT || e->kind == S_UNTIL || e->kind == S_NOP) {
+    if (e->kind == S_DUMP || e->kind == S_QUIT || e->kind == S_UNTIL || e->kind == S_NOP || e->kind == S_MOUSE) {
       if (e->kind == S_UNTIL) {
         uint16_t v = g_ram[e->addr];
         if (e->width == 2) v |= (uint16_t)(g_ram[e->addr + 1] << 8);
@@ -184,6 +189,10 @@ static uint16_t script_tick(void)
         }
       }
       if (e->kind == S_DUMP) dump(e->tag);
+      if (e->kind == S_MOUSE) {
+        if (e->width < 0) mods_mouse((int)e->addr, e->value, 1, false);
+        else mods_mouse((int)e->addr, e->value, e->width, e->width != 0);
+      }
       if (e->kind == S_QUIT) { fprintf(stderr, "script f=%llu quit\n", (unsigned long long)s_frame); s_quit = true; }
       if (++s_step < s_nsteps) { s_phase = 1; s_count = s_steps[s_step].wait; }
       if (s_quit) return 0;
@@ -360,6 +369,16 @@ static void toggle_fullscreen(void)
   config_save();
 }
 
+/* the pointer over the game (mouse controls, mods.c): window -> field */
+static void game_mouse(float mx, float my, int button, bool down)
+{
+  if (!s_mods || !g_cfg.mouse || s_dst.w <= 0) return;
+  float rx = mx, ry = my;
+  SDL_RenderCoordinatesFromWindow(s_renderer, mx, my, &rx, &ry);
+  float cx = (rx - s_dst.x) * s_fw / s_dst.w, cy = (ry - s_dst.y) * H / s_dst.h;
+  bool in = cx >= 0 && cy >= 0 && cx < s_fw && cy < H;
+  mods_mouse(in ? (int)cx : -1, in ? (int)cy : -1, button, down);
+}
 static void poll_events(void)
 {
   SDL_Event ev;
@@ -389,6 +408,13 @@ static void poll_events(void)
       }
       break;
     case SDL_EVENT_GAMEPAD_ADDED: case SDL_EVENT_GAMEPAD_REMOVED: gamepad_event(&ev); break;
+    case SDL_EVENT_MOUSE_MOTION:
+      game_mouse(ev.motion.x, ev.motion.y, 0, false); break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN: case SDL_EVENT_MOUSE_BUTTON_UP:
+      game_mouse(ev.button.x, ev.button.y, ev.button.button == SDL_BUTTON_LEFT ? 1 : ev.button.button == SDL_BUTTON_RIGHT ? 2 : 0,
+                 ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+      break;
+    case SDL_EVENT_WINDOW_MOUSE_LEAVE: if (s_mods) mods_mouse(-1, -1, 0, false); break;
     default: break;
     }
   }
@@ -445,9 +471,15 @@ static void present(const void *pixels, int w)
 }
 static void present_game(void)
 {
-  if (toast_on()) {
+  bool hud = s_mods && mods_hud(NULL, s_fw);
+  if (hud || toast_on()) {
     memcpy(s_ui, s_pixels, (size_t)s_fw * H * 4);
+    if (hud) mods_hud(s_ui, s_fw);
+  }
+  if (toast_on()) {
     draw_toast(s_ui, s_fw);
+    present(s_ui, s_fw);
+  } else if (hud) {
     present(s_ui, s_fw);
   } else {
     present(s_pixels, s_fw);
@@ -816,7 +848,7 @@ static int run_menu(int kind, bool in_game)
     pace(false);
     t++;
   }
-  if (g_cfg.fullscreen) SDL_HideCursor();
+  if (g_cfg.fullscreen && !g_cfg.mouse) SDL_HideCursor();
   s_swallow = read_pad();            /* what closed the menu stays out of the game */
   s_next_tick = 0; s_last_wake = 0; s_check_n = 0;
   return result;
@@ -868,6 +900,7 @@ static void end_of_frame(uint8_t *ram)
     if ((long)s_frame >= d0 && (long)s_frame <= d1) { char t[32]; snprintf(t, sizeof t, "fr%06ld", (long)s_frame); dump(t); } }
   if (s_nsteps) pad |= script_tick();
   if (s_mods) { bool open = false; pad = mods_pad(pad, &open); if (open) s_want_launcher = true; }
+  if (s_mods) pad = mods_mouse_pad(pad);
   native_set_pads(pad, 0);
   if (s_frame % 60 == 0) sram_save();
   if (s_quit) quit_now();
@@ -1170,7 +1203,7 @@ int main(int argc, char **argv)
   }
   if (s_log_path[0]) { FILE *lg = fopen(s_log_path, "a"); if (lg) { fprintf(lg, "rom %s\n", s_rom_path); fclose(lg); } }
   if (!native_hw_init(s_rom, s_rom_size, s_sram, SRAM_SIZE)) { fprintf(stderr, "out of memory\n"); return 1; }
-  if (!s_headless && g_cfg.fullscreen) SDL_HideCursor();
+  if (!s_headless && g_cfg.fullscreen && !g_cfg.mouse) SDL_HideCursor();
 
   g_hm_frame_hook = end_of_frame;
   g_native_lag_frame = lag_frame;

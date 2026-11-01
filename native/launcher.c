@@ -43,7 +43,7 @@ enum {
 enum {
   V_FULLSCREEN = 1, V_SCALE, V_PICTURE, V_VSYNC, V_WIDESCREEN, V_SPRITES, V_VOLUME, V_FF, V_LANG,
   V_SHOWLAUNCHER, V_FASTTEXT, V_DAYLEN, V_PAUSE, V_TITLEOPT, V_ENDLESS, V_MONEY, V_STAMINA,
-  V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL, V_CROPS,
+  V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL, V_CROPS, V_SEEDS, V_MOUSE,
 };
 
 typedef struct {
@@ -197,6 +197,8 @@ static int get_value(int id)
   case V_TITLEOPT: return c->title_options;
   case V_ENDLESS: return c->endless;
   case V_CROPS: return c->walk_crops;
+  case V_SEEDS: return c->single_seed;
+  case V_MOUSE: return c->mouse;
   case V_MONEY: return c->money;
   case V_STAMINA: return c->stamina;
   case V_CLOCK: return c->freeze_clock;
@@ -227,6 +229,8 @@ static void set_value(int id, int v)
   case V_TITLEOPT: c->title_options = v; break;
   case V_ENDLESS: c->endless = v; break;
   case V_CROPS: c->walk_crops = v; break;
+  case V_SEEDS: c->single_seed = v; break;
+  case V_MOUSE: c->mouse = v; break;
   case V_MONEY: c->money = v; break;
   case V_STAMINA: c->stamina = v; break;
   case V_CLOCK: c->freeze_clock = v; break;
@@ -361,6 +365,8 @@ static void build(void)
       toggle(V_TITLEOPT, "OPTIONS on the title screen", "Adds a fourth entry, OPTIONS, below HOW TO PLAY, which opens this options menu.");
       toggle(V_ENDLESS, "Endless game", "The game no longer stops after Year 3: you watch the ending, then wake up on Summer 30 and keep farming through Year 4, 5 and beyond.");
       toggle(V_CROPS, "Walk through crops", "Crops on the farm no longer block your way, so you can reach the middle of a 3x3 patch to water it. They sway as you pass.");
+      toggle(V_SEEDS, "One seed at a time", "A seed bag is 9 seeds: each use sows only the tile in front of you, in any order you like. The bag and the stamina go at the 9th seed.");
+      toggle(V_MOUSE, "Mouse controls", "Like Stardew Valley: left click next to you uses the tool there, left click farther walks there, right click talks or picks up. The keyboard and the pad still work.");
       toggle(V_WIDESCREEN, "Widescreen (16:9)", "Shows more of the map at the sides instead of black bars. At a map's edge, in small rooms and on the title screen it looks like the original (4:3).");
     } else {
       toggle(V_MONEY, "Infinite money", "Keeps your money at the most the game allows: 9,999,990 G.");
