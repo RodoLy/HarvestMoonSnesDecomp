@@ -298,29 +298,27 @@ static void title_frame(void)
  * plants move: when the player steps into a crop's tile, and again when
  * the player steps out of it, the plant sways (its top leans to one side
  * and back, a little less each time; the bottom row stays put). While the
- * player stands in it, the plant is drawn in front of the player's legs,
- * as when walking through a field.
- * How: for a moment the plant is drawn as host objects of the picture chip
- * over its own tile: one behind every sprite, with bare soil where the
- * plant was (the game's own tilled-soil tiles, the tile-change table
- * $81:B363 entries 17 / 18, dry and watered: whichever matches the tile
- * better), and the leaning plant either on it or, in the player's tile,
- * as a second object in front of the sprites, only from the player's
- * knees down. Which pixels are the plant: those that differ from the
- * soil. Nothing of the game's memory is written; when the sway is over the
+ * player stands in it, it stays still, under the player's sprite.
+ * How: for a moment the plant is drawn as a host object of the picture chip
+ * over its own tile: the soil that was under the plant (the tile's nearest
+ * soil pixels, so the texture goes on) and the plant, leaning. The soil
+ * around it is the picture chip's own and never moves. Which pixels are the
+ * plant: the tile's colours that are not brown soil (the game's tilled-soil
+ * tiles, the tile-change table $81:B363 entries 17 / 18, say which browns).
+ * Nothing of the game's memory is written; when the sway is over the
  * objects go and the map is as the game drew it. */
 #define FARM_TILE_TYPES 0x009B6
 #define BG1_WRAM_MAP    0x02000u
 #define TILE_CHANGES    0x81B363u
 #define TILE_GRAPHICS   0xA6A096u
-enum { SWAYS = 4, SWAY_FRAMES = 32, SWAY_M = 3, SWAY_W = 16 + 2 * SWAY_M, KNEES = 9 };
+enum { SWAYS = 4, SWAY_FRAMES = 32, SWAY_M = 3, SWAY_W = 16 + 2 * SWAY_M };
 typedef struct { bool on; int tx, ty, age, dir, amp; } Sway;   /* amp: percent */
 static Sway s_sway[SWAYS];
 static struct {
   int last_tx, last_ty;
   bool shown;
-  uint16_t back[SWAYS][16 * SWAY_W], front[SWAYS][16 * SWAY_W];
-  PpuExtraObject obj[2 * SWAYS];
+  uint16_t back[SWAYS][16 * SWAY_W];
+  PpuExtraObject obj[SWAYS];
 } s_crops = { -1, -1 };
 
 static bool crop_type(uint8_t t) { return t >= 0x1E && t <= 0x6F; }
@@ -377,7 +375,28 @@ static int lean(const Sway *s, int row)
 static uint8_t slot_first(void) { return (uint8_t)(PPU_objPriority(g_ppu) ? (g_ppu->oamaddl & 0xfe) >> 1 : 0); }
 static uint8_t slot_last(void) { return (uint8_t)((slot_first() + 127) & 127); }
 
-/* the objects of sway k (0 to 2 of them, from obj[*n] on) */
+/* is this colour of a crop tile soil (and not plant)? The tile's own soil
+ * is the tilled soil's colours, a shade or two off (the tile's palette), and
+ * brown (red over green) */
+static bool soil_like(uint16_t c, const uint16_t soil[2][256])
+{
+  int b = (c >> 10) & 31, g = (c >> 5) & 31, r = c & 31;
+  if (r <= g) return false;
+  for (int v = 0; v < 2; v++)
+    for (int i = 0; i < 256; i++) {
+      uint16_t d = soil[v][i];
+      if (!d) continue;
+      int db = ((d >> 10) & 31) - b, dg = ((d >> 5) & 31) - g, dr = (d & 31) - r;
+      if (db >= -3 && db <= 3 && dg >= -3 && dg <= 3 && dr >= -3 && dr <= 3) return true;
+    }
+  return false;
+}
+
+/* the object of sway k (one, at obj[*n]): over the tile, the soil that was
+ * under the plant (the tile's own nearest soil pixel in the row, so the
+ * texture goes on) and the plant, leaning. The soil that is not under the
+ * plant is left to the picture chip: it never moves. The player's sprite
+ * stays in front of all of it. */
 static bool sway_draw(int k, int *n)
 {
   const Sway *s = &s_sway[k];
@@ -386,28 +405,27 @@ static bool sway_draw(int k, int *n)
   map_entries(s->tx, s->ty, e);
   tile16(e, plant);
   for (int v = 0; v < 2; v++) { change_entries(0x17 + v, soil_e); tile16(soil_e, soil[v]); }
-  int same[2] = { 0, 0 };
-  for (int i = 0; i < 256; i++) for (int v = 0; v < 2; v++) same[v] += plant[i] == soil[v][i];
-  const uint16_t *ground = soil[same[1] > same[0]];
+  bool is_plant[256];
+  for (int i = 0; i < 256; i++) is_plant[i] = plant[i] && !soil_like(plant[i], soil);
 
-  int ptx = hm_rd16(g_ram, 0xD6) >> 4, pty = hm_rd16(g_ram, 0xD8) >> 4;
-  bool in_front = ptx == s->tx && pty == s->ty;              /* the player stands in it */
-  uint16_t *back = s_crops.back[k], *front = s_crops.front[k];
+  uint16_t *back = s_crops.back[k];
   memset(back, 0, sizeof s_crops.back[k]);
-  memset(front, 0, sizeof s_crops.front[k]);
-  for (int y = 0; y < 16; y++)                                /* bare soil where the plant was */
+  for (int y = 0; y < 16; y++)                                /* soil where the plant was */
     for (int x = 0; x < 16; x++) {
-      uint16_t p = plant[y * 16 + x], g = ground[y * 16 + x];
-      back[y * SWAY_W + SWAY_M + x] = p && g ? g : p;
+      if (!is_plant[y * 16 + x]) continue;
+      uint16_t c = 0;
+      for (int d = 1; d < 16 && !c; d++) {
+        if (x - d >= 0 && plant[y * 16 + x - d] && !is_plant[y * 16 + x - d]) c = plant[y * 16 + x - d];
+        else if (x + d < 16 && plant[y * 16 + x + d] && !is_plant[y * 16 + x + d]) c = plant[y * 16 + x + d];
+      }
+      back[y * SWAY_W + SWAY_M + x] = c ? c : soil[0][y * 16 + x];
     }
   for (int y = 0; y < 16; y++) {                              /* the plant, leaning */
     int d = lean(s, y);
-    uint16_t *row = in_front && y >= KNEES ? front : back;
     for (int x = 0; x < 16; x++) {
-      uint16_t c = plant[y * 16 + x];
-      if (!c || c == ground[y * 16 + x]) continue;
+      if (!is_plant[y * 16 + x]) continue;
       int X = SWAY_M + x + d;
-      if (X >= 0 && X < SWAY_W) row[y * SWAY_W + X] = c;
+      if (X >= 0 && X < SWAY_W) back[y * SWAY_W + X] = plant[y * 16 + x];
     }
   }
   /* where the picture chip draws the tile: its BG1 scroll (10 bits) */
@@ -418,10 +436,6 @@ static bool sway_draw(int k, int *n)
                        .priority = prio, .math = math, .oamSlot = slot_last(), .order = (uint32_t)(1 + k),
                        .pixels = back };
   s_crops.obj[(*n)++] = o;
-  if (in_front) {
-    o.oamSlot = slot_first(); o.pixels = front;
-    s_crops.obj[(*n)++] = o;
-  }
   return true;
 }
 static void crops_hide(void)
@@ -460,7 +474,7 @@ static void crops_frame(void)
   for (int i = 0; i < SWAYS; i++) {
     if (!s_sway[i].on) continue;
     /* over: gone, unless the player still stands in it (then it stays,
-     * still, in front of the legs) */
+     * still, under the player) */
     if (s_sway[i].age >= SWAY_FRAMES) {
       if (s_sway[i].tx == tx && s_sway[i].ty == ty) s_sway[i].age = SWAY_FRAMES - 1;
       else { s_sway[i].on = false; continue; }
