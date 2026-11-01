@@ -25,6 +25,8 @@
 #define PLAYER_Y     0xD8
 #define SLOTS        0xB586   /* the event slots, $7E:B586, 49 of $40 bytes */
 #define FLAGS_60     0x7F1F60
+#define MAP_ID       0x0022   /* the map shown: 0-3 the farm (one per season) */
+#define MAP_TILES    0x09B6   /* the current map's tile types (DB:) */
 
 static uint16_t dp16(uint8_t *ram, const HmRegs *r, unsigned a) { return hm_dp_r16(ram, r, a); }
 static void set16(uint8_t *ram, const HmRegs *r, unsigned a, uint16_t v) { hm_dp_w16(ram, r, a, v); }
@@ -53,6 +55,22 @@ static uint16_t sbc(HmRegs *r, uint16_t a, uint16_t b)
 }
 static uint16_t add(HmRegs *r, uint16_t a, uint16_t b) { r->c = 0; return adc(r, a, b); }
 static uint16_t sub(HmRegs *r, uint16_t a, uint16_t b) { r->c = 1; return sbc(r, a, b); }
+
+/* The native build's "walk through the crops" (g_hm_crops_passable, off in
+ * the checking build): a crop tile (seeds and every stage, 1E..6F) of the
+ * farm does not block the player. Only the player: whoever moves is at the
+ * player's place ($DF / $E1 = $D6 / $D8); the cows, the dog and the horse
+ * keep the game's rule. The point is the one just looked at ($86 / $88);
+ * the farm is 64 tiles wide. */
+static bool crop_for_player(uint8_t *ram, const HmRegs *r)
+{
+  if (ram[MAP_ID] > 3) return false;
+  if (dp16(ram, r, 0xDF) != dp16(ram, r, PLAYER_X) || dp16(ram, r, 0xE1) != dp16(ram, r, PLAYER_Y)) return false;
+  uint16_t x = dp16(ram, r, 0x86), y = dp16(ram, r, 0x88);
+  if (x >= 0x400 || y >= 0x400) return false;
+  uint8_t t = hm_bus_rd8(ram, ((uint32_t)r->db << 16) + MAP_TILES + (uint16_t)((y >> 4) * 64 + (x >> 4)));
+  return t >= 0x1E && t <= 0x6F;
+}
 
 /* ─────────────────────────────────────────────────────────────────────────
  * CFFFF ($83:B0F6, JSR, RTS). X, Y = a point; A = 0 for the first corner,
@@ -112,6 +130,7 @@ void hm_CFFFF(uint8_t *ram, HmRegs *r)
       }
     }
   }
+  if (blocked && g_hm_crops_passable && crop_for_player(ram, r)) blocked = false;
   r->a = blocked ? 1 : 0;
 }
 

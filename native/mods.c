@@ -292,6 +292,186 @@ static void title_frame(void)
   s_title.shown = true;
 }
 
+/* ── Walking through the crops ──────────────────────────────────────────
+ * The collision (src/collision.c, g_hm_crops_passable) lets the player
+ * through the crop tiles of the farm (maps 0-3, types 1E..6F). Here the
+ * plants move: when the player steps into a crop's tile, and again when
+ * the player steps out of it, the plant sways (its top leans to one side
+ * and back, a little less each time; the bottom row stays put). While the
+ * player stands in it, the plant is drawn in front of the player's legs,
+ * as when walking through a field.
+ * How: for a moment the plant is drawn as host objects of the picture chip
+ * over its own tile: one behind every sprite, with bare soil where the
+ * plant was (the game's own tilled-soil tiles, the tile-change table
+ * $81:B363 entries 17 / 18, dry and watered: whichever matches the tile
+ * better), and the leaning plant either on it or, in the player's tile,
+ * as a second object in front of the sprites, only from the player's
+ * knees down. Which pixels are the plant: those that differ from the
+ * soil. Nothing of the game's memory is written; when the sway is over the
+ * objects go and the map is as the game drew it. */
+#define FARM_TILE_TYPES 0x009B6
+#define BG1_WRAM_MAP    0x02000u
+#define TILE_CHANGES    0x81B363u
+#define TILE_GRAPHICS   0xA6A096u
+enum { SWAYS = 4, SWAY_FRAMES = 32, SWAY_M = 3, SWAY_W = 16 + 2 * SWAY_M, KNEES = 9 };
+typedef struct { bool on; int tx, ty, age, dir, amp; } Sway;   /* amp: percent */
+static Sway s_sway[SWAYS];
+static struct {
+  int last_tx, last_ty;
+  bool shown;
+  uint16_t back[SWAYS][16 * SWAY_W], front[SWAYS][16 * SWAY_W];
+  PpuExtraObject obj[2 * SWAYS];
+} s_crops = { -1, -1 };
+
+static bool crop_type(uint8_t t) { return t >= 0x1E && t <= 0x6F; }
+static uint8_t farm_type(int tx, int ty)
+{
+  if (tx < 0 || ty < 0 || tx >= 64 || ty >= 64) return 0;
+  return g_ram[FARM_TILE_TYPES + ty * 64 + tx];
+}
+/* a 16x16 tile from its four BG1 tilemap entries: colours (0 = see-through) */
+static void tile16(const uint16_t e[4], uint16_t out[256])
+{
+  uint32_t chars = PPU_bgTileAdr(g_ppu, 0);
+  for (int q = 0; q < 4; q++) {
+    unsigned t = e[q] & 0x3ff, pal = (e[q] >> 10) & 7;
+    bool hf = e[q] & 0x4000, vf = e[q] & 0x8000;
+    uint32_t base = chars + t * 16u;
+    for (int y = 0; y < 8; y++)
+      for (int x = 0; x < 8; x++) {
+        int sx = hf ? 7 - x : x, sy = vf ? 7 - y : y, b = 7 - sx;
+        uint16_t p01 = vram(base + sy), p23 = vram(base + 8 + sy);
+        int ci = ((p01 >> b) & 1) | ((p01 >> (8 + b)) & 1) << 1 | ((p23 >> b) & 1) << 2 | ((p23 >> (8 + b)) & 1) << 3;
+        out[((q >> 1) * 8 + y) * 16 + (q & 1) * 8 + x] = ci ? (uint16_t)(0x8000 | g_ppu->cgram[pal * 16 + ci]) : 0;
+      }
+  }
+}
+/* the tile's entries in the game's copy of the whole BG1 map ($7E:2000) */
+static void map_entries(int tx, int ty, uint16_t e[4])
+{
+  uint8_t wc = g_ram[0x0181];
+  unsigned w = wc == 1 ? 32 : wc == 2 ? 64 : 128;          /* entries per row */
+  for (int q = 0; q < 4; q++) {
+    unsigned r = (unsigned)ty * 2 + (q >> 1), c = (unsigned)tx * 2 + (q & 1);
+    e[q] = hm_rd16(g_ram, BG1_WRAM_MAP + (r * w + c) * 2);
+  }
+}
+/* the entries of a tile change ($81:B363: graphics at $A6:A096 + offset,
+ * rows $40 bytes apart) */
+static void change_entries(int change, uint16_t e[4])
+{
+  uint32_t src = TILE_GRAPHICS + hm_bus_rd16(g_ram, TILE_CHANGES + 6u * change);
+  e[0] = hm_bus_rd16(g_ram, src);        e[1] = hm_bus_rd16(g_ram, src + 2);
+  e[2] = hm_bus_rd16(g_ram, src + 0x40); e[3] = hm_bus_rd16(g_ram, src + 0x42);
+}
+/* how far (pixels) row `row` of the plant leans at this age */
+static int lean(const Sway *s, int row)
+{
+  static const int8_t wave[SWAY_FRAMES] = {   /* the top row, in quarter pixels */
+    4, 7, 9, 10, 10, 8, 5, 1, -3, -6, -8, -8, -6, -3, 0, 3, 5, 6, 5, 3, 1, -1, -3, -3, -2, -1, 0, 1, 1, 0, 0, 0 };
+  int q = wave[s->age] * s->dir * s->amp * (15 - row);     /* the bottom row stays put */
+  return (q >= 0 ? q + 3000 : q - 3000) / 6000;            /* / 100 / 15 rows / 4, rounded */
+}
+/* the sprite slot drawn last (behind every other sprite) and first: with
+ * OAM priority rotation on, the first slot is the OAM address's */
+static uint8_t slot_first(void) { return (uint8_t)(PPU_objPriority(g_ppu) ? (g_ppu->oamaddl & 0xfe) >> 1 : 0); }
+static uint8_t slot_last(void) { return (uint8_t)((slot_first() + 127) & 127); }
+
+/* the objects of sway k (0 to 2 of them, from obj[*n] on) */
+static bool sway_draw(int k, int *n)
+{
+  const Sway *s = &s_sway[k];
+  if (!crop_type(farm_type(s->tx, s->ty))) return false;
+  uint16_t e[4], soil_e[4], plant[256], soil[2][256];
+  map_entries(s->tx, s->ty, e);
+  tile16(e, plant);
+  for (int v = 0; v < 2; v++) { change_entries(0x17 + v, soil_e); tile16(soil_e, soil[v]); }
+  int same[2] = { 0, 0 };
+  for (int i = 0; i < 256; i++) for (int v = 0; v < 2; v++) same[v] += plant[i] == soil[v][i];
+  const uint16_t *ground = soil[same[1] > same[0]];
+
+  int ptx = hm_rd16(g_ram, 0xD6) >> 4, pty = hm_rd16(g_ram, 0xD8) >> 4;
+  bool in_front = ptx == s->tx && pty == s->ty;              /* the player stands in it */
+  uint16_t *back = s_crops.back[k], *front = s_crops.front[k];
+  memset(back, 0, sizeof s_crops.back[k]);
+  memset(front, 0, sizeof s_crops.front[k]);
+  for (int y = 0; y < 16; y++)                                /* bare soil where the plant was */
+    for (int x = 0; x < 16; x++) {
+      uint16_t p = plant[y * 16 + x], g = ground[y * 16 + x];
+      back[y * SWAY_W + SWAY_M + x] = p && g ? g : p;
+    }
+  for (int y = 0; y < 16; y++) {                              /* the plant, leaning */
+    int d = lean(s, y);
+    uint16_t *row = in_front && y >= KNEES ? front : back;
+    for (int x = 0; x < 16; x++) {
+      uint16_t c = plant[y * 16 + x];
+      if (!c || c == ground[y * 16 + x]) continue;
+      int X = SWAY_M + x + d;
+      if (X >= 0 && X < SWAY_W) row[y * SWAY_W + X] = c;
+    }
+  }
+  /* where the picture chip draws the tile: its BG1 scroll (10 bits) */
+  int sx = ((s->tx * 16 - (int)g_ppu->hScroll[0]) % 1024 + 1024 + 512) % 1024 - 512;
+  int sy = ((s->ty * 16 - (int)g_ppu->vScroll[0]) % 1024 + 1024 + 512) % 1024 - 512;
+  uint8_t prio = (uint8_t)((e[0] & 0x2000) ? 3 : 2), math = (uint8_t)(g_ppu->cgadsub & 0x01);
+  PpuExtraObject o = { .x = sx - SWAY_M, .y = sy, .width = SWAY_W, .height = 16, .stride = SWAY_W,
+                       .priority = prio, .math = math, .oamSlot = slot_last(), .order = (uint32_t)(1 + k),
+                       .pixels = back };
+  s_crops.obj[(*n)++] = o;
+  if (in_front) {
+    o.oamSlot = slot_first(); o.pixels = front;
+    s_crops.obj[(*n)++] = o;
+  }
+  return true;
+}
+static void crops_hide(void)
+{
+  if (s_crops.shown && g_ppu) PpuSetExtraObjects(g_ppu, NULL, 0);
+  s_crops.shown = false;
+}
+static void sway_start(int tx, int ty, int dir, int amp)
+{
+  int k = 0;
+  for (int i = 0; i < SWAYS; i++) if (s_sway[i].on && s_sway[i].tx == tx && s_sway[i].ty == ty) { k = i; goto found; }
+  for (int i = 0; i < SWAYS; i++) if (!s_sway[i].on) { k = i; goto found; }
+  for (int i = 1; i < SWAYS; i++) if (s_sway[i].age > s_sway[k].age) k = i;   /* the oldest */
+found:
+  s_sway[k] = (Sway){ true, tx, ty, 0, dir, amp };
+}
+static void crops_frame(void)
+{
+  g_hm_crops_passable = g_cfg.walk_crops;
+  if (!g_cfg.walk_crops || g_ram[HM_MAP_ID] > 3) {
+    memset(s_sway, 0, sizeof s_sway);
+    s_crops.last_tx = s_crops.last_ty = -1;
+    crops_hide();
+    return;
+  }
+  int tx = hm_rd16(g_ram, 0xD6) >> 4, ty = hm_rd16(g_ram, 0xD8) >> 4;
+  int lx = s_crops.last_tx, ly = s_crops.last_ty;
+  if (lx >= 0 && (tx != lx || ty != ly)) {
+    /* lean the way the player goes (up and down: alternately) */
+    int dir = tx > lx ? 1 : tx < lx ? -1 : ((tx + ty) & 1) ? 1 : -1;
+    if (crop_type(farm_type(lx, ly))) sway_start(lx, ly, dir, 70);     /* stepping out */
+    if (crop_type(farm_type(tx, ty))) sway_start(tx, ty, dir, 100);    /* stepping in */
+  }
+  s_crops.last_tx = tx; s_crops.last_ty = ty;
+  int n = 0;
+  for (int i = 0; i < SWAYS; i++) {
+    if (!s_sway[i].on) continue;
+    /* over: gone, unless the player still stands in it (then it stays,
+     * still, in front of the legs) */
+    if (s_sway[i].age >= SWAY_FRAMES) {
+      if (s_sway[i].tx == tx && s_sway[i].ty == ty) s_sway[i].age = SWAY_FRAMES - 1;
+      else { s_sway[i].on = false; continue; }
+    }
+    if (!sway_draw(i, &n)) { s_sway[i].on = false; continue; }
+    s_sway[i].age++;
+  }
+  if (n) { PpuSetExtraObjects(g_ppu, s_crops.obj, (size_t)n); s_crops.shown = true; }
+  else crops_hide();
+}
+
 /* ── Widescreen (hm_widescreen.c) ───────────────────────────────────────
  * The picture chip draws real columns on both sides of the 256. BG1 (the
  * map) is kept well ahead of the camera in a 64x64-tile ring, so the
@@ -417,6 +597,9 @@ void mods_reset(void)
   s_title.prev = s_title.swallow = 0;
   title_hide();
   g_hm_no_ending = 0;
+  memset(s_sway, 0, sizeof s_sway);
+  s_crops.last_tx = s_crops.last_ty = -1;
+  if (g_ppu) crops_hide();
   g_hm_oam_right = 0x0100; g_hm_oam_left = 0xFFF0;
 }
 
@@ -425,5 +608,5 @@ void mods_frame(uint8_t *ram)
   cheats_frame(ram);
   qol_frame(ram);
   endless_frame(ram);
-  if (g_ppu) { title_frame(); ws_frame(); }
+  if (g_ppu) { title_frame(); ws_frame(); crops_frame(); }
 }

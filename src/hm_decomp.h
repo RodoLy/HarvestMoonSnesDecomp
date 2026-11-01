@@ -273,9 +273,12 @@ extern void (*g_hm_frame_hook)(uint8_t *ram);
  *   g_hm_no_ending: the house's date check for the ending (Summer 30,
  *     Year 3, $83:DEE7) fails while it is set (the endless game);
  *   g_hm_year_suffix: the diary's year ordinal past the game's three
- *     ("4th", "5th"... $82:F298). */
+ *     ("4th", "5th"... $82:F298);
+ *   g_hm_crops_passable: the player walks through the crops of the farm
+ *     (CFFFF, the map's collision: a crop tile no longer blocks). */
 extern uint16_t g_hm_oam_right, g_hm_oam_left;
 extern int g_hm_no_ending;
+extern int g_hm_crops_passable;
 extern uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 /* the loops' own entries the host needs (not checked on their own) */
 void hm_IntroScreen_D871(uint8_t *ram, HmRegs *r);    /* intro.c: the demo check */

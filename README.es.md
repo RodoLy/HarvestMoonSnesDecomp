@@ -143,6 +143,10 @@ el clima de mañana). La música sigue sonando.
   tener, así que tus partidas siguen válidas si los apagas.
 - **Avance rápido** — mantén Tab (o el gatillo derecho): el juego va ×2 a
   ×6 y la música se acelera con él.
+- **Caminar entre cultivos** *(apagado por defecto)* — los cultivos de la
+  granja ya no te bloquean el paso, así que puedes llegar al centro de un
+  cuadro de 3×3 para regarlo. Las plantas se mueven cuando pasas y sus
+  hojas quedan delante de tus piernas mientras estás entre ellas.
 
 | OPTIONS en el título | Mejoras | Trucos |
 |---|---|---|
@@ -344,10 +348,11 @@ imagen y la WRAM; ahí las mejoras están apagadas salvo con `--mods`.
 | `native/mods.c`, `native/pause.c` | las mejoras de la recompilación y el menú de pausa |
 | `native/config.c`, `native/i18n.c` | `config.ini` / `keybinds.ini` y los textos en tres idiomas |
 
-El C solo tiene tres ganchos para las mejoras, con los valores
+El C solo tiene cuatro ganchos para las mejoras, con los valores
 de la ROM por defecto, así que el comprobador no ve diferencia:
-`g_hm_oam_right/left` (pantalla ancha), `g_hm_no_ending` (juego sin fin) y
-`g_hm_year_suffix` ("4th", "5th"…).
+`g_hm_oam_right/left` (pantalla ancha), `g_hm_no_ending` (juego sin fin),
+`g_hm_year_suffix` ("4th", "5th"…) y `g_hm_crops_passable` (caminar entre
+cultivos).
 
 Las letras del launcher y del menú de pausa son Pixelify Sans y Tiny5
 (SIL Open Font License, `native/fonts/`); los iconos y la granja de noche

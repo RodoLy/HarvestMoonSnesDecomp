@@ -143,6 +143,10 @@ keeps playing.
   stay valid when you turn them off.
 - **Fast forward** — hold Tab (or the right trigger): the game runs ×2 to
   ×6 and the music speeds up with it.
+- **Walk through crops** *(off by default)* — the crops on the farm no
+  longer block your way, so you can reach the middle of a 3×3 patch to
+  water it. The plants sway as you pass and their leaves stay in front of
+  your legs while you stand among them.
 
 | OPTIONS on the title | Improvements | Cheats |
 |---|---|---|
@@ -337,10 +341,11 @@ and the WRAM; there the improvements are off unless `--mods`.
 | `native/mods.c`, `native/pause.c` | the recompilation's improvements and the pause menu |
 | `native/config.c`, `native/i18n.c` | `config.ini` / `keybinds.ini` and the text in three languages |
 
-The C has only three hooks for the improvements, with the
+The C has only four hooks for the improvements, with the
 ROM's values by default, so the checker sees no difference:
-`g_hm_oam_right/left` (widescreen), `g_hm_no_ending` (endless game) and
-`g_hm_year_suffix` ("4th", "5th"…).
+`g_hm_oam_right/left` (widescreen), `g_hm_no_ending` (endless game),
+`g_hm_year_suffix` ("4th", "5th"…) and `g_hm_crops_passable` (walk
+through crops).
 
 The launcher's and the pause menu's type is Pixelify Sans and Tiny5 (SIL
 Open Font License, `native/fonts/`); the icons and the night farm are drawn

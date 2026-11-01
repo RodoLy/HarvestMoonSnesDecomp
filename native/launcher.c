@@ -43,7 +43,7 @@ enum {
 enum {
   V_FULLSCREEN = 1, V_SCALE, V_PICTURE, V_VSYNC, V_WIDESCREEN, V_SPRITES, V_VOLUME, V_FF, V_LANG,
   V_SHOWLAUNCHER, V_FASTTEXT, V_DAYLEN, V_PAUSE, V_TITLEOPT, V_ENDLESS, V_MONEY, V_STAMINA,
-  V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL,
+  V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL, V_CROPS,
 };
 
 typedef struct {
@@ -196,6 +196,7 @@ static int get_value(int id)
   case V_PAUSE: return c->pause_menu;
   case V_TITLEOPT: return c->title_options;
   case V_ENDLESS: return c->endless;
+  case V_CROPS: return c->walk_crops;
   case V_MONEY: return c->money;
   case V_STAMINA: return c->stamina;
   case V_CLOCK: return c->freeze_clock;
@@ -225,6 +226,7 @@ static void set_value(int id, int v)
   case V_PAUSE: c->pause_menu = v; break;
   case V_TITLEOPT: c->title_options = v; break;
   case V_ENDLESS: c->endless = v; break;
+  case V_CROPS: c->walk_crops = v; break;
   case V_MONEY: c->money = v; break;
   case V_STAMINA: c->stamina = v; break;
   case V_CLOCK: c->freeze_clock = v; break;
@@ -358,6 +360,7 @@ static void build(void)
       toggle(V_PAUSE, "Pause menu (Harvest Moon 64 style)", "M key or right-stick click (R3): tools, the girls' hearts and your farm's status. The game is paused while it is open.");
       toggle(V_TITLEOPT, "OPTIONS on the title screen", "Adds a fourth entry, OPTIONS, below HOW TO PLAY, which opens this options menu.");
       toggle(V_ENDLESS, "Endless game", "The game no longer stops after Year 3: you watch the ending, then wake up on Summer 30 and keep farming through Year 4, 5 and beyond.");
+      toggle(V_CROPS, "Walk through crops", "Crops on the farm no longer block your way, so you can reach the middle of a 3x3 patch to water it. They sway as you pass.");
       toggle(V_WIDESCREEN, "Widescreen (16:9)", "Shows more of the map at the sides instead of black bars. At a map's edge, in small rooms and on the title screen it looks like the original (4:3).");
     } else {
       toggle(V_MONEY, "Infinite money", "Keeps your money at the most the game allows: 9,999,990 G.");
