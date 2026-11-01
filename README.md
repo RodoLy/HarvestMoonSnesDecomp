@@ -1,4 +1,4 @@
-# HarvestMoonSnesDecomp — a decompilation of Harvest Moon (SNES)
+# HarvestMoonSnesDecomp — A reimplementation of Harvest Moon (SNES)
 
 **English** · [Español](README.es.md)
 
