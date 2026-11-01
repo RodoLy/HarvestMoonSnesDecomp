@@ -339,6 +339,7 @@ static void build(void)
       }
       add(K_ACTION, A_DEFAULT_KEYS, T("Default keys"), T("X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start, Right Shift = Select, arrows."));
       add(K_ACTION, A_HOTKEYS, T("Other keys"), T("Tab: fast forward · M: pause menu · Esc: this menu · F11 / Alt+Enter: full screen · F1-F10: load a state · Shift+F1-F10: save one."));
+      toggle(V_MOUSE, "Mouse controls", "Like Stardew Valley: left click next to you uses the tool there, left click farther walks there, right click talks or picks up. The keyboard and the pad still work.");
     } else {
       int n = host_gamepad_count();
       Item *it = add(K_CHOICE, V_PADSEL, T("Gamepad"), n ? T("The gamepad that plays. Left / right: another one, when more are connected.")
@@ -366,7 +367,6 @@ static void build(void)
       toggle(V_ENDLESS, "Endless game", "The game no longer stops after Year 3: you watch the ending, then wake up on Summer 30 and keep farming through Year 4, 5 and beyond.");
       toggle(V_CROPS, "Walk through crops", "Crops on the farm no longer block your way, so you can reach the middle of a 3x3 patch to water it. They sway as you pass.");
       toggle(V_SEEDS, "One seed at a time", "A seed bag is 9 seeds: each use sows only the tile in front of you, in any order you like. The bag and the stamina go at the 9th seed.");
-      toggle(V_MOUSE, "Mouse controls", "Like Stardew Valley: left click next to you uses the tool there, left click farther walks there, right click talks or picks up. The keyboard and the pad still work.");
       toggle(V_WIDESCREEN, "Widescreen (16:9)", "Shows more of the map at the sides instead of black bars. At a map's edge, in small rooms and on the title screen it looks like the original (4:3).");
     } else {
       toggle(V_MONEY, "Infinite money", "Keeps your money at the most the game allows: 9,999,990 G.");

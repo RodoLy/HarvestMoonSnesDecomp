@@ -151,7 +151,7 @@ el clima de mañana). La música sigue sonando.
   plantar con la forma que quieras. La bolsa y la energía se gastan con la
   9.ª semilla, como antes; un recuadro muestra las semillas que quedan y se
   guardan en tu diario.
-- **Controles con ratón** *(apagado por defecto)* — como en Stardew
+- **Controles con ratón** *(apagado por defecto, en Controles → Teclado)* — como en Stardew
   Valley: clic izquierdo junto a ti usa la herramienta ahí, clic izquierdo
   más lejos camina hasta ahí (mantenlo para seguir al puntero), clic
   derecho habla, recoge o abre. Un cuadro marca la casilla bajo el
