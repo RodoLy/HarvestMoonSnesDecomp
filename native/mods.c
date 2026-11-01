@@ -387,7 +387,7 @@ static bool soil_like(uint16_t c, const uint16_t soil[2][256])
       uint16_t d = soil[v][i];
       if (!d) continue;
       int db = ((d >> 10) & 31) - b, dg = ((d >> 5) & 31) - g, dr = (d & 31) - r;
-      if (db >= -3 && db <= 3 && dg >= -3 && dg <= 3 && dr >= -3 && dr <= 3) return true;
+      if (db >= -1 && db <= 1 && dg >= -1 && dg <= 1 && dr >= -1 && dr <= 1) return true;
     }
   return false;
 }
@@ -408,6 +408,19 @@ static bool sway_draw(int k, int *n)
   bool is_plant[256];
   for (int i = 0; i < 256; i++) is_plant[i] = plant[i] && !soil_like(plant[i], soil);
 
+  /* the plant's dark outline and shading are close to the soil's browns: a
+   * pixel with most of its neighbours in the plant is in the plant too */
+  for (int y = 0; y < 16; y++)
+    for (int x = 0; x < 16; x++) {
+      int i = y * 16 + x, m = 0;
+      if (!plant[i] || is_plant[i]) continue;
+      for (int dy = -1; dy <= 1; dy++)
+        for (int dx = -1; dx <= 1; dx++) {
+          int yy = y + dy, xx = x + dx;
+          if ((dy || dx) && yy >= 0 && yy < 16 && xx >= 0 && xx < 16 && is_plant[yy * 16 + xx]) m++;
+        }
+      if (m >= 5) is_plant[i] = true;
+    }
   uint16_t *back = s_crops.back[k];
   memset(back, 0, sizeof s_crops.back[k]);
   for (int y = 0; y < 16; y++)                                /* soil where the plant was */
