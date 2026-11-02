@@ -320,7 +320,7 @@ static void build(void)
     }
     add(K_ACTION, A_OPTIONS, T("Options"), T("Window, full screen, the picture, widescreen, sound, fast forward and language."));
     add(K_ACTION, A_CONTROLS, T("Controls"), T("The keys and the gamepad's buttons. Connect a gamepad (USB or Bluetooth) at any time: it appears here."));
-    add(K_ACTION, A_MODS, T("Improvements"), T("The recompilation's improvements: fast text, longer days, a pause menu, OPTIONS on the title, an endless game, and cheats."));
+    add(K_ACTION, A_MODS, T("Improvements"), T("Fast text, longer days, a pause menu with a crop bag, walking through crops, your wife's help, an endless game and cheats."));
     add(K_ACTION, A_PACKS, T("Mods"), T("The community's mods: new pictures, text, maps and more for the game, from the mods folder. Turn on the ones you want."));
     add(K_ACTION, A_QUIT, L.in_game ? T("Quit the game") : T("Quit"), T("Close the program. The game saves only in its diaries (when you sleep)."));
     break;
