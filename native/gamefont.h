@@ -7,3 +7,4 @@
 int gamefont_text(int x, int y, const char *s, uint32_t ink);   /* the width drawn */
 int gamefont_width(const char *s);
 int gamefont_wrap(int x, int y, int w, const char *s, uint32_t ink); /* lines, 16 apart */
+int gamefont_text_box(int x, int y, const char *s, uint32_t ink, uint32_t dark);   /* the game's box look */

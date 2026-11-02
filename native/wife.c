@@ -82,6 +82,7 @@ static struct {
   int day;                       /* the day the counts are for (absolute) */
   int talks;                     /* times she was talked to that day */
   bool offered, talking, want_dialog;
+  int dialog_in;                 /* frames until she asks (the game's box goes first) */
   /* the day's work */
   bool planned;
   int water_quota, water_done, cow_quota, cow_done, hen_quota, hen_done;
@@ -518,6 +519,23 @@ static void activity(int w)
 /* ── Every frame ───────────────────────────────────────────────────────── */
 void wife_reset(void) { memset(&W, 0, sizeof W); }
 
+/* At the end of every frame, also while a map comes in: once she went out
+ * to work, the house the game draws her in stays without her, from its
+ * first frame (her slot and its game object out of sight). */
+void wife_frame(uint8_t *ram)
+{
+  if (!g_cfg.wife_help || !hm_diary_loaded(ram) || !W.left_house || today() != W.day) return;
+  int map = ram[HM_MAP_ID], hour = ram[HM_HOUR];
+  if (map < 0x15 || map > 0x17 || !helping_today() || hour < 6 || hour >= HELP_UNTIL_HOUR) return;
+  if (!slot_is_wife()) return;
+  place(0x0F00, 0x0F00);
+  int obj = rd16(SLOT + 0x12);
+  if (!(g_ram[SLOT + 0x01] & 0x02) && obj < 40) {
+    uint32_t o = 0x019Cu + 0x24u * (unsigned)obj;
+    if (rd16(o) == 0x7777) { wr16(o + 0x08, 0x0F00); wr16(o + 0x0A, 0x0F00); }
+  }
+}
+
 void wife_clean_point(uint8_t *ram, const HmRegs *regs)
 {
   g_hm_wife_on = g_cfg.wife_help;
@@ -538,10 +556,11 @@ void wife_clean_point(uint8_t *ram, const HmRegs *regs)
     W.talking = false;
     if (W.talks >= 2 && !W.offered && hearts_of(w) >= 950 && hour < 18 && !helping_today()) {
       W.offered = true;
-      W.want_dialog = true;
+      W.dialog_in = 30;
     }
   }
 
+  if (W.dialog_in > 0 && --W.dialog_in == 0) W.want_dialog = !box;
   /* her clothes, wherever the game has her */
   if (slot_is_wife() && single_day()) {
     int s = rd16(SLOT + 0x16);
@@ -592,15 +611,62 @@ static void accept(int days)
   g_hm_wife_until = (uint16_t)(start + days - 1);
   W.planned = false;
 }
+/* The game's own text box (as on screen when she talks): 240 x 64 at
+ * (8, 151), a lilac and white rounded frame, see-through checks inside
+ * (every other pixel dark), white letters in the game's font, three lines
+ * 16 apart from (16, 159). Her words are in English, as the game's. */
+#define BOX_LILAC UI_RGB(0x8484B5)
+#define BOX_WHITE UI_RGB(0xFFFFFF)
+#define BOX_DARK  UI_RGB(0x424252)
+static void game_box(int ox)
+{
+  static const char *corner[10] = {
+    "......LLLL", "....LLLWWW", "...LLWWWWW", "..LLWWWWLL", ".LLWWWLL..",
+    ".LWWWL....", "LLWWL.....", "LWWWL.....", "LWWL......", "LWWL......" };
+  static const char edge[4] = { 'L', 'W', 'W', 'L' };
+  int x0 = ox + 8, y0 = 151, w = 240, h = 64;
+  for (int y = y0 + 4; y < y0 + h - 4; y++)          /* the checks */
+    for (int x = x0 + 4; x < x0 + w - 4; x++)
+      if ((x + y) & 1) ui_px(x, y, BOX_DARK);
+  for (int i = 0; i < 4; i++) {                      /* the sides */
+    uint32_t c = edge[i] == 'L' ? BOX_LILAC : BOX_WHITE;
+    ui_hline(x0 + 10, y0 + i, w - 20, c); ui_hline(x0 + 10, y0 + h - 1 - i, w - 20, c);
+    ui_vline(x0 + i, y0 + 10, h - 20, c); ui_vline(x0 + w - 1 - i, y0 + 10, h - 20, c);
+  }
+  for (int j = 0; j < 10; j++)                       /* the corners, mirrored */
+    for (int i = 0; i < 10; i++) {
+      char k = corner[j][i];
+      if (k == '.') {
+        if (j >= 4 && i >= 4 && j + i >= 9) {           /* inside: checks */
+          if ((x0 + i + y0 + j) & 1) ui_px(x0 + i, y0 + j, BOX_DARK);
+          if ((x0 + w - 1 - i + y0 + j) & 1) ui_px(x0 + w - 1 - i, y0 + j, BOX_DARK);
+          if ((x0 + i + y0 + h - 1 - j) & 1) ui_px(x0 + i, y0 + h - 1 - j, BOX_DARK);
+          if ((x0 + w - 1 - i + y0 + h - 1 - j) & 1) ui_px(x0 + w - 1 - i, y0 + h - 1 - j, BOX_DARK);
+        }
+        continue;
+      }
+      uint32_t c = k == 'L' ? BOX_LILAC : BOX_WHITE;
+      ui_px(x0 + i, y0 + j, c); ui_px(x0 + w - 1 - i, y0 + j, c);
+      ui_px(x0 + i, y0 + h - 1 - j, c); ui_px(x0 + w - 1 - i, y0 + h - 1 - j, c);
+    }
+}
+static void box_line(int ox, int line, const char *t)
+{
+  gamefont_text_box(ox + 16, 159 + 16 * line, t, BOX_WHITE, BOX_DARK);
+}
+/* the choices, on the third line: a white arrow before the one chosen */
+static const char *const kOpts[4] = { "1 day", "3 days", "1 week", "No" };
+static int opt_x(int i) { static const int at[4] = { 1, 8, 16, 24 }; return 16 + 8 * at[i]; }
+
 bool wife_dialog_update(const UiInput *in)
 {
   if (W.page == 1) return in->accept || in->back || in->click || in->rclick;
   int n = 4;
-  if (in->pressed & B_UP) W.sel = (W.sel + n - 1) % n;
-  if (in->pressed & B_DOWN) W.sel = (W.sel + 1) % n;
+  if (in->pressed & (B_UP | B_LEFT)) W.sel = (W.sel + n - 1) % n;
+  if (in->pressed & (B_DOWN | B_RIGHT)) W.sel = (W.sel + 1) % n;
   for (int i = 0; i < n; i++) {
-    int y = 90 + i * 16;
-    if (in->mouse_x >= s_ox + 138 && in->mouse_x < s_ox + 242 && in->mouse_y >= y && in->mouse_y < y + 16) {
+    int x = s_ox + opt_x(i) - 8, wdt = 8 * ((int)strlen(kOpts[i]) + 1);
+    if (in->mouse_x >= x && in->mouse_x < x + wdt && in->mouse_y >= 191 && in->mouse_y < 207) {
       if (in->mouse_moved) W.sel = i;
       if (in->click) { W.sel = i; goto chosen; }
     }
@@ -617,18 +683,20 @@ void wife_dialog_draw(uint32_t *dst, int w)
   ui_target(dst, w, 224);
   int ox = (w - 256) / 2;
   s_ox = ox;
-  /* in the game's own letters (gamefont.c) */
-  ui_frame(ox + 4, 160, 248, 60, C_PAPER);
+  game_box(ox);
   if (W.page == 1) {
-    gamefont_wrap(ox + 14, 166, 232, T("Leave the farm to me, darling! I'll do half of the work every morning."), C_INK);
+    box_line(ox, 0, "Leave the farm to me,");
+    box_line(ox, 1, "darling! I'll do half the");
+    box_line(ox, 2, "work every morning.");
     return;
   }
-  gamefont_wrap(ox + 14, 166, 232, T("Darling, may I help you on the farm?"), C_INK);
-  static const char *opts[4] = { "One day", "Three days", "A week", "No, thanks" };
-  ui_frame(ox + 132, 84, 116, 74, C_PAPER);
+  box_line(ox, 0, "Darling, may I help you");
+  box_line(ox, 1, "on the farm?");
   for (int i = 0; i < 4; i++) {
-    int y = 90 + i * 16;
-    if (i == W.sel) { ui_rect(ox + 138, y, 104, 16, C_SELECT); ui_hand(ox + 133, y + 4); }
-    gamefont_text(ox + 148, y, T(opts[i]), C_INK);
+    gamefont_text_box(ox + opt_x(i), 191, kOpts[i], BOX_WHITE, BOX_DARK);
+    if (i == W.sel) {                                  /* the arrow */
+      int ax = ox + opt_x(i) - 7, ay = 191 + 6;
+      for (int k = 0; k < 4; k++) ui_vline(ax + k, ay + k, 7 - 2 * k, BOX_WHITE);
+    }
   }
 }

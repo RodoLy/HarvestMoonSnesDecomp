@@ -111,6 +111,23 @@ int gamefont_width(const char *s)
   return n * 8;
 }
 
+/* as the game's text box prints it: colour 3 the letter, 1 and 2 its dark
+ * shadow and the box's checks, 0 left as it is (the picture behind) */
+int gamefont_text_box(int x, int y, const char *s, uint32_t ink, uint32_t dark)
+{
+  int x0 = x;
+  while (*s) {
+    uint8_t px[16][8];
+    if (next_glyph(&s, px))
+      for (int j = 0; j < 16; j++)
+        for (int i = 0; i < 8; i++)
+          if (px[j][i] == 3) ui_px(x + i, y + j, ink);
+          else if (px[j][i] == 2 || (px[j][i] == 1 && ((x + i + y + j) & 1))) ui_px(x + i, y + j, dark);
+    x += 8;
+  }
+  return x - x0;
+}
+
 int gamefont_text(int x, int y, const char *s, uint32_t ink)
 {
   int x0 = x;

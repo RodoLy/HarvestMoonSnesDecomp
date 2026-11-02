@@ -1176,5 +1176,6 @@ void mods_frame(uint8_t *ram)
   qol_frame(ram);
   endless_frame(ram);
   seeds_frame(ram);
+  wife_frame(ram);
   if (g_ppu) { title_frame(); ws_frame(); crops_frame(); }
 }
