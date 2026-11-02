@@ -1005,18 +1005,6 @@ static void ws_frame(void)
   }
   if (g_cfg.widescreen && ws_start_screen()) {
     l = r = mods_ws_budget();
-    /* the intro's farm ($5B): BG1 (the fence, the gate, the mountains) is a
-     * panorama 512 pixels wide that scrolls from 256 to 0. Past its right
-     * end it is reflected at that end (hills and trees, mods_ws_world_bg1);
-     * near its left end, where the gate is, both sides narrow with it,
-     * evenly, and open again once the view has risen to the sky */
-    if (g_ram[HM_MAP_ID] == 0x5B) {
-      int hs = g_ppu->hScroll[0] & 0x1FF, vs = g_ppu->vScroll[0] & 0x1FF;
-      if (hs < l) {
-        int open = vs < 80 ? (80 - vs) * l / 80 : 0;
-        l = r = hs > open ? hs : open;
-      }
-    }
   }
   /* leaving a start screen, the game changes the screen's number before it
    * fades out: the margins stay as they were until the picture is dark (at
@@ -1043,11 +1031,18 @@ unsigned mods_ws_mirror(void)
 {
   return g_ram[HM_MAP_ID] == 0x3C && !hm_diary_loaded(g_ram) ? 0x0F : 0;
 }
-/* the intro's farm ($5B): its BG1 panorama's width, reflected at its own
- * edges (0 = none) */
-unsigned mods_ws_world_bg1(void)
+/* The intro's farm ($5B): BG1 (the fence, the gate, the mountains) is a
+ * panorama 512 pixels wide that the camera crosses from 256 to 0. Wide,
+ * its ends would come into the margins (and past them its other end: a
+ * hill cut off against the mountains). So the picture chip draws it with
+ * the camera kept inside the panorama, at most the margin's width from the
+ * game's own: the picture stays wide from beginning to end and never shows
+ * past the panorama. Only the drawing: the game's scroll is put back. */
+bool mods_ws_bg1_camera(int *lo, int *hi)
 {
-  return g_ram[HM_MAP_ID] == 0x5B ? 512 : 0;
+  if (g_ram[HM_MAP_ID] != 0x5B || !s_ws_l) return false;
+  *lo = s_ws_l; *hi = 512 - 256 - s_ws_r;
+  return true;
 }
 unsigned mods_ws_clamp(void)
 {

@@ -271,18 +271,27 @@ void native_draw_frame(uint8_t *pixels, int field_w, int left, int right)
     }
     if (left || right) PpuSetWidescreenLayerClamp(g_ppu, mods_ws_clamp());   /* kept in the 256: BG3 (the text, the clock), more on some screens */
     PpuSetWidescreenLayerMirror(g_ppu, (left || right) ? mods_ws_mirror() : 0);   /* margins reflected from the picture */
-    if ((left || right) && mods_ws_world_bg1())                                     /* a panorama: reflected at its ends */
-      PpuSetWidescreenLayerWorldMirrorBand(g_ppu, 0, 0, 224, 0, (uint16_t)mods_ws_world_bg1());
   }
   Dma *dma = g_snes->dma;
   dma_startDma(dma, g_snesrecomp_last_hdmaen, true);
   dma_initHdma(dma);
   dma_primeHdmaFirstLine(dma);
+  /* a panorama drawn with its camera kept inside it (mods_ws_bg1_camera);
+   * the game's own scroll is put back afterwards */
+  int lo, hi, keep = -1;
+  if (budget && (left || right) && mods_ws_bg1_camera(&lo, &hi)) {
+    keep = g_ppu->hScroll[0];
+    int hs = keep & 0x1FF;
+    if (hs < lo) hs = lo;
+    if (hs > hi) hs = hi;
+    g_ppu->hScroll[0] = (uint16_t)((keep & ~0x1FF) | hs);
+  }
   for (int line = 1; line <= 224; line++) {
     g_snes->vPos = (uint16_t)line;
     ppu_runLine(g_ppu, line);
     dma_doHdma(dma);
   }
+  if (keep >= 0) g_ppu->hScroll[0] = (uint16_t)keep;
   g_snes->vPos = 225;
   ppu_checkOverscan(g_ppu);
   ppu_handleVblank(g_ppu);
