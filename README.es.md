@@ -123,7 +123,8 @@ mientras juegas: en vivo (la hora, tus herramientas, los corazones, la
 granja, los animales) y se usa tocándolo (tocar una herramienta la toma,
 las pestañas cambian de página, arrastrar recorre los animales), mientras
 el juego sigue arriba con los botones del equipo. Se apaga en Controles →
-Táctil → Segunda pantalla. En la Thor, abre la app en la **pantalla de
+Táctil → Segunda pantalla (la opción solo aparece si el equipo tiene otra
+pantalla). En la Thor, abre la app en la **pantalla de
 arriba** (mantén presionada la app → Screen Launch → Top).
 
 ### Launcher con el aspecto del juego

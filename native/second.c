@@ -29,7 +29,7 @@ void second_render(uint32_t *dst) { pause_live_render(dst); }
 static SDL_Mutex *s_mx;
 static struct { int a, x, y; } s_q[QMAX];
 static int s_qn;
-static SDL_AtomicInt s_shown;
+static SDL_AtomicInt s_shown, s_available;
 static jclass s_cls;
 static jmethodID s_m_frame, s_m_enable;
 static jintArray s_arr;
@@ -49,6 +49,13 @@ JNIEXPORT void JNICALL Java_io_github_rodriloy_harvestmoon_HarvestMoonActivity_n
   (void)env; (void)cls;
   SDL_SetAtomicInt(&s_shown, on ? 1 : 0);
 }
+
+JNIEXPORT void JNICALL Java_io_github_rodriloy_harvestmoon_HarvestMoonActivity_nativeSecondAvailable(JNIEnv *env, jclass cls, jboolean on)
+{
+  (void)env; (void)cls;
+  SDL_SetAtomicInt(&s_available, on ? 1 : 0);
+}
+bool second_available(void) { return SDL_GetAtomicInt(&s_available) != 0; }
 
 static JNIEnv *jni(void)
 {
@@ -110,5 +117,6 @@ void second_init(void) {}
 void second_apply(void) {}
 void second_frame(void) {}
 bool second_shown(void) { return false; }
+bool second_available(void) { return false; }
 
 #endif

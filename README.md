@@ -119,7 +119,8 @@ Harvest Moon 64-style pause menu stays on the lower screen while you play:
 live (the time, your tools, the hearts, the farm, the animals) and used by
 touch (a tap on a tool holds it, the tabs change pages, a drag scrolls the
 animals), while the game goes on above with the device's buttons. Turn it
-off in Controls → Touch → Second screen. On the Thor, launch the app on
+off in Controls → Touch → Second screen (the option only shows when the
+device has another screen). On the Thor, launch the app on
 the **top screen** (long-press it → Screen Launch → Top).
 
 ### A launcher in the look of the game

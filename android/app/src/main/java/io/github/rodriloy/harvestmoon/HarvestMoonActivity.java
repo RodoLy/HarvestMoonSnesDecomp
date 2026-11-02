@@ -75,7 +75,13 @@ public class HarvestMoonActivity extends SDLActivity {
 
     private void updateSecond() {
         if (isFinishing()) return;
-        Display d = sWanted ? otherDisplay() : null;
+        Display other = otherDisplay();
+        try {
+            nativeSecondAvailable(other != null);      /* the option shows only then */
+        } catch (UnsatisfiedLinkError e) {
+            /* the game's library is not loaded (yet) */
+        }
+        Display d = sWanted ? other : null;
         if (mSecond != null && (d == null || mSecond.getDisplay().getDisplayId() != d.getDisplayId())) closeSecond();
         if (d != null && mSecond == null) {
             try {
@@ -116,4 +122,5 @@ public class HarvestMoonActivity extends SDLActivity {
     /* ── the game's side ── */
     static native void nativeSecondTouch(int action, int x, int y);
     static native void nativeSecondShown(boolean on);
+    static native void nativeSecondAvailable(boolean on);
 }

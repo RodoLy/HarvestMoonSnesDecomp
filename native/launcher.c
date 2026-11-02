@@ -373,6 +373,7 @@ static void build(void)
       choice(V_TOUCH, "On-screen controls", "Buttons on a touch screen, in the look of the game's menus. Auto: they show when you touch the screen and hide when you use keys or a gamepad.",
              3, T("Auto"), T("Always"), T("Off"));
 #ifdef SDL_PLATFORM_ANDROID
+      if (second_available())
       toggle(V_SECOND, "Second screen", "On devices with two screens (the AYN Thor): the pause menu stays on the lower screen while you play, live, and is used by touch.");
 #endif
       toggle(V_MOUSE, "Mouse controls", "Left click next to you uses the tool there, left click farther walks there, right click talks or picks up. The keyboard and the pad still work.");
