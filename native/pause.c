@@ -518,28 +518,28 @@ static void draw_farm(int x, int y)
  * +3 days left sick; +4 happiness, the milk's size: below $60 S, below $C0
  * M, else L); a chicken 8 bytes at $7E:C286 (+0: 02 egg, 04 chick, 08 hen,
  * 10 hungry; +1 the map, $28 the coop). Pictures: the game's own sprites
- * (cow $18B, calf $1C9, hen $212, chick $217, the egg item $23). */
-enum { COWS = 12, CHICKENS = 13, COW_COLS = 6, HEN_COLS = 7 };
+ * (cow $1C7, calf $1BA, hen $212, chick $217, the egg item $23). */
+enum { COWS = 12, CHICKENS = 13, ROWS_SHOWN = 5 };
 static const uint8_t *cow(int i) { return &g_ram[HM_COW_DATA + 16 * i]; }
 static const uint8_t *hen(int i) { return &g_ram[HM_CHICKEN_DATA + 8 * i]; }
-static int sec_cols(int n) { return n == 0 ? COW_COLS : HEN_COLS; }
-static int sec_size(int n) { return n == 0 ? COWS : CHICKENS; }
-static int cursor_index(void) { return s.ar * sec_cols(s.an) + s.ac; }
+/* the animals there are, cows first: (section 0 cow / 1 chicken, slot) */
+static int animal_list(int sec[COWS + CHICKENS], int slot[COWS + CHICKENS])
+{
+  int n = 0;
+  for (int i = 0; i < COWS; i++) if (cow(i)[0]) { sec[n] = 0; slot[n] = i; n++; }
+  for (int i = 0; i < CHICKENS; i++) if (hen(i)[0]) { sec[n] = 1; slot[n] = i; n++; }
+  return n;
+}
 static void animals_move(int dx, int dy)
 {
-  if (dx) {
-    int cols = sec_cols(s.an), n = sec_size(s.an);
-    s.ac = (s.ac + cols + dx) % cols;
-    if (s.ar * cols + s.ac >= n) s.ac = dx > 0 ? 0 : (n - 1) % cols;
-  }
-  if (dy) {
-    int row = s.an * 2 + s.ar + dy;              /* four rows: cows 0-1, chickens 2-3 */
-    row = (row + 4) % 4;
-    s.an = row / 2; s.ar = row % 2;
-    int cols = sec_cols(s.an), n = sec_size(s.an);
-    if (s.ac >= cols) s.ac = cols - 1;
-    if (s.ar * cols + s.ac >= n) s.ac = (n - 1) % cols;
-  }
+  int sec[COWS + CHICKENS], slot[COWS + CHICKENS];
+  int n = animal_list(sec, slot);
+  (void)dx;
+  if (!n) { s.ac = s.ar = 0; return; }
+  if (dy) s.ac = (s.ac + n + dy) % n;
+  if (s.ac >= n) s.ac = n - 1;
+  if (s.ac < s.ar) s.ar = s.ac;
+  if (s.ac >= s.ar + ROWS_SHOWN) s.ar = s.ac - ROWS_SHOWN + 1;
 }
 static uint32_t animal_mark(int sec, int i)
 {
@@ -548,50 +548,80 @@ static uint32_t animal_mark(int sec, int i)
     if (c[0] & 0x20) return C_RED;                         /* sick */
     if (c[0] & 0x10) return UI_RGB(0xEC8A2A);              /* cranky */
     if (c[0] & 0x40) return UI_RGB(0xF27AA8);              /* pregnant */
-    bool adult = c[0] & 0x08;
-    if ((c[1] & 0x01) && (c[1] & 0x04) && (!adult || (c[1] & 0x02))) return C_GREEN;   /* all done today */
     return 0;
   }
-  const uint8_t *h = hen(i);
-  if (h[0] & 0x10) return UI_RGB(0xEC8A2A);                /* hungry */
+  if (hen(i)[0] & 0x10) return UI_RGB(0xEC8A2A);           /* hungry */
   return 0;
 }
+/* the animal's picture, the game's own sprite, in a w x h box at (x, y) */
+static void animal_picture(int sec, int i, int x, int y, int w, int h)
+{
+  static uint32_t px[48 * 24];
+  uint8_t st = sec == 0 ? cow(i)[0] : hen(i)[0];
+  bool ok;
+  if (sec == 0) ok = mods_sprite((st & 0x08) ? 0x1C7 : 0x1BA, false, px, w, h);
+  else if (st & 0x02) {
+    uint32_t e[256];
+    ok = mods_item_sprite(0x23, 0, e);
+    memset(px, 0, sizeof px);
+    for (int j = 0; ok && j < 16 && j < h; j++)
+      for (int k = 0; k < 16 && k + (w - 16) / 2 < w; k++) px[j * w + k + (w - 16) / 2] = e[j * 16 + k];
+  } else ok = mods_sprite((st & 0x08) ? 0x212 : 0x217, false, px, w, h);
+  if (!ok) return;
+  for (int j = 0; j < h; j++)
+    for (int k = 0; k < w; k++) if (px[j * w + k]) ui_px(x + k, y + j, px[j * w + k]);
+}
+static void animal_name(int sec, int i, char *buf, size_t n)
+{
+  snprintf(buf, n, "%s %d", sec == 0 ? T("Cow") : T("Chicken"), i + 1);
+}
+/* like the girls' hearts: a row each, the cows with ten hearts of
+ * happiness (0-255; the chickens have none) */
 static void draw_animals(int x, int y)
 {
-  uint32_t px[38 * 20];
-  for (int sec = 0; sec < 2; sec++) {
-    int cols = sec_cols(sec), n = sec_size(sec), cw = sec == 0 ? 39 : 33;
-    int top = y + sec * 47, have = 0;
-    for (int i = 0; i < n; i++) have += (sec == 0 ? cow(i)[0] : hen(i)[0]) != 0;
-    char c[32]; snprintf(c, sizeof c, "%s  %d", sec == 0 ? T("COWS") : T("CHICKENS"), have);
-    ui_text(UI_SMALL, x, top + 7, c, C_INK_SOFT);
-    for (int i = 0; i < n; i++) {
-      int gx = i % cols, gy = i / cols;
-      int sx = x + gx * cw, sy = top + 9 + gy * 19;
-      bool sel = s.an == sec && cursor_index() == i;
-      uint8_t st = sec == 0 ? cow(i)[0] : hen(i)[0];
-      ui_rect(sx, sy, cw - 1, 18, sel ? C_GOLD_DARK : C_PAPER_LINE);
-      ui_rect(sx + 1, sy + 1, cw - 3, 16, sel ? C_SELECT : (st ? C_PAPER : C_PAPER_DARK));
-      if (!st) continue;
-      int w = cw - 3, h = 16;
-      bool ok;
-      if (sec == 0) ok = mods_sprite((st & 0x08) ? 0x18B : 0x1C9, false, px, w, h);
-      else if (st & 0x02) { uint32_t e[256]; ok = mods_item_sprite(0x23, 0, e); memset(px, 0, sizeof px);
-                            if (ok) for (int j = 0; j < 16; j++) for (int k = 0; k < 16; k++) if (k + (w - 16) / 2 < w && j < h) px[j * w + k + (w - 16) / 2] = e[j * 16 + k]; }
-      else ok = mods_sprite((st & 0x08) ? 0x212 : 0x217, false, px, w, h);
-      if (ok)
-        for (int j = 0; j < h; j++)
-          for (int k = 0; k < w; k++) if (px[j * w + k]) ui_px(sx + 1 + k, sy + 1 + j, px[j * w + k]);
-      uint32_t m = animal_mark(sec, i);
-      if (m) { ui_rect(sx + cw - 7, sy + 2, 4, 4, C_WOOD_EDGE); ui_rect(sx + cw - 6, sy + 3, 2, 2, m); }
+  int sec[COWS + CHICKENS], slot[COWS + CHICKENS];
+  int n = animal_list(sec, slot);
+  if (!n) { ui_text(UI_BODY, x + 4, y + 40, T("No animals yet."), C_INK_SOFT); return; }
+  if (s.ac >= n) s.ac = n - 1;
+  for (int r = 0; r < ROWS_SHOWN && s.ar + r < n; r++) {
+    int k = s.ar + r, sc = sec[k], i = slot[k];
+    int ry = y + 1 + r * 19;
+    bool sel = k == s.ac;
+    if (sel) ui_rect(x - 2, ry - 1, 240, 19, C_SELECT);
+    ui_rect(x, ry, 36, 18, C_WOOD_EDGE);
+    ui_rect(x + 1, ry + 1, 34, 16, C_PAPER_DARK);
+    animal_picture(sc, i, x + 2, ry + 1, 32, 16);
+    uint32_t m = animal_mark(sc, i);
+    if (m) { ui_rect(x + 30, ry + 2, 4, 4, C_WOOD_EDGE); ui_rect(x + 31, ry + 3, 2, 2, m); }
+    char name[32]; animal_name(sc, i, name, sizeof name);
+    ui_text(UI_BODY, x + 42, ry + 13, name, C_INK);
+    if (sc == 0) {
+      unsigned v = cow(i)[4];
+      unsigned full = (v * 10 + 127) / 255;
+      uint32_t col = heart_colour(v * 1000 / 256);
+      for (int h = 0; h < 10; h++) ui_heart(x + 112 + h * 9, ry + 6, col, (unsigned)h < full);
+      char num[8]; snprintf(num, sizeof num, "%u", v);
+      ui_text_r(UI_SMALL, x + 236, ry + 12, num, C_INK_SOFT);
+    } else {
+      uint8_t st = hen(i)[0];
+      const char *kind = (st & 0x02) ? T("egg in the incubator") : (st & 0x04) ? T("chick") : T("hen");
+      ui_text(UI_SMALL, x + 112, ry + 12, kind, C_INK_SOFT);
     }
+    if (r < ROWS_SHOWN - 1 && k < n - 1) ui_hline(x + 40, ry + 18, 196, C_PAPER_LINE);
   }
+  /* more above / below */
+  if (s.ar > 0) for (int j = 0; j < 3; j++) ui_hline(x + 237 - j, y - 2 + j, 1 + 2 * j, C_WOOD_DARK);
+  if (s.ar + ROWS_SHOWN < n) for (int j = 0; j < 3; j++) ui_hline(x + 235 + j, y + 96 + j, 5 - 2 * j, C_WOOD_DARK);
 }
 static void animal_details(int x)
 {
-  int i = cursor_index();
+  int sec[COWS + CHICKENS], slot[COWS + CHICKENS];
+  int n = animal_list(sec, slot);
+  if (!n) { ui_text(UI_BODY, x, 193, T("No animals yet."), C_INK_SOFT); return; }
+  if (s.ac >= n) s.ac = n - 1;
+  int i = slot[s.ac];
   char a[96], b[128];
-  if (s.an == 0) {
+  if (sec[s.ac] == 0) {
     const uint8_t *c = cow(i);
     if (!c[0]) { ui_text(UI_BODY, x, 193, T("(empty)"), C_INK_SOFT); return; }
     bool adult = c[0] & 0x08;
