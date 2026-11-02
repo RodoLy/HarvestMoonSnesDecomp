@@ -963,8 +963,9 @@ static int s_ws_l, s_ws_r;
 /* The screens from power-on to choosing the diary, also wide: the Natsume
  * logo ($5D), the title ($5C), the diary list ($5E), the names ($5F) and
  * the intro's road ($3C, before any diary is loaded). Their pictures go on
- * past the 256 (the title's sky, the road's grass, the lists' moving
- * background); on the lists and the names, BG1 (the panels, and the
+ * past the 256 (the title's sky, the lists' moving background; the road's
+ * margins are its own picture reflected, mods_ws_mirror); on the lists
+ * and the names, BG1 (the panels, and the
  * hidden ones beside them) stays in the 256 with BG3, see mods_ws_clamp. */
 static bool ws_start_screen(void)
 {
@@ -997,6 +998,13 @@ static void ws_frame(void)
   g_hm_oam_left = (uint16_t)(0xFFF0 - l);
 }
 void mods_ws_margins(int *left, int *right) { *left = s_ws_l; *right = s_ws_r; }
+/* the intro's road ($3C) is one screen wide: past it, the map's memory
+ * holds other rows, a few pixels off; its margins are the picture itself,
+ * reflected at the edges (the grass, the fences and the bushes carry on) */
+unsigned mods_ws_mirror(void)
+{
+  return g_ram[HM_MAP_ID] == 0x3C && !hm_diary_loaded(g_ram) ? 0x0F : 0;
+}
 unsigned mods_ws_clamp(void)
 {
   uint8_t m = g_ram[HM_MAP_ID];
