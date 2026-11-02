@@ -15,6 +15,7 @@ typedef struct {
   int pad_button;            /* a gamepad button pressed this frame, or -1 */
   int mouse_x, mouse_y;      /* on the menu's canvas; -1 when outside */
   bool mouse_moved, click, rclick;
+  bool touch;                /* the pointer is a finger (a touch screen) */
   int wheel;                 /* + up, - down */
 } UiInput;
 

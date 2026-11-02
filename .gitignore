@@ -3,3 +3,8 @@ __pycache__/
 MEMORIA.md
 /HarvestMoonNative
 /Harvest Moon.command
+/HarvestMoon.apk
+android/.gradle/
+android/app/build/
+android/app/.cxx/
+android/local.properties

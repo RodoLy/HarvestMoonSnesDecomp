@@ -15,7 +15,7 @@
 **100.00%** of the game's code rewritten in C and verified: 45176 of 45176 instructions, 778 of 778 routines (100.0%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
-![platform: Windows / macOS / Linux](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20macOS%20%7C%20Linux-blue)
+![platform: Windows / macOS / Linux / Android](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)
 ![ROM: not included](https://img.shields.io/badge/ROM-not%20included-red)
 
 The game rewritten, routine by routine, as C a person can read. Every
@@ -83,6 +83,44 @@ what you like in Improvements and Options. On Linux: see
    newer.
 3. Double-click **`Harvest Moon.command`** (or `HarvestMoonNative`) and
    choose **your own ROM** the first time.
+
+### How to play it on Android (phones, tablets, the AYN Thor)
+
+The APK is built on your Windows PC, like the Windows version:
+
+1. Double-click **`compilar_android.bat`**. The first time it downloads a
+   Java JDK, Android's command-line tools and, through them, the Android
+   SDK pieces the build needs (about 2.5 GB in all, checked by their
+   checksums), SDL3's source and Gradle; it shows Android's license (answer
+   `y`). Then it builds **`HarvestMoon.apk`** in the project folder (10-20
+   minutes the first time, a couple of minutes after that). Its messages
+   are also in `build\android.log`.
+2. Copy `HarvestMoon.apk` to the device and open it to install it (or,
+   with the device connected over USB with debugging on, the script offers
+   to install it).
+3. The first time, choose **your own ROM** with Android's file picker
+   (Look for another file...): a copy goes into the app's folder,
+   `Android/data/io.github.rodriloy.harvestmoon/files`, with `config.ini`
+   and the diaries (`rom.srm`, which you can copy from the PC to keep
+   playing yours).
+
+On a touch screen the controls are drawn in the look of the game's menus
+(a wooden cross, A B X Y as parchment coins, L and R, Select and Start, the
+pause menu, the crop bag, the launcher and fast forward). Beside a 4:3
+picture they sit in the bars; with widescreen they go over the picture's
+edges, see-through. Auto (Controls → Touch): they show when the screen is
+touched and hide when a gamepad or the device's own buttons are used. The
+back button opens the launcher (or goes back in a menu). With mouse
+controls on, a tap on the field is a click, a drag walks after the finger
+and a long press is a right click.
+
+**Two screens (the AYN Thor).** On a device with a second screen, the
+Harvest Moon 64-style pause menu stays on the lower screen while you play:
+live (the time, your tools, the hearts, the farm, the animals) and used by
+touch (a tap on a tool holds it, the tabs change pages, a drag scrolls the
+animals), while the game goes on above with the device's buttons. Turn it
+off in Controls → Touch → Second screen. On the Thor, launch the app on
+the **top screen** (long-press it → Screen Launch → Top).
 
 ### A launcher in the look of the game
 

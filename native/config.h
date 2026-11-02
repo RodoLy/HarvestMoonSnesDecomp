@@ -36,6 +36,8 @@ typedef struct {
   bool money, stamina, freeze_clock, stock, bags;
   int weather;                       /* WEATHER_* */
   /* controls */
+  int touch;                         /* on-screen controls: TOUCH_AUTO, _ALWAYS, _OFF (touch.h) */
+  bool second_screen;                /* a second screen (the AYN Thor's): the pause menu, live */
   SDL_Scancode keys[NBUTTONS];
   SDL_GamepadButton pad[NBUTTONS];
 } Config;
@@ -46,5 +48,6 @@ void config_default_keys(Config *c);
 void config_default_pad(Config *c);
 void config_load(void);
 void config_save(void);
-const char *config_dir(void);        /* the program's folder ("" when unknown) */
+const char *config_dir(void);        /* the program's folder ("" when unknown); on Android the
+                                        app's own folder in the shared storage */
 void config_add_game(const char *path);

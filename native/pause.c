@@ -48,6 +48,7 @@ static struct {
   int an, ar, ac;        /* animals: the section (0 cows, 1 chickens), its row and column */
   int cx, cy;            /* tools cursor: cy -1 = the top slots (cx 0 hand, 1 bag) */
   char message[96];      /* the tools page's feedback line */
+  bool live;             /* drawn for a second screen while the game goes on */
 } s;
 
 /* ── Game data ───────────────────────────────────────────────────────── */
@@ -644,12 +645,12 @@ static void draw_textbox(void)
   if (on_bag()) {
     if (s.message[0]) ui_text(UI_BODY, x, 193, s.message, C_GREEN_DARK);
     else if (!player_free()) ui_text(UI_BODY, x, 193, T("(only while you can move)"), C_RED);
-    else ui_text(UI_BODY, x, 193, T("A  take it out"), C_INK);
+    else ui_text(UI_BODY, x, 193, s.live ? T("Tap: take it out") : T("A  take it out"), C_INK);
     ui_text(UI_SMALL, x, 205, T("Q  put what you carry in / take the last out"), C_INK_SOFT);
   } else if (s.tab == 0) {
     if (s.message[0]) ui_text(UI_BODY, x, 193, s.message, C_GREEN_DARK);
     else if (!player_free()) ui_text(UI_BODY, x, 193, T("(only while you can move)"), C_RED);
-    else ui_text(UI_BODY, x, 193, T("A  equip"), C_INK);
+    else ui_text(UI_BODY, x, 193, s.live ? T("Tap a tool: hold it") : T("A  equip"), C_INK);
     char help[128];
     snprintf(help, sizeof help, "%s    %s %s", T("X  hand ↔ backpack"), T("Y  put away in"), T("the tool shed"));
     ui_text(UI_SMALL, x, 205, help, C_INK_SOFT);
@@ -664,7 +665,8 @@ static void draw_textbox(void)
              T(kSeasons[g_ram[HM_SEASON] & 3]), g_ram[HM_DAY], g_ram[HM_YEAR] + 1u);
     ui_text(UI_BODY, x, 196, d, C_INK);
   }
-  ui_text(UI_SMALL, x, 214, T("B / M / Esc  close     ·     the game is paused"), C_INK_SOFT);
+  if (s.live) ui_text(UI_SMALL, x, 214, T("Tap to choose  ·  the game goes on"), C_INK_SOFT);
+  else ui_text(UI_SMALL, x, 214, T("B / M / Esc  close     ·     the game is paused"), C_INK_SOFT);
   /* the blinking-arrow corner of a game text box, standing still */
   for (int j = 0; j < 3; j++) ui_hline(241 + j, 210 + j, 5 - 2 * j, C_WOOD_DARK);
 }
@@ -769,6 +771,44 @@ void pause_mouse(int mx, int my, bool moved, bool click, bool rclick, int wheel)
     int n = animal_list(sec, slot);
     for (int r = 0; r < ROWS_SHOWN && s.ar + r < n; r++)
       if (hit(mx, my, 8, 72 + r * 19, 242, 19)) s.ac = s.ar + r;
+  }
+}
+
+/* ── Live, on a second screen (second.c) ──────────────────────────────
+ * The same menu, drawn every other frame while the game goes on, and used
+ * by touch: a tap is a click there (equip, swap, take out, the tabs); on
+ * the Animals page a drag scrolls the list. Changes are made between two
+ * frames, as the game's own code would. Before a diary is loaded: the
+ * floor and a line saying so. */
+void pause_live_render(uint32_t *dst)
+{
+  if (!hm_diary_loaded(g_ram)) {
+    ui_target(dst, LW, LH);
+    ui_checker();
+    ui_frame(28, 92, 200, 40, C_PAPER);
+    ui_text_c(UI_BODY, 128, 116, T("Load a diary to begin."), C_INK);
+    return;
+  }
+  if (s.tab >= ntabs()) s.tab = 0;
+  if (s.cy >= inv_rows() || s.cy < -1) s.cy = 0;
+  s.live = true;
+  render();
+  s.live = false;
+  memcpy(dst, s_canvas, sizeof s_canvas);
+}
+void pause_live_touch(int action, int x, int y)
+{
+  static int last_y, acc;
+  if (!hm_diary_loaded(g_ram)) return;
+  if (action == 0) {                                  /* down: a click there */
+    last_y = y; acc = 0;
+    bool keep = s.open;
+    pause_mouse(x, y, true, true, false, 0);
+    s.open = keep;                                    /* "close" means nothing here */
+  } else if (action == 1 && s.tab == 3) {             /* a drag on the animals: scroll */
+    acc += y - last_y; last_y = y;
+    while (acc <= -12) { animals_move(0, +1); acc += 12; }
+    while (acc >= 12) { animals_move(0, -1); acc -= 12; }
   }
 }
 

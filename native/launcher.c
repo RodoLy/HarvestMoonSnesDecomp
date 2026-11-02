@@ -31,6 +31,8 @@
 #include "i18n.h"
 #include "launcher.h"
 #include "native.h"
+#include "second.h"
+#include "touch.h"
 #include "ui.h"
 
 enum { P_MAIN, P_GAMES, P_OPTIONS, P_CONTROLS, P_MODS, P_STATES, NPAGES };
@@ -43,7 +45,7 @@ enum {
 enum {
   V_FULLSCREEN = 1, V_SCALE, V_PICTURE, V_VSYNC, V_WIDESCREEN, V_SPRITES, V_VOLUME, V_FF, V_LANG,
   V_SHOWLAUNCHER, V_FASTTEXT, V_DAYLEN, V_PAUSE, V_TITLEOPT, V_ENDLESS, V_MONEY, V_STAMINA,
-  V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL, V_CROPS, V_SEEDS, V_MOUSE, V_BAG,
+  V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL, V_CROPS, V_SEEDS, V_MOUSE, V_BAG, V_TOUCH, V_SECOND,
 };
 
 typedef struct {
@@ -78,6 +80,8 @@ static struct {
   int nitems;
   struct Hit { int x, y, w, h, i; } hits[40];
   int nhits;
+  struct Hit tabhits[4];  /* the header's tabs (a click or a tap there) */
+  int ntabhits;
   struct { int x, y, w, h, v; } chits[2];
 } L;
 
@@ -207,6 +211,8 @@ static int get_value(int id)
   case V_BAGS: return c->bags;
   case V_WEATHER: return c->weather;
   case V_PADSEL: return host_gamepad_current();
+  case V_TOUCH: return c->touch;
+  case V_SECOND: return c->second_screen;
   }
   return 0;
 }
@@ -240,6 +246,8 @@ static void set_value(int id, int v)
   case V_BAGS: c->bags = v; break;
   case V_WEATHER: c->weather = v; break;
   case V_PADSEL: host_gamepad_select(v); return;
+  case V_TOUCH: c->touch = v; break;
+  case V_SECOND: c->second_screen = v; second_apply(); break;
   }
   host_apply_video();
   host_apply_sound();
@@ -316,9 +324,11 @@ static void build(void)
     add(K_ACTION, A_QUIT, T("Quit"), T("Close the program."));
     break;
   case P_OPTIONS:
+#ifndef SDL_PLATFORM_ANDROID
     toggle(V_FULLSCREEN, "Full screen", "The game over the whole screen (also F11 or Alt+Enter).");
     choice(V_SCALE, "Window size", "How many times the console's picture the window is (when it is not full screen).",
            6, "×1", "×2", "×3", "×4", "×5", "×6");
+#endif
     choice(V_PICTURE, "Picture", "Sharp: as large as the window allows, with no uneven pixels. Exact: whole multiples only, with a border.",
            2, T("Sharp"), T("Exact pixels"));
     toggle(V_VSYNC, "Vertical sync", "Frames follow the screen's refresh (smoothest on 60 Hz screens). Turned off by itself if the screen cannot keep up.");
@@ -342,7 +352,7 @@ static void build(void)
       add(K_ACTION, A_DEFAULT_KEYS, T("Default keys"), T("X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start, Right Shift = Select, arrows."));
       add(K_ACTION, A_HOTKEYS, T("Other keys"), T("Tab: fast forward · M: pause menu · Esc: this menu · F11 / Alt+Enter: full screen · F1-F10: load a state · Shift+F1-F10: save one."));
       toggle(V_MOUSE, "Mouse controls", "Left click next to you uses the tool there, left click farther walks there, right click talks or picks up. The keyboard and the pad still work.");
-    } else {
+    } else if (L.tab[P_CONTROLS] == 1) {
       int n = host_gamepad_count();
       Item *it = add(K_CHOICE, V_PADSEL, T("Gamepad"), n ? T("The gamepad that plays. Left / right: another one, when more are connected.")
                                                           : T("No gamepad connected. Plug one in (USB) or pair it (Bluetooth): it appears here at once."));
@@ -357,6 +367,13 @@ static void build(void)
       }
       add(K_ACTION, A_DEFAULT_PAD, T("Default buttons"), T("The SNES layout: A on the right, B below, X above, Y on the left; shoulders L / R."));
       add(K_ACTION, A_PADHELP, T("Other buttons"), T("Left stick: moves too · R3: pause menu · L3 or Guide: this menu · right trigger: fast forward."));
+    } else {
+      choice(V_TOUCH, "On-screen controls", "Buttons on a touch screen, in the look of the game's menus. Auto: they show when you touch the screen and hide when you use keys or a gamepad.",
+             3, T("Auto"), T("Always"), T("Off"));
+#ifdef SDL_PLATFORM_ANDROID
+      toggle(V_SECOND, "Second screen", "On devices with two screens (the AYN Thor): the pause menu stays on the lower screen while you play, live, and is used by touch.");
+#endif
+      toggle(V_MOUSE, "Mouse controls", "Left click next to you uses the tool there, left click farther walks there, right click talks or picks up. The keyboard and the pad still work.");
     }
     break;
   case P_MODS:
@@ -546,7 +563,7 @@ static void capture(const UiInput *in)
   }
 }
 
-static int page_tabs(int page) { return page == P_CONTROLS || page == P_MODS || page == P_STATES ? 2 : 0; }
+static int page_tabs(int page) { return page == P_CONTROLS ? 3 : page == P_MODS || page == P_STATES ? 2 : 0; }
 
 int launcher_update(const UiInput *in)
 {
@@ -589,6 +606,14 @@ int launcher_update(const UiInput *in)
   build();
   int *sel = &L.sel[L.page];
   if (*sel >= L.nitems) *sel = L.nitems ? L.nitems - 1 : 0;
+  /* the mouse (or a finger) on the tabs */
+  for (int t = 0; t < L.ntabhits && in->click; t++)
+    if (in->mouse_x >= L.tabhits[t].x && in->mouse_x < L.tabhits[t].x + L.tabhits[t].w &&
+        in->mouse_y >= L.tabhits[t].y && in->mouse_y < L.tabhits[t].y + L.tabhits[t].h && L.tab[L.page] != t) {
+      L.tab[L.page] = t; L.sel[L.page] = 0; L.scroll[L.page] = 0;
+      build();
+      return LA_NONE;
+    }
   /* the mouse */
   for (int h = 0; h < L.nhits; h++)
     if (in->mouse_x >= L.hits[h].x && in->mouse_x < L.hits[h].x + L.hits[h].w &&
@@ -681,11 +706,13 @@ static void draw_header(const char *title, int tabs, const char *const *names)
   int x = s_ox + 4;
   ui_frame(x, 2, 248, 24, C_WOOD);
   ui_text_sh(UI_BODY, x + 124 - ui_text_w(UI_BODY, title) / 2, 18, title, C_CREAM);
+  L.ntabhits = 0;
   if (!tabs) return;
   int tx = x + 4;
   for (int t = 0; t < tabs; t++) {
     const char *name = names[t];
     int w = ui_text_w(UI_SMALL, name) + 12;
+    if (t < 4) { L.tabhits[t] = (struct Hit){ tx, 26, w, 12, t }; L.ntabhits = t + 1; }
     bool on = t == L.tab[L.page];
     int y = on ? 26 : 28;
     ui_rect(tx + 1, y, w - 2, 38 - y, C_WOOD_EDGE);
@@ -826,7 +853,7 @@ void launcher_draw(uint32_t *dst, int w, int h, const uint32_t *game, uint32_t f
   } else {
     ui_scene(frame);
   }
-  L.nhits = 0;
+  L.nhits = 0; L.ntabhits = 0;
   build();
   if (L.sel[L.page] >= L.nitems) L.sel[L.page] = L.nitems ? L.nitems - 1 : 0;
   const char *hint = T("A / Enter: choose  ·  B / Esc: back  ·  < >: change");
@@ -848,8 +875,8 @@ void launcher_draw(uint32_t *dst, int w, int h, const uint32_t *game, uint32_t f
   }
   case P_OPTIONS: draw_header(T("Options"), 0, NULL); draw_list(28); break;
   case P_CONTROLS: {
-    const char *tabs[2] = { T("Keyboard"), T("Gamepad") };
-    draw_header(T("Controls"), 2, tabs);
+    const char *tabs[3] = { T("Keyboard"), T("Gamepad"), T("Touch") };
+    draw_header(T("Controls"), 3, tabs);
     draw_list(38);
     break;
   }

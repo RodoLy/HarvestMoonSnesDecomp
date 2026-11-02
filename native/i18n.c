@@ -320,6 +320,17 @@ static const Pair kEs[] = {
   { "First time: choose your own copy of Harvest Moon (USA). It is checked and remembered; next time the game opens with it.", "Primera vez: elige tu propia copia de Harvest Moon (USA). Se revisa y se recuerda; la próxima vez el juego abre con ella." },
   { "Start Harvest Moon with your ROM.", "Empieza Harvest Moon con tu ROM." },
   { "Close the program.", "Cierra el programa." },
+  { "Touch", "Táctil" },
+  { "On-screen controls", "Controles en pantalla" },
+  { "Buttons on a touch screen, in the look of the game's menus. Auto: they show when you touch the screen and hide when you use keys or a gamepad.", "Botones en una pantalla táctil, con el aspecto de los menús del juego. Auto: aparecen al tocar la pantalla y se esconden al usar teclas o un mando." },
+  { "Auto", "Auto" },
+  { "Always", "Siempre" },
+  { "Second screen", "Segunda pantalla" },
+  { "On devices with two screens (the AYN Thor): the pause menu stays on the lower screen while you play, live, and is used by touch.", "En equipos con dos pantallas (la AYN Thor): el menú de pausa se queda en la pantalla de abajo mientras juegas, en vivo, y se usa tocándolo." },
+  { "Tap to choose  ·  the game goes on", "Toca para elegir  ·  el juego sigue" },
+  { "Load a diary to begin.", "Carga un diario para empezar." },
+  { "Tap: take it out", "Toca: sácalo" },
+  { "Tap a tool: hold it", "Toca una herramienta: tómala" },
 };
 static const Pair kIt[] = {
   { "Cheats", "Trucchi" },
@@ -631,6 +642,17 @@ static const Pair kIt[] = {
   { "First time: choose your own copy of Harvest Moon (USA). It is checked and remembered; next time the game opens with it.", "Prima volta: scegli la tua copia di Harvest Moon (USA). Viene verificata e ricordata; la prossima volta il gioco si apre con quella." },
   { "Start Harvest Moon with your ROM.", "Avvia Harvest Moon con la tua ROM." },
   { "Close the program.", "Chiude il programma." },
+  { "Touch", "Touch" },
+  { "On-screen controls", "Comandi sullo schermo" },
+  { "Buttons on a touch screen, in the look of the game's menus. Auto: they show when you touch the screen and hide when you use keys or a gamepad.", "Pulsanti su uno schermo touch, con l'aspetto dei menu del gioco. Auto: compaiono quando tocchi lo schermo e spariscono quando usi tasti o un controller." },
+  { "Auto", "Auto" },
+  { "Always", "Sempre" },
+  { "Second screen", "Secondo schermo" },
+  { "On devices with two screens (the AYN Thor): the pause menu stays on the lower screen while you play, live, and is used by touch.", "Sui dispositivi con due schermi (l'AYN Thor): il menu di pausa resta sullo schermo inferiore mentre giochi, dal vivo, e si usa toccandolo." },
+  { "Tap to choose  ·  the game goes on", "Tocca per scegliere  ·  il gioco continua" },
+  { "Load a diary to begin.", "Carica un diario per iniziare." },
+  { "Tap: take it out", "Tocca: tiralo fuori" },
+  { "Tap a tool: hold it", "Tocca un attrezzo: prendilo" },
 };
 
 static const Pair *s_table;

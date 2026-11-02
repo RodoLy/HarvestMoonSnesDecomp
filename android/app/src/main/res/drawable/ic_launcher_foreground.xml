@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- the harvest moon over a hill and a red barn (drawn for this build) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFE28C" android:pathData="M62,46m-16,0a16,16 0,1 1,32 0a16,16 0,1 1,-32 0" />
+    <path android:fillColor="#F2A23A" android:pathData="M47,52a16,16 0,0 0,30 0z" />
+    <path android:fillColor="#2E5426" android:pathData="M0,78C20,70 40,66 54,70C70,74 88,70 108,64L108,108L0,108z" />
+    <path android:fillColor="#4A1614" android:pathData="M30,58L42,48L54,58z" />
+    <path android:fillColor="#7E2620" android:pathData="M32,58h20v16h-20z" />
+    <path android:fillColor="#4A1614" android:pathData="M39,64h6v10h-6z" />
+</vector>

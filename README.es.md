@@ -16,7 +16,7 @@
 **100.00%** del código del juego reescrito en C y verificado: 45176 de 45176 instrucciones, 778 de 778 rutinas (100.0%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
-![plataforma: Windows / macOS / Linux](https://img.shields.io/badge/plataforma-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20macOS%20%7C%20Linux-blue)
+![plataforma: Windows / macOS / Linux / Android](https://img.shields.io/badge/plataforma-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)
 ![ROM: no incluida](https://img.shields.io/badge/ROM-no%20incluida-red)
 
 El juego reescrito, rutina por rutina, como C que una persona puede leer.
@@ -84,6 +84,47 @@ Linux: ver [Cómo funciona la versión nativa](#cómo-funciona-la-versión-nativ
    macOS 11 o más nuevo.
 3. Doble clic en **`Harvest Moon.command`** (o `HarvestMoonNative`) y elige
    **tu propia ROM** la primera vez.
+
+### Cómo jugarlo en Android (teléfonos, tablets, la AYN Thor)
+
+El APK se compila en tu PC con Windows, como la versión de Windows:
+
+1. Doble clic en **`compilar_android.bat`**. La primera vez descarga un
+   JDK de Java, las herramientas de línea de comandos de Android y, con
+   ellas, las piezas del SDK de Android que hacen falta (unos 2.5 GB en
+   total, revisados por sus sumas de verificación), el código de SDL3 y
+   Gradle; muestra la licencia de Android (contesta `y`). Luego compila
+   **`HarvestMoon.apk`** en la carpeta del proyecto (10-20 minutos la
+   primera vez, un par de minutos después). Sus mensajes también quedan en
+   `build\android.log`.
+2. Copia `HarvestMoon.apk` al equipo y ábrelo para instalarlo (o, con el
+   equipo conectado por USB con la depuración activada, el script ofrece
+   instalarlo).
+3. La primera vez elige **tu propia ROM** con el selector de archivos de
+   Android (Buscar otro archivo...): una copia queda en la carpeta de la
+   app, `Android/data/io.github.rodriloy.harvestmoon/files`, junto con
+   `config.ini` y los diarios (`rom.srm`, que puedes copiar desde la PC
+   para seguir con tu partida).
+
+En una pantalla táctil los controles se dibujan con el aspecto de los
+menús del juego (una cruceta de madera, A B X Y como monedas de
+pergamino, L y R, Select y Start, el menú de pausa, la mochila de
+cosechas, el launcher y el avance rápido). Junto a una imagen 4:3 van en
+las franjas de los lados; con pantalla ancha van sobre los bordes de la
+imagen, transparentes. Auto (Controles → Táctil): aparecen al tocar la
+pantalla y se esconden al usar un mando o los botones del equipo. El
+botón de atrás abre el launcher (o regresa en un menú). Con los controles
+con ratón activados, un toque en el campo es un clic, arrastrar camina
+tras el dedo y mantener presionado es clic derecho.
+
+**Dos pantallas (la AYN Thor).** En un equipo con segunda pantalla, el
+menú de pausa estilo Harvest Moon 64 se queda en la pantalla de abajo
+mientras juegas: en vivo (la hora, tus herramientas, los corazones, la
+granja, los animales) y se usa tocándolo (tocar una herramienta la toma,
+las pestañas cambian de página, arrastrar recorre los animales), mientras
+el juego sigue arriba con los botones del equipo. Se apaga en Controles →
+Táctil → Segunda pantalla. En la Thor, abre la app en la **pantalla de
+arriba** (mantén presionada la app → Screen Launch → Top).
 
 ### Launcher con el aspecto del juego
 

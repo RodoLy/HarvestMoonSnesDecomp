@@ -40,6 +40,8 @@
 #include "launcher.h"
 #include "mods.h"
 #include "pause.h"
+#include "second.h"
+#include "touch.h"
 #include "ui.h"
 
 enum { W = 256, W_MAX = 256 + 2 * WS_BUDGET, H = 224, SRAM_SIZE = 0x2000 };
@@ -338,9 +340,14 @@ static uint16_t read_pad(void)
     if (ly > 16000) m |= B_DOWN;
     if (SDL_GetGamepadAxis(s_gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 12000) fast = true;
   }
-  s_fast = fast;
   s_bag_key = k[SDL_SCANCODE_Q] || (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MASK(SDL_BUTTON_MIDDLE)) ||
               (s_gamepad && SDL_GetGamepadAxis(s_gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 12000);
+  /* the controls on the screen (touch.c): they hide when keys or a pad are used */
+  touch_input_seen(m | (fast ? 1 : 0) | (s_bag_key ? 1 : 0));
+  m |= touch_pad();
+  fast = fast || touch_fast();
+  s_bag_key = s_bag_key || touch_bag();
+  s_fast = fast;
   /* never both ways at once */
   if ((m & (B_LEFT | B_RIGHT)) == (B_LEFT | B_RIGHT)) m &= (uint16_t)~(B_LEFT | B_RIGHT);
   if ((m & (B_UP | B_DOWN)) == (B_UP | B_DOWN)) m &= (uint16_t)~(B_UP | B_DOWN);
@@ -380,6 +387,7 @@ static void toggle_fullscreen(void)
 static void game_mouse(float mx, float my, int button, bool down)
 {
   if (!s_mods || !g_cfg.mouse || s_dst.w <= 0) return;
+  if (mx < 0) { mods_mouse(-1, -1, 0, false); return; }      /* a finger lifted a while ago */
   float rx = mx, ry = my;
   SDL_RenderCoordinatesFromWindow(s_renderer, mx, my, &rx, &ry);
   float cx = (rx - s_dst.x) * s_fw / s_dst.w, cy = (ry - s_dst.y) * H / s_dst.h;
@@ -395,7 +403,7 @@ static void poll_events(void)
     case SDL_EVENT_KEY_DOWN: {
       SDL_Keycode k = ev.key.key;
       if (ev.key.repeat) break;
-      if (k == SDLK_ESCAPE) s_want_launcher = true;
+      if (k == SDLK_ESCAPE || k == SDLK_AC_BACK) s_want_launcher = true;   /* Android: the back button */
       else if (k == SDLK_F11 || (k == SDLK_RETURN && (ev.key.mod & SDL_KMOD_ALT))) toggle_fullscreen();
       else if (k == SDLK_M) {
         bool bound = false;
@@ -416,10 +424,22 @@ static void poll_events(void)
       break;
     case SDL_EVENT_GAMEPAD_ADDED: case SDL_EVENT_GAMEPAD_REMOVED: gamepad_event(&ev); break;
     case SDL_EVENT_MOUSE_MOTION:
+      if (ev.motion.which == SDL_TOUCH_MOUSEID) break;           /* a finger: touch.c has it */
       game_mouse(ev.motion.x, ev.motion.y, 0, false); break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN: case SDL_EVENT_MOUSE_BUTTON_UP:
+      if (ev.button.which == SDL_TOUCH_MOUSEID) break;
       game_mouse(ev.button.x, ev.button.y, ev.button.button == SDL_BUTTON_LEFT ? 1 : ev.button.button == SDL_BUTTON_RIGHT ? 2 : 0,
                  ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+      break;
+    case SDL_EVENT_FINGER_DOWN: case SDL_EVENT_FINGER_MOTION: case SDL_EVENT_FINGER_UP: case SDL_EVENT_FINGER_CANCELED: {
+      int ww = 0, wh = 0, ow = 0, oh = 0;
+      SDL_GetWindowSize(s_window, &ww, &wh);
+      SDL_GetCurrentRenderOutputSize(s_renderer, &ow, &oh);
+      touch_event(&ev, ww, wh, ow, oh, s_dst);
+      break;
+    }
+    case SDL_EVENT_WILL_ENTER_BACKGROUND: case SDL_EVENT_TERMINATING: case SDL_EVENT_LOW_MEMORY:
+      sram_save();                                                 /* a phone may close us any time now */
       break;
     case SDL_EVENT_WINDOW_MOUSE_LEAVE: if (s_mods) mods_mouse(-1, -1, 0, false); break;
     case SDL_EVENT_WINDOW_DISPLAY_CHANGED: host_apply_video(); break;   /* another screen, maybe another shape */
@@ -435,6 +455,58 @@ static void poll_events(void)
  * window) makes some rows and columns of pixels wider than others, and
  * fine patterns (the town's bricks and roofs) shimmer as they scroll; this
  * keeps them steady and sharp. Exact pixels: whole multiples only. */
+static bool s_in_menu;                    /* a menu is up: no controls over it */
+/* tests without a screen: HM_SHOT_AT=frame[,frame...] and HM_SHOT_DIR=dir
+ * keep the whole window's picture (shot<frame>.ppm); HM_SECOND_SHOT likewise
+ * the second screen's menu (second<frame>.ppm) */
+static bool frame_listed(const char *env)
+{
+  const char *e = getenv(env);
+  for (; e && *e; e = strchr(e, ',') ? strchr(e, ',') + 1 : NULL) if (atol(e) == (long)s_frame) return true;
+  return false;
+}
+static void test_shot(void)
+{
+  const char *dir = getenv("HM_SHOT_DIR");
+  if (!dir || !frame_listed("HM_SHOT_AT")) return;
+  SDL_Surface *sf = SDL_RenderReadPixels(s_renderer, NULL);
+  SDL_Surface *rgb = sf ? SDL_ConvertSurface(sf, SDL_PIXELFORMAT_RGB24) : NULL;
+  char path[1200]; snprintf(path, sizeof path, "%s/shot%06ld.ppm", dir, (long)s_frame);
+  FILE *f = rgb ? fopen(path, "wb") : NULL;
+  if (f) {
+    fprintf(f, "P6\n%d %d\n255\n", rgb->w, rgb->h);
+    for (int y = 0; y < rgb->h; y++) fwrite((uint8_t *)rgb->pixels + y * rgb->pitch, 3, (size_t)rgb->w, f);
+    fclose(f);
+  }
+  SDL_DestroySurface(rgb); SDL_DestroySurface(sf);
+}
+static void test_second_shot(void)
+{
+  const char *dir = getenv("HM_SHOT_DIR");
+  if (!dir || !frame_listed("HM_SECOND_SHOT")) return;
+  static uint32_t px[256 * 224];
+  second_render(px);
+  char path[1200]; snprintf(path, sizeof path, "%s/second%06ld.ppm", dir, (long)s_frame);
+  FILE *f = fopen(path, "wb");
+  if (!f) return;
+  fprintf(f, "P6\n256 224\n255\n");
+  for (int i = 0; i < 256 * 224; i++) { uint8_t c[3] = { (uint8_t)(px[i] >> 16), (uint8_t)(px[i] >> 8), (uint8_t)px[i] }; fwrite(c, 1, 3, f); }
+  fclose(f);
+}
+/* HM_TOUCH_AT=frame:x,y,d|m|u[;...] (x, y from 0 to 1 over the window): fingers, for tests */
+static void test_touch(void)
+{
+  const char *e = getenv("HM_TOUCH_AT");
+  for (; e && *e; e = strchr(e, ';') ? strchr(e, ';') + 1 : NULL) {
+    long fr; float x, y; char a;
+    if (sscanf(e, "%ld:%f,%f,%c", &fr, &x, &y, &a) != 4 || fr != (long)s_frame) continue;
+    SDL_Event ev; SDL_zero(ev);
+    ev.type = a == 'd' ? SDL_EVENT_FINGER_DOWN : a == 'm' ? SDL_EVENT_FINGER_MOTION : SDL_EVENT_FINGER_UP;
+    ev.tfinger.touchID = 7; ev.tfinger.fingerID = 1; ev.tfinger.x = x; ev.tfinger.y = y;
+    ev.tfinger.windowID = SDL_GetWindowID(s_window);
+    SDL_PushEvent(&ev);
+  }
+}
 static void present(const void *pixels, int w)
 {
   if (w != s_tex_w) {
@@ -457,6 +529,8 @@ static void present(const void *pixels, int w)
   if (s_soft || (float)k == scale) {
     SDL_RenderClear(s_renderer);
     SDL_RenderTexture(s_renderer, s_texture, NULL, &dst);
+    if (!s_in_menu) touch_draw(s_renderer, ow, oh, dst);
+    test_shot();
     SDL_RenderPresent(s_renderer);
     return;
   }
@@ -475,6 +549,8 @@ static void present(const void *pixels, int w)
     SDL_RenderClear(s_renderer);
     SDL_RenderTexture(s_renderer, s_texture, NULL, &dst);
   }
+  if (!s_in_menu) touch_draw(s_renderer, ow, oh, dst);
+  test_shot();
   SDL_RenderPresent(s_renderer);
 }
 static void present_game(void)
@@ -507,10 +583,15 @@ static void screen_shape(SDL_DisplayID d)
 {
   const SDL_DisplayMode *m = d ? SDL_GetDesktopDisplayMode(d) : NULL;
   if (m && m->w > 0 && m->h > 0) mods_screen_aspect((float)m->w / (float)m->h);
+  int tw, th; const char *e = getenv("HM_TEST_WINDOW");             /* tests: a phone's shape */
+  if (e && sscanf(e, "%dx%d", &tw, &th) == 2 && th > 0) mods_screen_aspect((float)tw / (float)th);
 }
 void host_apply_video(void)
 {
   static int a_full = -1, a_scale = -1, a_vsync = -1, a_fw = -1;
+#ifdef SDL_PLATFORM_ANDROID
+  g_cfg.fullscreen = true;                         /* a phone has no windows */
+#endif
   g_native_ppu_flags = g_cfg.sprite_limits ? (g_native_ppu_flags & ~8u) : (g_native_ppu_flags | 8u);
   if (!s_headless && s_window) screen_shape(SDL_GetDisplayForWindow(s_window));
   int fw = s_mods ? mods_field_width() : W;
@@ -727,7 +808,7 @@ static void menu_input(UiInput *in, uint16_t *prev, uint32_t *held_frames)
       if (ev.key.key == SDLK_RETURN && (ev.key.mod & SDL_KMOD_ALT)) { toggle_fullscreen(); in->key = SDL_SCANCODE_UNKNOWN; break; }
       if (ev.key.key == SDLK_F11) { toggle_fullscreen(); break; }
       if (ev.key.key == SDLK_RETURN || ev.key.key == SDLK_KP_ENTER || ev.key.key == SDLK_SPACE) in->accept = true;
-      if (ev.key.key == SDLK_ESCAPE || ev.key.key == SDLK_BACKSPACE) in->back = true;
+      if (ev.key.key == SDLK_ESCAPE || ev.key.key == SDLK_BACKSPACE || ev.key.key == SDLK_AC_BACK) in->back = true;
       if (ev.key.key == SDLK_PAGEUP || ev.key.key == SDLK_Q) tab_l = true;
       if (ev.key.key == SDLK_PAGEDOWN || ev.key.key == SDLK_E || ev.key.key == SDLK_TAB) tab_r = true;
       break;
@@ -740,9 +821,13 @@ static void menu_input(UiInput *in, uint16_t *prev, uint32_t *held_frames)
       }
       break;
     case SDL_EVENT_GAMEPAD_ADDED: case SDL_EVENT_GAMEPAD_REMOVED: gamepad_event(&ev); break;
-    case SDL_EVENT_MOUSE_MOTION: mx = ev.motion.x; my = ev.motion.y; in->mouse_moved = true; s_menu_mouse = true; break;
+    case SDL_EVENT_MOUSE_MOTION:
+      mx = ev.motion.x; my = ev.motion.y; in->mouse_moved = true; s_menu_mouse = true;
+      if (ev.motion.which == SDL_TOUCH_MOUSEID) in->touch = true;
+      break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
       mx = ev.button.x; my = ev.button.y; s_menu_mouse = true;
+      if (ev.button.which == SDL_TOUCH_MOUSEID) in->touch = true;
       if (ev.button.button == SDL_BUTTON_LEFT) in->click = true;
       if (ev.button.button == SDL_BUTTON_RIGHT) in->rclick = true;
       break;
@@ -827,11 +912,14 @@ static int run_menu(int kind, bool in_game)
   set_fast(false);
   s_menu_mouse = false;
   SDL_ShowCursor();
+  touch_release_all();
+  s_in_menu = true;
   uint32_t t = 0;
   for (;;) {
     UiInput in;
     menu_input(&in, &prev, &held_frames);
     if (s_quit) quit_now();
+    if (in_game) second_frame();
     if (kind == MENU_PAUSE) {
       if (in.back || in.key == SDL_SCANCODE_M) pause_action('B');
       else {
@@ -844,7 +932,7 @@ static int run_menu(int kind, bool in_game)
         if (in.pressed & B_DOWN) pause_action('d');
         if (in.pressed & B_LEFT) pause_action('l');
         if (in.pressed & B_RIGHT) pause_action('r');
-        if (s_mods && g_cfg.mouse && (in.mouse_moved || in.click || in.rclick || in.wheel))
+        if (s_mods && (g_cfg.mouse || in.touch) && (in.mouse_moved || in.click || in.rclick || in.wheel))
           pause_mouse(in.mouse_x < 0 ? -1 : in.mouse_x - (s_fw - 256) / 2, in.mouse_y, in.mouse_moved, in.click, in.rclick, in.wheel);
       }
       if (!pause_is_open()) break;
@@ -876,6 +964,7 @@ static int run_menu(int kind, bool in_game)
     t++;
   }
   if (g_cfg.fullscreen && !g_cfg.mouse) SDL_HideCursor();
+  s_in_menu = false;
   s_swallow = read_pad();            /* what closed the menu stays out of the game */
   s_next_tick = 0; s_last_wake = 0; s_check_n = 0;
   return result;
@@ -905,7 +994,12 @@ static void end_of_frame(uint8_t *ram)
 
   uint16_t pad = 0;
   if (!s_headless) {
+    test_touch();
+    test_second_shot();
     poll_events();
+    touch_frame();
+    { int rq = touch_request(); if (rq == 1) s_want_pause = true; else if (rq == 2) s_want_launcher = true; }
+    second_frame();
     pad = read_pad();
     s_swallow &= pad;
     pad &= (uint16_t)~s_swallow;
@@ -1082,6 +1176,17 @@ bool host_rom_dialog_result(char *out, size_t n)
   if (!SDL_GetAtomicInt(&s_dialog_done)) return false;
   snprintf(out, n, "%s", s_dialog_path);
   SDL_SetAtomicInt(&s_dialog_done, 0);
+#ifdef SDL_PLATFORM_ANDROID
+  /* Android answers with a content:// address, which only SDL can open: a
+   * copy goes into the app's folder as rom.sfc (the diaries beside it) */
+  if (!strncmp(out, "content://", 10)) {
+    size_t size = 0;
+    void *data = SDL_LoadFile(out, &size);
+    char path[1100]; snprintf(path, sizeof path, "%srom.sfc", config_dir());
+    if (data && size && SDL_SaveFile(path, data, size)) snprintf(out, n, "%s", path);
+    SDL_free(data);
+  }
+#endif
   return true;
 }
 
@@ -1169,6 +1274,13 @@ int main(int argc, char **argv)
   if (g_cfg.sprite_limits) g_native_ppu_flags &= ~8u;
   s_fw = s_mods ? mods_field_width() : W;
 
+#ifdef SDL_PLATFORM_ANDROID
+  /* the back button reaches the game (the launcher, or back in a menu);
+   * the game lies on its side; always the whole screen */
+  SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+  SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+  g_cfg.fullscreen = true;
+#endif
   if (!s_headless) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
       fprintf(stderr, "SDL: %s\n", SDL_GetError());
@@ -1176,7 +1288,14 @@ int main(int argc, char **argv)
     }
     screen_shape(SDL_GetPrimaryDisplay());          /* widescreen: as wide as the screen */
     s_fw = s_mods ? mods_field_width() : W;
-    if (!SDL_CreateWindowAndRenderer("Harvest Moon", s_fw * g_cfg.scale, H * g_cfg.scale, SDL_WINDOW_RESIZABLE,
+#ifdef SDL_PLATFORM_ANDROID
+    SDL_WindowFlags wflags = SDL_WINDOW_FULLSCREEN;
+#else
+    SDL_WindowFlags wflags = SDL_WINDOW_RESIZABLE;
+#endif
+    int win_w = s_fw * g_cfg.scale, win_h = H * g_cfg.scale;
+    { const char *e = getenv("HM_TEST_WINDOW"); if (e) sscanf(e, "%dx%d", &win_w, &win_h); }   /* tests: a phone's shape */
+    if (!SDL_CreateWindowAndRenderer("Harvest Moon", win_w, win_h, wflags,
                                      &s_window, &s_renderer)) {
       fprintf(stderr, "SDL: %s\n", SDL_GetError());
       return 1;
@@ -1211,6 +1330,12 @@ int main(int argc, char **argv)
     SDL_JoystickID *ids = SDL_GetGamepads(&n);
     if (ids && n) s_gamepad = SDL_OpenGamepad(ids[0]);
     SDL_free(ids);
+#ifdef SDL_PLATFORM_ANDROID
+    touch_init(s_gamepad == NULL, game_mouse);   /* a phone: the controls from the start */
+#else
+    touch_init(false, game_mouse);               /* a touch screen: when it is touched */
+#endif
+    second_init();
   }
 
   /* the launcher first (unless it is turned off and the ROM is there) */

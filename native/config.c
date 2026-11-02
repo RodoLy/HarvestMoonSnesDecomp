@@ -20,8 +20,21 @@ const ButtonInfo kButtons[NBUTTONS] = {
 
 const char *config_dir(void)
 {
+#ifdef SDL_PLATFORM_ANDROID
+  /* Android/data/<the app>/files on the shared storage (reachable over USB:
+   * the ROM, the diaries, config.ini), else the app's private folder */
+  static char dir[1024];
+  if (!dir[0]) {
+    const char *p = NULL;
+    if (SDL_GetAndroidExternalStorageState() & SDL_ANDROID_EXTERNAL_STORAGE_WRITE) p = SDL_GetAndroidExternalStoragePath();
+    if (!p) p = SDL_GetAndroidInternalStoragePath();
+    if (p) snprintf(dir, sizeof dir, "%s/", p);
+  }
+  return dir;
+#else
   const char *b = SDL_GetBasePath();
   return b ? b : "";
+#endif
 }
 
 void config_default_keys(Config *c)
@@ -54,6 +67,8 @@ void config_defaults(Config *c)
   c->widescreen = false;
   c->pause_menu = false; c->title_options = false; c->endless = false; c->walk_crops = false; c->single_seed = false; c->mouse = false; c->crop_bag = false;
   c->day_length = 0;
+  c->touch = 0;                      /* TOUCH_AUTO: shown when the screen is touched */
+  c->second_screen = true;           /* only where there is one */
   config_default_keys(c);
   config_default_pad(c);
   default_language(c);
@@ -173,6 +188,9 @@ void config_load(void)
         else if (!strcmp(k, "stock")) c->stock = yes(v);
         else if (!strcmp(k, "bags")) c->bags = yes(v);
         else if (!strcmp(k, "weather")) { c->weather = atoi(v); if (c->weather < 0 || c->weather > 3) c->weather = 0; }
+      } else if (!strcmp(section, "[touch]")) {
+        if (!strcmp(k, "controls")) { c->touch = atoi(v); if (c->touch < 0 || c->touch > 2) c->touch = 0; }
+        else if (!strcmp(k, "secondscreen")) c->second_screen = yes(v);
       } else if (!strcmp(section, "[gamepad]")) {
         for (int i = 0; i < NBUTTONS; i++)
           if (!strcmp(k, kButtons[i].ini)) {
@@ -205,6 +223,8 @@ void config_save(void)
             c->fast_text, c->day_length, c->pause_menu, c->title_options, c->endless, c->walk_crops, c->single_seed, c->mouse, c->crop_bag);
     fprintf(f, "[Cheats]\nMoney = %d\nStamina = %d\nFreezeClock = %d\nStock = %d\nBags = %d\nWeather = %d\n\n",
             c->money, c->stamina, c->freeze_clock, c->stock, c->bags, c->weather);
+    fprintf(f, "[Touch]\n# Controls: 0 shown when the screen is touched, 1 always, 2 never\nControls = %d\nSecondScreen = %d\n\n",
+            c->touch, c->second_screen);
     fprintf(f, "[Gamepad]\n# SDL gamepad button names: a (bottom), b (right), x (left), y (top),\n"
                "# back, start, leftshoulder, rightshoulder, dpup, dpdown, dpleft, dpright...\n");
     for (int i = 0; i < NBUTTONS; i++) {

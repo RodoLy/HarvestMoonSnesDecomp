@@ -1,0 +1,72 @@
+// The app: the game's C (native/, built by CMake with the NDK) and SDL3, whose
+// source folder is given by HM_SDL3_SOURCE_DIR (or -PsdlDir=...): its C is
+// built with the game and its Java (SDLActivity...) goes into the app.
+// compilar_android.bat sets all of this up.
+plugins {
+    id 'com.android.application'
+}
+
+def sdlDir = (project.findProperty('sdlDir') ?: System.getenv('HM_SDL3_SOURCE_DIR') ?: '').toString().replace('\\', '/')
+if (!sdlDir || !file("${sdlDir}/android-project/app/src/main/java/org/libsdl/app/SDLActivity.java").exists())
+    throw new GradleException("SDL3's source folder is needed: set HM_SDL3_SOURCE_DIR (or -PsdlDir=...)")
+
+android {
+    namespace = "io.github.rodriloy.harvestmoon"
+    compileSdk 35
+    ndkVersion = "28.2.13676358"
+
+    defaultConfig {
+        applicationId "io.github.rodriloy.harvestmoon"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "0.1.0-beta"
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_static", "-DHM_SDL3_SOURCE_DIR=${sdlDir}"
+                abiFilters 'arm64-v8a'
+            }
+        }
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs += ["${sdlDir}/android-project/app/src/main/java"]
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path '../../native/CMakeLists.txt'
+            version '3.22.1'
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (project.hasProperty('hmKeystore')) {
+                storeFile file(project.property('hmKeystore'))
+                storePassword project.property('hmPassword')
+                keyAlias 'harvestmoon'
+                keyPassword project.property('hmPassword')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig project.hasProperty('hmKeystore') ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
+}

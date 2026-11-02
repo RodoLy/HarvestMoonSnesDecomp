@@ -1,0 +1,5 @@
+// Harvest Moon (native build) for Android. Built by compilar_android.bat
+// (or: gradle -p android assembleRelease with ANDROID_HOME, HM_SDL3_SOURCE_DIR
+// and the signing properties set; see app/build.gradle).
+rootProject.name = 'HarvestMoon'
+include ':app'
