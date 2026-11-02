@@ -349,12 +349,12 @@ static void next_task(void)
 /* elsewhere than the farm: a task now and then */
 static void work_away(uint8_t *ram, const HmRegs *regs)
 {
-  /* as quick as on the farm: two things each game minute (the clock stops
-   * in the houses, and so does she) */
+  /* about as quick as on the farm: one thing each game minute (the clock
+   * stops in the houses, and so does she) */
   int minute = g_ram[HM_HOUR] * 15 + g_ram[HM_MINUTES];
   if (W.offmap_tick == 0 || minute < W.offmap_tick - 1) W.offmap_tick = minute + 1;
   if (minute + 1 == W.offmap_tick) return;
-  if (W.away_left <= 0) W.away_left = 2;
+  if (W.away_left <= 0) W.away_left = 1;
   if (--W.away_left == 0) W.offmap_tick = minute + 1;
   switch (W.task) {
   case T_COWS: if (!feed_cows()) next_task(); break;
@@ -434,7 +434,7 @@ static void work_here(uint8_t *ram, const HmRegs *regs, int w)
     }
     if (walk(w)) {
       if (!dry(tiles()[W.ty * 64 + W.tx])) { W.plen = 0; return; }   /* the player was quicker */
-      face_tile(w); W.wait = 16;
+      face_tile(w); W.wait = 40;
     }
     return;
   case T_REST:                                       /* done: by the house's door */
