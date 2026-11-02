@@ -804,9 +804,77 @@ uint16_t mods_bag_pad(uint16_t pad, bool key)
   }
   return pad;
 }
-/* small pictures of what goes in the bag (12 x 12) */
+/* The item's own sprite, the one the game draws over the player's head
+ * (SUB_8180B7, case 1): DATA8_8196AF gives the item's list, its case 1 the
+ * sprite; the sprite's entry ($86/$87:8080 + 2 x the number) its first
+ * frame's piece list: a count, then 5 bytes a piece (the piece number,
+ * X and Y offsets, attributes: palette bits 0-2, flips bits 4-5). A
+ * piece's graphics are where the loader (CODE_858CB2) takes them from:
+ * bank $88 + (piece >> 8), $8000 + $2000 x (bits 6-7) + 32 x the byte at
+ * $86:8000 + 2 x (bits 0-5); a 16x16 is the 8x8 tiles at +0, +$20, +$200,
+ * +$220. The colours: the OBJ palettes of the game's CGRAM copy. */
+static uint32_t snes_rgb(uint16_t c)
+{
+  uint32_t r = (c & 31) << 3, g = ((c >> 5) & 31) << 3, b = ((c >> 10) & 31) << 3;
+  return UI_RGB(r << 16 | g << 8 | b);
+}
+static bool item_sprite(uint8_t it, uint32_t out[256])
+{
+  memset(out, 0, 256 * sizeof *out);
+  if (it == 0 || it > 0x5A) return false;
+  uint32_t list = hm_bus_rd16(g_ram, 0x8196AF + it * 3u) | (uint32_t)hm_bus_rd8(g_ram, 0x8196AF + it * 3u + 2) << 16;
+  uint16_t sprite = hm_bus_rd16(g_ram, list + 3);
+  bool item_flip = hm_bus_rd8(g_ram, list + 5) & 1;
+  uint32_t bank = sprite >= 0x262 ? 0x870000 : 0x860000;
+  uint16_t number = sprite >= 0x262 ? (uint16_t)(sprite - 0x262) : sprite;
+  uint16_t entry = hm_bus_rd16(g_ram, bank + 0x8080 + 2u * number);
+  uint32_t pl = bank | hm_bus_rd16(g_ram, bank | entry);
+  int count = hm_bus_rd8(g_ram, pl);
+  if (count <= 0 || count > 8) return false;
+  int minx = 99, miny = 99;
+  for (int i = 0; i < count; i++) {
+    int ox = (int8_t)hm_bus_rd8(g_ram, pl + 3 + 5u * i), oy = (int8_t)hm_bus_rd8(g_ram, pl + 4 + 5u * i);
+    if (ox < minx) minx = ox;
+    if (oy < miny) miny = oy;
+  }
+  bool any = false;
+  for (int i = 0; i < count; i++) {
+    uint16_t piece = hm_bus_rd16(g_ram, pl + 1 + 5u * i);
+    int ox = (int8_t)hm_bus_rd8(g_ram, pl + 3 + 5u * i) - minx, oy = (int8_t)hm_bus_rd8(g_ram, pl + 4 + 5u * i) - miny;
+    uint8_t attr = hm_bus_rd8(g_ram, pl + 5 + 5u * i);
+    bool hf = ((attr >> 4) & 1) ^ item_flip, vf = (attr >> 5) & 1;
+    uint16_t part = (uint16_t)((piece & 0xFFC0) >> 6), low = piece & 0x3F;
+    uint32_t src = (uint32_t)(0x88 + (part >> 2)) << 16 |
+                   (uint16_t)((hm_bus_rd16(g_ram, 0x868000 + 2u * low) & 0xFF) * 32u + ((part & 3u) << 13) + 0x8000);
+    const uint8_t *cg = &g_ram[HM_CGRAM_SHADOW + 256 + (attr & 7) * 32];
+    for (int y = 0; y < 16; y++)
+      for (int x = 0; x < 16; x++) {
+        int sx = hf ? 15 - x : x, sy = vf ? 15 - y : y;
+        uint32_t t = src + (sx >= 8 ? 0x20 : 0) + (sy >= 8 ? 0x200 : 0);
+        int r = sy & 7, b = 7 - (sx & 7);
+        uint8_t p0 = hm_bus_rd8(g_ram, t + 2u * r), p1 = hm_bus_rd8(g_ram, t + 2u * r + 1);
+        uint8_t p2 = hm_bus_rd8(g_ram, t + 16 + 2u * r), p3 = hm_bus_rd8(g_ram, t + 17 + 2u * r);
+        int ci = ((p0 >> b) & 1) | ((p1 >> b) & 1) << 1 | ((p2 >> b) & 1) << 2 | ((p3 >> b) & 1) << 3;
+        int X = ox + x, Y = oy + y;
+        if (!ci || X < 0 || Y < 0 || X >= 16 || Y >= 16) continue;
+        out[Y * 16 + X] = snes_rgb((uint16_t)(cg[2 * ci] | cg[2 * ci + 1] << 8));
+        any = true;
+      }
+  }
+  return any;
+}
+
+/* a picture of an item in the bag, 16 x 16: its own sprite, or, if it has
+ * none, a little drawing (12 x 12, centred) */
 void mods_bag_icon(int x, int y, uint8_t it)
 {
+  uint32_t px[256];
+  if (item_sprite(it, px)) {
+    for (int j = 0; j < 16; j++)
+      for (int i = 0; i < 16; i++) if (px[j * 16 + i]) ui_rect(x + i, y + j, 1, 1, px[j * 16 + i]);
+    return;
+  }
+  x += 2; y += 2;
   static const char *const TURNIP[12] = { "...g..g.....", "....gggg....", "...gggggg...", "....gggg....",
     "....pppp....", "...pwwwwp...", "..wwwwwwww..", "..wwwwwwww..", "..wwwwwwww..", "...wwwwww...", ".....ww.....", "......w....." };
   static const char *const POTATO[12] = { "............", "............", "...bbbbb....", "..bbbbbbbb..", ".bbbkbbbbbb.",
@@ -847,7 +915,7 @@ static bool bag_hud(uint32_t *px, int w)
   ui_frame(x, y, 8 + 9 * 18, 26, C_PAPER);
   for (int i = 0; i < 9; i++) {
     int ix = x + 4 + i * 18;
-    if (i < n) mods_bag_icon(ix + 3, y + 7, g_hm_bag[i]);
+    if (i < n) mods_bag_icon(ix + 1, y + 5, g_hm_bag[i]);
     else ui_rect(ix + 7, y + 12, 4, 2, C_PAPER_LINE);
   }
   return true;

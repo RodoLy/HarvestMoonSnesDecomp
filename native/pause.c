@@ -375,7 +375,7 @@ static void draw_bag(int x, int y)
     bool sel = s.bx == i;
     ui_rect(sx, sy, 24, 24, sel ? C_GOLD_DARK : C_PAPER_LINE);
     ui_rect(sx + 1, sy + 1, 22, 22, sel ? C_SELECT : (i < n ? C_PAPER : C_PAPER_DARK));
-    if (i < n) mods_bag_icon(sx + 6, sy + 6, items[i]);
+    if (i < n) mods_bag_icon(sx + 4, sy + 4, items[i]);
   }
   int ty = y + 52;
   if (s.bx < n) {
