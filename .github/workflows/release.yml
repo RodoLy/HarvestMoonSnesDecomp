@@ -3,8 +3,9 @@
 # the source, tagged vVERSION. Nothing from the ROM is in them: each player
 # chooses their own copy of the game the first time.
 #
-# Started by hand from the Actions page (Release -> Run workflow), never on
-# a push: a release is a decision. VERSION must match HM_NATIVE_VERSION in
+# Started by pushing a tag vVERSION (git tag v1.0.0-beta; git push origin
+# v1.0.0-beta), or by hand from the Actions page (Release -> Run workflow);
+# never by an ordinary push: a release is a decision. VERSION must match HM_NATIVE_VERSION in
 # native/native.h (the launcher shows it) and versionName in
 # android/app/build.gradle.
 #
@@ -15,6 +16,8 @@
 name: Release
 
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
@@ -30,7 +33,7 @@ permissions:
   contents: write
 
 env:
-  V: ${{ inputs.version }}
+  TAG: ${{ inputs.version || github.ref_name }}
   SDL_VERSION: '3.4.10'
   SDL_SHA256: '12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785'
 
@@ -39,6 +42,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: The version
+        run: echo "V=${TAG#v}" >> "$GITHUB_ENV"
       - name: The version is the launcher's and the app's
         run: |
           grep -q "HM_NATIVE_VERSION \"$V\"" native/native.h
@@ -54,6 +59,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: The version
+        run: echo "V=${TAG#v}" >> "$GITHUB_ENV"
       - name: Tools
         run: |
           sudo apt-get update -qq
@@ -78,6 +85,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - name: The version
+        run: echo "V=${TAG#v}" >> "$GITHUB_ENV"
       - name: Tools
         run: |
           sudo apt-get update -qq
@@ -104,6 +113,8 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      - name: The version
+        run: echo "V=${TAG#v}" >> "$GITHUB_ENV"
       - name: Build (Apple Silicon and Intel in one)
         run: |
           cmake -S native -B b -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
@@ -126,6 +137,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: The version
+        run: echo "V=${TAG#v}" >> "$GITHUB_ENV"
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
@@ -169,6 +182,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: The version
+        run: echo "V=${TAG#v}" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@v4
         with: { path: out, merge-multiple: true }
       - name: Release
@@ -178,4 +193,4 @@ jobs:
           ls -l out
           sed "s/{VERSION}/$V/g" .github/release_notes.md > notes.md
           gh release create "v$V" out/* --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md \
-            ${{ inputs.prerelease && '--prerelease' || '' }}
+            ${{ (inputs.prerelease || contains(github.ref_name, 'beta')) && '--prerelease' || '' }}
