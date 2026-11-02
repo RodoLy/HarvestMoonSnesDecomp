@@ -1,14 +1,6 @@
-# HarvestMoonSnesDecomp — una reimplimentacion de Harvest Moon (SNES)
+# HarvestMoonSnesDecomp — Harvest Moon (SNES) reescrito en C
 
 [English](README.md) · **Español**
-
-> [!NOTE]
-> **Sobre el nombre.** El título dice descompilación, pero en sentido
-> estricto esto es una **reimplementación en C**, no una descompilación como tal:
-> Harvest Moon se escribió en ensamblador del 65816, así que nunca hubo un
-> código C original que recuperar. El juego se reescribió en C rutina por
-> rutina a partir del desensamblado de HM-Decomp, y cada rutina se
-> comprueba contra la original.
 
 <!-- progress -->
 ![Reescrito en C: 100.00%](https://img.shields.io/badge/reescrito%20en%20C-100.00%25-2f855a)
@@ -16,525 +8,213 @@
 **100.00%** del código del juego reescrito en C y verificado: 45176 de 45176 instrucciones, 778 de 778 rutinas (100.0%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
-![plataforma: Windows / macOS / Linux / Android](https://img.shields.io/badge/plataforma-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)
+![plataforma: Windows / macOS / Linux / Android](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)
 ![ROM: no incluida](https://img.shields.io/badge/ROM-no%20incluida-red)
 
-El juego reescrito, rutina por rutina, como C que una persona puede leer.
-Cada rutina reescrita se **comprueba contra la original byte por byte**: la
-memoria completa (128 KB de WRAM, pila incluida), los registros del CPU y
-los registros de DMA tienen que quedar idénticos.
+Todo el juego reescrito, rutina por rutina, en C que una persona puede leer
+y modificar, y **jugable solo sobre ese C**. Cada rutina se comprobó contra
+la original byte por byte (toda la memoria, los registros del procesador y
+los del DMA deben quedar idénticos). En sentido estricto es una
+*reimplementación* en C: el juego se escribió en ensamblador 65816, así que
+no había C original que recuperar. Parte del desensamblado de la comunidad
+[HM-Decomp](https://github.com/ElisaS-Codes/HM-Decomp) (ElisaS-Codes y
+DasK) y es proyecto hermano de
+[HarvestMoonSNESRecomp](https://github.com/RodriLoy/HarvestMoonSNESRecomp).
 
-Es un proyecto hermano del port jugable
-[HarvestMoonSNESRecomp](https://github.com/RodriLoy/HarvestMoonSNESRecomp)
-y se apoya en el desensamblado de la comunidad
-[HM-Decomp](https://github.com/ElisaS-Codes/HM-Decomp) (ElisaS-Codes y DasK),
-de donde vienen los nombres de las rutinas y el mapa de memoria.
-
-| | HarvestMoonSNESRecomp | HarvestMoonSnesDecomp (este) |
-|---|---|---|
-| Para qué | Jugar: el port de PC con sus mejoras | Entender el juego: código legible |
-| Resultado | El juego (`.exe`) | Rutinas en `src/`, un ejecutable de prueba y el juego jugable compilado solo con ellas |
-| Depende de | Tu ROM | Tu ROM (el comprobador, además, el proyecto de recompilación) |
-
-## Jugarlo: la versión nativa
-
-Con el 100 % reescrito, el juego **se juega solo con este C**:
-sin código recompilado y sin emular la CPU. Cada rutina del juego es una
-función de C de `src/`, llamada directamente. Lo único que sigue en
-software son el chip de imagen y el de sonido de la consola (los gráficos y
-la música del cartucho están en sus formatos), del runner de snesrecomp sin
-cambios, incluidos en `native/chips/`. Además trae todas las mejoras de la
-recompilación y un launcher nuevo.
+## Jugarlo
 
 > [!IMPORTANT]
-> **Necesitas tu propia copia del juego, obtenida legalmente.** Ni este
-> repositorio ni sus descargas traen la ROM ni nada sacado de ella: la
-> primera vez el programa te pide tu copia, la revisa y la recuerda. Por
-> favor no pidas ROMs.
+> **Necesitas tu propia copia legal de Harvest Moon (USA).** No se incluye
+> la ROM ni nada sacado de ella: la primera vez el programa te pide tu
+> copia, la revisa y la recuerda. Por favor no pidas ROMs.
 
-**[⬇ Descargar la última versión](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/latest)**:
-lista para jugar, para Windows, Mac, Linux y Android. Las novedades: [CHANGELOG.md](CHANGELOG.md#cambios).
+**[⬇ Descargar la última versión](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/latest)** · Novedades: [CHANGELOG.md](CHANGELOG.md)
+
+| | Descarga | O compílalo tú |
+|---|---|---|
+| **Windows** 10/11 | `…-Windows.zip`: descomprime y abre `HarvestMoonNative.exe` | `build.bat` |
+| **Mac** (macOS 11+) | `…-Mac.zip`: descomprime y doble clic en `Harvest Moon.command` | `build_mac.command` |
+| **Android** 8+ | `…-Android.apk`: ábrelo en el equipo para instalarlo | `build_android.bat` (en Windows) |
+| **Linux** (x86_64) | `…-Linux.tar.gz`: descomprime y ejecuta `./HarvestMoonNative` | [ver abajo](#compilar-y-comprobar) |
 
 > [!NOTE]
 > **La primera vez tu computadora o teléfono te va a advertir: es normal.**
-> Es un proyecto gratuito hecho por aficionados: los programas no están
-> firmados con un certificado de pago y el APK no viene de la Play Store, así
-> que Windows (*«Windows protegió tu PC»* → **Más información → Ejecutar de
-> todas formas**), macOS (*«desarrollador no identificado»* → clic derecho →
-> **Abrir**) y Android (*«apps desconocidas»* → permitirlo para tu navegador o
-> explorador) preguntan antes. Las descargas las compila GitHub mismo con este
-> código público (la pestaña **Actions**), y cada versión publica su SHA-256
-> para comprobar un archivo. Si prefieres no abrir un programa descargado,
-> compílalo tú con los scripts de abajo.
+> Los programas no están firmados con un certificado de pago y el APK no
+> viene de la Play Store. Windows: **Más información → Ejecutar de todas
+> formas**. Mac: clic derecho → **Abrir**. Android: permite instalar apps
+> desde tu navegador o explorador. Las descargas las compila GitHub con
+> este código público (pestaña **Actions**) y cada versión trae su SHA-256.
 
-### Cómo jugarlo en Windows
+**En Android** los controles se dibujan en la pantalla con el aspecto de
+los menús del juego (se ocultan cuando usas un mando o los botones del
+equipo). En un equipo de dos pantallas como la **AYN Thor**, el menú de
+pausa queda en vivo en la pantalla de abajo y se usa tocándolo (abre la
+app en la pantalla de arriba).
 
-1. Descarga **`HarvestMoon-…-Windows.zip`** y descomprímelo donde quieras.
-2. Abre **`HarvestMoonNative.exe`**. La primera vez Windows puede decir
-   *«Windows protegió tu PC»*, porque el programa no está firmado con un
-   certificado de pago: da clic en **Más información → Ejecutar de todas
-   formas**.
-3. La primera vez te pide **tu propia ROM** de *Harvest Moon (USA)*; la
-   revisa y la recuerda.
-
-**Todo viene apagado**: el juego es el de la consola hasta que actives lo
-que quieras en Mejoras y Opciones.
-
-O compílalo tú: descarga el código y haz doble clic en **`build.bat`**. La
-primera vez descarga un compilador de C (llvm-mingw) y SDL3 (unos 190 MB,
-revisados por su SHA-256) y compila el juego en un minuto más o menos.
-Windows 10/11, x64 y ARM.
-
-### Cómo jugarlo en Mac
-
-1. Descarga **`HarvestMoon-…-Mac.zip`** y descomprímelo (Apple Silicon e
-   Intel, macOS 11 o más nuevo).
-2. Doble clic en **`Harvest Moon.command`**. La primera vez macOS puede
-   decir que es de un desarrollador no identificado: clic derecho →
-   **Abrir** → **Abrir** (o, en Terminal, `xattr -dr
-   com.apple.quarantine` sobre la carpeta).
-3. Elige **tu propia ROM** la primera vez.
-
-O compílalo tú: doble clic en **`build_mac.command`** en el código. Si
-faltan las herramientas de línea de comandos de Apple pide instalarlas, y
-la primera vez descarga CMake (50 MB, revisado por su SHA-256) si no lo
-tienes, y el código de SDL3; compilar tarda unos minutos.
-
-### Cómo jugarlo en Android (teléfonos, tablets, la AYN Thor)
-
-1. Descarga **`HarvestMoon-…-Android.apk`** en el equipo (o cópialo ahí) y
-   ábrelo para instalarlo; Android pide permitir instalar apps desde ese
-   explorador o navegador. Android 8 o más nuevo.
-2. La primera vez elige **tu propia ROM** con el selector de archivos de
-   Android (Buscar otro archivo...): una copia queda en la carpeta de la
-   app, `Android/data/io.github.rodriloy.harvestmoon/files`, junto con
-   `config.ini`, la carpeta `mods` y los diarios (`rom.srm`, que puedes
-   copiar desde la PC para seguir con tu partida).
-
-O compila el APK tú en una PC con Windows: doble clic en
-**`build_android.bat`**. La primera vez descarga un JDK de Java, las
-herramientas de línea de comandos de Android y las piezas del SDK que
-hacen falta (unos 2.5 GB, revisados por sus sumas de verificación), el
-código de SDL3 y Gradle; muestra la licencia de Android (contesta `y`).
-Luego compila **`HarvestMoon.apk`** (10-20 minutos la primera vez). Sus
-mensajes también quedan en `build\android.log`.
-
-En una pantalla táctil los controles se dibujan con el aspecto de los
-menús del juego (una cruceta de madera, A B X Y como monedas de
-pergamino, L y R, Select y Start, el menú de pausa, la mochila de
-cosechas, el launcher y el avance rápido). Junto a una imagen 4:3 van en
-las franjas de los lados; con pantalla ancha van sobre los bordes de la
-imagen, transparentes. Auto (Controles → Táctil): aparecen al tocar la
-pantalla y se esconden al usar un mando o los botones del equipo. El
-botón de atrás abre el launcher (o regresa en un menú). Con los controles
-con ratón activados, un toque en el campo es un clic, arrastrar camina
-tras el dedo y mantener presionado es clic derecho.
-
-![Controles táctiles en un teléfono](docs/screenshots/android_touch.png)
-
-**Dos pantallas (la AYN Thor).** En un equipo con segunda pantalla, el
-menú de pausa estilo Harvest Moon 64 se queda en la pantalla de abajo
-mientras juegas: en vivo (la hora, tus herramientas, los corazones, la
-granja, los animales) y se usa tocándolo (tocar una herramienta la toma,
-las pestañas cambian de página, arrastrar recorre los animales), mientras
-el juego sigue arriba con los botones del equipo. Se apaga en Controles →
-Táctil → Segunda pantalla (la opción solo aparece si el equipo tiene otra
-pantalla). En la Thor, abre la app en la **pantalla de
-arriba** (mantén presionada la app → Screen Launch → Top).
-
-![Las dos pantallas de la AYN Thor](docs/screenshots/android_two_screens.png)
-
-### Cómo jugarlo en Linux
-
-Descarga **`HarvestMoon-…-Linux.tar.gz`** (x86_64), descomprímelo y
-ejecuta `./HarvestMoonNative` (o `./HarvestMoonNative /ruta/a/tu/rom.sfc`).
-Para compilarlo tú, ver
-[Cómo funciona la versión nativa](#cómo-funciona-la-versión-nativa).
-
-### Launcher con el aspecto del juego
-
-Marcos de madera, pergamino y la mano que señala, todo dibujado a la
-resolución del SNES, así que sus píxeles son del tamaño de los del juego.
-Es la primera pantalla del programa, sobre una granja en un día soleado.
-Se maneja con teclado, mando o
-ratón, en **inglés (por defecto), español o italiano**. En el juego se abre con **Esc**
-(o L3 / Guía en el mando, o OPTIONS en el título) y el juego queda en pausa
-mientras la música sigue.
-
-| Launcher | Primera vez: elegir la ROM |
+| Controles táctiles | Las dos pantallas de la AYN Thor |
 |---|---|
-| ![Launcher](docs/screenshots/launcher.png) | ![Elegir la ROM](docs/screenshots/first_rom.png) |
+| ![Controles táctiles](docs/screenshots/android_touch.png) | ![Dos pantallas](docs/screenshots/android_two_screens.png) |
 
-- **Opciones** — pantalla completa, tamaño de ventana (×1 a ×6), imagen
-  nítida o de píxeles exactos, sincronía vertical, pantalla ancha, sprites
-  sin parpadeo o como la consola, volumen, velocidad del avance rápido,
-  idioma y si este menú aparece al iniciar.
-- **Controles** — cada botón de la SNES en el teclado y en el mando
-  (presionas la tecla o el botón nuevo); los mandos conectados (Xbox,
-  PlayStation, Switch Pro… por USB o Bluetooth) aparecen al momento y eliges
-  cuál juega; el botón que presionas se ilumina para probarlo.
-- **Estados guardados** — 10 ranuras (también F1–F10 cargar,
-  Shift+F1–F10 guardar). No tocan tus diarios.
-- Todo se guarda en `config.ini` y `keybinds.ini` (el mismo formato de la
-  recompilación, así que tus teclas sirven en los dos).
+## Qué trae
 
-| Opciones | Controles | Mando |
-|---|---|---|
-| ![Opciones](docs/screenshots/options.png) | ![Controles](docs/screenshots/controls.png) | ![Mando](docs/screenshots/gamepad.png) |
+**Todo viene apagado**, así que el juego es exactamente el de la consola:
+activa lo que quieras en el launcher.
 
-| En el juego |
-|---|
-| ![Launcher en el juego](docs/screenshots/launcher_ingame.png) |
+### Un launcher con el aspecto del juego
 
-### Pantalla ancha *(apagada por defecto)*
+La primera pantalla del programa, dibujada a la resolución del SNES con los
+marcos de madera del juego; en el juego se abre con **Esc** (o L3 / Guía) y
+el juego queda en pausa. En inglés, español e italiano.
 
-Muestra más mapa a los lados en lugar de barras negras, con personajes y
-animales también en los márgenes, tan ancho como tu pantalla: una tele o
-monitor 16:9 ve 398 × 224 y una laptop 16:10, 358 × 224 (nunca más ancho
-que 16:9). El inicio del juego
-también es ancho: el logo de Natsume, el camino de la intro, el título, la
-lista de diarios y los nombres. Al borde de un mapa y en cuartos pequeños
-vuelve al 4:3 original, porque ahí el juego no tiene nada que dibujar. Se
-activa en Opciones o en Mejoras.
+- **Opciones**: pantalla completa, tamaño de ventana, píxeles nítidos o
+  exactos, vsync, pantalla ancha, sprites sin parpadeo, volumen, velocidad
+  del avance rápido, idioma.
+- **Controles**: **los mandos se configuran solos** (Xbox, PlayStation,
+  Switch Pro, 8BitDo… por USB o Bluetooth): conectas uno y juegas. Igual
+  puedes cambiar cada botón y cada tecla.
+- **Estados guardados**: 10 espacios (F1–F10 cargar, Shift+F1–F10 guardar).
 
-| Original (4:3) | Pantalla ancha (16:9) |
+| Launcher | Opciones | Controles | Mando |
+|---|---|---|---|
+| ![Launcher](docs/screenshots/launcher.png) | ![Opciones](docs/screenshots/options.png) | ![Controles](docs/screenshots/controls.png) | ![Mando](docs/screenshots/gamepad.png) |
+
+### Pantalla ancha
+
+Más mapa a los lados en vez de franjas negras, tan ancho como tu pantalla
+(16:9 o 16:10), también en las pantallas de inicio.
+
+| Original (4:3) | Pantalla ancha |
 |---|---|
 | ![4:3](docs/screenshots/widescreen_off.png) | ![16:9](docs/screenshots/widescreen.png) |
 
 ### Menú de pausa estilo Harvest Moon 64 *(M o R3)*
 
-Fecha y reloj, dinero y energía; **Inventario** (mano, mochila y la
-bodega: equipar, cambiar y guardar con las reglas del propio juego; las
-semillas que quedan; la mochila de cosechas, si está activada);
-**Corazones** (la cara de cada chica, su propio sprite leído de tu ROM,
-con diez corazones); **Granja** (envíos, madera, forraje, vacas, felicidad,
-el clima de mañana); **Animales** (cada vaca y gallina con su propio
-sprite: ternera o adulta, enferma, preñada, enojada o con hambre,
-felicidad y tamaño de la leche, y si hoy la cepillaste, le hablaste y la
-ordeñaste). Todas las imágenes son los sprites del propio juego, leídos de
-tu ROM. La música sigue sonando.
+Fecha, dinero y energía; tus herramientas y la bodega; los corazones de
+cada chica; el estado de la granja; y cada vaca y gallina con su propio
+sprite, corazones y cuidados del día. Todas las imágenes son las del
+juego, leídas de tu ROM.
 
-| Inventario | Corazones | Granja |
+| Inventario | Corazones | Granja | Animales |
+|---|---|---|---|
+| ![Inventario](docs/screenshots/pause_tools.png) | ![Corazones](docs/screenshots/pause_hearts.png) | ![Granja](docs/screenshots/pause_farm.png) | ![Animales](docs/screenshots/pause_animals.png) |
+
+### Más mejoras
+
+- **Mochila de cosechas** (con el menú de pausa): Q guarda lo que cargas,
+  hasta 9; mantenida en la caja de envíos, los envía todos.
+- **Tu esposa te ayuda**: casado y con sus diez corazones, te ofrece ayuda
+  por un día, tres o una semana; en las mañanas alimenta a los animales y
+  riega (la mitad del trabajo como máximo, cada planta lo mismo que tú).
+- **Su ropa de soltera algunos días**: uno de cada dos días se viste con la
+  ropa de antes de la boda.
+- **Caminar entre cultivos** (se mecen al pasar) y **una semilla a la vez**.
+- **Controles con ratón**: clic para usar una herramienta, caminar o hablar.
+- **Juego sin fin**, **texto rápido**, **días más largos**, **OPTIONS en la
+  pantalla de título**, **avance rápido** (Tab) y **trucos**.
+
+| Mochila de cosechas | Tu esposa ofrece ayudarte | Su ropa de soltera |
 |---|---|---|
-| ![Herramientas](docs/screenshots/pause_tools.png) | ![Corazones](docs/screenshots/pause_hearts.png) | ![Granja](docs/screenshots/pause_farm.png) |
+| ![Mochila de cosechas](docs/screenshots/crop_bag.png) | ![Tu esposa te ayuda](docs/screenshots/wife_help.png) | ![Su ropa de soltera](docs/screenshots/wife_clothes.png) |
 
-| Animales | La mochila de cosechas (en Inventario) |
-|---|---|
-| ![Animales](docs/screenshots/pause_animals.png) | ![Mochila de cosechas](docs/screenshots/crop_bag.png) |
-
-### Las demás mejoras (las de la recompilación)
-
-- **Juego sin fin** *(apagado por defecto)* — ves el final del año 3
-  completo y luego sigues con tu granja: otoño, año 4, 5 y más; el diario
-  dice "4th", "5th"…
-- **OPTIONS en la pantalla de título** — una cuarta opción debajo de HOW TO
-  PLAY que abre el launcher.
-- **Texto rápido** (4×) y **días más largos** (1.5× a 4×).
-- **Trucos** *(apagados por defecto)* — dinero infinito, energía infinita,
-  detener el reloj, madera y forraje infinitos, semillas y alimento
-  infinitos, controlar el clima. Solo ponen valores que el juego puede
-  tener, así que tus partidas siguen válidas si los apagas.
-- **Avance rápido** — mantén Tab (o el gatillo derecho): el juego va ×2 a
-  ×6 y la música se acelera con él.
-- **Caminar entre cultivos** *(apagado por defecto)* — los cultivos de la
-  granja ya no te bloquean el paso, así que puedes llegar al centro de un
-  cuadro de 3×3 para regarlo. Las plantas se mueven cuando pasas.
-- **Semillas de una en una** *(apagado por defecto)* — una bolsa son 9
-  semillas y cada uso siembra solo la casilla de enfrente, así que puedes
-  plantar con la forma que quieras. La bolsa y la energía se gastan con la
-  9.ª semilla, como antes; el menú de pausa muestra las semillas que quedan
-  y se guardan en tu diario.
-- **Mochila de cosechas** *(apagado por defecto; es parte del menú de pausa, así que necesita que esté activado)* — Q (el gatillo
-  izquierdo del mando, el botón central del ratón) guarda lo que cargas
-  sobre la cabeza en una mochila de 9 (cosechas, huevos, leche, comida);
-  con las manos libres saca lo último. Tira uno a la caja de envíos tú
-  mismo y luego mantén Q un segundo desde el mismo sitio: el resto entra
-  uno tras otro, y el juego envía cada uno él mismo, así que el dinero y
-  los contadores son exactamente los suyos. La pestaña Inventario del menú
-  de pausa muestra la mochila y te deja elegir cuál sacar; se guarda en tu
-  diario.
-- **Tu esposa te ayuda** *(apagado por defecto)* — casado y con sus diez
-  corazones (950+): después de oír su frase del día, háblale otra vez y
-  te ofrece ayuda en la granja por un día, tres días o una semana (si le
-  dices que no, ese día ya no vuelve a preguntar). Esas mañanas (6:00-11:00)
-  llena comederos del establo y del gallinero y riega las semillas y plantas
-  sin regar (cada una tarda lo mismo que tú con la regadera),
-  como máximo la mitad del trabajo, caminando por la granja con sus
-  propios sprites (si le hablas, dice sus frases de siempre) y brincando
-  las cercas; si no estás en la granja, el trabajo igual se hace, al mismo
-  ritmo (en las casas el reloj se para, y ella también). A las 11:00 se va a sus
-  quehaceres del mediodía, como en el juego (María, Nina y Ellen en la
-  granja, Ann y Eve en la bodega). Se guarda en tu diario.
-- **Su ropa de soltera algunos días** *(apagado por defecto)* — casado, uno
-  de cada dos días tu esposa se viste con la ropa que usaba antes de la
-  boda, esté donde esté (te ayude o no).
-
-  ![Con su ropa de esposa y, otro día, con la de antes de la boda](docs/screenshots/wife_clothes.png)
-- **Controles con ratón** *(apagado por defecto, en Controles → Teclado)* — clic izquierdo junto a
-  ti usa la herramienta ahí, clic izquierdo
-  más lejos camina hasta ahí (mantenlo para seguir al puntero), clic
-  derecho habla, recoge o abre. Un cuadro marca la casilla bajo el
-  puntero (claro si está a tu alcance). Las semillas solo se siembran en
-  tierra arada: un clic en otro lado camina hasta ahí. En textos y menús,
-  clic izquierdo es A y clic derecho es B; el menú de pausa también se
-  usa con el ratón (apuntar y clic, clic derecho cierra, la rueda recorre
-  los animales).
-
-| OPTIONS en el título | Mejoras | Trucos |
+| Mejoras | Trucos | OPTIONS en el título |
 |---|---|---|
-| ![OPTIONS](docs/screenshots/title_options.png) | ![Mejoras](docs/screenshots/improvements.png) | ![Trucos](docs/screenshots/cheats.png) |
+| ![Mejoras](docs/screenshots/improvements.png) | ![Trucos](docs/screenshots/cheats.png) | ![OPTIONS](docs/screenshots/title_options.png) |
 
-| Tu esposa te ofrece ayuda |
-|---|
-| ![Tu esposa te ayuda](docs/screenshots/wife_help.png) |
-
-**Todo viene apagado**, así que el juego es exactamente el de la consola: activa lo que quieras en Mejoras y Opciones.
+*(Las capturas muestran los menús en inglés; el idioma se cambia en Options → Language.)*
 
 ### Mods de la comunidad
 
-Cualquiera puede hacer un **mod**: dibujos, textos, mapas, música o tablas
-nuevos para el juego, como un parche IPS o BPS (los de siempre del ROM
-hacking) en una carpeta dentro de `mods/`, junto al programa. La página
-**Mods** del launcher los muestra, con su autor y descripción, y activa o
-desactiva cada uno; tu archivo de ROM nunca se modifica (los mods se
-aplican en memoria al iniciar el juego). Cómo hacer uno:
+Nuevas imágenes, textos, mapas o música como parches IPS / BPS, en una
+carpeta dentro de `mods/`; la página **Mods** del launcher activa o apaga
+cada uno. Tu ROM nunca se modifica. Cómo hacer uno:
 [docs/MODS.es.md](docs/MODS.es.md).
 
-![La página Mods](docs/screenshots/mods.png)
+![La página de Mods](docs/screenshots/mods.png)
 
-### Controles
+### Teclas
 
 | Tecla | SNES / acción |
 |---|---|
-| Flechas | Cruceta |
-| X / Z / S / A | A / B / X / Y |
-| C / V | L / R |
-| Enter / Shift derecho | Start / Select |
-| Esc (mando: L3 o Guía) | Launcher (el juego en pausa) |
-| M (mando: R3) | Menú de pausa |
-| Tab (mando: gatillo derecho), mantener | Avance rápido |
-| F1…F10 / Shift+F1…F10 | Cargar / guardar estado |
-| F11 o Alt+Enter | Pantalla completa |
+| Flechas · X Z S A · C V | Cruceta · A B X Y · L R |
+| Enter · Shift derecho | Start · Select |
+| Esc · M · Tab (mantenida) | Launcher · menú de pausa · avance rápido |
+| F1…F10 · Shift+F1…F10 · F11 | Cargar · guardar un estado · pantalla completa |
 
-Todo se cambia en Controles.
+## El código
 
-### Por qué existe
+Las 778 rutinas del juego están en `src/`, un archivo por sistema (el
+clima, la granja, los animales, los eventos, los menús…), con nombres que
+se leen: `src/hm_vars.h` nombra una sola vez cada variable que comparten
+los archivos, con una nota de para qué sirve, y `src/hm_regs.h` los
+registros de la consola. **[GUIDE.es.md](GUIDE.es.md)** explica cómo
+funciona el juego por dentro, para quien no sabe nada de esto, con todo lo
+descubierto en el camino (las probabilidades del clima, los errores del
+juego original…). En inglés: [GUIDE.md](GUIDE.md).
 
-Harvest Moon es de mis juegos favoritos. Después de la recompilación quise
-ir más lejos: entender el juego rutina por rutina y que se pudiera jugar
-solo con ese código.
+- `src/` — las rutinas, y el comprobador que las compara con las
+  originales (`hm_decomp.c`).
+- `native/` — la versión jugable: la ventana, el sonido y los controles
+  (`main.c`), el launcher, las mejoras, y los chips de imagen y sonido de
+  la consola (`native/chips/`, de snesrecomp, sin cambios).
+- `tools/`, `scripts/` — las pruebas y sus recorridos.
+- `DECOMPILATION.md` (el método) y `STATUS.md` (notas).
 
-**Este proyecto se hizo con ayuda de IA.** Yo lo dirigí y estuve
-supervisando cada paso: qué hacer, cómo debía comportarse, probarlo en mi
-propia PC y decidir qué se queda. Si no te gusta que se haya hecho con
-ayuda de IA, está perfecto: simplemente no lo uses.
-
-## Aviso legal
-
-Este repositorio y sus versiones publicadas **no contienen la ROM ni nada
-generado a partir de ella** (ni código generado, ni gráficos, textos o
-música del juego): los programas de las versiones se compilan con este
-código y leen tu copia del juego al iniciar. Para jugar necesitas tu
-propia copia legal de *Harvest Moon (USA)*:
-SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
-
-## Qué está reescrito
-
-| Sistema | Rutinas | Archivo |
-|---|---|---|
-| Números aleatorios | GetRNG, RNGReturn0toA ("dado de n caras") | `src/rng.c` |
-| Aritmética | DivisionUnsigned | `src/math.c` |
-| Clima | SetWeatherFlags, WeatherTomorrow, TvWeatherForecast (el pronóstico de la tele) | `src/weather.c` |
-| Granja | GetTileIndex, LoadDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment, CowEatsGrass (pastar) | `src/farm.c` |
-| Existencias y dinero | AddWood, AddGrass, AddPlayerHappiness, AddMoney | `src/stock.c` |
-| Jugador | ChangeStamina, HaveLunch | `src/stamina.c` |
-| Personas | FindMostLovedName, WifePregnancyAndChildren | `src/people.c` |
-| Calendario | LoadDateNames | `src/calendar.c` |
-| Animales | GetCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingAndStatus (la noche de los animales), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: gallinas, vacas, perro y caballo en el mapa al que entras) | `src/animals.c` |
-| Final | RanchMasteryCalculator (el puntaje final del rancho) | `src/ending.c` |
-| Comandos de los guiones de evento | 57 de los 90: cada cuadro de la vaca, la gallina y el perro (Event_CowFrame, Event_ChickenFrame, Event_DogFrame), saltos y pruebas (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), reloj (TimeRunning / Stopped, SetHour), jugador (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) y banderas | `src/eventcmds.c` |
-| Eventos | SetEventSlotPointer, ResetCurrentEventSlotLong / Short, StartScriptAtTileInFront, StartEventScriptLong / Short (arrancar un guion de evento) | `src/events.c` |
-| Edición del mapa | EditTileOnMap / EditFarmTile, ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), ReadTileChange, DrawTileChange, SetTileTypeBlock, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
-| DMA de video | AddProgrammedDMA (encolar una copia a VRAM / CGRAM para el próximo NMI), RemoveProgrammedDMA, DrawTilemapBlock2x2 (un bloque de 2x2 casillas de BG3), CopyLetterToVram (una letra) | `src/dma.c` |
-| Menús | SaveSlotMenuInputs, LoadSlotMenuInputs, StartMenuInputs, TitleMenuInputs, ListInputs (los botones de cada menú), ImmobileInputs (con un cuadro de texto abierto: acelerar, seguir, cerrar, elegir) | `src/menus.c` |
-| Partidas guardadas | SaveGameSlot (todo el formato de la partida), LoadGameSlotResume, CheckSRAMIntegrity (el comprobador también compara la RAM con batería) | `src/save.c` |
-| Sonido | SoundChipBusy / 7 (esperar "listo"), SoundStartCommand, PlaySoundEffect / 19 (efectos de sonido), SoundCommand0C, SoundCommand0B (órdenes al chip de sonido, comprobadas grabando sus respuestas) | `src/audio.c` |
-| Cuadro de texto | PrintTextFrame (ADDDDFFFF: la impresora, código por código), StartTextBox, CloseTextBox (CODE_8393F9), ClearTextBox (borrar el cuadro), BlinkTextBoxArrow / TextBoxArrow / DrawTextBoxArrow (la flecha de "hay más texto"), FindLetterGraphics / DrawLetter / AdvanceLetterCursor / BlinkTextCursor (letras), PrintDigit (números) | `src/text.c` |
-| Objetos | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites y los objetos que dejan las herramientas en el mapa) | `src/objects.c` |
-| Herramientas | GetTileContent, GetTileProperty, CheckToolSuccess, CalculateTileInFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square, CheckToolSuccessForSound | `src/tools.c` |
-| Usar las herramientas | Las 28 rutinas ToolUsed*: hoz, azada, martillo, hacha, sus versiones de oro, las cinco semillas, pintura, comida, medicina, poción, campana, ordeñadora, cepillo, habichuelas, semilla de gema, pluma azul, regadera, aspersor; UseToolInHand (usa el objeto en la mano: una rutina por objeto, por Tool_Used_Table) | `src/toolused.c` |
-
-Algunas cosas que se descubrieron por el camino (detalles en los
-comentarios de cada archivo):
-
-- "1 de cada n" en el juego no es exactamente 1/n: RNGReturn0toA favorece
-  un poco el 0.
-- Lluvia 1/6 en primavera y 1/10 en verano y otoño; nieve 1/3 en invierno;
-  huracán 1/30 en verano (1/60 con el caparazón de tortuga).
-- El primer año trae dos tormentas fijas: invierno día 8 y verano día 30.
-- De noche, la lluvia rompe cercas (1/96), el huracán además arranca pasto
-  (1/16) y cultivos (1/4), y el año nuevo borra pasto (1/64) y cultivos
-  (1/32).
-- Un cultivo crece una etapa por noche solo si estaba regado; la lluvia
-  riega todo. En otoño los cultivos regados solo se secan, y el primer día
-  de invierno todos mueren y vuelven a tierra arada.
-- El "desarrollo del rancho" de la evaluación final es simplemente cuántas
-  casillas de la granja tienen cercas, cultivos o pasto.
-- Una vaca con hambre puede enfermarse (1/4); si sigue enferma hasta el
-  final, muere, salvo que mañana sea festival. El embarazo cuenta con un
-  contador global, y la felicidad inicial de la cría (20 / 50 / 100) depende
-  de la de la madre.
-- Hijos: el primero pide 450 corazones de la esposa; el segundo, 650 y que
-  el primero tenga 90 días; los dos, la casa en nivel 2. Un hijo nace 60
-  días después de concebido.
-- Si una herramienta funciona lo dice un bit de la tabla de propiedades de
-  la casilla (hoz 01, azada 02, martillo 04, hacha 08, agua 10, semillas
-  20), y solo desde los lados y en las estaciones que la casilla permite.
-  Cualquier objeto que no esté en esa lista "funciona".
-- El sufijo del día es "st/nd/rd" solo para los días 1-3, así que el juego
-  escribe "21th", "22th" y "23th".
-- **Un bug del juego original:** en CowFeedingAndStatus, después de tirar el
-  dado de 1/16 para una vaca que quedó afuera, el registro X se queda en 8
-  bits; si además está la bandera de cerca rota ($0196 bit $0400),
-  `LDY.W #$0002` en $83:BDE1 se lee como instrucción de 2 bytes y el `00`
-  sobrante se ejecuta como `BRK`.
-- Hallazgos con las herramientas: con la azada, una vez al día, 1 de 16
-  una moneda (10 G) o si no 1 de 16 una bolsa de dinero (50 G); en
-  primavera y verano 1 de 32 un topo; 1 de 64 una baya de poder, solo dos
-  veces en todo el juego. La hoz encuentra una rana en verano (1 de 16,
-  +2 de felicidad). Una baya más en la roca del manantial (martillo, 1 de
-  4) y otra en un tocón fuera de la granja (hacha, 1 de 16).
-- Las piedras grandes y los tocones se rompen al 6.º golpe (un mismo
-  contador, $096D); el martillo y el hacha de oro, de un golpe. La azada
-  de oro ara hasta 6 casillas en línea y para en la primera que no puede;
-  la hoz de oro corta las 9 de alrededor. El hacha de oro se salta la
-  revisión de "hoy no hay hallazgos".
-- Las semillas solo prenden en su estación (maíz y tomate en verano, papa
-  y nabo en primavera, pasto en primavera y verano); fuera de estación la
-  casilla queda como un brote muerto.
-- Pintar la casa: cuatro partes de la pared, +10 de felicidad cada una.
-- El puntaje del rancho del final (0-999) suma dinero (máximo 78),
-  animales (3 cada uno), energía máxima, corazones de las chicas,
-  cultivos enviados, felicidad, la casa, los hijos, el reloj, el
-  caparazón de tortuga, el desarrollo de la granja y la felicidad de cada
-  vaca. **Errores:** corazones y envíos se recortan con `AND #$1FF` en vez
-  de tener un tope (enviar 512 nabos cuenta 0), y del dinero solo cuentan
-  los 16 bits bajos (655.360 G cuentan 0).
-- El ánimo del perro cambia cada 2 segundos entre cinco estados y una
-  tirada al azar decide qué hace; cada abrazo se cuenta ($7F1F52). Una
-  gallina que no se levanta arranca otro guion cada $200 cuadros.
-- Hay como mucho 10 "objetos del mapa" (los efectos que dejan las
-  herramientas, como la hierba cortada). Si los 10 están en uso cuando hace
-  falta un 11.º, el juego se congela: `BRA` a sí mismo en $81:A528.
-
-## Carpetas
-
-- `src/` — las rutinas reescritas y el comprobador (`hm_decomp.c/.h`).
-  `src/hm_vars.h` nombra, una sola vez, cada variable del juego que usan
-  varios archivos (con una nota de para qué sirve); `src/hm_regs.h`, los
-  registros de la consola. Cada archivo de rutinas nombra al principio los
-  pocos lugares que solo él usa.
-- `native/` — la versión nativa: el juego corriendo solo sobre las rutinas
-  reescritas (`main.c`: la ventana, los controles, el sonido; `hw.c`: los
-  chips de la consola alrededor del C).
-- `data/decomp_names.tsv` — nombres de 499 rutinas (de HM-Decomp).
-- `tools/build.sh` — genera, renombra y compila el ejecutable de prueba.
-- `tools/check.sh` — corre las pruebas (al azar, partida nueva y noches).
-- `tools/progress.py` — calcula el porcentaje de arriba.
-- `tools/import_decomp_names.py`, `tools/decomp_overrides.py` — herramientas.
-- `scripts/` — recorridos automáticos usados por las pruebas.
-- `GUIDE.es.md` — **una guía de cómo funciona el juego por dentro**, para
-  quien no sabe nada de esto, con todo lo descubierto hasta ahora (en
-  inglés: `GUIDE.md`).
-- `DECOMPILATION.md` — el método explicado. `STATUS.md` — estado y notas.
-
-## Uso
-
-Con los tres proyectos uno al lado del otro:
+### Compilar y comprobar
 
 ```
-HarvestMoonSNESRecomp/   (git clone + bash tools/apply_patches.sh)
-HarvestMoonSnesDecomp/
-HM-Decomp/
-```
-
-```
-cd HarvestMoonSnesDecomp
-tools/build.sh --rom /ruta/a/tu/rom.sfc            # HM_RECOMP=... si la recompilación está en otro lado
-HM_ROM=/ruta/a/tu/rom.sfc tools/check.sh 2000 10   # 10 semillas x 2000 llamadas al azar + partidas
-python3 tools/progress.py --decomp ../HM-Decomp --update-readme
-```
-
-Este proyecto **no modifica** el proyecto de recompilación: genera su
-propia copia del código a partir de tu ROM, le pone los nombres y los
-comprobadores, y compila un ejecutable de prueba en `build/`. Sin
-`HM_DECOMP_CHECK` / `HM_DECOMP_FUZZ`, ese ejecutable juega exactamente igual
-que el juego normal.
-
-## Cómo funciona la versión nativa
-
-`native/` compila `src/*.c` (menos el comprobador) con los chips de imagen y
-de sonido del runner de snesrecomp, sin modificarlos (`native/chips/`, con
-sus licencias: PolyForm Noncommercial y las MIT / ISC de donde vienen). Cada espera del
-cuadro siguiente pasa por `hm_nmi`, que dibuja el cuadro, lee los controles
-y deja correr el chip de sonido; las rutinas que nunca vuelven (RESET, el
-título, las demos, GameLoop…) dejan en `g_hm_next` a dónde saltan y `main`
-llama a la siguiente. Los detalles están en la sección 5.34 de la
-[guía](GUIDE.es.md).
-
-```
-cmake -S native -B build/native
-cmake --build build/native
+cmake -S native -B build/native && cmake --build build/native
 build/native/HarvestMoonNative /ruta/a/tu/rom.sfc
 ```
 
-Para Windows desde Linux: añadir `-DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake`
-(MinGW-w64). SDL3 se compila desde el código si no hay uno instalado.
-`--headless --script archivo --dump-dir carpeta` juega un guion (los mismos
-comandos que el `--script` de la recompilación) sin ventana y guarda la
-imagen y la WRAM; ahí las mejoras están apagadas salvo con `--mods`.
+Para Windows desde Linux agrega `-DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake`.
+Para comparar las rutinas con las originales, con
+[HarvestMoonSNESRecomp](https://github.com/RodriLoy/HarvestMoonSNESRecomp)
+y HM-Decomp junto a esta carpeta:
 
-| Archivo | Qué hace |
-|---|---|
-| `native/main.c` | la ventana, el sonido, los controles, el ritmo, los estados guardados |
-| `native/hw.c` | los chips de la consola alrededor del C (mapa de memoria, registros) |
-| `native/launcher.c`, `native/ui.c` | el launcher y su dibujo |
-| `native/mods.c`, `native/pause.c` | las mejoras de la recompilación y el menú de pausa |
-| `native/config.c`, `native/i18n.c` | `config.ini` / `keybinds.ini` y los textos en tres idiomas |
+```
+tools/build.sh --rom /ruta/a/tu/rom.sfc
+HM_ROM=/ruta/a/tu/rom.sfc tools/check.sh 2000 10
+```
 
-El C solo tiene seis ganchos para las mejoras, con los valores
-de la ROM por defecto, así que el comprobador no ve diferencia:
-`g_hm_oam_right/left` (pantalla ancha), `g_hm_no_ending` (juego sin fin),
-`g_hm_year_suffix` ("4th", "5th"…), `g_hm_crops_passable` (caminar entre
-cultivos), `g_hm_single_seed` (semillas de una en una) y `g_hm_bag_take`
-(la mochila; ella y las semillas se guardan en bytes del diario que el
-juego nunca usa). El ratón solo pulsa los botones del propio juego.
+## Por qué existe
 
-Las letras del launcher y del menú de pausa son Pixelify Sans y Tiny5
-(SIL Open Font License, `native/fonts/`); los iconos y la granja de noche
-están dibujados para este proyecto, sin gráficos del juego.
+Harvest Moon es uno de mis juegos favoritos. Después de la recompilación
+quise ir más lejos: entender el juego rutina por rutina y que se jugara
+solo sobre ese código.
+
+**Este proyecto se hizo con ayuda de IA.** Yo lo dirigí y supervisé cada
+paso: qué hacer, cómo debía comportarse, probarlo en mi propia PC y decidir
+qué se queda. Si no te gusta que se haya hecho con ayuda de IA, está bien:
+simplemente no lo uses.
+
+## Aviso legal
+
+Este repositorio y sus versiones **no contienen la ROM ni nada generado a
+partir de ella** (ni código, gráficos, textos o música del juego): los
+programas leen tu copia al iniciar. Necesitas tu propia copia legal de
+*Harvest Moon (USA)*: SHA-256
+`73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 
 ## Licencia
 
 [PolyForm Noncommercial 1.0.0](LICENSE), la misma que HarvestMoonSNESRecomp:
-uso libre sin fines comerciales. Cubre solo el código de este repositorio,
-no el juego ni sus datos.
+libre para uso no comercial. Cubre solo el código de este repositorio, no
+el juego ni sus datos.
 
 ## Créditos
 
-- [HM-Decomp](https://github.com/ElisaS-Codes/HM-Decomp), de ElisaS-Codes y
-  DasK: el desensamblado, los nombres y el mapa de RAM.
+- [HM-Decomp](https://github.com/ElisaS-Codes/HM-Decomp) de ElisaS-Codes y
+  DasK: el desensamblado, los nombres y el mapa de la RAM.
 - [snesrecomp](https://github.com/RetroPortingToolKit/snesrecomp)
-  (RetroPortingToolKit / Matthew Stanley): el recompilador estático sobre
-  el que corre el comprobador, y los chips de imagen y de sonido de la
-  versión nativa (`native/chips/`, con su licencia y sus créditos MIT / ISC).
+  (RetroPortingToolKit / Matthew Stanley): el recompilador sobre el que
+  corre el comprobador, y los chips de imagen y sonido (`native/chips/`,
+  con sus licencias).
 - [HarvestMoonSNESRecomp](https://github.com/RodriLoy/HarvestMoonSNESRecomp):
-  las mejoras, el menú de pausa, sus textos e iconos, y el mapa de RAM
-  `hm_ram.h`, portados a la versión nativa.
+  las mejoras, el menú de pausa y el mapa de la RAM `hm_ram.h`.
 - [SDL3](https://libsdl.org): ventana, sonido y mandos.
 - [Pixelify Sans](https://github.com/eifetx/Pixelify-Sans) y
-  [Tiny5](https://github.com/Gissio/font_tiny5) (SIL OFL): las letras de
-  los menús.
-- **Harvest Moon** © 1996 Pack-In-Video / AMCCUS, © 1997 Natsume. Todos
-  los nombres, personajes y gráficos pertenecen a sus dueños; este es un
-  proyecto de fan sin fines de lucro, no afiliado ni respaldado por ellos.
+  [Tiny5](https://github.com/Gissio/font_tiny5) (SIL OFL): la letra de los
+  menús. Los íconos y la granja del launcher se dibujaron para este proyecto.
+- **Harvest Moon** © 1996 Pack-In-Video / AMCCUS, © 1997 Natsume. Todos los
+  nombres, personajes y gráficos son de sus dueños; este es un proyecto de
+  fans sin fines de lucro, sin relación ni aval de ellos.
