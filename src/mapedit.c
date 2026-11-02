@@ -17,10 +17,96 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define TILE_CHANGES      0x81B363
+/* ── Names of the memory locations used here ────────────────────────────── */
+/* ROM tables */
+#define TILE_CHANGES      0x81B363   /* the tile changes, 6 bytes each: */
+#define CHG_GFX           0          /*   16b: the graphics' offset in TILE_GRAPHICS */
+#define CHG_ROWS          2          /*   8b: rows of 16x16 tiles */
+#define CHG_COLS          3          /*   8b: columns */
+#define CHG_TYPE          4          /*   16b: the tile type to write (0 = leave it) */
 #define TILE_GRAPHICS     0xA6A096   /* ROM, bank $A6 */
-#define HM_MAP_TILES      0x009B6    /* DB: */
+#define MAP_ANIMATIONS    0x81B963   /* 3 bytes each: a long pointer to a map animation */
+#define MAP_ANIM_BANK_AT  2          /*   8b: the pointer's bank */
+#define JOINS             0x82B02A   /* DATA8_82B02A: 16 entries */
+/* A map animation's steps (7 bytes, at [MAP_ANIM]) */
+#define STEP_CHANGE       0          /* 16b: the tile change ($FFFF end, $FFFE jump) */
+#define STEP_X            2          /* 16b: where, pixels */
+#define STEP_Y            4          /* 16b */
+#define STEP_FRAMES       6          /* 8b: frames to wait after it */
+#define STEP_BYTES        7
+#define JUMP_ADDR         2          /* in a $FFFE step: 16b the address to go on at, */
+#define JUMP_BANK         4          /*   8b its bank */
+
+/* WRAM */
+#define BG1_TILEMAP       0x2000     /* $7E:2000: the map's whole BG1 tilemap (bank $7E) */
+#define HM_MAP_TILES      0x009B6    /* DB: the current map's tile types, 64 x 64 */
 #define HM_MAP_WIDTH      0x00181    /* DB: 1, 2 or other (= 4) screens */
+#define ITEM_FLAGS        0x0974     /* DB: the copy of a map object's flags (objects.c) */
+#define HM_FARM_TILES     0x7EA4E6   /* the farm's own copy of its tile types */
+#define PRINT_X           0x0907     /* DB: where the player was 8 steps before */
+#define PRINT_Y           0x0909
+#define ANIMATION_WAIT    0x0989     /* DB: frames left before the map animation's next step */
+#define WRAM_LONG(a)      (0x7E0000 + (a))   /* the bus address of a ram[] offset */
+#define SEASON_LONG       WRAM_LONG(HM_SEASON)   /* $7F:1F19 (hm_ram.h's HM_SEASON) */
+#define VRAM_TILEMAP      0x6000     /* VRAM: the 64x64 window of the BG1 tilemap */
+
+/* Direct page. $72-$99 mean different things in different routines: the names
+ * below say whose use each one is. ReadTileChange's results (also read by its
+ * callers): */
+#define CHANGE_GFX        0x7E   /* 16b: the graphics' offset in TILE_GRAPHICS */
+#define CHANGE_COLS       0x80   /* 16b: the columns (the callers then make it 4 x: the
+                                  * bytes of a row of the graphics) */
+#define CHANGE_ROWS       0x82   /* 16b: the rows */
+#define CHANGE_TYPE       0x84   /* 16b: the tile type to write (0 = none) */
+/* The graphics being copied: */
+#define SOURCE_PTR        0x72   /* long $72-$74: the graphics (AddProgrammedDMA's source) */
+#define SOURCE_BANK       0x74
+/* DrawTileChange's own uses: */
+#define DRAW_COL          0x7E   /* first the tilemap offset of the column (CHANGE_GFX
+                                  * after ReadTileChange) */
+#define DRAW_ROW          0x80   /* first the tilemap offset of the row (CHANGE_COLS
+                                  * after ReadTileChange) */
+#define DRAW_STRIDE       0x88   /* tilemap bytes from one row to the next */
+#define DRAW_START        0x86   /* the tilemap offset of the top-left corner */
+#define TILEMAP_PTR       0x75   /* long $75-$77: where the row goes in BG1_TILEMAP */
+#define TILEMAP_PTR_BANK  0x77
+#define GFX_ROW_PTR       0x78   /* long $78-$7A: the start of the graphics' row */
+#define GFX_ROW_PTR_BANK  0x7A
+#define SCREEN_SKIP       0x8E   /* $40 once the row crossed into the next screen */
+#define CROSSED           0x90   /* bytes done in the row (+ $40 at a screen crossing) */
+/* SetTileTypeBlock's own uses (DrawWholeMap: TILE_X / TILE_Y too): */
+#define BLOCK_TYPE        0x99   /* 8b: the tile type */
+#define TILE_X            0x82   /* 16b: the position, pixels (CHANGE_ROWS elsewhere) */
+#define TILE_Y            0x84   /* 16b (CHANGE_TYPE elsewhere) */
+#define BLOCK_COLS        0x86   /* 16b: the block's columns */
+#define BLOCK_ROWS        0x88   /* 16b: its rows */
+#define BLOCK_ROW16       0x8E   /* 8b (read as 16b): 16 x the row */
+#define BLOCK_COL16       0x90   /* 8b (read as 16b): 16 x the column */
+/* QueueTileGraphicsDMA's own uses: */
+#define QUEUE_COL         0x7E   /* the tile's column (CHANGE_GFX after ReadTileChange) */
+#define QUEUE_ROW         0x80   /* the tile's row (CHANGE_COLS after ReadTileChange) */
+#define QUEUE_VRAM        0x86   /* the VRAM address of the top-left corner */
+#define ROW_SOURCE        0x75   /* long $75-$77: the start of the graphics' row */
+#define ROW_SOURCE_BANK   0x77
+#define FIRST_CHANNEL     0x92   /* 8b: the pair's first DMA channel (2, then 0) */
+#define DMA_CHANNEL       0x27   /* 8b: AddProgrammedDMA's channel */
+#define DMA_B_ADDRESS     0x29   /* 8b: its destination register (B-bus, $21xx) */
+#define BBAD_VRAM         0x18   /*   $2118, the VRAM data register (as in dma.c) */
+/* DrawWholeMap's own uses: */
+#define TILE_PROPS        0x0D   /* long $0D-$0F: the map's tile property table (4 bytes
+                                  * a type; byte 0 = its drawing) */
+#define JOIN_MASK         0x86   /* the neighbours of the same kind (left 8, right 2,
+                                  * up 4, down 1) */
+#define JOIN_ADD          0x94   /* 8b: JOINS[mask] - 1, added to the drawing */
+/* The map animation (StartMapAnimation, RunMapAnimation): */
+#define MAP_ANIM          0xCF   /* long $CF-$D1: its next step (0 = none) */
+#define MAP_ANIM_BANK     0xD1
+#define ANIM_ENTRY        0x7E   /* StartMapAnimation: the entry asked for */
+#define JUMP_PTR          0x72   /* RunMapAnimation: long $72-$74, a jump's target */
+#define JUMP_PTR_BANK     0x74
+/* Others: */
+#define MAP_OBJ_PTR       0x07   /* long $07-$09: the map object worked on (objects.c) */
+/* HM_MAP_ID ($22, hm_ram.h): the map being shown */
 
 static void push16(uint8_t *ram, HmRegs *r, uint16_t v)
 {
@@ -45,12 +131,12 @@ void hm_ReadTileChange(uint8_t *ram, HmRegs *r)
   s = (s & 0xFFFF) + n + (s > 0xFFFF);                 /* ADC (carry chained) */
   r->c = s > 0xFFFF;
   uint16_t x = (uint16_t)s;
-  hm_dp_w16(ram, r, 0x7E, hm_bus_rd16(ram, TILE_CHANGES + x));
-  hm_dp_w16(ram, r, 0x82, hm_bus_rd8(ram, TILE_CHANGES + (uint16_t)(x + 2)));
-  hm_dp_w16(ram, r, 0x80, hm_bus_rd8(ram, TILE_CHANGES + (uint16_t)(x + 3)));
-  r->a = hm_bus_rd16(ram, TILE_CHANGES + (uint16_t)(x + 4));
-  hm_dp_w16(ram, r, 0x84, r->a);
-  r->x = (uint16_t)(x + 4);
+  hm_dp_w16(ram, r, CHANGE_GFX, hm_bus_rd16(ram, TILE_CHANGES + x));
+  hm_dp_w16(ram, r, CHANGE_ROWS, hm_bus_rd8(ram, TILE_CHANGES + (uint16_t)(x + CHG_ROWS)));
+  hm_dp_w16(ram, r, CHANGE_COLS, hm_bus_rd8(ram, TILE_CHANGES + (uint16_t)(x + CHG_COLS)));
+  r->a = hm_bus_rd16(ram, TILE_CHANGES + (uint16_t)(x + CHG_TYPE));
+  hm_dp_w16(ram, r, CHANGE_TYPE, r->a);
+  r->x = (uint16_t)(x + CHG_TYPE);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -68,70 +154,70 @@ void hm_DrawTileChange(uint8_t *ram, HmRegs *r)
 {
   uint16_t change = r->a;
   push16(ram, r, change);                                /* PHA */
-  hm_dp_w16(ram, r, 0x7E, (uint16_t)((r->x >> 4) << 2));
+  hm_dp_w16(ram, r, DRAW_COL, (uint16_t)((r->x >> 4) << 2));
   uint16_t row = (uint16_t)((r->y >> 4) << 7), stride = 0x40;
-  hm_dp_w16(ram, r, 0x80, row);
-  hm_dp_w16(ram, r, 0x88, stride);
+  hm_dp_w16(ram, r, DRAW_ROW, row);
+  hm_dp_w16(ram, r, DRAW_STRIDE, stride);
   uint8_t width = hm_bus_rd8(ram, ((uint32_t)r->db << 16) + HM_MAP_WIDTH);
   if (width != 1) {
     row = (uint16_t)(row << 1); stride = (uint16_t)(stride << 1);
-    hm_dp_w16(ram, r, 0x80, row); hm_dp_w16(ram, r, 0x88, stride);
+    hm_dp_w16(ram, r, DRAW_ROW, row); hm_dp_w16(ram, r, DRAW_STRIDE, stride);
     if (width != 2) {
       row = (uint16_t)(row << 1); stride = (uint16_t)(stride << 1);
-      hm_dp_w16(ram, r, 0x80, row); hm_dp_w16(ram, r, 0x88, stride);
+      hm_dp_w16(ram, r, DRAW_ROW, row); hm_dp_w16(ram, r, DRAW_STRIDE, stride);
     }
   }
-  hm_dp_w16(ram, r, 0x86, (uint16_t)(hm_dp_r16(ram, r, 0x7E) + row));
+  hm_dp_w16(ram, r, DRAW_START, (uint16_t)(hm_dp_r16(ram, r, DRAW_COL) + row));
   r->a = pull16(ram, r);                                 /* PLA */
   hm_jsl(ram, r, RET_83A_CHANGES, 0x81);
   hm_ReadTileChange(ram, r);
   hm_rtl(ram, r);
 
-  uint16_t cols4 = (uint16_t)(hm_dp_r16(ram, r, 0x80) << 2);
-  hm_dp_w16(ram, r, 0x80, cols4);
-  uint16_t src = (uint16_t)(0xA096 + hm_dp_r16(ram, r, 0x7E));
-  hm_dp_w16(ram, r, 0x72, src); hm_dp_w16(ram, r, 0x78, src);
-  *hm_dp(ram, r, 0x74) = 0xA6; *hm_dp(ram, r, 0x7A) = 0xA6;
-  hm_dp_w16(ram, r, 0x75, (uint16_t)(0x2000 + hm_dp_r16(ram, r, 0x86)));
-  *hm_dp(ram, r, 0x77) = 0x7E;
-  hm_dp_w16(ram, r, 0x8E, 0);
-  hm_dp_w16(ram, r, 0x90, 0);
+  uint16_t cols4 = (uint16_t)(hm_dp_r16(ram, r, CHANGE_COLS) << 2);
+  hm_dp_w16(ram, r, CHANGE_COLS, cols4);
+  uint16_t src = (uint16_t)((uint16_t)TILE_GRAPHICS + hm_dp_r16(ram, r, CHANGE_GFX));
+  hm_dp_w16(ram, r, SOURCE_PTR, src); hm_dp_w16(ram, r, GFX_ROW_PTR, src);
+  *hm_dp(ram, r, SOURCE_BANK) = 0xA6; *hm_dp(ram, r, GFX_ROW_PTR_BANK) = 0xA6;
+  hm_dp_w16(ram, r, TILEMAP_PTR, (uint16_t)(BG1_TILEMAP + hm_dp_r16(ram, r, DRAW_START)));
+  *hm_dp(ram, r, TILEMAP_PTR_BANK) = 0x7E;
+  hm_dp_w16(ram, r, SCREEN_SKIP, 0);
+  hm_dp_w16(ram, r, CROSSED, 0);
 
-  uint16_t rows = hm_dp_r16(ram, r, 0x82);
+  uint16_t rows = hm_dp_r16(ram, r, CHANGE_ROWS);
   uint16_t y = 0;
   do {
     push16(ram, r, y);                                   /* PHY */
     for (uint16_t pass = 0; pass != 2; pass++) {         /* the two halves */
       push16(ram, r, pass);                              /* PHA */
       uint16_t sy = 0, dx = 0;
-      hm_dp_w16(ram, r, 0x90, 0);
+      hm_dp_w16(ram, r, CROSSED, 0);
       do {
-        uint16_t v = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, sy));
+        uint16_t v = hm_bus_rd16(ram, hm_dp_long(ram, r, SOURCE_PTR, sy));
         push16(ram, r, sy);                              /* PHY; TXY */
-        hm_bus_wr16(ram, hm_dp_long(ram, r, 0x75, dx), v);
+        hm_bus_wr16(ram, hm_dp_long(ram, r, TILEMAP_PTR, dx), v);
         sy = (uint16_t)(pull16(ram, r) + 2);             /* PLY; INY; INY */
         dx = (uint16_t)(dx + 2);
         pull16(ram, r); push16(ram, r, pass);            /* PLA; PHA */
-        uint16_t crossed = (uint16_t)(hm_dp_r16(ram, r, 0x90) + 2);
-        hm_dp_w16(ram, r, 0x90, crossed);
-        if ((uint16_t)(hm_dp_r16(ram, r, 0x7E) + crossed) & 0x0040) {
-          hm_dp_w16(ram, r, 0x8E, 0x40);                 /* next screen */
-          hm_dp_w16(ram, r, 0x90, (uint16_t)(crossed + 0x40));
+        uint16_t crossed = (uint16_t)(hm_dp_r16(ram, r, CROSSED) + 2);
+        hm_dp_w16(ram, r, CROSSED, crossed);
+        if ((uint16_t)(hm_dp_r16(ram, r, CHANGE_GFX) + crossed) & 0x0040) {
+          hm_dp_w16(ram, r, SCREEN_SKIP, 0x40);          /* next screen */
+          hm_dp_w16(ram, r, CROSSED, (uint16_t)(crossed + 0x40));
           sy = (uint16_t)(sy + 0x40);
         }
-      } while (dx != hm_dp_r16(ram, r, 0x80));
-      hm_dp_w16(ram, r, 0x72, (uint16_t)(hm_dp_r16(ram, r, 0x72) + 0x40));
-      hm_dp_w16(ram, r, 0x75, (uint16_t)(hm_dp_r16(ram, r, 0x75) + hm_dp_r16(ram, r, 0x88)));
+      } while (dx != hm_dp_r16(ram, r, CHANGE_COLS));
+      hm_dp_w16(ram, r, SOURCE_PTR, (uint16_t)(hm_dp_r16(ram, r, SOURCE_PTR) + 0x40));
+      hm_dp_w16(ram, r, TILEMAP_PTR, (uint16_t)(hm_dp_r16(ram, r, TILEMAP_PTR) + hm_dp_r16(ram, r, DRAW_STRIDE)));
       pull16(ram, r);                                    /* PLA */
       r->x = dx;
     }
-    uint32_t next = (uint32_t)hm_dp_r16(ram, r, 0x78) + hm_dp_r16(ram, r, 0x80);
-    next = (next & 0xFFFF) + hm_dp_r16(ram, r, 0x8E) + (next > 0xFFFF);
-    hm_dp_w16(ram, r, 0x78, (uint16_t)next);
-    hm_dp_w16(ram, r, 0x72, (uint16_t)next);
-    hm_dp_w16(ram, r, 0x8E, 0);
-    r->a = (uint16_t)(hm_dp_r16(ram, r, 0x7E) + hm_dp_r16(ram, r, 0x90));
-    hm_dp_w16(ram, r, 0x7E, r->a);
+    uint32_t next = (uint32_t)hm_dp_r16(ram, r, GFX_ROW_PTR) + hm_dp_r16(ram, r, CHANGE_COLS);
+    next = (next & 0xFFFF) + hm_dp_r16(ram, r, SCREEN_SKIP) + (next > 0xFFFF);
+    hm_dp_w16(ram, r, GFX_ROW_PTR, (uint16_t)next);
+    hm_dp_w16(ram, r, SOURCE_PTR, (uint16_t)next);
+    hm_dp_w16(ram, r, SCREEN_SKIP, 0);
+    r->a = (uint16_t)(hm_dp_r16(ram, r, CHANGE_GFX) + hm_dp_r16(ram, r, CROSSED));
+    hm_dp_w16(ram, r, CHANGE_GFX, r->a);
     y = (uint16_t)(pull16(ram, r) + 1);                  /* PLY; INY */
   } while (y != rows);
   r->y = y;
@@ -152,19 +238,19 @@ void hm_DrawTileChange(uint8_t *ram, HmRegs *r)
 void hm_SetTileTypeBlock(uint8_t *ram, HmRegs *r)
 {
   uint8_t type = (uint8_t)r->a;
-  *hm_dp(ram, r, 0x99) = type;
-  hm_dp_w16(ram, r, 0x82, r->x);
-  hm_dp_w16(ram, r, 0x84, r->y);
+  *hm_dp(ram, r, BLOCK_TYPE) = type;
+  hm_dp_w16(ram, r, TILE_X, r->x);
+  hm_dp_w16(ram, r, TILE_Y, r->y);
   uint16_t row = 0;
   do {
     push16(ram, r, row);                                 /* PHY */
-    *hm_dp(ram, r, 0x8E) = (uint8_t)(row << 4);
+    *hm_dp(ram, r, BLOCK_ROW16) = (uint8_t)(row << 4);
     uint16_t col = 0;
     do {
       push16(ram, r, col);                               /* PHX */
-      *hm_dp(ram, r, 0x90) = (uint8_t)(col << 4);
-      r->x = (uint16_t)(hm_dp_r16(ram, r, 0x82) + hm_dp_r16(ram, r, 0x8E));
-      r->y = (uint16_t)(hm_dp_r16(ram, r, 0x84) + hm_dp_r16(ram, r, 0x90));
+      *hm_dp(ram, r, BLOCK_COL16) = (uint8_t)(col << 4);
+      r->x = (uint16_t)(hm_dp_r16(ram, r, TILE_X) + hm_dp_r16(ram, r, BLOCK_ROW16));
+      r->y = (uint16_t)(hm_dp_r16(ram, r, TILE_Y) + hm_dp_r16(ram, r, BLOCK_COL16));
       hm_push8(ram, r, (uint8_t)(RET_B060_INDEX >> 8));
       hm_push8(ram, r, (uint8_t)RET_B060_INDEX);
       hm_GetTileIndex(ram, r);
@@ -172,10 +258,10 @@ void hm_SetTileTypeBlock(uint8_t *ram, HmRegs *r)
       r->a = (uint16_t)((r->a & 0xFF00) | type);
       hm_bus_wr8(ram, (((uint32_t)r->db << 16) + HM_MAP_TILES + r->x) & 0xFFFFFF, type);
       col = (uint16_t)(pull16(ram, r) + 1);              /* PLX; INX */
-    } while (col != hm_dp_r16(ram, r, 0x86));
+    } while (col != hm_dp_r16(ram, r, BLOCK_COLS));
     row = (uint16_t)(pull16(ram, r) + 1);                /* PLY; INY */
-  } while (row != hm_dp_r16(ram, r, 0x88));
-  r->x = hm_dp_r16(ram, r, 0x86);
+  } while (row != hm_dp_r16(ram, r, BLOCK_ROWS));
+  r->x = hm_dp_r16(ram, r, BLOCK_COLS);
   r->y = row;
   r->c = 1;
 }
@@ -203,10 +289,10 @@ static bool second_screen(uint16_t v) { return (v >= 0x10 && v < 0x20) || v >= 0
 
 static void queue_half(uint8_t *ram, HmRegs *r, uint8_t channel, uint16_t row_x, uint16_t ret)
 {
-  *hm_dp(ram, r, 0x27) = channel;
-  *hm_dp(ram, r, 0x29) = 0x18;                           /* VRAM */
-  r->y = hm_dp_r16(ram, r, 0x80);
-  r->x = (uint16_t)((row_x << 5) + hm_dp_r16(ram, r, 0x86));
+  *hm_dp(ram, r, DMA_CHANNEL) = channel;
+  *hm_dp(ram, r, DMA_B_ADDRESS) = BBAD_VRAM;             /* VRAM */
+  r->y = hm_dp_r16(ram, r, CHANGE_COLS);
+  r->x = (uint16_t)((row_x << 5) + hm_dp_r16(ram, r, QUEUE_VRAM));
   r->a = 0x0080;
   hm_jsl(ram, r, ret, 0x80);
   hm_AddProgrammedDMA(ram, r);
@@ -217,40 +303,40 @@ void hm_QueueTileGraphicsDMA(uint8_t *ram, HmRegs *r)
 {
   push16(ram, r, r->a);                                  /* PHA */
   uint16_t col = (uint16_t)(r->x >> 4), row = (uint16_t)(r->y >> 4);
-  hm_dp_w16(ram, r, 0x7E, col);
-  hm_dp_w16(ram, r, 0x80, row);
-  uint16_t vram = (uint16_t)(0x6000 + (screen_part(col) << 1));
+  hm_dp_w16(ram, r, QUEUE_COL, col);
+  hm_dp_w16(ram, r, QUEUE_ROW, row);
+  uint16_t vram = (uint16_t)(VRAM_TILEMAP + (screen_part(col) << 1));
   if (second_screen(col)) vram = (uint16_t)(vram + 0x03E0);
   vram = (uint16_t)(vram + (screen_part(row) << 6));
   if (second_screen(row)) vram = (uint16_t)(vram + 0x0400);
-  hm_dp_w16(ram, r, 0x86, vram);
-  hm_dp_w16(ram, r, 0x72, 0xA096); hm_dp_w16(ram, r, 0x75, 0xA096);
-  *hm_dp(ram, r, 0x74) = 0xA6; *hm_dp(ram, r, 0x77) = 0xA6;
+  hm_dp_w16(ram, r, QUEUE_VRAM, vram);
+  hm_dp_w16(ram, r, SOURCE_PTR, (uint16_t)TILE_GRAPHICS); hm_dp_w16(ram, r, ROW_SOURCE, (uint16_t)TILE_GRAPHICS);
+  *hm_dp(ram, r, SOURCE_BANK) = 0xA6; *hm_dp(ram, r, ROW_SOURCE_BANK) = 0xA6;
 
   r->a = pull16(ram, r);                                 /* PLA */
   hm_jsl(ram, r, RET_6C1_CHANGES, 0x81);
   hm_ReadTileChange(ram, r);
   hm_rtl(ram, r);
 
-  hm_dp_w16(ram, r, 0x80, (uint16_t)(hm_dp_r16(ram, r, 0x80) << 2));
-  hm_dp_w16(ram, r, 0x82, (uint16_t)(hm_dp_r16(ram, r, 0x82) << 1));
-  uint16_t src = (uint16_t)(hm_dp_r16(ram, r, 0x72) + hm_dp_r16(ram, r, 0x7E));
-  hm_dp_w16(ram, r, 0x72, src); hm_dp_w16(ram, r, 0x75, src);
-  *hm_dp(ram, r, 0x92) = 2;
+  hm_dp_w16(ram, r, CHANGE_COLS, (uint16_t)(hm_dp_r16(ram, r, CHANGE_COLS) << 2));
+  hm_dp_w16(ram, r, CHANGE_ROWS, (uint16_t)(hm_dp_r16(ram, r, CHANGE_ROWS) << 1));
+  uint16_t src = (uint16_t)(hm_dp_r16(ram, r, SOURCE_PTR) + hm_dp_r16(ram, r, CHANGE_GFX));
+  hm_dp_w16(ram, r, SOURCE_PTR, src); hm_dp_w16(ram, r, ROW_SOURCE, src);
+  *hm_dp(ram, r, FIRST_CHANNEL) = 2;
 
   uint16_t x = 0;
   do {
     push16(ram, r, x);                                   /* PHX */
-    queue_half(ram, r, *hm_dp(ram, r, 0x92), x, RET_6C1_DMA_A);
-    hm_dp_w16(ram, r, 0x72, (uint16_t)(hm_dp_r16(ram, r, 0x72) + 0x40));
+    queue_half(ram, r, *hm_dp(ram, r, FIRST_CHANNEL), x, RET_6C1_DMA_A);
+    hm_dp_w16(ram, r, SOURCE_PTR, (uint16_t)(hm_dp_r16(ram, r, SOURCE_PTR) + 0x40));
     x = (uint16_t)(pull16(ram, r) + 1);                  /* PLX; INX; PHX */
     push16(ram, r, x);
-    queue_half(ram, r, (uint8_t)(*hm_dp(ram, r, 0x92) + 1), x, RET_6C1_DMA_B);
-    r->a = (uint16_t)(hm_dp_r16(ram, r, 0x75) + hm_dp_r16(ram, r, 0x80));
-    hm_dp_w16(ram, r, 0x75, r->a); hm_dp_w16(ram, r, 0x72, r->a);
-    *hm_dp(ram, r, 0x92) = 0;
+    queue_half(ram, r, (uint8_t)(*hm_dp(ram, r, FIRST_CHANNEL) + 1), x, RET_6C1_DMA_B);
+    r->a = (uint16_t)(hm_dp_r16(ram, r, ROW_SOURCE) + hm_dp_r16(ram, r, CHANGE_COLS));
+    hm_dp_w16(ram, r, ROW_SOURCE, r->a); hm_dp_w16(ram, r, SOURCE_PTR, r->a);
+    *hm_dp(ram, r, FIRST_CHANNEL) = 0;
     x = (uint16_t)(pull16(ram, r) + 1);                  /* PLX; INX */
-  } while (x != hm_dp_r16(ram, r, 0x82));
+  } while (x != hm_dp_r16(ram, r, CHANGE_ROWS));
   r->x = x;
   r->c = 1;
 }
@@ -288,9 +374,9 @@ void hm_ChangeMapTile(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
   r->x = pull16(ram, r);                                 /* PLX; PLY */
   r->y = pull16(ram, r);
-  hm_dp_w16(ram, r, 0x86, hm_dp_r16(ram, r, 0x80));
-  hm_dp_w16(ram, r, 0x88, hm_dp_r16(ram, r, 0x82));
-  r->a = hm_dp_r16(ram, r, 0x84);
+  hm_dp_w16(ram, r, BLOCK_COLS, hm_dp_r16(ram, r, CHANGE_COLS));
+  hm_dp_w16(ram, r, BLOCK_ROWS, hm_dp_r16(ram, r, CHANGE_ROWS));
+  r->a = hm_dp_r16(ram, r, CHANGE_TYPE);
   if (r->a == 0) return;
   hm_jsl(ram, r, RET_688_TYPES, 0x82);
   hm_SetTileTypeBlock(ram, r);
@@ -306,23 +392,22 @@ void hm_ChangeMapTile(uint8_t *ram, HmRegs *r)
  * Leftovers: $7E = A in; A = (high byte of the pointer word : bank),
  * X = 3 A + 2, C from the 3 A sum.
  * ───────────────────────────────────────────────────────────────────────── */
-#define MAP_ANIMATIONS 0x81B963
 
 void hm_StartMapAnimation(uint8_t *ram, HmRegs *r)
 {
   uint16_t n = r->a;
-  hm_dp_w16(ram, r, 0x7E, n);
+  hm_dp_w16(ram, r, ANIM_ENTRY, n);
   uint32_t sum = (uint32_t)(uint16_t)(n << 1) + n;       /* ASL; CLC; ADC $7E */
   r->c = sum > 0xFFFF;
   uint16_t x = (uint16_t)sum;
   uint16_t word = hm_bus_rd16(ram, (MAP_ANIMATIONS + x) & 0xFFFFFF);
-  hm_dp_w16(ram, r, 0xCF, word);
-  x = (uint16_t)(x + 2);
+  hm_dp_w16(ram, r, MAP_ANIM, word);
+  x = (uint16_t)(x + MAP_ANIM_BANK_AT);
   uint8_t bank = hm_bus_rd8(ram, (MAP_ANIMATIONS + x) & 0xFFFFFF);
-  *hm_dp(ram, r, 0xD1) = bank;
+  *hm_dp(ram, r, MAP_ANIM_BANK) = bank;
   r->a = (uint16_t)((word & 0xFF00) | bank);
   r->x = x;
-  hm_bus_wr8(ram, ((uint32_t)r->db << 16) | 0x0989, 0);
+  hm_bus_wr8(ram, ((uint32_t)r->db << 16) | ANIMATION_WAIT, 0);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -337,7 +422,6 @@ void hm_StartMapAnimation(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_03A_INDEX   0xB041
 #define RET_049_INDEX   0xB057
-#define HM_FARM_TILES   0x7EA4E6
 
 static uint16_t tile_index_keeping(uint8_t *ram, HmRegs *r, uint8_t type, uint16_t ret)
 {
@@ -374,7 +458,6 @@ void hm_EditFarmTile(uint8_t *ram, HmRegs *r)
  * a mask (left 8, right 2, up 4, down 1) and DATA8_82B02A[mask] - 1 is
  * added to the drawing. Each tile is drawn with DrawTileChange.
  * ───────────────────────────────────────────────────────────────────────── */
-#define JOINS        0x82B02A   /* DATA8_82B02A: 16 entries */
 
 static uint8_t tile_at(uint8_t *ram, const HmRegs *r, uint16_t x)
 {
@@ -394,8 +477,8 @@ void hm_DrawWholeMap(uint8_t *ram, HmRegs *r)
     for (uint16_t x = 0; x != 0x0400; ) {
       push16(ram, r, y);                                   /* PHY; PHX */
       push16(ram, r, x);
-      hm_dp_w16(ram, r, 0x82, x);
-      hm_dp_w16(ram, r, 0x84, y);
+      hm_dp_w16(ram, r, TILE_X, x);
+      hm_dp_w16(ram, r, TILE_Y, y);
       r->x = x; r->y = y;
       push16(ram, r, 0xAF10);                              /* JSR GetTileIndex */
       hm_GetTileIndex(ram, r);
@@ -413,7 +496,7 @@ void hm_DrawWholeMap(uint8_t *ram, HmRegs *r)
             uint16_t mask = 0;
             static const struct { int16_t d; uint16_t bit; } N[4] = {
               { -1, 8 }, { 1, 2 }, { -0x40, 4 }, { 0x40, 1 } };
-            hm_dp_w16(ram, r, 0x86, 0);
+            hm_dp_w16(ram, r, JOIN_MASK, 0);
             for (unsigned k = 0; k < 4; k++) {
               push16(ram, r, at);                          /* PHX ... PLX */
               uint16_t nx = (uint16_t)(at + N[k].d);
@@ -426,19 +509,19 @@ void hm_DrawWholeMap(uint8_t *ram, HmRegs *r)
               if (joins(r, nt)) {
                 mask |= N[k].bit;
                 r->a = mask;
-                hm_dp_w16(ram, r, 0x86, mask);
+                hm_dp_w16(ram, r, JOIN_MASK, mask);
               }
             }
             push16(ram, r, at);                            /* PHX; LDA $86; TAX */
             r->x = mask;
             uint8_t join = (uint8_t)(hm_bus_rd8(ram, JOINS + mask) - 1);
-            *hm_dp(ram, r, 0x94) = join;
+            *hm_dp(ram, r, JOIN_ADD) = join;
             pull16(ram, r);
             r->x = at;
             uint16_t yy = (uint16_t)(t << 2);              /* LDA #0; XBA; LDA; ASL; ASL */
             r->c = 0;
             r->y = yy;
-            uint8_t base = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0D, yy));
+            uint8_t base = hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPS, yy));
             uint16_t s = (uint16_t)(base + join);          /* CLC; ADC $94 (8 bits) */
             r->c = s > 0xFF;
             pic = (uint8_t)s;
@@ -447,7 +530,7 @@ void hm_DrawWholeMap(uint8_t *ram, HmRegs *r)
             uint16_t yy = (uint16_t)(t << 2);
             r->c = 0;
             r->y = yy;
-            pic = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0D, yy));
+            pic = hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPS, yy));
             r->a = pic;
             draw = pic != 0;
           }
@@ -455,8 +538,8 @@ void hm_DrawWholeMap(uint8_t *ram, HmRegs *r)
       }
       if (draw) {
         r->a = pic;
-        r->x = hm_dp_r16(ram, r, 0x82);
-        r->y = hm_dp_r16(ram, r, 0x84);
+        r->x = hm_dp_r16(ram, r, TILE_X);
+        r->y = hm_dp_r16(ram, r, TILE_Y);
         hm_jsl(ram, r, 0xB008, 0x81);
         hm_DrawTileChange(ram, r);
         hm_rtl(ram, r);
@@ -485,9 +568,6 @@ void hm_DrawWholeMap(uint8_t *ram, HmRegs *r)
  * changes, not the map, so the prints are gone when the map is loaded
  * again. Leftovers: A, X, Y, C from the last compare or call.
  * ───────────────────────────────────────────────────────────────────────── */
-#define SEASON_LONG   0x7F1F19
-#define PRINT_X       0x0907    /* DB: */
-#define PRINT_Y       0x0909
 
 void hm_SnowFootprints(uint8_t *ram, HmRegs *r)
 {
@@ -495,7 +575,7 @@ void hm_SnowFootprints(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)((r->a & 0xFF00) | season);
   r->c = season >= 3;
   if (season != 3) return;                                 /* not winter */
-  uint8_t map = *hm_dp(ram, r, 0x22);
+  uint8_t map = *hm_dp(ram, r, HM_MAP_ID);
   r->a = (uint16_t)((r->a & 0xFF00) | map);
   r->c = map >= 4;
   if (map >= 4) {
@@ -536,54 +616,53 @@ void hm_SnowFootprints(uint8_t *ram, HmRegs *r)
  * done at once, unchecked).
  * Leftovers: A, X, Y from the last step, C from its add (or a compare).
  * ───────────────────────────────────────────────────────────────────────── */
-#define ANIMATION_WAIT 0x0989    /* DB: */
 
 void hm_RunMapAnimation(uint8_t *ram, HmRegs *r)
 {
   uint32_t wait = (uint32_t)r->db << 16 | ANIMATION_WAIT;
-  r->a = hm_dp_r16(ram, r, 0xCF);
+  r->a = hm_dp_r16(ram, r, MAP_ANIM);
   if (!r->a) {
-    r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, 0xD1));
+    r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, MAP_ANIM_BANK));
     if (!(r->a & 0xFF)) return;                            /* no animation */
   }
   uint8_t w = hm_bus_rd8(ram, wait);
   r->a = (uint16_t)((r->a & 0xFF00) | w);
   if (w) { hm_bus_wr8(ram, wait, (uint8_t)(w - 1)); return; }
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCF, 0));
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, MAP_ANIM, STEP_CHANGE));
   r->c = r->a >= 0xFFFF;
   if (r->a == 0xFFFF) {                                    /* the end */
-    hm_dp_w16(ram, r, 0xCF, 0);
-    *hm_dp(ram, r, 0xD1) = 0;
+    hm_dp_w16(ram, r, MAP_ANIM, 0);
+    *hm_dp(ram, r, MAP_ANIM_BANK) = 0;
     return;
   }
   r->c = r->a >= 0xFFFE;
   if (r->a == 0xFFFE) {                                    /* jump */
-    r->y = 2;
-    hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCF, 2)));
-    r->y = 4;
-    uint8_t bank = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCF, 4));
-    *hm_dp(ram, r, 0x74) = bank;
-    r->a = hm_dp_r16(ram, r, 0x72);
-    hm_dp_w16(ram, r, 0xCF, r->a);
+    r->y = JUMP_ADDR;
+    hm_dp_w16(ram, r, JUMP_PTR, hm_bus_rd16(ram, hm_dp_long(ram, r, MAP_ANIM, JUMP_ADDR)));
+    r->y = JUMP_BANK;
+    uint8_t bank = hm_bus_rd8(ram, hm_dp_long(ram, r, MAP_ANIM, JUMP_BANK));
+    *hm_dp(ram, r, JUMP_PTR_BANK) = bank;
+    r->a = hm_dp_r16(ram, r, JUMP_PTR);
+    hm_dp_w16(ram, r, MAP_ANIM, r->a);
     r->a = (uint16_t)((r->a & 0xFF00) | bank);
-    *hm_dp(ram, r, 0xD1) = bank;
+    *hm_dp(ram, r, MAP_ANIM_BANK) = bank;
   }
-  uint16_t change = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCF, 0));
+  uint16_t change = hm_bus_rd16(ram, hm_dp_long(ram, r, MAP_ANIM, STEP_CHANGE));
   push16(ram, r, change);
-  uint16_t x = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCF, 2));
+  uint16_t x = hm_bus_rd16(ram, hm_dp_long(ram, r, MAP_ANIM, STEP_X));
   push16(ram, r, x);
-  uint16_t y = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCF, 4));
+  uint16_t y = hm_bus_rd16(ram, hm_dp_long(ram, r, MAP_ANIM, STEP_Y));
   push16(ram, r, y);
-  uint8_t frames = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCF, 6));
+  uint8_t frames = hm_bus_rd8(ram, hm_dp_long(ram, r, MAP_ANIM, STEP_FRAMES));
   hm_bus_wr8(ram, wait, frames);
   r->y = pull16(ram, r); r->x = pull16(ram, r); r->a = pull16(ram, r);
   hm_jsl(ram, r, 0xA64C, 0x81);
   hm_ChangeMapTile(ram, r);
   hm_rtl(ram, r);
-  uint32_t next = (uint32_t)hm_dp_r16(ram, r, 0xCF) + 7;
+  uint32_t next = (uint32_t)hm_dp_r16(ram, r, MAP_ANIM) + STEP_BYTES;
   r->c = next > 0xFFFF;
   r->a = (uint16_t)next;
-  hm_dp_w16(ram, r, 0xCF, r->a);
+  hm_dp_w16(ram, r, MAP_ANIM, r->a);
 }
 
 /* FreeMapObject ($81:A4F1, JSL, RTL): frees the map object at [$07] (its
@@ -592,6 +671,6 @@ void hm_FreeMapObject(uint8_t *ram, HmRegs *r)
 {
   r->y = 0;
   r->a &= 0xFF00;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, 0x07, 0), 0);
-  hm_bus_wr8(ram, (uint32_t)r->db << 16 | 0x0974, 0);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, MAP_OBJ_PTR, 0), 0);
+  hm_bus_wr8(ram, (uint32_t)r->db << 16 | ITEM_FLAGS, 0);
 }
