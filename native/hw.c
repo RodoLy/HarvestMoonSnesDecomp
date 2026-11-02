@@ -27,7 +27,9 @@
 #include "saveload.h"
 
 #include "hm_decomp.h"
+#include "mods.h"
 #include "native.h"
+#include "mods.h"
 
 /* ── What the decompilation expects (hm_decomp.h) ─────────────────────── */
 uint8_t g_ram[0x20000];
@@ -267,7 +269,7 @@ void native_draw_frame(uint8_t *pixels, int field_w, int left, int right)
       for (int x = 0; x < budget - left; x++) row[x] = 0;
       for (int x = budget + 256 + right; x < field_w; x++) row[x] = 0;
     }
-    if (left || right) PpuSetWidescreenLayerClamp(g_ppu, 1u << 2);   /* BG3: the text, the clock */
+    if (left || right) PpuSetWidescreenLayerClamp(g_ppu, mods_ws_clamp());   /* kept in the 256: BG3 (the text, the clock), more on some screens */
   }
   Dma *dma = g_snes->dma;
   dma_startDma(dma, g_snesrecomp_last_hdmaen, true);

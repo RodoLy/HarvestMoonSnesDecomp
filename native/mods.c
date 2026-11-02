@@ -954,11 +954,23 @@ bool mods_hud(uint32_t *px, int w)
  * camera limit ($ED left, $F1 right). The middle of the farm opens fully;
  * at a map's edge that side closes; a one-screen room (limits 0/0) stays
  * 4:3. BG3 (text, the clock) stays in the 256. Screens that are not a map
- * ($22 >= $57: intro, title, menus, names) stay 4:3. Sprites: the game
+ * ($22 >= $57: menus, the ending...) stay 4:3, except the start screens
+ * (ws_start_screen). Sprites: the game
  * drops a piece outside [-16, 256) (PrepareOAMData); the limits widen with
  * the margins (g_hm_oam_left / g_hm_oam_right). Nothing the game computes
  * (camera, collisions, the people, the random numbers) sees the margins. */
 static int s_ws_l, s_ws_r;
+/* The screens from power-on to choosing the diary, also wide: the Natsume
+ * logo ($5D), the title ($5C), the diary list ($5E), the names ($5F) and
+ * the intro's road ($3C, before any diary is loaded). Their pictures go on
+ * past the 256 (the title's sky, the road's grass, the lists' moving
+ * background); on the lists and the names, BG1 (the panels, and the
+ * hidden ones beside them) stays in the 256 with BG3, see mods_ws_clamp. */
+static bool ws_start_screen(void)
+{
+  uint8_t m = g_ram[HM_MAP_ID];
+  return m == 0x5C || m == 0x5D || m == 0x5E || m == 0x5F || (m == 0x3C && !hm_diary_loaded(g_ram));
+}
 int mods_field_width(void) { return g_cfg.widescreen ? 256 + 2 * WS_BUDGET : 256; }
 static int imin(int a, int b) { return a < b ? a : b; }
 static int iclamp(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -979,11 +991,17 @@ static void ws_frame(void)
       r = iclamp(imin(cr - cam, cr - pc), 0, WS_BUDGET);
     }
   }
+  if (g_cfg.widescreen && ws_start_screen()) l = r = WS_BUDGET;
   s_ws_l = l; s_ws_r = r;
   g_hm_oam_right = (uint16_t)(0x0100 + r);
   g_hm_oam_left = (uint16_t)(0xFFF0 - l);
 }
 void mods_ws_margins(int *left, int *right) { *left = s_ws_l; *right = s_ws_r; }
+unsigned mods_ws_clamp(void)
+{
+  uint8_t m = g_ram[HM_MAP_ID];
+  return (m == 0x5E || m == 0x5F) ? (1u << 0) | (1u << 2) : 1u << 2;
+}
 
 /* ── The endless game (hm_endless.c) ─────────────────────────────────────
  * On the morning of Summer 30, Year 3, the house's map code ($83:DED3)

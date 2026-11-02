@@ -35,6 +35,8 @@ bool mods_item_sprite(uint8_t it, int kase, uint32_t out[256]);
 /* any sprite of the game (its first frame), centred in w x h */
 bool mods_sprite(uint16_t sprite, bool flip, uint32_t *out, int w, int h);
 void mods_ws_margins(int *left, int *right);
+/* the background layers kept in the 256 (a mask: 1 BG1, 2 BG2, 4 BG3, 8 BG4) */
+unsigned mods_ws_clamp(void);
 enum { WS_BUDGET = 43 };
 
 /* The endless game. The host keeps a copy of the whole machine at the
