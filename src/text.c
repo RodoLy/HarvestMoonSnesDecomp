@@ -27,6 +27,56 @@
 #define ARROW_FRAME_1     0x945F     /* $83:945F: the other frame */
 #define BOX_FLAGS         0x7F1F5A
 #define BOX_OPEN_FLAG     0x4000
+#define BLANK_LETTERS     0x9CBBA3   /* ROM: the box's letter tiles, blank */
+#define BBAD_VRAM         0x18       /* $2118: a copy to VRAM */
+
+/* VRAM (word addresses) */
+#define VRAM_LETTERS      0x5000     /* the box's letter tiles (the first letter at + $10) */
+#define VRAM_WAIT_MARK    0x5528     /* where the "waiting" mark blinks */
+
+/* Data-bank variables: the text printer */
+#define TEXT_NUMBER       0x0183     /* the text being shown (index of TEXT_POINTERS) */
+/* $0185 is HM_TEXT_X (hm_ram.h): the VRAM address of the next letter */
+#define TEXT_CODE_AT      0x0187     /* 16b: the code being read (its number in the text) */
+/* $0189 is HM_TEXT_TICK (hm_ram.h): the frames between letters (0-4) */
+#define ARROW_PLACE       0x018A     /* the arrow's place (0-11) */
+#define ARROW_BLINK       0x018B     /* the arrow's blink: bit 7 the frame, bits 0-6 a counter */
+#define PRINT_LEFT        0x018C     /* the digits / letters of a number / name still to
+                                      * print (PrintDigit: the power of ten) */
+#define NAME_LAST         0x018D     /* the name's letters - 1 */
+#define CHOICE_LAST       0x018E     /* the choice's options - 1 */
+#define CHOICE            0x018F     /* the option the cursor is on */
+#define LETTER_WIDTH      0x0190     /* 0 narrow, 1 (ignored, see DrawLetter) */
+#define TEXT_BOX_LINES    0x0191     /* the box's height in lines of 2 rows (1 or 2) */
+#define PRINT_NUMBER      0x0192     /* 24b ($0192-$0194): the number PrintDigit prints */
+#define TEXT_FLAGS        0x019B     /* bit 0 printing, 1 a letter this frame, 2 the end,
+                                      * 3 waiting, 4 a choice, 5 waiting at the box's end,
+                                      * 7 a digit was printed */
+/* Other data-bank variables */
+#define SOUND_EFFECT      0x0114     /* the sound effect PlaySoundEffect0A plays */
+#define SOUND_BANK        0x0115     /* its bank */
+#define BG3_SCROLL_Y      0x0146     /* BG3_Map_Offset_Y: BG3's scroll, down */
+#define MAP_FLAGS         0x0196     /* bit 5: the clock was already stopped */
+#define PLAYER_SCREEN_Y   0x090D     /* where the player is on the screen, down */
+/* $0973 is HM_TIME_RUNNING (hm_ram.h) */
+
+/* Direct page */
+#define TEXT_PTR          0x01       /* long $01-$03: the text being read */
+#define TEXT_PTR_BANK     0x03
+#define DMA_CHANNEL       0x27       /* AddProgrammedDMA's channel */
+#define DMA_BBAD          0x29       /*   its destination register ($21xx) */
+#define SOURCE            0x72       /* long $72-$74: the DMA's source; a letter's
+                                      * graphics; a number's or a name's address */
+#define SOURCE_BANK       0x74
+/* $7E and $80 mean a different thing in each routine: */
+#define EXTRA_SCROLL      0x7E       /* StartTextBox, CloseTextBox: the scroll for the
+                                      * box's lines */
+#define BLINK_LETTER      0x7E       /* BlinkTextBoxArrow, BlinkTextCursor: A in */
+#define LETTER_COLUMN     0x7E       /* FindLetterGraphics: the code, then 32 (code & 7) */
+#define LETTER_ROW        0x80       /* FindLetterGraphics: the group, then the row's offset */
+#define CURSOR_STEP       0x80       /* AdvanceLetterCursor: 8 */
+#define POWER             0x7E       /* PrintDigit: the power of ten (16b), then the digit */
+#define POWER_HIGH        0x80       /*   the power's high byte */
 
 static uint32_t db_addr(const HmRegs *r, uint16_t addr) { return (uint32_t)r->db << 16 | addr; }
 static uint8_t rd8(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_rd8(ram, db_addr(r, a)); }
@@ -38,7 +88,7 @@ static void wr16(uint8_t *ram, const HmRegs *r, uint16_t a, uint16_t v) { hm_bus
  * line ("LDA #0; XBA; LDA $0191; DEC A", then 7 ASL in 16 bits). */
 static uint16_t extra_scroll(uint8_t *ram, const HmRegs *r)
 {
-  return (uint16_t)((uint8_t)(rd8(ram, r, 0x0191) - 1) << 7);
+  return (uint16_t)((uint8_t)(rd8(ram, r, TEXT_BOX_LINES) - 1) << 7);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -51,30 +101,30 @@ static uint16_t extra_scroll(uint8_t *ram, const HmRegs *r)
 void hm_StartTextBox(uint8_t *ram, HmRegs *r)
 {
   uint16_t text = r->x;
-  wr16(ram, r, 0x0183, text);
-  wr16(ram, r, 0x0185, 0x5010);                       /* LDA #$5000; CLC; ADC #$10 */
-  wr16(ram, r, 0x0187, 0);
-  wr8(ram, r, 0x019B, rd8(ram, r, 0x019B) | 0x01);
-  static const uint16_t cleared[] = { 0x0189, 0x018B, 0x018C, 0x018E, 0x018F, 0x0190 };
+  wr16(ram, r, TEXT_NUMBER, text);
+  wr16(ram, r, HM_TEXT_X, VRAM_LETTERS + 0x10);       /* LDA #$5000; CLC; ADC #$10 */
+  wr16(ram, r, TEXT_CODE_AT, 0);
+  wr8(ram, r, TEXT_FLAGS, rd8(ram, r, TEXT_FLAGS) | 0x01);
+  static const uint16_t cleared[] = { HM_TEXT_TICK, ARROW_BLINK, PRINT_LEFT, CHOICE_LAST, CHOICE, LETTER_WIDTH };
   for (unsigned i = 0; i < sizeof cleared / sizeof cleared[0]; i++)
     wr8(ram, r, cleared[i], 0);
 
   uint16_t x = (uint16_t)(text * 3);                  /* ASL; CLC; ADC $0183 */
-  hm_dp_w16(ram, r, 0x01, hm_bus_rd16(ram, (TEXT_POINTERS + x) & 0xFFFFFF));
+  hm_dp_w16(ram, r, TEXT_PTR, hm_bus_rd16(ram, (TEXT_POINTERS + x) & 0xFFFFFF));
   x = (uint16_t)(x + 2);
-  *hm_dp(ram, r, 0x03) = hm_bus_rd8(ram, (TEXT_POINTERS + x) & 0xFFFFFF);
+  *hm_dp(ram, r, TEXT_PTR_BANK) = hm_bus_rd8(ram, (TEXT_POINTERS + x) & 0xFFFFFF);
   r->x = x;
 
-  if (rd8(ram, r, 0x0191) == 0)
-    wr8(ram, r, 0x0191, rd16(ram, r, 0x090D) < 0x0081 ? 2 : 1);
+  if (rd8(ram, r, TEXT_BOX_LINES) == 0)
+    wr8(ram, r, TEXT_BOX_LINES, rd16(ram, r, PLAYER_SCREEN_Y) < 0x0081 ? 2 : 1);
 
   uint16_t extra = extra_scroll(ram, r);
-  hm_dp_w16(ram, r, 0x7E, extra);
-  uint16_t y = (uint16_t)(rd16(ram, r, 0x0146) - 0x0100);   /* SEC; SBC #$0100 */
-  r->c = y >= extra;                                         /* SEC; SBC $7E */
-  wr16(ram, r, 0x0146, (uint16_t)(y - extra));
+  hm_dp_w16(ram, r, EXTRA_SCROLL, extra);
+  uint16_t y = (uint16_t)(rd16(ram, r, BG3_SCROLL_Y) - 0x0100);   /* SEC; SBC #$0100 */
+  r->c = y >= extra;                                              /* SEC; SBC $7E */
+  wr16(ram, r, BG3_SCROLL_Y, (uint16_t)(y - extra));
 
-  wr8(ram, r, 0x0973, 0);                                    /* STZ time_running (8-bit) */
+  wr8(ram, r, HM_TIME_RUNNING, 0);                                /* STZ time_running (8-bit) */
   r->a = (uint16_t)(hm_bus_rd16(ram, BOX_FLAGS) | BOX_OPEN_FLAG);
   hm_bus_wr16(ram, BOX_FLAGS, r->a);
 }
@@ -90,18 +140,18 @@ void hm_StartTextBox(uint8_t *ram, HmRegs *r)
 
 void hm_ClearTextBox(uint8_t *ram, HmRegs *r)
 {
-  *hm_dp(ram, r, 0x27) = 6;
-  *hm_dp(ram, r, 0x29) = 0x18;                        /* VRAM data port */
-  r->x = 0x5000;
+  *hm_dp(ram, r, DMA_CHANNEL) = 6;
+  *hm_dp(ram, r, DMA_BBAD) = BBAD_VRAM;               /* VRAM data port */
+  r->x = VRAM_LETTERS;
   r->y = 0x0C00;
-  hm_dp_w16(ram, r, 0x72, 0xBBA3);
-  *hm_dp(ram, r, 0x74) = 0x9C;
+  hm_dp_w16(ram, r, SOURCE, (uint16_t)BLANK_LETTERS);
+  *hm_dp(ram, r, SOURCE_BANK) = (uint8_t)(BLANK_LETTERS >> 16);
   r->a = 0x0080;
   hm_jsl(ram, r, RET_32D_ADD, 0x80);
   hm_AddProgrammedDMA(ram, r);
   hm_rtl(ram, r);
   r->a = (uint16_t)((r->a & 0xFF00) | 7);             /* SEP; LDA #7 */
-  *hm_dp(ram, r, 0x27) = 7;
+  *hm_dp(ram, r, DMA_CHANNEL) = 7;
   hm_jsl(ram, r, RET_32D_REMOVE, 0x80);
   hm_RemoveProgrammedDMA(ram, r);
   hm_rtl(ram, r);
@@ -118,15 +168,15 @@ void hm_ClearTextBox(uint8_t *ram, HmRegs *r)
 
 void hm_CloseTextBox(uint8_t *ram, HmRegs *r)
 {
-  wr8(ram, r, 0x019B, 0);
+  wr8(ram, r, TEXT_FLAGS, 0);
   uint16_t extra = extra_scroll(ram, r);
-  hm_dp_w16(ram, r, 0x7E, extra);
-  wr16(ram, r, 0x0146, (uint16_t)(rd16(ram, r, 0x0146) + 0x0100 + extra));
+  hm_dp_w16(ram, r, EXTRA_SCROLL, extra);
+  wr16(ram, r, BG3_SCROLL_Y, (uint16_t)(rd16(ram, r, BG3_SCROLL_Y) + 0x0100 + extra));
   hm_jsl(ram, r, RET_3F9_WIPE, 0x83);
   hm_ClearTextBox(ram, r);
   hm_rtl(ram, r);
-  if (rd16(ram, r, 0x0196) & 0x0020)
-    wr8(ram, r, 0x0973, rd8(ram, r, 0x0973) | 0x01);
+  if (rd16(ram, r, MAP_FLAGS) & 0x0020)
+    wr8(ram, r, HM_TIME_RUNNING, rd8(ram, r, HM_TIME_RUNNING) | 0x01);
   r->a = (uint16_t)(hm_bus_rd16(ram, BOX_FLAGS) & ~BOX_OPEN_FLAG);
   hm_bus_wr16(ram, BOX_FLAGS, r->a);
 }
@@ -144,14 +194,14 @@ void hm_DrawTextBoxArrow(uint8_t *ram, HmRegs *r)
   uint16_t frame = r->a;
   hm_push8(ram, r, (uint8_t)(frame >> 8));            /* PHA */
   hm_push8(ram, r, (uint8_t)frame);
-  uint8_t place = rd8(ram, r, 0x018A);
+  uint8_t place = rd8(ram, r, ARROW_PLACE);
   if (place >= 0x0B) place = 0x0B;
   r->x = hm_bus_rd16(ram, ARROW_PLACES + 2u * place);
   hm_pull8(ram, r); hm_pull8(ram, r);                 /* PLA */
   uint16_t tiles = frame == 1 ? ARROW_FRAME_1 : ARROW_FRAME_0;
-  hm_dp_w16(ram, r, 0x72, tiles);
+  hm_dp_w16(ram, r, SOURCE, tiles);
   r->a = (uint16_t)((tiles & 0xFF00) | 0x83);         /* SEP; LDA #$83 */
-  *hm_dp(ram, r, 0x74) = 0x83;
+  *hm_dp(ram, r, SOURCE_BANK) = 0x83;
   hm_jsl(ram, r, RET_4D7_DRAW, 0x83);
   hm_DrawTilemapBlock2x2(ram, r);
   hm_rtl(ram, r);
@@ -170,16 +220,16 @@ void hm_DrawTextBoxArrow(uint8_t *ram, HmRegs *r)
 
 void hm_BlinkTextBoxArrow(uint8_t *ram, HmRegs *r)
 {
-  hm_dp_w16(ram, r, 0x7E, r->a);
-  if ((rd16(ram, r, 0x018B) & 0x007F) == 0x14)
-    wr8(ram, r, 0x018B, (uint8_t)((rd8(ram, r, 0x018B) & 0x80) ^ 0x80));
-  bool second = rd8(ram, r, 0x018B) & 0x80;
+  hm_dp_w16(ram, r, BLINK_LETTER, r->a);
+  if ((rd16(ram, r, ARROW_BLINK) & 0x007F) == 0x14)
+    wr8(ram, r, ARROW_BLINK, (uint8_t)((rd8(ram, r, ARROW_BLINK) & 0x80) ^ 0x80));
+  bool second = rd8(ram, r, ARROW_BLINK) & 0x80;
   r->a = second ? 1 : 0;
   hm_jsl(ram, r, second ? RET_495_FRAME1 : RET_495_FRAME0, 0x83);
   hm_DrawTextBoxArrow(ram, r);
   hm_rtl(ram, r);
-  uint8_t counter = (uint8_t)(rd8(ram, r, 0x018B) + 1);
-  wr8(ram, r, 0x018B, counter);
+  uint8_t counter = (uint8_t)(rd8(ram, r, ARROW_BLINK) + 1);
+  wr8(ram, r, ARROW_BLINK, counter);
   r->a = (uint16_t)((r->a & 0xFF00) | counter);
 }
 
@@ -242,21 +292,21 @@ static void jsl(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmR
 void hm_FindLetterGraphics(uint8_t *ram, HmRegs *r)
 {
   uint16_t code = r->a, group = (uint16_t)(code >> 6);
-  hm_dp_w16(ram, r, 0x7E, code);
-  hm_dp_w16(ram, r, 0x80, group);
+  hm_dp_w16(ram, r, LETTER_COLUMN, code);
+  hm_dp_w16(ram, r, LETTER_ROW, group);
   uint16_t x = (uint16_t)(group * 3);
-  hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, FONT_GROUPS + x));
+  hm_dp_w16(ram, r, SOURCE, hm_bus_rd16(ram, FONT_GROUPS + x));
   x = (uint16_t)(x + 2);
-  *hm_dp(ram, r, 0x74) = hm_bus_rd8(ram, FONT_GROUPS + x);
+  *hm_dp(ram, r, SOURCE_BANK) = hm_bus_rd8(ram, FONT_GROUPS + x);
   uint16_t row = (uint16_t)(((code & 0x3F) >> 3) << 9);
   uint16_t column = (uint16_t)((code & 7) << 5);
-  hm_dp_w16(ram, r, 0x80, row);
-  hm_dp_w16(ram, r, 0x7E, column);
-  uint32_t s = (uint32_t)hm_dp_r16(ram, r, 0x72) + column;       /* CLC; ADC $7E */
+  hm_dp_w16(ram, r, LETTER_ROW, row);
+  hm_dp_w16(ram, r, LETTER_COLUMN, column);
+  uint32_t s = (uint32_t)hm_dp_r16(ram, r, SOURCE) + column;     /* CLC; ADC $7E */
   s = (s & 0xFFFF) + row + (s >> 16);                             /* ADC $80 */
   r->c = s > 0xFFFF;
   r->a = (uint16_t)s;
-  hm_dp_w16(ram, r, 0x72, r->a);
+  hm_dp_w16(ram, r, SOURCE, r->a);
   r->x = x;
 }
 
@@ -277,7 +327,7 @@ void hm_DrawLetter(uint8_t *ram, HmRegs *r)
   jsr(ram, r, RET_823_FIND, hm_FindLetterGraphics);
   hm_pull8(ram, r); hm_pull8(ram, r);                 /* PLX */
   r->a = 0;                                           /* TXA: the width */
-  r->x = rd16(ram, r, 0x0185);
+  r->x = rd16(ram, r, HM_TEXT_X);
   jsl(ram, r, RET_823_COPY, hm_CopyLetterToVram);
 }
 
@@ -292,9 +342,9 @@ void hm_DrawLetter(uint8_t *ram, HmRegs *r)
 void hm_AdvanceLetterCursor(uint8_t *ram, HmRegs *r)
 {
   r->x = 0;
-  hm_dp_w16(ram, r, 0x80, 8);                         /* TXA; ASL x3; ADC #8 */
-  uint16_t at = (uint16_t)(rd16(ram, r, 0x0185) + 8);
-  wr16(ram, r, 0x0185, at);
+  hm_dp_w16(ram, r, CURSOR_STEP, 8);                  /* TXA; ASL x3; ADC #8 */
+  uint16_t at = (uint16_t)(rd16(ram, r, HM_TEXT_X) + 8);
+  wr16(ram, r, HM_TEXT_X, at);
   if ((at & 0xFF) != 0x80) {
     r->a = at & 0xFF;
     r->c = r->a >= 0x80;
@@ -303,7 +353,7 @@ void hm_AdvanceLetterCursor(uint8_t *ram, HmRegs *r)
   uint32_t next = (uint32_t)at + 0x80;
   r->c = next > 0xFFFF;
   r->a = (uint16_t)next;
-  wr16(ram, r, 0x0185, r->a);
+  wr16(ram, r, HM_TEXT_X, r->a);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -319,19 +369,19 @@ void hm_AdvanceLetterCursor(uint8_t *ram, HmRegs *r)
 
 void hm_BlinkTextCursor(uint8_t *ram, HmRegs *r)
 {
-  hm_dp_w16(ram, r, 0x7E, r->a);
-  if ((rd16(ram, r, 0x018B) & 0x007F) == 0x14)
-    wr8(ram, r, 0x018B, (uint8_t)((rd8(ram, r, 0x018B) & 0x80) ^ 0x80));
+  hm_dp_w16(ram, r, BLINK_LETTER, r->a);
+  if ((rd16(ram, r, ARROW_BLINK) & 0x007F) == 0x14)
+    wr8(ram, r, ARROW_BLINK, (uint8_t)((rd8(ram, r, ARROW_BLINK) & 0x80) ^ 0x80));
   r->x = 1;
-  if (rd8(ram, r, 0x018B) & 0x80) {
+  if (rd8(ram, r, ARROW_BLINK) & 0x80) {
     r->a = LETTER_WAITING;
     jsl(ram, r, RET_75F_MARK, hm_DrawLetter);
   } else {
-    r->a = hm_dp_r16(ram, r, 0x7E);
+    r->a = hm_dp_r16(ram, r, BLINK_LETTER);
     jsl(ram, r, RET_75F_LETTER, hm_DrawLetter);
   }
-  uint8_t counter = (uint8_t)(rd8(ram, r, 0x018B) + 1);
-  wr8(ram, r, 0x018B, counter);
+  uint8_t counter = (uint8_t)(rd8(ram, r, ARROW_BLINK) + 1);
+  wr8(ram, r, ARROW_BLINK, counter);
   r->a = (uint16_t)((r->a & 0xFF00) | counter);
 }
 
@@ -350,15 +400,15 @@ void hm_BlinkTextCursor(uint8_t *ram, HmRegs *r)
 
 void hm_PrintDigit(uint8_t *ram, HmRegs *r)
 {
-  uint8_t n = rd8(ram, r, 0x018C);
+  uint8_t n = rd8(ram, r, PRINT_LEFT);
   uint16_t x = (uint8_t)(n * 3);                       /* 8-bit ASL; CLC; ADC */
   uint16_t power_lo = hm_bus_rd16(ram, POWERS_OF_TEN + x);
-  hm_dp_w16(ram, r, 0x7E, power_lo);
+  hm_dp_w16(ram, r, POWER, power_lo);
   uint8_t power_hi = hm_bus_rd8(ram, POWERS_OF_TEN + (uint16_t)(x + 2));
-  *hm_dp(ram, r, 0x80) = power_hi;
+  *hm_dp(ram, r, POWER_HIGH) = power_hi;
   uint32_t power = (uint32_t)power_hi << 16 | power_lo;
 
-  uint32_t number = rd16(ram, r, 0x0192) | (uint32_t)rd8(ram, r, 0x0194) << 16;
+  uint32_t number = rd16(ram, r, PRINT_NUMBER) | (uint32_t)rd8(ram, r, PRINT_NUMBER + 2) << 16;
   uint16_t digit = 0;
   for (;;) {
     number = (number - power) & 0xFFFFFF;
@@ -366,10 +416,10 @@ void hm_PrintDigit(uint8_t *ram, HmRegs *r)
     digit++;
   }
   number = (number + power) & 0xFFFFFF;                 /* add the last one back */
-  wr16(ram, r, 0x0192, (uint16_t)number);
-  wr8(ram, r, 0x0194, (uint8_t)(number >> 16));
+  wr16(ram, r, PRINT_NUMBER, (uint16_t)number);
+  wr8(ram, r, PRINT_NUMBER + 2, (uint8_t)(number >> 16));
 
-  uint8_t flags = rd8(ram, r, 0x019B);
+  uint8_t flags = rd8(ram, r, TEXT_FLAGS);
   if (!(flags & 0x80)) {
     if (digit == 0) {                                   /* a leading zero */
       r->a = (uint16_t)(number & 0xFF00);
@@ -377,9 +427,9 @@ void hm_PrintDigit(uint8_t *ram, HmRegs *r)
       r->c = 1;
       return;
     }
-    wr8(ram, r, 0x019B, flags | 0x80);
+    wr8(ram, r, TEXT_FLAGS, flags | 0x80);
   }
-  hm_dp_w16(ram, r, 0x7E, digit);
+  hm_dp_w16(ram, r, POWER, digit);
   r->a = (uint16_t)(LETTER_ZERO + digit);
   r->x = 0;
   jsl(ram, r, RET_7A6_DIGIT, hm_DrawLetter);
@@ -418,13 +468,13 @@ void hm_PrintDigit(uint8_t *ram, HmRegs *r)
 #define CODE_CHOICE       0xFFFE
 #define CODE_END          0xFFFF
 
-static uint16_t text_word(uint8_t *ram, HmRegs *r, uint16_t y) { return hm_bus_rd16(ram, hm_dp_long(ram, r, 0x01, y)); }
-static uint8_t text_byte(uint8_t *ram, HmRegs *r, uint16_t y) { return hm_bus_rd8(ram, hm_dp_long(ram, r, 0x01, y)); }
+static uint16_t text_word(uint8_t *ram, HmRegs *r, uint16_t y) { return hm_bus_rd16(ram, hm_dp_long(ram, r, TEXT_PTR, y)); }
+static uint8_t text_byte(uint8_t *ram, HmRegs *r, uint16_t y) { return hm_bus_rd8(ram, hm_dp_long(ram, r, TEXT_PTR, y)); }
 static void set_a8(HmRegs *r, uint8_t v) { r->a = (uint16_t)((r->a & 0xFF00) | v); }
 static void set_flags_019B(uint8_t *ram, HmRegs *r, uint8_t bits)
 {
-  uint8_t v = (uint8_t)(rd8(ram, r, 0x019B) | bits);
-  wr8(ram, r, 0x019B, v);
+  uint8_t v = (uint8_t)(rd8(ram, r, TEXT_FLAGS) | bits);
+  wr8(ram, r, TEXT_FLAGS, v);
   set_a8(r, v);
 }
 
@@ -432,88 +482,88 @@ static void set_flags_019B(uint8_t *ram, HmRegs *r, uint8_t bits)
  * cursor moves; $0189 counts the frame. */
 static void next_letter(uint8_t *ram, HmRegs *r)
 {
-  if (rd8(ram, r, 0x018C) == 0) {
-    r->a = (uint16_t)(rd16(ram, r, 0x0187) + 1);
-    wr16(ram, r, 0x0187, r->a);
+  if (rd8(ram, r, PRINT_LEFT) == 0) {
+    r->a = (uint16_t)(rd16(ram, r, TEXT_CODE_AT) + 1);
+    wr16(ram, r, TEXT_CODE_AT, r->a);
   }
-  r->a = r->x = rd8(ram, r, 0x0190);                  /* LDA #0; XBA; LDA $0190; TAX */
+  r->a = r->x = rd8(ram, r, LETTER_WIDTH);            /* LDA #0; XBA; LDA $0190; TAX */
   jsr(ram, r, 0x95E6, hm_AdvanceLetterCursor);
-  uint8_t frames = (uint8_t)(rd8(ram, r, 0x0189) + 1);   /* 8395E7 */
-  wr8(ram, r, 0x0189, frames);
+  uint8_t frames = (uint8_t)(rd8(ram, r, HM_TEXT_TICK) + 1);   /* 8395E7 */
+  wr8(ram, r, HM_TEXT_TICK, frames);
   set_a8(r, frames);
 }
 /* LDA $0187; INC; INC; STA $0187 in 8 bits */
 static void skip_two_codes8(uint8_t *ram, HmRegs *r)
 {
-  uint8_t v = (uint8_t)(rd8(ram, r, 0x0187) + 2);
-  wr8(ram, r, 0x0187, v);
+  uint8_t v = (uint8_t)(rd8(ram, r, TEXT_CODE_AT) + 2);
+  wr8(ram, r, TEXT_CODE_AT, v);
   set_a8(r, v);
 }
 
 static void print_number(uint8_t *ram, HmRegs *r)
 {
-  if (rd8(ram, r, 0x018C) == 0) {                     /* first digit: copy the value */
-    uint16_t y = (uint16_t)(rd16(ram, r, 0x0187) * 2 + 2);
-    wr8(ram, r, 0x018C, text_byte(ram, r, y));       /* digits */
+  if (rd8(ram, r, PRINT_LEFT) == 0) {                 /* first digit: copy the value */
+    uint16_t y = (uint16_t)(rd16(ram, r, TEXT_CODE_AT) * 2 + 2);
+    wr8(ram, r, PRINT_LEFT, text_byte(ram, r, y));   /* digits */
     y = (uint16_t)(y + 2);
     uint16_t x = (uint16_t)((text_word(ram, r, y) - 1) << 2);
-    hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, (TEXT_NUMBERS + x) & 0xFFFFFF));
+    hm_dp_w16(ram, r, SOURCE, hm_bus_rd16(ram, (TEXT_NUMBERS + x) & 0xFFFFFF));
     x = (uint16_t)(x + 2);
-    *hm_dp(ram, r, 0x74) = hm_bus_rd8(ram, (TEXT_NUMBERS + x) & 0xFFFFFF);
-    wr8(ram, r, 0x0192, 0); wr8(ram, r, 0x0193, 0); wr8(ram, r, 0x0194, 0);
-    wr8(ram, r, 0x019B, rd8(ram, r, 0x019B) & 0x7F);
+    *hm_dp(ram, r, SOURCE_BANK) = hm_bus_rd8(ram, (TEXT_NUMBERS + x) & 0xFFFFFF);
+    wr8(ram, r, PRINT_NUMBER, 0); wr8(ram, r, PRINT_NUMBER + 1, 0); wr8(ram, r, PRINT_NUMBER + 2, 0);
+    wr8(ram, r, TEXT_FLAGS, rd8(ram, r, TEXT_FLAGS) & 0x7F);
     x = (uint16_t)(x + 1);
     uint8_t size = hm_bus_rd8(ram, (TEXT_NUMBERS + x) & 0xFFFFFF);
     uint16_t i = 0;
     do {                                              /* PHA; LDA [$72],Y; STA $0192,X; ... DEC; BNE */
       hm_push8(ram, r, size);
-      wr8(ram, r, (uint16_t)(0x0192 + i), hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, i)));
+      wr8(ram, r, (uint16_t)(PRINT_NUMBER + i), hm_bus_rd8(ram, hm_dp_long(ram, r, SOURCE, i)));
       i++;
       hm_pull8(ram, r);
     } while (--size);
     r->x = r->y = i;
   }
-  wr8(ram, r, 0x018C, (uint8_t)(rd8(ram, r, 0x018C) - 1));
-  set_a8(r, rd8(ram, r, 0x018C));
+  wr8(ram, r, PRINT_LEFT, (uint8_t)(rd8(ram, r, PRINT_LEFT) - 1));
+  set_a8(r, rd8(ram, r, PRINT_LEFT));
   jsl(ram, r, 0x9686, hm_PrintDigit);
-  wr8(ram, r, 0x0190, 0);
-  wr8(ram, r, 0x0189, 0);
-  set_a8(r, rd8(ram, r, 0x018C));
-  if (rd8(ram, r, 0x018C) == 0) skip_two_codes8(ram, r);
+  wr8(ram, r, LETTER_WIDTH, 0);
+  wr8(ram, r, HM_TEXT_TICK, 0);
+  set_a8(r, rd8(ram, r, PRINT_LEFT));
+  if (rd8(ram, r, PRINT_LEFT) == 0) skip_two_codes8(ram, r);
   next_letter(ram, r);
 }
 
 static void print_name(uint8_t *ram, HmRegs *r)
 {
-  if (rd8(ram, r, 0x018C) == 0) {
-    uint16_t y = (uint16_t)(rd16(ram, r, 0x0187) * 2 + 2);
+  if (rd8(ram, r, PRINT_LEFT) == 0) {
+    uint16_t y = (uint16_t)(rd16(ram, r, TEXT_CODE_AT) * 2 + 2);
     uint8_t n = text_byte(ram, r, y);
-    wr8(ram, r, 0x018C, n);
-    wr8(ram, r, 0x018D, (uint8_t)(n - 1));
+    wr8(ram, r, PRINT_LEFT, n);
+    wr8(ram, r, NAME_LAST, (uint8_t)(n - 1));
   }
-  uint16_t y = (uint16_t)(rd16(ram, r, 0x0187) * 2 + 4);
+  uint16_t y = (uint16_t)(rd16(ram, r, TEXT_CODE_AT) * 2 + 4);
   r->y = y;
   uint16_t x = (uint16_t)((text_word(ram, r, y) - 1) << 2);
-  hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, (TEXT_NAMES + x) & 0xFFFFFF));
+  hm_dp_w16(ram, r, SOURCE, hm_bus_rd16(ram, (TEXT_NAMES + x) & 0xFFFFFF));
   x = (uint16_t)(x + 2);
-  *hm_dp(ram, r, 0x74) = hm_bus_rd8(ram, (TEXT_NAMES + x) & 0xFFFFFF);
-  uint8_t left = (uint8_t)(rd8(ram, r, 0x018C) - 1);
-  wr8(ram, r, 0x018C, left);
-  uint8_t which = (uint8_t)(rd8(ram, r, 0x018D) - left);  /* SEC; SBC $018C */
+  *hm_dp(ram, r, SOURCE_BANK) = hm_bus_rd8(ram, (TEXT_NAMES + x) & 0xFFFFFF);
+  uint8_t left = (uint8_t)(rd8(ram, r, PRINT_LEFT) - 1);
+  wr8(ram, r, PRINT_LEFT, left);
+  uint8_t which = (uint8_t)(rd8(ram, r, NAME_LAST) - left);  /* SEC; SBC $018C */
   r->y = (uint16_t)(which << 1);
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, r->y));
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, SOURCE, r->y));
   r->x = 1;
   jsl(ram, r, 0x96FC, hm_DrawLetter);
-  wr8(ram, r, 0x0190, 1);
-  wr8(ram, r, 0x0189, 0);
-  set_a8(r, rd8(ram, r, 0x018C));
-  if (rd8(ram, r, 0x018C) == 0) skip_two_codes8(ram, r);
+  wr8(ram, r, LETTER_WIDTH, 1);
+  wr8(ram, r, HM_TEXT_TICK, 0);
+  set_a8(r, rd8(ram, r, PRINT_LEFT));
+  if (rd8(ram, r, PRINT_LEFT) == 0) skip_two_codes8(ram, r);
   next_letter(ram, r);
 }
 
 void hm_PrintTextFrame(uint8_t *ram, HmRegs *r)
 {
-  uint8_t flags = rd8(ram, r, 0x019B);
+  uint8_t flags = rd8(ram, r, TEXT_FLAGS);
   set_a8(r, flags & 0x20);                            /* AND #$20 */
   if (flags & 0x20) {                                 /* JMP CODE_839447 */
     jsr(ram, r, RET_447_BLINK, hm_BlinkTextBoxArrow);
@@ -522,9 +572,9 @@ void hm_PrintTextFrame(uint8_t *ram, HmRegs *r)
   if (!(flags & 0x01)) { set_a8(r, 0); return; }      /* AND #$01 */
 
   for (;;) {                                          /* 839534 */
-    set_a8(r, rd8(ram, r, 0x019B) & 0xFD);
-    wr8(ram, r, 0x019B, (uint8_t)r->a);
-    uint16_t at = rd16(ram, r, 0x0187);
+    set_a8(r, rd8(ram, r, TEXT_FLAGS) & 0xFD);
+    wr8(ram, r, TEXT_FLAGS, (uint8_t)r->a);
+    uint16_t at = rd16(ram, r, TEXT_CODE_AT);
     r->y = (uint16_t)(at << 1);
     uint16_t code = text_word(ram, r, r->y);
     r->a = code;
@@ -532,13 +582,13 @@ void hm_PrintTextFrame(uint8_t *ram, HmRegs *r)
     switch (code) {
     case CODE_WAIT:
       set_flags_019B(ram, r, 0x08);
-      wr16(ram, r, 0x0185, 0x5528);
+      wr16(ram, r, HM_TEXT_X, VRAM_WAIT_MARK);
       r->a = CODE_WAIT;
       jsr(ram, r, 0x960A, hm_BlinkTextCursor);
       return;
     case CODE_SPACE:
       r->a = (uint16_t)(at + 1);
-      wr16(ram, r, 0x0187, r->a);
+      wr16(ram, r, TEXT_CODE_AT, r->a);
       r->x = 1;
       jsr(ram, r, 0x961D, hm_AdvanceLetterCursor);
       continue;                                       /* JMP 839534 */
@@ -548,11 +598,11 @@ void hm_PrintTextFrame(uint8_t *ram, HmRegs *r)
     case CODE_CHOICE: {
       set_flags_019B(ram, r, 0x10);
       uint8_t n = text_byte(ram, r, (uint16_t)(r->y + 2));
-      wr8(ram, r, 0x018E, (uint8_t)(n - 1));
+      wr8(ram, r, CHOICE_LAST, (uint8_t)(n - 1));
       r->y = (uint16_t)(r->y + 2);
-      uint16_t x = (uint8_t)(rd8(ram, r, 0x018F) << 1);  /* 8-bit ASL */
+      uint16_t x = (uint8_t)(rd8(ram, r, CHOICE) << 1);  /* 8-bit ASL */
       r->x = x;
-      wr16(ram, r, 0x0185, hm_bus_rd16(ram, CHOICE_PLACES + x));
+      wr16(ram, r, HM_TEXT_X, hm_bus_rd16(ram, CHOICE_PLACES + x));
       r->a = 0x0275;
       jsr(ram, r, 0x974E, hm_BlinkTextCursor);
       return;
@@ -563,25 +613,25 @@ void hm_PrintTextFrame(uint8_t *ram, HmRegs *r)
     }
     r->c = code >= CODE_END;                          /* CMP #$FFFF, not equal */
 
-    uint8_t frames = rd8(ram, r, 0x0189);             /* 83956F */
+    uint8_t frames = rd8(ram, r, HM_TEXT_TICK);       /* 83956F */
     set_a8(r, frames);
     r->c = frames >= 4;
     if (frames != 4) {                                /* not yet: count the frame */
-      wr8(ram, r, 0x0189, (uint8_t)(frames + 1));
+      wr8(ram, r, HM_TEXT_TICK, (uint8_t)(frames + 1));
       set_a8(r, (uint8_t)(frames + 1));
       return;
     }
-    wr8(ram, r, 0x0189, 0);
+    wr8(ram, r, HM_TEXT_TICK, 0);
     if (code == CODE_NAME) { print_name(ram, r); return; }
 
     uint8_t narrow = (code >= 0x00BC && code < 0x00C6) || code == 0x0270;
     r->x = (uint16_t)((r->x & 0xFF00) | (narrow ? 0 : 1));   /* SEP #$10; LDX */
-    wr8(ram, r, 0x0190, (uint8_t)r->x);
+    wr8(ram, r, LETTER_WIDTH, (uint8_t)r->x);
     r->a = code;
     jsl(ram, r, 0x95AA, hm_DrawLetter);
     set_a8(r, 6);
-    wr8(ram, r, 0x0114, 3);
-    wr8(ram, r, 0x0115, 6);
+    wr8(ram, r, SOUND_EFFECT, 3);
+    wr8(ram, r, SOUND_BANK, 6);
     jsl(ram, r, 0x95BC, hm_PlaySoundEffect0A);
     set_flags_019B(ram, r, 0x02);
     next_letter(ram, r);
