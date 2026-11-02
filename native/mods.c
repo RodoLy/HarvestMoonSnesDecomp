@@ -960,6 +960,7 @@ bool mods_hud(uint32_t *px, int w)
  * the margins (g_hm_oam_left / g_hm_oam_right). Nothing the game computes
  * (camera, collisions, the people, the random numbers) sees the margins. */
 static int s_ws_l, s_ws_r;
+static int s_pic_key = -1;   /* the screen being seen: its number | 0x100 with a diary loaded */
 /* The screens from power-on to choosing the diary, also wide: the Natsume
  * logo ($5D), the title ($5C), the diary list ($5E), the names ($5F) and
  * the intro's road ($3C, before any diary is loaded). Their pictures go on
@@ -1020,6 +1021,14 @@ static void ws_frame(void)
     was_start = start;
   }
   s_ws_l = l; s_ws_r = r;
+  /* the same for how the layers are drawn (mods_ws_mirror, _clamp,
+   * _bg1_camera): they follow the screen being seen, not the number the game
+   * already changed (Start on the road: the title's number, the road still
+   * fading out) */
+  static int pic_hold;
+  int key = g_ram[HM_MAP_ID] | (hm_diary_loaded(g_ram) ? 0x100 : 0);
+  if (key != s_pic_key && s_pic_key >= 0 && !dark && pic_hold < 120) pic_hold++;
+  else { s_pic_key = key; pic_hold = 0; }
   g_hm_oam_right = (uint16_t)(0x0100 + r);
   g_hm_oam_left = (uint16_t)(0xFFF0 - l);
 }
@@ -1029,7 +1038,7 @@ void mods_ws_margins(int *left, int *right) { *left = s_ws_l; *right = s_ws_r; }
  * reflected at the edges (the grass, the fences and the bushes carry on) */
 unsigned mods_ws_mirror(void)
 {
-  return g_ram[HM_MAP_ID] == 0x3C && !hm_diary_loaded(g_ram) ? 0x0F : 0;
+  return s_pic_key == 0x3C ? 0x0F : 0;
 }
 /* The intro's farm ($5B): BG1 (the fence, the gate, the mountains) is a
  * panorama 512 pixels wide that the camera crosses from 256 to 0. Wide,
@@ -1040,13 +1049,13 @@ unsigned mods_ws_mirror(void)
  * past the panorama. Only the drawing: the game's scroll is put back. */
 bool mods_ws_bg1_camera(int *lo, int *hi)
 {
-  if (g_ram[HM_MAP_ID] != 0x5B || !s_ws_l) return false;
+  if ((s_pic_key & 0xFF) != 0x5B || !s_ws_l) return false;
   *lo = s_ws_l; *hi = 512 - 256 - s_ws_r;
   return true;
 }
 unsigned mods_ws_clamp(void)
 {
-  uint8_t m = g_ram[HM_MAP_ID];
+  int m = s_pic_key & 0xFF;
   return (m == 0x5E || m == 0x5F) ? (1u << 0) | (1u << 2) : 1u << 2;
 }
 
