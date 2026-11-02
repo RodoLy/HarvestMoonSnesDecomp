@@ -29,8 +29,6 @@
 /* The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* ROM tables */
-#define RULES               0x80B6F5 /* Unk_Table13 */
-#define PICK_ITEMS          0x82CFB4 /* DATA8_82CFB4 */
 #define SONG_INSTRUMENTS    0x80B8CD /* per song, its instrument (- 1) */
 
 /* Direct page */
@@ -139,7 +137,7 @@ void hm_PressAOnTile(uint8_t *ram, HmRegs *r)
     if (!text) return;
     r->c = 0;                                              /* ASL x3 of a byte */
     r->x = (uint16_t)((uint16_t)(rule_no << 3) + 3);
-    uint8_t rule = hm_bus_rd8(ram, RULES + r->x);
+    uint8_t rule = hm_bus_rd8(ram, DOOR_TABLE + r->x);
     r->a = (uint16_t)((r->x & 0xFF00) | rule);
     if (!rule_applies(ram, r, rule)) return;
     r->a = text;                                           /* LDA #0; XBA; LDA $93 */
@@ -169,7 +167,7 @@ void hm_PressAOnTile(uint8_t *ram, HmRegs *r)
     r->c = s > 0xFFFF;
     r->x = (uint16_t)s;
     r->a = (uint16_t)s;
-    hm_bus_wr8(ram, db_addr(r, HM_ITEM_ON_HAND), lda8(r, hm_bus_rd8(ram, PICK_ITEMS + r->x)));
+    hm_bus_wr8(ram, db_addr(r, HM_ITEM_ON_HAND), lda8(r, hm_bus_rd8(ram, PICK_UP_ITEMS + r->x)));
     r->a = 4;
     set16(ram, r, HM_PLAYER_ACTION, 4);
     return;

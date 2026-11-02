@@ -35,18 +35,15 @@
 
 /* ROM tables */
 #define TILE_TYPE_SHEET     0xA7F500   /* the tile types, laid out like the graphics sheet */
-#define SHED_LIST           0xBE0F     /* $81:BE0F: the shed's items, 8 bytes each */
+#define SHED_LIST           ((uint16_t)SHED_ITEM_TABLE) /* the shed's items, 8 bytes each */
 #define FLOWER_SHOP_LIST    0xBEEF     /* $81:BEEF: the flower shop's */
 #define GENERAL_STORE_LIST  0xBF27     /* $81:BF27: the general store's */
 #define ANIMAL_SHOP_LIST    0xBF6F     /* $81:BF6F: the animal shop's */
 #define POWER_FLOWER_PLACES 0x81AC49   /* x, y words; 10 places */
-#define TROUGH_BITS         0x82A571   /* a word per trough: its bit in HM_COW_TROUGHS / HM_CHICKEN_TROUGHS */
 #define HEN_BITS            0x81BF97   /* a word per hen: its bit in HM_HEN_EGGS */
-#define HEN_PLACES          0x83CA10   /* 4 bytes per hen: x, y in the coop */
 #define BARN_TROUGHS        0x81B0ED   /* 4 bytes per barn trough: x, y */
 #define COOP_TROUGHS        0x81B19F   /* 4 bytes per coop trough: x, y */
 #define MAP_ROUTINES        0x81A9F6   /* a word per map: its routine (bank $81) */
-#define MAPS_GRAPHICS       0x80AA7C   /* Maps_Graphics_Table: a word per map */
 
 /* Direct page */
 #define CHANGE_GFX          0x7E   /* 16b: ReadTileChange's output: the graphics' offset, */
@@ -504,13 +501,13 @@ static void by_bits(uint8_t *ram, HmRegs *r, uint16_t n, uint32_t bits, uint32_t
 void hm_ReplaceTilesBarn(uint8_t *ram, HmRegs *r)
 {
   item(ram, r, 0x1A, 0, 1, 0xB0B5);
-  by_bits(ram, r, 13, TROUGH_BITS, db_(r, HM_COW_TROUGHS), BARN_TROUGHS, 0x99, 0xB0E2);
+  by_bits(ram, r, 13, FEED_BOX_BITS, db_(r, HM_COW_TROUGHS), BARN_TROUGHS, 0x99, 0xB0E2);
 }
 void hm_ReplaceTilesCoop(uint8_t *ram, HmRegs *r)
 {
   item(ram, r, 0x19, 0, 1, 0xB12E);
-  by_bits(ram, r, 12, TROUGH_BITS, db_(r, HM_CHICKEN_TROUGHS), COOP_TROUGHS, 0x99, 0xB15D);
-  by_bits(ram, r, 13, HEN_BITS, WRAM_LONG(HM_HEN_EGGS), HEN_PLACES, 0xF1, 0xB194);
+  by_bits(ram, r, 12, FEED_BOX_BITS, db_(r, HM_CHICKEN_TROUGHS), COOP_TROUGHS, 0x99, 0xB15D);
+  by_bits(ram, r, 13, HEN_BITS, WRAM_LONG(HM_HEN_EGGS), CHICKEN_PLACES, 0xF1, 0xB194);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -587,7 +584,7 @@ void hm_GetBackgroundData(uint8_t *ram, HmRegs *r)
 {
   r->x = (uint16_t)(*hm_dp(ram, r, HM_MAP_ID) << 1);
   r->c = 0;
-  uint16_t record = rd16(ram, MAPS_GRAPHICS + r->x);
+  uint16_t record = rd16(ram, MAPS_GRAPHICS_TABLE + r->x);
   hm_dp_w16(ram, r, BG_RECORD, record);
   uint8_t b = hm_bus_rd8(ram, (((uint32_t)r->db << 16) + record + r->y) & 0xFFFFFF);  /* (dp),Y */
   r->a = (uint16_t)((record & 0xFF00) | b);

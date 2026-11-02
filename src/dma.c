@@ -17,8 +17,6 @@
 
 /* ── Names of the memory locations used here (as in video.c) ────────────── */
 
-#define DMA_CHANNEL_FLAGS 0x808B3C   /* ROM: db 1 << ch */
-
 /* Direct page */
 #define DMA_CHANNEL     0x27   /* 8b: the channel to set up next */
 #define DMA_WAITING     0x28   /* 8b: the channels to start, one bit each */
@@ -69,7 +67,7 @@ void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, HM_LOAD_BUDGET, (uint16_t)(hm_dp_r16(ram, r, HM_LOAD_BUDGET) - hm_bus_rd16(ram, regs + DAS)));
 
   uint8_t *to_start = hm_dp(ram, r, DMA_WAITING);
-  *to_start |= hm_bus_rd8(ram, DMA_CHANNEL_FLAGS + ch);
+  *to_start |= hm_bus_rd8(ram, DMA_CHANNEL_BITS + ch);
   r->a = *to_start;
   r->x = ch;
   r->c = 0;
@@ -85,7 +83,7 @@ void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r)
 void hm_RemoveProgrammedDMA(uint8_t *ram, HmRegs *r)
 {
   r->x = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, DMA_CHANNEL));
-  uint8_t flag = hm_bus_rd8(ram, (DMA_CHANNEL_FLAGS + r->x) & 0xFFFFFF);
+  uint8_t flag = hm_bus_rd8(ram, (DMA_CHANNEL_BITS + r->x) & 0xFFFFFF);
   uint8_t *to_start = hm_dp(ram, r, DMA_WAITING);
   *to_start = (uint8_t)(~flag & *to_start);
   r->a = (uint16_t)((r->a & 0xFF00) | *to_start);

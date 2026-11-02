@@ -87,15 +87,12 @@
 /* ROM */
 #define ZERO_WORD       0x808424  /* $0000 */
 #define OFF_SCREEN      0x808426  /* $00F0 */
-#define CHANNEL_BITS    0x808B3C  /* db 1 << ch */
-#define MAPS_GRAPHICS_TABLE 0x80AA7C
 #define LAYER_SIZES     0x80AA68  /* by HM_MAP_WIDTH: MAP_ROW_LENGTH */
 #define LAYER_SIZES_2   0x80AA72  /* by HM_MAP_WIDTH: CAMERA_IN_ROW */
 #define BLOCK_TILES     0x82E666  /* DrawTileBlock3x2's tiles */
 #define BLOCK_PLACES    0x82E73E  /* DrawTileBlock3x2: per block, its VRAM address */
 #define BAR_VRAM_AT     0x82EB49  /* DrawScreenBar: the address */
 #define BAR_TILE_AT     0x82EB4B  /*   the first tile */
-#define BLANKS_AT       0x82EB4D  /* DrawNameEntryBlanks: the first position */
 #define BAR_COLUMNS_AT  0x82EB55  /* DrawScreenBar: the columns */
 #define BARS_VRAM       0x82F258  /* DrawScreenBars: per bar, the address, */
 #define BARS_TILE       0x82F268  /*   the first tile, */
@@ -396,7 +393,7 @@ void hm_StartLastPreparedDMA(uint8_t *ram, HmRegs *r)
   }
   r->x = ch;
   r->c = 0;
-  uint8_t bit = hm_bus_rd8(ram, CHANNEL_BITS + ch);
+  uint8_t bit = hm_bus_rd8(ram, DMA_CHANNEL_BITS + ch);
   set_a8(r, bit);
   wr8(ram, r, MDMAEN, bit);
   *hm_dp(ram, r, DMA_WAITING) = 0;
@@ -615,7 +612,7 @@ void hm_DrawTileBlock3x2(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_DrawNameEntryBlanks(uint8_t *ram, HmRegs *r)
 {
-  hm_dp_w16(ram, r, BLANK_AT, hm_bus_rd16(ram, BLANKS_AT));
+  hm_dp_w16(ram, r, BLANK_AT, hm_bus_rd16(ram, NAME_LETTER_AT));
   for (uint16_t i = 0; i < 4; i++) {
     push16(ram, r, i);                                     /* PHX */
     hm_bus_wr16(ram, TEXT_AT, hm_dp_r16(ram, r, BLANK_AT));

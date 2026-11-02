@@ -51,13 +51,10 @@
 #define JOY_A             0x0080
 
 /* ROM tables */
-#define CHICKEN_PLACES    0x83CA10   /* 4 bytes per chicken: x, y in the coop */
-#define COWS_SPAWN        0x83CA44   /* Table_CowsSpawnPos: a word per cow, 4 bytes apart */
 #define EVENT_FLAG_BITS   0x8494D3   /* dw 1 << n, Events_Flags_Table */
 #define INVERSE_FLAG_BITS 0x8494F3   /* Events_Inverse_Flags_Tables: ~(1 << n) */
 #define WAIT_BITS         0x84B4D2   /* dw $0400, $0800, $0100, $0200, $8000 */
 #define FLAG_BITS_84      0x84C014   /* DATA16_84C014: dw 1 << n */
-#define SHED_PLACES       0x81BE0F   /* per item, 8 bytes: +6 shed byte, +7 its bit */
 #define ANIM_TABLE_BANK   0xB3       /* the bank of the animation tables (+33 points there) */
 
 /* Slot numbers (see PlaceAnimalsOnMap in animals.c) */
@@ -1633,8 +1630,8 @@ void hm_Event_CowFrame(uint8_t *ram, HmRegs *r)
     r->x = (uint16_t)(animal_number(ram, r, COW_SLOT0) << 2);
     rec_w8(ram, r, COW_MAP, MAP_BARN);
     /* the same word for both coordinates (no INX in between) */
-    rec_w16(ram, r, COW_X, hm_bus_rd16(ram, COWS_SPAWN + r->x));
-    rec_w16(ram, r, COW_Y, hm_bus_rd16(ram, COWS_SPAWN + r->x));
+    rec_w16(ram, r, COW_X, hm_bus_rd16(ram, COW_PLACES + r->x));
+    rec_w16(ram, r, COW_Y, hm_bus_rd16(ram, COW_PLACES + r->x));
   } else if (interact(ram, r)) {
     wander(ram, r);
   }
@@ -2142,11 +2139,11 @@ static void to_shed(uint8_t *ram, HmRegs *r, uint16_t at)
   uint16_t x = (uint16_t)((item << 3) + 6);                /* ASL x3; CLC; ADC #6 */
   r->c = 0;
   r->x = x;
-  uint8_t place = hm_bus_rd8(ram, SHED_PLACES + x);
+  uint8_t place = hm_bus_rd8(ram, SHED_ITEM_TABLE + x);
   r->a = (uint16_t)((x & 0xFF00) | place);
   hm_push8(ram, r, place);                                 /* PHA */
   r->x = (uint16_t)(x + 1);
-  uint8_t bit = hm_bus_rd8(ram, SHED_PLACES + r->x);
+  uint8_t bit = hm_bus_rd8(ram, SHED_ITEM_TABLE + r->x);
   *hm_dp(ram, r, DP_CMP_LOW) = bit;
   hm_pull8(ram, r);                                        /* PLA; XBA; LDA #0; XBA */
   r->a = r->x = place;

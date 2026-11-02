@@ -36,10 +36,8 @@
 #define HEARTS_EVE    (WRAM_LONG(HM_HEARTS_BASE) + 8)
 
 /* ROM tables */
-#define PICK_UP_TABLE 0x82CFB4   /* DATA8_82CFB4: per tile type x 4 + season, an item */
 #define TV_TEXTS      0x81D510   /* DATA8_81D510: 8 bytes per channel, a word per season */
 #define PIECE_BITS    0x81FAB4   /* DATA8_81FAB4: a word per fence piece, its bit */
-#define NESTS         0x83CA10   /* DATA16_83CA10: 4 bytes per nest, X first */
 #define NEST_BITS     0x81FAD4   /* DATA16_81FAD4: a word per nest, its egg bit */
 
 typedef void Step(uint8_t *ram, HmRegs *r);
@@ -462,7 +460,7 @@ static void take(uint8_t *ram, HmRegs *r, uint16_t k)
   r->a = (uint16_t)(k << 2);
   r->c = 0;
   r->x = r->a;
-  hold(ram, r, hm_bus_rd8(ram, PICK_UP_TABLE + r->x));
+  hold(ram, r, hm_bus_rd8(ram, PICK_UP_ITEMS + r->x));
   done(ram, r);
 }
 #define TAKE(n, k) void hm_PlayerAction_##n(uint8_t *ram, HmRegs *r) { take(ram, r, k); }
@@ -1468,7 +1466,7 @@ void hm_PlayerAction_53(uint8_t *ram, HmRegs *r)
   for (r->y = 0; r->y < 0x0D; r->y++) {
     r->a = (uint16_t)(r->y << 2);
     r->x = r->a;
-    r->a = (uint16_t)(hm_bus_rd16(ram, NESTS + r->x) - 8);
+    r->a = (uint16_t)(hm_bus_rd16(ram, CHICKEN_PLACES + r->x) - 8);
     r->c = r->a >= v;
     if (r->a == v) {
       r->a = (uint16_t)(r->y << 1);

@@ -41,7 +41,6 @@
 #define JUMP_TOGGLE     0x0971     /* 8b: the slow jump moves every other frame */
 
 /* ROM: the exits (Unk_Table13, $80:B6F5, 8 bytes an exit) */
-#define DOORS           0x80B6F5
 #define DOOR_DEST       0          /* 8b: the destination map */
 #define DOOR_ANIM       2          /* 8b: the map animation (0 = none) */
 #define DOOR_FLAGS      3          /* 8b: when the door is shut, + season, festivals */
@@ -993,7 +992,7 @@ void hm_CheckMountainFinds(uint8_t *ram, HmRegs *r)
  * Leftovers: the original's A, X, Y and C on each path.
  * ───────────────────────────────────────────────────────────────────────── */
 
-static uint8_t door(uint8_t *ram, uint16_t x) { return hm_bus_rd8(ram, DOORS + x); }
+static uint8_t door(uint8_t *ram, uint16_t x) { return hm_bus_rd8(ram, DOOR_TABLE + x); }
 static bool cmp8(HmRegs *r, uint8_t a, uint8_t v) { r->c = a >= v; return a == v; }
 
 /* LDA $0878; ASL; ASL; TAY; LDA #0; XBA; LDA [$0D],Y; ASL x3; TAX */
@@ -1049,8 +1048,8 @@ static void door_open(uint8_t *ram, HmRegs *r, uint16_t x)
   }
   wr8(ram, r, HM_TIME_RUNNING, 0);                        /* the clock stops */
   r->x = (uint16_t)(x + DOOR_ARRIVE_Y);
-  wr16(ram, r, HM_TRANSITION_X, hm_bus_rd16(ram, DOORS + x + DOOR_ARRIVE_X));
-  wr16(ram, r, HM_TRANSITION_Y, hm_bus_rd16(ram, DOORS + x + DOOR_ARRIVE_Y));
+  wr16(ram, r, HM_TRANSITION_X, hm_bus_rd16(ram, DOOR_TABLE + x + DOOR_ARRIVE_X));
+  wr16(ram, r, HM_TRANSITION_Y, hm_bus_rd16(ram, DOOR_TABLE + x + DOOR_ARRIVE_Y));
   uint8_t animation = *hm_dp(ram, r, DOOR_MAP_ANIM);
   r->a = animation;                                       /* LDA #0; XBA; LDA $92 */
   r->c = 1;                                               /* CMP #0 */

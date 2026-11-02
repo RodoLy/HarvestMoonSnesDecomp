@@ -45,7 +45,6 @@
 #define NAME_GRID_0       0xEBF8   /* $82:EBF8: the name screen's page 0, 8 bytes a cell */
 #define NAME_GRID_1       0xEE30   /* $82:EE30: page 1 */
 #define NAME_GRID_2       0xF0D0   /* $82:F0D0: page 2 */
-#define NAME_LETTER_AT    0x82EB4D /* DATA16_82EB4D: the VRAM place of each letter */
 
 static uint32_t db_addr(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static uint8_t rd8(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_rd8(ram, db_addr(r, a)); }

@@ -21,10 +21,7 @@
 #define DIVISOR            0x80      /* StartEnding: DivisionUnsigned's divisor */
 
 /* ROM tables */
-#define COW_FEED_FLAGS     0x82A571  /* ROM: dw 1 << n */
 #define HEN_EGG_FLAGS      0x83CA78  /* ROM: dw 1 << n */
-#define CHICKEN_SPAWN      0x83CA10  /* ROM: dw x, y per chicken slot (bought) */
-#define COW_SPAWN          0x83CA44  /* ROM: dw x, y per cow slot (in the barn) */
 
 static void slot_pointer(uint8_t *ram, HmRegs *r, uint16_t base, unsigned shift)
 {
@@ -252,7 +249,7 @@ static void feed_cow(uint8_t *ram, HmRegs *r, uint16_t i)
   }
   if (*field(ram, r, COW_MAP) == MAP_BARN) {
     uint16_t stall = (*field(ram, r, ANIMAL_STATUS) & COW_PREGNANT) ? 12 : i;
-    if (hm_bus_rd16(ram, COW_FEED_FLAGS + 2u * stall) & hm_rd16(ram, HM_COW_TROUGHS))
+    if (hm_bus_rd16(ram, FEED_BOX_BITS + 2u * stall) & hm_rd16(ram, HM_COW_TROUGHS))
       cow_after_meal(ram, r);
     else
       cow_hungry(ram, r, -8, 0xBD18, 4);
@@ -533,7 +530,7 @@ void hm_AddNewChicken(uint8_t *ram, HmRegs *r)
   r->c = source >= 1;                                    /* CMP #1 */
   if (source == 1) {
     put8(ram, r, ANIMAL_STATUS, 0x09);
-    spawn_from_table(ram, r, CHICKEN_SPAWN, CHICKEN_X, CHICKEN_Y);
+    spawn_from_table(ram, r, CHICKEN_PLACES, CHICKEN_X, CHICKEN_Y);
   } else if (r->c = source >= 2, source == 2) {          /* CMP #2 */
     put8(ram, r, ANIMAL_STATUS, 0x09);
     uint8_t s = ram[HM_SEASON];
@@ -580,7 +577,7 @@ void hm_AddNewCow(uint8_t *ram, HmRegs *r)
     hm_AddPlayerHappiness(ram, r);
     hm_rtl(ram, r);
   }
-  spawn_from_table(ram, r, COW_SPAWN, COW_X, COW_Y);
+  spawn_from_table(ram, r, COW_PLACES, COW_X, COW_Y);
   r->a = 0;
 }
 
@@ -772,11 +769,11 @@ static void place_cows(uint8_t *ram, HmRegs *r, uint8_t map)
       r->x = (uint16_t)(stall << 2);
       r->c = (stall >> 14) & 1;                          /* ASL; ASL */
       r->y = COW_X;
-      r->a = hm_bus_rd16(ram, COW_SPAWN + r->x);
+      r->a = hm_bus_rd16(ram, COW_PLACES + r->x);
       hm_wr16(ram, HM_TILE_IN_FRONT_X, r->a);
       r->x = (uint16_t)(r->x + 2);
       r->y = COW_Y;
-      r->a = hm_bus_rd16(ram, COW_SPAWN + r->x);
+      r->a = hm_bus_rd16(ram, COW_PLACES + r->x);
       hm_wr16(ram, HM_TILE_IN_FRONT_Y, r->a);
       r->x = pull16(ram, r);                             /* PLX */
     } else {

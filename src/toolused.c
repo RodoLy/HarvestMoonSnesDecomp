@@ -42,7 +42,6 @@
 #define MONEY_CHANGE_BANK  0x74     /* 8b: its third byte */
 /* WRAM */
 #define NO_FINDS           0x0008   /* HM_FLAGS_60 */
-#define TROUGH_BITS        0x82A571 /* ROM: dw 1 << n, n = 0..12 */
 
 enum { SPRING, SUMMER, FALL, WINTER };
 #define FARM_MAPS 0x04              /* maps 0-3 are the farm (per season) */
@@ -758,7 +757,7 @@ static void feed(uint8_t *ram, HmRegs *r, const Feeding *f)
       uint16_t n = sub_c(r, r->x, 0x00E2);
       r->c = (n & 0x8000) != 0;                          /* ASL */
       r->x = (uint16_t)(n << 1);
-      r->a = hm_bus_rd16(ram, TROUGH_BITS + r->x) | hm_rd16(ram, f->troughs);
+      r->a = hm_bus_rd16(ram, FEED_BOX_BITS + r->x) | hm_rd16(ram, f->troughs);
       hm_wr16(ram, f->troughs, r->a);
       load8(r, ++ram[f->fed]);
       change_tile_in_front(ram, r, 0x0099, f->ret_tile);

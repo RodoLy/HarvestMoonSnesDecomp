@@ -516,3 +516,29 @@
 #define GOBJ_SIZE                0x24    /* the size of a game object's record (36 bytes) */
 #define GOBJ_MAX                 0x28    /* how many there are (40) */
 #define GOBJ_IN_USE              0x7777  /* GOBJ_STATUS's value for an object in use */
+
+/* ── Tables in the ROM ─────────────────────────────────────────────────────────────────
+ * The bus addresses of ROM tables that several files read (not RAM, so no
+ * HM_). The name in HM-Decomp is in brackets. */
+#define DMA_CHANNEL_BITS         0x808B3C /* 8 bytes: 1 << the channel */
+#define MAPS_GRAPHICS_TABLE      0x80AA7C /* a word per map: its graphics
+                                             (Maps_Graphics_Table) */
+#define DOOR_TABLE               0x80B6F5 /* the doors: the destination map, the map
+                                             animation, when it is shut, where the player
+                                             arrives (the DOOR_* fields of
+                                             playerstate.c); interact.c reads its opening
+                                             hours (Unk_Table13) */
+#define SHED_ITEM_TABLE          0x81BE0F /* 8 bytes per item: +6 its byte in
+                                             HM_SHED_ITEMS, +7 its bit; also the shed's
+                                             list */
+#define FEED_BOX_BITS            0x82A571 /* a word per feed box: its bit (1 << n) in
+                                             HM_COW_TROUGHS / HM_CHICKEN_TROUGHS
+                                             (Cow_Feed_Flags) */
+#define PICK_UP_ITEMS            0x82CFB4 /* per tile type x 4 + the season: the item
+                                             picked up there (DATA8_82CFB4) */
+#define NAME_LETTER_AT           0x82EB4D /* the names screen: the VRAM place of each
+                                             letter (DATA16_82EB4D) */
+#define CHICKEN_PLACES           0x83CA10 /* 4 bytes per chicken (nest): x, y in the coop
+                                             (DATA16_83CA10) */
+#define COW_PLACES               0x83CA44 /* 4 bytes per cow: x, y in the barn
+                                             (Table_CowsSpawnPos) */

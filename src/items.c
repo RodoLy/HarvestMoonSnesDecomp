@@ -30,11 +30,9 @@
 #define ITEM_SOUNDS   0x81A308   /* DATA8_81A308: per item, whether it makes a sound */
 #define SPOT_TABLE    0x81A363   /* DATA8_81A363: X, Y of the bins and boxes */
 #define SPOT_Y        2          /*   in an entry: Y */
-#define SHELVES       0x81BE0F   /* 8 bytes a tool: */
 #define SHELF_Y       2          /*   +0 X, +2 Y, */
 #define SHELF_TILE    4          /*   +4 the tile (ChangeMapTile's arguments), */
 #define SHELF_ROW     6          /*   +6 a row of HM_SHED_ITEMS, +7 its bit */
-#define STALL_BITS    0x82A571   /* Cow_Feed_Flags: one bit per feed box */
 
 /* Data-bank variables. The item being worked on (a copy of its map object's
  * record, see objects.c): */
@@ -817,7 +815,7 @@ void hm_FodderIntoFeedBox(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)((r->x - 0xE2) << 1);                   /* SEC; SBC; ASL */
   r->c = 0;
   r->x = r->a;
-  r->a = (uint16_t)(hm_bus_rd16(ram, STALL_BITS + r->x) | rd16(ram, r, flags));
+  r->a = (uint16_t)(hm_bus_rd16(ram, FEED_BOX_BITS + r->x) | rd16(ram, r, flags));
   wr16(ram, r, flags, r->a);
   uint8_t n = (uint8_t)(rd8(ram, r, count) + 1);
   set_a8(r, n);
@@ -1392,11 +1390,11 @@ void hm_PutToolOnShelf(uint8_t *ram, HmRegs *r)
     set_a8(r, map);
     if (map == shop) {
       uint16_t x = (uint16_t)(tool * 8);
-      uint16_t tx = hm_bus_rd16(ram, SHELVES + x), ty = hm_bus_rd16(ram, SHELVES + x + SHELF_Y);
+      uint16_t tx = hm_bus_rd16(ram, SHED_ITEM_TABLE + x), ty = hm_bus_rd16(ram, SHED_ITEM_TABLE + x + SHELF_Y);
       hm_push8(ram, r, (uint8_t)(tx >> 8)); hm_push8(ram, r, (uint8_t)tx);   /* PHA; PHA; PLY; PLX */
       hm_push8(ram, r, (uint8_t)(ty >> 8)); hm_push8(ram, r, (uint8_t)ty);
       hm_pull8(ram, r); hm_pull8(ram, r); hm_pull8(ram, r); hm_pull8(ram, r);
-      r->a = hm_bus_rd16(ram, SHELVES + x + SHELF_TILE);
+      r->a = hm_bus_rd16(ram, SHED_ITEM_TABLE + x + SHELF_TILE);
       r->x = tx;
       r->y = ty;
       jsl(ram, r, 0xA9A6, 0x81, hm_ChangeMapTile);
@@ -1404,7 +1402,7 @@ void hm_PutToolOnShelf(uint8_t *ram, HmRegs *r)
     }
   }
   uint16_t x = (uint16_t)(tool * 8 + SHELF_ROW);
-  uint8_t row = hm_bus_rd8(ram, SHELVES + x), bit = hm_bus_rd8(ram, SHELVES + x + 1);
+  uint8_t row = hm_bus_rd8(ram, SHED_ITEM_TABLE + x), bit = hm_bus_rd8(ram, SHED_ITEM_TABLE + x + 1);
   *hm_dp(ram, r, SHED_BIT) = bit;
   r->x = r->y = row;
   uint8_t v = (uint8_t)(hm_bus_rd8(ram, WRAM_LONG(HM_SHED_ITEMS) + row) | bit);
@@ -1438,8 +1436,8 @@ void hm_TakeToolFromShelf(uint8_t *ram, HmRegs *r)
   wr8(ram, r, HM_TOOL_SELECTED, tool);
   uint16_t x = (uint16_t)((tool << 3) + SHELF_ROW);          /* ASL x3; CLC; ADC #6 */
   r->c = 0;
-  uint8_t row = hm_bus_rd8(ram, (SHELVES + x) & 0xFFFFFF);
-  uint8_t bit = hm_bus_rd8(ram, (SHELVES + x + 1) & 0xFFFFFF);
+  uint8_t row = hm_bus_rd8(ram, (SHED_ITEM_TABLE + x) & 0xFFFFFF);
+  uint8_t bit = hm_bus_rd8(ram, (SHED_ITEM_TABLE + x + 1) & 0xFFFFFF);
   hm_push8(ram, r, row);                                     /* PHA ... PLA */
   *hm_dp(ram, r, SHED_BIT) = (uint8_t)~bit;
   hm_pull8(ram, r);
