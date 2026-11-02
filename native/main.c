@@ -468,8 +468,32 @@ static bool frame_listed(const char *env)
   for (; e && *e; e = strchr(e, ',') ? strchr(e, ',') + 1 : NULL) if (atol(e) == (long)s_frame) return true;
   return false;
 }
+/* HM_RECORD=file: every picture the window shows, raw RGB (its size), and
+ * HM_RECORD2=file: the second screen's (256 x 224), for making videos */
+static void test_record(void)
+{
+  static FILE *f; static bool init;
+  if (!init) { init = true; const char *p = getenv("HM_RECORD"); if (p) f = fopen(p, "wb"); }
+  if (!f) return;
+  SDL_Surface *sf = SDL_RenderReadPixels(s_renderer, NULL);
+  SDL_Surface *rgb = sf ? SDL_ConvertSurface(sf, SDL_PIXELFORMAT_RGB24) : NULL;
+  if (rgb) for (int y = 0; y < rgb->h; y++) fwrite((uint8_t *)rgb->pixels + y * rgb->pitch, 3, (size_t)rgb->w, f);
+  fflush(f);
+  SDL_DestroySurface(rgb); SDL_DestroySurface(sf);
+}
+static void test_record_second(void)
+{
+  static FILE *f; static bool init;
+  if (!init) { init = true; const char *p = getenv("HM_RECORD2"); if (p) f = fopen(p, "wb"); }
+  if (!f) return;
+  static uint32_t px[256 * 224];
+  second_render(px);
+  for (int i = 0; i < 256 * 224; i++) { uint8_t c[3] = { (uint8_t)(px[i] >> 16), (uint8_t)(px[i] >> 8), (uint8_t)px[i] }; fwrite(c, 1, 3, f); }
+  fflush(f);
+}
 static void test_shot(void)
 {
+  test_record();
   const char *dir = getenv("HM_SHOT_DIR");
   if (!dir || !frame_listed("HM_SHOT_AT")) return;
   SDL_Surface *sf = SDL_RenderReadPixels(s_renderer, NULL);
@@ -1005,6 +1029,7 @@ static void end_of_frame(uint8_t *ram)
   if (!s_headless) {
     test_touch();
     test_second_shot();
+    test_record_second();
     poll_events();
     touch_frame();
     { int rq = touch_request(); if (rq == 1) s_want_pause = true; else if (rq == 2) s_want_launcher = true; }

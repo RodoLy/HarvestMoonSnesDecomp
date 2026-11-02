@@ -724,7 +724,7 @@ static void draw_main(void)
   const char *title = "Harvest Moon";
   ui_text_sh(UI_SMALL, 3, 9, "v" HM_NATIVE_VERSION, C_CREAM);
   ui_text_big(cx - ui_text_big_w(title) / 2, 34, title, C_CREAM, C_WOOD_EDGE);
-  const char *sub = T("NATIVE EDITION · DECOMPILED C");
+  const char *sub = T("NATIVE EDITION");
   ui_text_sh(UI_SMALL, cx - ui_text_w(UI_SMALL, sub) / 2, 47, sub, C_AMBER);
   int bw = 0;
   for (int i = 0; i < L.nitems; i++) { int w = ui_text_w(UI_BODY, L.items[i].label); if (w > bw) bw = w; }
