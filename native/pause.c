@@ -71,6 +71,20 @@ static const char *tool_name(uint8_t id)
   for (int i = 0; i < NTOOLS; i++) if (kTools[i].id == id) return T(kTools[i].name);
   return "?";
 }
+/* a seed bag's bags (0: not a seed bag) */
+static unsigned bag_count_of(uint8_t id)
+{
+  int k = id >= 0x05 && id <= 0x08 ? id - 0x04 : id == 0x0C ? 0 : -1;
+  return k < 0 ? 0 : g_ram[HM_SEEDS_GRASS_N + k];
+}
+/* a little dark label with a number, its bottom-right corner at (rx, by) */
+static void count_badge(int rx, int by, unsigned n)
+{
+  char c[12]; snprintf(c, sizeof c, "%u", n);
+  int w = ui_text_w(UI_SMALL, c) + 4;
+  ui_rect(rx - w, by - 8, w, 8, C_WOOD_EDGE);
+  ui_text(UI_SMALL, rx - w + 2, by - 1, c, C_CREAM);
+}
 /* a seed bag's count: bags; with "one seed at a time", the seeds left */
 static unsigned item_count(uint8_t id)
 {
@@ -267,6 +281,8 @@ static void draw_top(void)
   ui_slot(134, 8, 26, C_BLUE, C_BLUE_DARK, on_top && s.cx == 1);
   ui_icon(109, 13, r[HM_TOOL_SELECTED]);
   ui_icon(139, 13, r[HM_TOOL_BACKPACK]);
+  { unsigned n = item_count(r[HM_TOOL_SELECTED]); if (n) count_badge(130, 34, n); }
+  { unsigned n = item_count(r[HM_TOOL_BACKPACK]); if (n) count_badge(160, 34, n); }
   ui_text_c(UI_SMALL, 117, 45, T("Hand"), C_CREAM);
   ui_text_c(UI_SMALL, 147, 45, T("Bag"), C_CREAM);
   ui_text_c(UI_SMALL, 117, 44, T("Hand"), C_WOOD_EDGE);
@@ -326,7 +342,7 @@ static void draw_tools(int x, int y)
     if (have) {
       ui_icon(sx + 2, sy + 2, kTools[i].id);
       unsigned n = item_count(kTools[i].id);
-      if (n) { char c[12]; snprintf(c, sizeof c, "%u", n); ui_text_r(UI_SMALL, sx + 20, sy + 19, c, C_INK); }
+      if (n) count_badge(sx + 20, sy + 20, n);
     }
   }
   /* the cursor: a little hand pointing at the slot */
@@ -352,8 +368,19 @@ static void draw_tools(int x, int y)
     char *sp = strchr(a, ' ');
     if (sp && ui_text_w(UI_SMALL, a) > 58) { *sp = 0; ui_text(UI_SMALL, rx, y + 38, a, C_INK); ui_text(UI_SMALL, rx, y + 46, sp + 1, C_INK); }
     else ui_text(UI_SMALL, rx, y + 38, a, C_INK);
-    unsigned n = item_count(id);
-    if (n) { char c[16]; snprintf(c, sizeof c, "×%u", n); ui_text(UI_SMALL, rx + 20, y + 25, c, C_INK_SOFT); }
+    unsigned bags = bag_count_of(id);
+    if (bags) {                                 /* how much is left, in words */
+      char c[48];
+      int ly = sp && ui_text_w(UI_SMALL, name) > 58 ? y + 58 : y + 50;
+      if (g_cfg.single_seed) {
+        unsigned n = item_count(id);
+        snprintf(c, sizeof c, n == 1 ? T("1 seed") : T("%u seeds"), n);
+        ui_text(UI_SMALL, rx, ly, c, C_GREEN_DARK);
+        ly += 9;
+      }
+      snprintf(c, sizeof c, bags == 1 ? T("1 bag") : T("%u bags"), bags);
+      ui_text(UI_SMALL, rx, ly, c, g_cfg.single_seed ? C_INK_SOFT : C_GREEN_DARK);
+    }
   } else {
     ui_text(UI_SMALL, rx, y + 38, T("(nothing)"), C_INK_SOFT);
   }

@@ -644,7 +644,24 @@ uint16_t mods_mouse_pad(uint16_t pad)
 
 /* ── One seed at a time (src/toolused.c, g_hm_single_seed) ──────────────
  * The sowing itself is the game's (one tile per use, 9 per bag, the bag's
- * seeds kept in the saved game); the pause menu shows the seeds left. */
+ * seeds kept in the saved game); the pause menu shows the seeds left.
+ * Here: the toss (the feed's animation, $74 + facing, about a second) runs
+ * one and a half times as fast: every other frame, the player's game object
+ * ($0905: record $019C + $24 x it) has one frame less to wait on its
+ * picture (+12), as if the game had counted twice (CODE_8582C7). */
+static void seeds_frame(uint8_t *ram)
+{
+  static unsigned tick;
+  if (!g_cfg.single_seed || hm_rd16(ram, HM_PLAYER_ACTION) != 0x0A) return;
+  uint8_t tool = ram[HM_TOOL_SELECTED];
+  uint16_t anim = hm_rd16(ram, 0x0901);
+  if (!((tool >= 5 && tool <= 8) || tool == 0x0C) || anim < 0x74 || anim > 0x77) return;
+  if (++tick & 1) return;
+  uint16_t obj = hm_rd16(ram, 0x0905);
+  if (obj >= 40) return;
+  uint8_t *timer = &ram[0x019C + 0x24 * obj + 0x12];
+  if (*timer >= 2 && *timer < 0xFE) (*timer)--;
+}
 
 /* ── The crop bag (src/items.c, g_hm_bag) ───────────────────────────────
  * (Nothing is drawn over the game: the pause menu's Harvest tab shows the
@@ -1053,5 +1070,6 @@ void mods_frame(uint8_t *ram)
   cheats_frame(ram);
   qol_frame(ram);
   endless_frame(ram);
+  seeds_frame(ram);
   if (g_ppu) { title_frame(); ws_frame(); crops_frame(); }
 }
