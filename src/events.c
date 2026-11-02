@@ -79,15 +79,13 @@
 #define SLOT_STEP_X        0x03   /* 8b signed: the step */
 #define SLOT_STEP_Y        0x04   /* 8b signed */
 #define SLOT_STEP_DELAY    0x05   /* 8b: frames between steps, StepSlot reloads SLOT_STEP_TIMER
-                                     from it (eventcmds.c: SLOT_STEP_WAIT) */
-#define SLOT_STEP_TIMER    0x06   /* 8b: frames until the next step (eventcmds.c:
-                                     SLOT_STEP_PERIOD) */
+                                     from it */
+#define SLOT_STEP_TIMER    0x06   /* 8b: frames until the next step */
 #define SLOT_WALK_STEPS    0x07   /* 8b: steps of a walk */
 #define SLOT_STEPS_LEFT    0x08   /* 8b: steps left of this walk */
 #define SLOT_RANGE_X       0x09   /* 8b: how far it may wander from home, across */
 #define SLOT_RANGE_Y       0x0A   /* 8b: down */
-#define SLOT_WALK_DELAY    0x0B   /* 8b: a walk's frames between steps (eventcmds.c:
-                                     SLOT_PAUSE) */
+#define SLOT_WALK_DELAY    0x0B   /* 8b: a walk's frames between steps */
 #define SLOT_PRESSED       0x0C   /* 8b: the player pressed A on it (CollideEventObjects) */
 #define SLOT_STATE         0x0E   /* 8b: here the tile type ahead */
 #define SLOT_FORCED_DIR    0x0F   /* 8b: the direction the script forces: 1 down, 2 up,

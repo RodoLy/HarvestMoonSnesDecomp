@@ -156,13 +156,13 @@
                                     face */
 #define SLOT_STEP_X       0x03   /* 8b signed: the step */
 #define SLOT_STEP_Y       0x04   /* 8b signed */
-#define SLOT_STEP_WAIT    0x05   /* 8b: frames until the next step */
-#define SLOT_STEP_PERIOD  0x06   /* 8b: frames between steps */
+#define SLOT_STEP_DELAY   0x05   /* 8b: frames between steps (reloads SLOT_STEP_TIMER) */
+#define SLOT_STEP_TIMER   0x06   /* 8b: frames until the next step */
 #define SLOT_WALK_STEPS   0x07   /* 8b: steps of a walk */
 #define SLOT_STEPS_LEFT   0x08   /* 8b: steps left of this walk */
 #define SLOT_RANGE_X      0x09   /* 8b: how far it may wander from home, across */
 #define SLOT_RANGE_Y      0x0A   /* 8b: down */
-#define SLOT_PAUSE        0x0B   /* 8b: the pause between walks */
+#define SLOT_WALK_DELAY   0x0B   /* 8b: a walk's frames between steps */
 #define SLOT_PRESSED      0x0C   /* 8b: the player pressed A on it / talked to it (set by
                                     CollideEventObjects): it can be picked up */
 #define SLOT_ROLL         0x0D   /* 8b: the last die roll (GetRNG) */
@@ -804,8 +804,8 @@ void hm_Event_MoveSlot(uint8_t *ram, HmRegs *r)
   slot_w8(ram, r, SLOT_FRAMES, arg8(ram, r));
   advance(ram, r, 1);
   uint8_t v = arg8(ram, r);
-  slot_w8(ram, r, SLOT_STEP_WAIT, v);
-  slot_w8(ram, r, SLOT_STEP_PERIOD, v);
+  slot_w8(ram, r, SLOT_STEP_DELAY, v);
+  slot_w8(ram, r, SLOT_STEP_TIMER, v);
   slot_w8(ram, r, SLOT_FLAGS, lda8(r, slot8(ram, r, SLOT_FLAGS) | 0x20));
   advance(ram, r, 1);
 }
@@ -1200,9 +1200,9 @@ void hm_Event_WanderInArea(uint8_t *ram, HmRegs *r)
   slot_w8(ram, r, SLOT_RANGE_Y, arg8(ram, r));
   advance(ram, r, 1);
   uint8_t v = arg8(ram, r);
-  slot_w8(ram, r, SLOT_PAUSE, v);
-  slot_w8(ram, r, SLOT_STEP_WAIT, v);
-  slot_w8(ram, r, SLOT_STEP_PERIOD, v);
+  slot_w8(ram, r, SLOT_WALK_DELAY, v);
+  slot_w8(ram, r, SLOT_STEP_DELAY, v);
+  slot_w8(ram, r, SLOT_STEP_TIMER, v);
   advance(ram, r, 1);
   start_walk(ram, r, 0x28);
 }
@@ -1213,9 +1213,9 @@ void hm_Event_WanderFreely(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   uint8_t v = arg8(ram, r);
-  slot_w8(ram, r, SLOT_PAUSE, v);
-  slot_w8(ram, r, SLOT_STEP_WAIT, v);
-  slot_w8(ram, r, SLOT_STEP_PERIOD, v);
+  slot_w8(ram, r, SLOT_WALK_DELAY, v);
+  slot_w8(ram, r, SLOT_STEP_DELAY, v);
+  slot_w8(ram, r, SLOT_STEP_TIMER, v);
   advance(ram, r, 1);
   start_walk(ram, r, 0xA8);
 }
