@@ -16,3 +16,4 @@ bool wife_dialog_update(const UiInput *in); /* true: closed */
 void wife_dialog_draw(uint32_t *dst, int w);
 void wife_reset(void);                      /* a new game, a reset, another ROM */
 void wife_frame(uint8_t *ram);              /* the end of every frame */
+uint16_t wife_pad(uint16_t pad);            /* the buttons the game is given */

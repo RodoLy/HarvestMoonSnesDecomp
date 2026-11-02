@@ -224,8 +224,9 @@ tu ROM. La música sigue sonando.
   de pausa muestra la mochila y te deja elegir cuál sacar; se guarda en tu
   diario.
 - **Tu esposa te ayuda** *(apagado por defecto)* — casado y con sus diez
-  corazones (950+): háblale dos veces en un día y te ofrece ayuda en la
-  granja por un día, tres días o una semana. Esas mañanas (6:00-11:00)
+  corazones (950+): después de oír su frase del día, háblale otra vez y
+  te ofrece ayuda en la granja por un día, tres días o una semana (si le
+  dices que no, ese día ya no vuelve a preguntar). Esas mañanas (6:00-11:00)
   llena comederos del establo y del gallinero y riega las semillas y plantas
   sin regar,
   como máximo la mitad del trabajo, caminando por la granja con sus

@@ -217,8 +217,9 @@ music keeps playing.
   menu's Inventory tab shows the bag and lets you pick which one to take
   out; it is kept in your diary.
 - **Your wife helps** *(off by default)* — married, with her ten hearts
-  (950+): talk to her twice in a day and she offers to help on the farm
-  for a day, three days or a week. Those mornings (6:00-11:00) she fills
+  (950+): once you heard her line of the day, talk to her again and she
+  offers to help on the farm for a day, three days or a week (after a
+  "no", not again that day). Those mornings (6:00-11:00) she fills
   troughs in the barn and the coop and waters the seeds and plants not
   watered yet, at most half of the work, walking the farm in her own pictures (talk to her: her usual
   lines); away from the farm the work gets done all the same. At 11:00 she

@@ -1030,6 +1030,7 @@ static void end_of_frame(uint8_t *ram)
   if (s_mods) { bool open = false; pad = mods_pad(pad, &open); if (open) s_want_launcher = true; }
   if (s_mods) pad = mods_mouse_pad(pad);
   if (s_mods) { bool key = s_bag_key || s_script_bag > 0; if (s_script_bag > 0) s_script_bag--; pad = mods_bag_pad(pad, key); }
+  if (s_mods) pad = wife_pad(pad);
   native_set_pads(pad, 0);
   if (s_frame % 60 == 0) sram_save();
   if (s_quit) quit_now();

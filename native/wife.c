@@ -81,8 +81,7 @@ enum { T_NONE, T_COWS, T_HENS, T_WATER, T_REST, T_ACTIVITY, T_DONE };
 static struct {
   int day;                       /* the day the counts are for (absolute) */
   int talks;                     /* times she was talked to that day */
-  bool offered, talking, want_dialog;
-  int dialog_in;                 /* frames until she asks (the game's box goes first) */
+  bool declined, talking, want_dialog;   /* declined: told "no" today */
   /* the day's work */
   bool planned;
   int water_quota, water_done, cow_quota, cow_done, hen_quota, hen_done;
@@ -516,6 +515,31 @@ static void activity(int w)
   W.task = T_DONE;
 }
 
+/* The player's buttons, before the game reads them: once her line was
+ * heard today, the next A facing her is her offer (her line is not said
+ * again). */
+uint16_t wife_pad(uint16_t pad)
+{
+  static uint16_t prev;
+  static bool hold;                                  /* the A that asked: kept from the game until let go */
+  bool pressed = (pad & B_A) && !(prev & B_A);
+  prev = pad;
+  if (hold) { if (pad & B_A) return (uint16_t)(pad & ~B_A); hold = false; }
+  if (!pressed || !g_cfg.wife_help || !hm_diary_loaded(g_ram) || W.declined) return pad;
+  int w = wife_of();
+  if (w < 0 || W.talks < 1 || today() != W.day || hearts_of(w) < 950 || g_ram[HM_HOUR] >= 18 || helping_today()) return pad;
+  if ((rd16(BOX_OPEN) & 0x4000) || !slot_is_wife() || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE) return pad;
+  if (rd16(0xD2) & 0x0010) return pad;                    /* carrying something: as the game, no talk */
+  static const int ahead[4][2] = { { 0, 16 }, { 0, -16 }, { 16, 0 }, { -16, 0 } };
+  int f = rd16(0xDA) & 3;
+  int fx = rd16(PLAYER_X) + ahead[f][0], fy = rd16(PLAYER_Y) + ahead[f][1];
+  int dx = rd16(SLOT + 0x1A) - fx, dy = rd16(SLOT + 0x1C) - fy;
+  if (abs(dx) > 12 || abs(dy) > 12) return pad;          /* not in front of her */
+  W.want_dialog = true;
+  hold = true;
+  return (uint16_t)(pad & ~B_A);
+}
+
 /* ── Every frame ───────────────────────────────────────────────────────── */
 void wife_reset(void) { memset(&W, 0, sizeof W); }
 
@@ -552,15 +576,7 @@ void wife_clean_point(uint8_t *ram, const HmRegs *regs)
     int dx = rd16(SLOT + 0x1A) - rd16(PLAYER_X), dy = rd16(SLOT + 0x1C) - rd16(PLAYER_Y);
     if (dx * dx + dy * dy < 40 * 40) { W.talking = true; W.talks++; }
   }
-  if (!box && W.talking) {
-    W.talking = false;
-    if (W.talks >= 2 && !W.offered && hearts_of(w) >= 950 && hour < 18 && !helping_today()) {
-      W.offered = true;
-      W.dialog_in = 30;
-    }
-  }
-
-  if (W.dialog_in > 0 && --W.dialog_in == 0) W.want_dialog = !box;
+  if (!box && W.talking) W.talking = false;
   /* her clothes, wherever the game has her */
   if (slot_is_wife() && single_day()) {
     int s = rd16(SLOT + 0x16);
@@ -675,6 +691,7 @@ bool wife_dialog_update(const UiInput *in)
   if (!in->accept) return false;
 chosen:
   if (W.sel < 3) accept(kDays[W.sel]);
+  else W.declined = true;                            /* "No": not again today */
   W.page = W.sel < 3 ? 1 : 2;
   return W.page == 2;
 }
