@@ -52,7 +52,7 @@ void config_defaults(Config *c)
   /* every improvement starts off: the game as the console runs it, and the
    * player turns on what they like (Improvements, Options) */
   c->widescreen = false;
-  c->pause_menu = false; c->title_options = false; c->endless = false; c->walk_crops = false; c->single_seed = false; c->mouse = false;
+  c->pause_menu = false; c->title_options = false; c->endless = false; c->walk_crops = false; c->single_seed = false; c->mouse = false; c->crop_bag = false;
   c->day_length = 0;
   config_default_keys(c);
   config_default_pad(c);
@@ -165,6 +165,7 @@ void config_load(void)
         else if (!strcmp(k, "walkthroughcrops")) c->walk_crops = yes(v);
         else if (!strcmp(k, "oneseedatatime")) c->single_seed = yes(v);
         else if (!strcmp(k, "mousecontrols")) c->mouse = yes(v);
+        else if (!strcmp(k, "cropbag")) c->crop_bag = yes(v);
       } else if (!strcmp(section, "[cheats]")) {
         if (!strcmp(k, "money")) c->money = yes(v);
         else if (!strcmp(k, "stamina")) c->stamina = yes(v);
@@ -200,8 +201,8 @@ void config_save(void)
     fprintf(f, "\n[Video]\nFullscreen = %d\nScale = %d\nVSync = %d\nSpriteLimits = %d\nWidescreen = %d\nExactPixels = %d\n\n",
             c->fullscreen, c->scale, c->vsync, c->sprite_limits, c->widescreen, c->exact_pixels);
     fprintf(f, "[Sound]\nVolume = %d\n\n", c->volume);
-    fprintf(f, "[Improvements]\nFastText = %d\nDayLength = %d\nPauseMenu = %d\nTitleOptions = %d\nEndless = %d\nWalkThroughCrops = %d\nOneSeedAtATime = %d\nMouseControls = %d\n\n",
-            c->fast_text, c->day_length, c->pause_menu, c->title_options, c->endless, c->walk_crops, c->single_seed, c->mouse);
+    fprintf(f, "[Improvements]\nFastText = %d\nDayLength = %d\nPauseMenu = %d\nTitleOptions = %d\nEndless = %d\nWalkThroughCrops = %d\nOneSeedAtATime = %d\nMouseControls = %d\nCropBag = %d\n\n",
+            c->fast_text, c->day_length, c->pause_menu, c->title_options, c->endless, c->walk_crops, c->single_seed, c->mouse, c->crop_bag);
     fprintf(f, "[Cheats]\nMoney = %d\nStamina = %d\nFreezeClock = %d\nStock = %d\nBags = %d\nWeather = %d\n\n",
             c->money, c->stamina, c->freeze_clock, c->stock, c->bags, c->weather);
     fprintf(f, "[Gamepad]\n# SDL gamepad button names: a (bottom), b (right), x (left), y (top),\n"

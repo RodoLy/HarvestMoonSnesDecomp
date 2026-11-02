@@ -150,6 +150,13 @@ keeps playing.
   each use sows only the tile in front of you, so you can plant in any
   shape you like. The bag and the stamina go at the 9th seed, as before;
   a small box shows the seeds left, and they are kept in your diary.
+- **Crop bag** *(off by default)* — Q (the pad's left trigger, the
+  mouse's middle button) puts what you carry over your head into a bag of
+  9 (crops, eggs, milk, food); with free hands it takes the last one out.
+  Throw one into the shipping box yourself, then press Q from the same
+  spot and the rest go in one after another — the game ships each one
+  itself, so money and counts are exactly its own. The bag shows at the
+  top left and is kept in your diary.
 - **Mouse controls** *(off by default, in Controls → Keyboard)* — like Stardew Valley: left click
   next to you uses the tool there, left click farther away walks there
   (hold it to follow the pointer), right click talks, picks up or
@@ -349,13 +356,14 @@ and the WRAM; there the improvements are off unless `--mods`.
 | `native/mods.c`, `native/pause.c` | the recompilation's improvements and the pause menu |
 | `native/config.c`, `native/i18n.c` | `config.ini` / `keybinds.ini` and the text in three languages |
 
-The C has only five hooks for the improvements, with the
+The C has only six hooks for the improvements, with the
 ROM's values by default, so the checker sees no difference:
 `g_hm_oam_right/left` (widescreen), `g_hm_no_ending` (endless game),
 `g_hm_year_suffix` ("4th", "5th"…), `g_hm_crops_passable` (walk
-through crops) and `g_hm_single_seed` (one seed at a time; its seeds go
-in bytes of the diary the game never uses). The mouse only presses the
-game's own buttons.
+through crops), `g_hm_single_seed` (one seed at a time) and
+`g_hm_bag_take` (the crop bag; it and the seeds are kept in bytes of the
+diary the game never uses). The mouse only presses the game's own
+buttons.
 
 The launcher's and the pause menu's type is Pixelify Sans and Tiny5 (SIL
 Open Font License, `native/fonts/`); the icons and the night farm are drawn

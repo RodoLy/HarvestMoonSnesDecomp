@@ -19,7 +19,8 @@
  *   +98  the 13 chickens (8 bytes each)   +100  the 12 cows (16 bytes)
  *   +1C0 the farm map from tile $C0 on, to the end of the slot
  *   (+1B-+2D and +52-+5F: unused. The native build's "one seed at a
- *   time" keeps its seeds in +20 = $5E and +21-+25.)
+ *   time" keeps its seeds in +20 = $5E and +21-+25, its crop bag in
+ *   +52-+5A, with +5B = $BA.)
  *
  * The checksum is the 16-bit sum of the slot's 2048 words, taken with +2E
  * and +2F-+30 at 0.
@@ -31,6 +32,8 @@
 #define SLOT_1        0x700000
 #define SEEDS_MARK_AT 0x20        /* the native build's seeds: +20 = $5E, +21-+25 */
 #define SEEDS_MARK    0x5E
+#define BAG_AT        0x52        /* the native build's crop bag: +52-+5A, +5B = $BA */
+#define BAG_MARK      0xBA
 #define SLOT_2        0x701000
 #define FARM_TILES    0x7EA4E6
 #define COWS          0x7EC1C6
@@ -130,6 +133,10 @@ void hm_SaveGameSlot(uint8_t *ram, HmRegs *r)
   if (g_hm_single_seed) {                             /* the native build's seeds */
     sram_w8(ram, r, SEEDS_MARK_AT, SEEDS_MARK);
     for (uint16_t i = 0; i < 5; i++) sram_w8(ram, r, (uint16_t)(SEEDS_MARK_AT + 1 + i), g_hm_seeds_used[i]);
+  }
+  if (g_hm_bag_on) {                                  /* the native build's crop bag */
+    for (uint16_t i = 0; i < 9; i++) sram_w8(ram, r, (uint16_t)(BAG_AT + i), g_hm_bag[i]);
+    sram_w8(ram, r, BAG_AT + 9, BAG_MARK);
   }
   for (uint16_t x = 0; x < 0x68; x++) sram_w8(ram, r, (uint16_t)(0x098 + x), hm_bus_rd8(ram, CHICKENS + x));
   for (uint16_t x = 0; x < 0xC0; x++) sram_w8(ram, r, (uint16_t)(0x100 + x), hm_bus_rd8(ram, COWS + x));
@@ -326,6 +333,11 @@ void hm_LoadGameSlot(uint8_t *ram, HmRegs *r)
       g_hm_seeds_used[i] = v < 9 ? v : 0;
     }
   }
+  if (g_hm_bag_on) {                                  /* the native build's crop bag */
+    bool marked = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, BAG_AT + 9)) == BAG_MARK;
+    for (uint16_t i = 0; i < 9; i++)
+      g_hm_bag[i] = marked ? hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, (uint16_t)(BAG_AT + i))) : 0;
+  }
   uint16_t x;
   for (x = 0; x < 0x68; x++) {
     uint8_t v = sram8(ram, r, (uint16_t)(0x098 + x));
@@ -389,6 +401,7 @@ static uint16_t new_game_value(uint16_t at)
 void hm_NewGameSetup(uint8_t *ram, HmRegs *r)
 {
   memset(g_hm_seeds_used, 0, sizeof g_hm_seeds_used);  /* the native build's seeds */
+  memset(g_hm_bag, 0, sizeof g_hm_bag);                 /* and crop bag */
   for (unsigned i = 0; i < sizeof FIELDS / sizeof FIELDS[0]; i++) {
     const Field *f = &FIELDS[i];
     uint32_t to = f->data_bank ? db_addr(r, (uint16_t)f->from) : f->from;

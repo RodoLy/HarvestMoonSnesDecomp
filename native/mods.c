@@ -18,6 +18,8 @@
 #include "config.h"
 #include "mods.h"
 #include "ui.h"
+#include "host.h"
+#include "i18n.h"
 
 extern Ppu *g_ppu;
 
@@ -663,6 +665,171 @@ static bool seeds_hud(uint32_t *px, int w)
   return true;
 }
 
+/* ── The crop bag (src/items.c, g_hm_bag) ───────────────────────────────
+ * Nine places for what the player carries over his head (crops, eggs,
+ * milk, food, goods; not tools, animals, lumber or the things that go to a
+ * place). The bag key (Q, the pad's left trigger, the mouse's middle
+ * button):
+ *   - holding such an item: it goes into the bag. The game's own way: its
+ *     map object is set to state 8 (the step after shipping), which takes
+ *     it away and frees the hands; nothing is shipped or counted;
+ *   - hands free: the last item comes out, as when picking something up
+ *     (action 4: the animation, then holding it), but nothing is left on
+ *     the map (g_hm_bag_take);
+ *   - hands free where the last item was shipped (the player threw one
+ *     into the shipping box from this very tile, facing this way, today:
+ *     the day's shipped money, $7F1F07-$7F1F09, went up), before 5 pm:
+ *     every item with a price, one after the other: out, then A to throw
+ *     it. The game ships each one itself, so money and counts are its
+ *     own. It stops when the bag is empty, at an item the box does not
+ *     take, when a throw shipped nothing, or with the arrows.
+ * The bag goes with the diary (src/save.c). */
+#define MAP_OBJECTS_AT 0x0B4E6          /* 10 x 16 bytes: +0 flags, +2 state, +3 item */
+#define GAME_STATE     0x000D2
+static struct {
+  bool prev; int ship, wait;
+  uint32_t shipped;                     /* the day's shipped money, last frame */
+  bool spot; int sx, sy, sdir, sday;    /* where the last shipping throw was */
+} s_bag;
+
+static bool bag_item(uint8_t it)
+{
+  return (it >= 0x01 && it <= 0x0C) || (it >= 0x10 && it <= 0x19) || it == 0x24 || (it >= 0x58 && it <= 0x5A);
+}
+static int bag_count(void) { int n = 0; while (n < 9 && g_hm_bag[n]) n++; return n; }
+static bool holding(void) { return hm_rd16(g_ram, GAME_STATE) & 0x0002; }
+static uint16_t player_action(void) { return hm_rd16(g_ram, HM_PLAYER_ACTION); }
+static uint32_t shipped_money(void) { return hm_rd24(g_ram, 0x11F07); }
+static bool at_box(void)
+{
+  int x, y; player_tile(&x, &y);
+  return s_bag.spot && x == s_bag.sx && y == s_bag.sy && hm_rd16(g_ram, 0xDA) == s_bag.sdir &&
+         g_ram[0x11F1B] == s_bag.sday && g_ram[HM_MAP_ID] <= 3 && g_ram[0x11F1C] < 0x11;
+}
+/* the box takes it: it has a price ($81:9FDE, 2 bytes per item, +1) */
+static bool sellable(uint8_t it) { return hm_bus_rd8(g_ram, 0x819FDE + 2u * it + 1) != 0; }
+static bool bag_put(void)
+{
+  uint8_t it = g_ram[HM_ITEM_ON_HAND];
+  int n = bag_count();
+  if (!bag_item(it)) { host_toast(T("That does not go in the bag.")); return false; }
+  if (n >= 9) { host_toast(T("The bag is full (9).")); return false; }
+  for (int i = 0; i < 10; i++) {
+    uint8_t *o = &g_ram[MAP_OBJECTS_AT + 16 * i];
+    if ((o[0] & 1) && o[3] == it && o[2] == 2) {
+      o[2] = 8;
+      g_hm_bag[n] = it;
+      return true;
+    }
+  }
+  return false;
+}
+static bool bag_take(void)
+{
+  int n = bag_count();
+  if (!n) return false;
+  g_ram[HM_ITEM_ON_HAND] = g_hm_bag[n - 1];
+  g_hm_bag[n - 1] = 0;
+  g_hm_bag_take = 1;
+  hm_wr16(g_ram, HM_PLAYER_ACTION, 4);
+  return true;
+}
+uint16_t mods_bag_pad(uint16_t pad, bool key)
+{
+  g_hm_bag_on = g_cfg.crop_bag;
+  bool press = key && !s_bag.prev;
+  s_bag.prev = key;
+  if (!g_cfg.crop_bag || !hm_diary_loaded(g_ram) || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE ||
+      g_ram[HM_INPUT_STATE] != 1) { s_bag.ship = 0; return pad; }
+  uint16_t act = player_action();
+  uint32_t money = shipped_money();
+  bool shipped_now = money > s_bag.shipped;
+  if (shipped_now) {                          /* a throw into the box: remember where */
+    int x, y; player_tile(&x, &y);
+    s_bag.spot = true; s_bag.sx = x; s_bag.sy = y; s_bag.sdir = hm_rd16(g_ram, 0xDA); s_bag.sday = g_ram[0x11F1B];
+  }
+  if (money < s_bag.shipped) s_bag.spot = false;               /* a new day */
+  s_bag.shipped = money;
+  if (s_bag.ship) {
+    if (pad & (B_UP | B_DOWN | B_LEFT | B_RIGHT)) { s_bag.ship = 0; return pad; }
+    if (++s_bag.wait > 180) { s_bag.ship = 0; return pad; }        /* never forever */
+    switch (s_bag.ship) {
+    case 1:                                    /* hands free: the next one out */
+      if (holding() || act != 0) return pad;
+      if (!bag_count() || !at_box() || !sellable(g_hm_bag[bag_count() - 1])) { s_bag.ship = 0; return pad; }
+      bag_take(); s_bag.ship = 2; s_bag.wait = 0;
+      return pad;
+    case 2:                                    /* holding it: throw it into the box */
+      if (!holding() || act != 0) return pad;
+      if (!at_box()) { s_bag.ship = 0; return pad; }               /* it stays in the hands */
+      s_bag.ship = 3; s_bag.wait = 0;
+      return pad | B_A;
+    case 3:                                    /* thrown: wait until it is shipped */
+      if (s_bag.wait < 3) return pad | B_A;
+      if (shipped_now) { s_bag.ship = 1; s_bag.wait = 0; }
+      else if (s_bag.wait > 120) s_bag.ship = 0;                 /* nothing shipped: stop */
+      return pad;
+    }
+    return pad;
+  }
+  if (!press) return pad;
+  if (holding()) {
+    if (act <= 2) bag_put();
+  } else if (act == 0 && bag_count()) {
+    if (at_box()) { s_bag.ship = 1; s_bag.wait = 0; }
+    else bag_take();
+  }
+  return pad;
+}
+/* small pictures of what goes in the bag (12 x 12) */
+static void bag_icon(int x, int y, uint8_t it)
+{
+  static const char *const TURNIP[12] = { "...g..g.....", "....gggg....", "...gggggg...", "....gggg....",
+    "....pppp....", "...pwwwwp...", "..wwwwwwww..", "..wwwwwwww..", "..wwwwwwww..", "...wwwwww...", ".....ww.....", "......w....." };
+  static const char *const POTATO[12] = { "............", "............", "...bbbbb....", "..bbbbbbbb..", ".bbbkbbbbbb.",
+    ".bbbbbbbkbb.", ".bbkbbbbbbb.", ".bbbbbbbbbb.", "..bbbbkbbb..", "...bbbbbb...", "............", "............" };
+  static const char *const TOMATO[12] = { "............", ".....gg.....", "...gggggg...", "..rrggggrr..", ".rrrrrrrrrr.",
+    ".rrwrrrrrrr.", ".rrrrrrrrrr.", ".rrrrrrrrrr.", ".rrrrrrrrrr.", "..rrrrrrrr..", "...rrrrrr...", "............" };
+  static const char *const CORN[12] = { "......g.....", ".....yyg....", "....yyyyg...", "...yyyyyg...", "...yyyyygg..",
+    "..yyyyyygg..", "..yyyyygg...", ".gyyyyyg....", ".ggyyygg....", "..ggggg.....", "...gg.......", "............" };
+  static const char *const EGG[12] = { "............", ".....ww.....", "....wwww....", "...wwwwww...", "...wwwwww...",
+    "..wwwwwwww..", "..wwwwwwww..", "..wwwwwwww..", "..wwwwwwkw..", "...wwwwkw...", "....wwww....", "............" };
+  static const char *const MILK[12] = { "....uuuu....", "....uuuu....", ".....ww.....", ".....ww.....", "....wwww....",
+    "...wwwwww...", "...wuuuuw...", "...wuuuuw...", "...wwwwww...", "...wwwwww...", "...wwwwww...", "....kkkk...." };
+  static const char *const SACK[12] = { "............", ".....kk.....", "....bbbb....", ".....bb.....", "...bbbbbb...",
+    "..bbbbbbbb..", ".bbbbbbbbbb.", ".bbbbbbbbbb.", ".bbbbbbbbbb.", ".bbbbbbbbbb.", "..bbbbbbbb..", "............" };
+  const char *const *p = it == 0x13 ? TURNIP : it == 0x12 ? POTATO : it == 0x11 ? TOMATO : it == 0x10 ? CORN :
+                         it == 0x14 ? EGG : (it >= 0x15 && it <= 0x17) ? MILK : SACK;
+  for (int j = 0; j < 12; j++)
+    for (int i = 0; i < 12; i++) {
+      uint32_t c;
+      switch (p[j][i]) {
+      case 'g': c = UI_RGB(0x4C9A3C); break;  case 'p': c = UI_RGB(0x9A4CA0); break;
+      case 'w': c = UI_RGB(0xF8F4E4); break;  case 'b': c = UI_RGB(0xB07A40); break;
+      case 'k': c = UI_RGB(0x6A4220); break;  case 'r': c = UI_RGB(0xD8402C); break;
+      case 'y': c = UI_RGB(0xF0C838); break;  case 'u': c = UI_RGB(0x4878C8); break;
+      default: continue;
+      }
+      ui_rect(x + i, y + j, 1, 1, c);
+    }
+}
+/* the bag's contents, under the seeds' box */
+static bool bag_hud(uint32_t *px, int w)
+{
+  int n = bag_count();
+  if (!g_cfg.crop_bag || !n || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE || !hm_diary_loaded(g_ram)) return false;
+  if (!px) return true;
+  ui_target(px, w, 224);
+  int x = (w - 256) / 2 + 6, y = seeds_hud(NULL, w) ? 34 : 6;
+  ui_frame(x, y, 8 + 9 * 18, 26, C_PAPER);
+  for (int i = 0; i < 9; i++) {
+    int ix = x + 4 + i * 18;
+    if (i < n) bag_icon(ix + 3, y + 7, g_hm_bag[i]);
+    else ui_rect(ix + 7, y + 12, 4, 2, C_PAPER_LINE);
+  }
+  return true;
+}
+
 /* the square on the tile under the pointer */
 static bool mouse_hud(uint32_t *px, int w)
 {
@@ -681,8 +848,8 @@ static bool mouse_hud(uint32_t *px, int w)
 }
 bool mods_hud(uint32_t *px, int w)
 {
-  bool a = mouse_hud(px, w), b = seeds_hud(px, w);
-  return a || b;
+  bool a = mouse_hud(px, w), b = seeds_hud(px, w), c = bag_hud(px, w);
+  return a || b || c;
 }
 
 /* ── Widescreen (hm_widescreen.c) ───────────────────────────────────────

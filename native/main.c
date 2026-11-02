@@ -52,6 +52,8 @@ static uint8_t s_sram[SRAM_SIZE], s_sram_saved[SRAM_SIZE];
 static char s_sram_path[1100], s_rom_path[1024];
 static uint8_t *s_rom; static uint32_t s_rom_size, s_rom_crc;
 static bool s_headless, s_fast, s_quit, s_booted, s_mods = true;
+static bool s_bag_key;        /* the crop bag's key (Q, left trigger, middle button) */
+static int s_script_bag;      /* script: "bag" holds it a few frames */
 static uint64_t s_frame;
 static double s_apu_target;
 static SDL_Window *s_window;
@@ -94,9 +96,10 @@ static void sram_save(void)
 /* ── Scripted input (the same commands as the recompilation's --script):
  *   wait N, press <button[+button]> N, dump <tag>, poke <addr> <hex>,
  *   until <addr> ==|!= <value> [timeout], turbo on|off, quit,
- *   mouse <x> <y> [left|right|up]: the pointer on the field (mouse controls) ─────────── */
+ *   mouse <x> <y> [left|right|up]: the pointer on the field (mouse controls),
+ *   bag: the crop bag's key ─────────── */
 typedef struct {
-  enum { S_PRESS, S_DUMP, S_POKE, S_UNTIL, S_QUIT, S_NOP, S_MOUSE } kind;
+  enum { S_PRESS, S_DUMP, S_POKE, S_UNTIL, S_QUIT, S_NOP, S_MOUSE, S_BAG } kind;
   uint16_t mask; int hold, wait;
   uint32_t addr; uint8_t bytes[64]; int nbytes;
   bool ne; uint16_t value; int width, timeout, waited;
@@ -132,6 +135,7 @@ static void script_load(const char *path)
     if (!strcmp(cmd, "press")) { e->kind = S_PRESS; e->mask = button(a1); e->hold = n >= 3 ? atoi(a2) : 1; }
     else if (!strcmp(cmd, "dump")) { e->kind = S_DUMP; snprintf(e->tag, sizeof e->tag, "%s", a1); }
     else if (!strcmp(cmd, "quit")) e->kind = S_QUIT;
+    else if (!strcmp(cmd, "bag")) e->kind = S_BAG;
     else if (!strcmp(cmd, "mouse")) {
       e->kind = S_MOUSE; e->addr = (uint32_t)atoi(a1); e->value = (uint16_t)atoi(a2);
       e->width = !strcmp(a3, "left") ? 1 : !strcmp(a3, "right") ? 2 : !strcmp(a3, "up") ? -1 : 0;
@@ -179,7 +183,7 @@ static uint16_t script_tick(void)
       if (s_count > 0) { s_count--; return 0; }
       s_phase = 0; s_count = e->hold;
     }
-    if (e->kind == S_DUMP || e->kind == S_QUIT || e->kind == S_UNTIL || e->kind == S_NOP || e->kind == S_MOUSE) {
+    if (e->kind == S_DUMP || e->kind == S_QUIT || e->kind == S_UNTIL || e->kind == S_NOP || e->kind == S_MOUSE || e->kind == S_BAG) {
       if (e->kind == S_UNTIL) {
         uint16_t v = g_ram[e->addr];
         if (e->width == 2) v |= (uint16_t)(g_ram[e->addr + 1] << 8);
@@ -189,6 +193,7 @@ static uint16_t script_tick(void)
         }
       }
       if (e->kind == S_DUMP) dump(e->tag);
+      if (e->kind == S_BAG) s_script_bag = 3;
       if (e->kind == S_MOUSE) {
         if (e->width < 0) mods_mouse((int)e->addr, e->value, 1, false);
         else mods_mouse((int)e->addr, e->value, e->width, e->width != 0);
@@ -334,6 +339,8 @@ static uint16_t read_pad(void)
     if (SDL_GetGamepadAxis(s_gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 12000) fast = true;
   }
   s_fast = fast;
+  s_bag_key = k[SDL_SCANCODE_Q] || (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MASK(SDL_BUTTON_MIDDLE)) ||
+              (s_gamepad && SDL_GetGamepadAxis(s_gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 12000);
   /* never both ways at once */
   if ((m & (B_LEFT | B_RIGHT)) == (B_LEFT | B_RIGHT)) m &= (uint16_t)~(B_LEFT | B_RIGHT);
   if ((m & (B_UP | B_DOWN)) == (B_UP | B_DOWN)) m &= (uint16_t)~(B_UP | B_DOWN);
@@ -901,6 +908,7 @@ static void end_of_frame(uint8_t *ram)
   if (s_nsteps) pad |= script_tick();
   if (s_mods) { bool open = false; pad = mods_pad(pad, &open); if (open) s_want_launcher = true; }
   if (s_mods) pad = mods_mouse_pad(pad);
+  if (s_mods) { bool key = s_bag_key || s_script_bag > 0; if (s_script_bag > 0) s_script_bag--; pad = mods_bag_pad(pad, key); }
   native_set_pads(pad, 0);
   if (s_frame % 60 == 0) sram_save();
   if (s_quit) quit_now();

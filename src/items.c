@@ -83,6 +83,7 @@ void hm_SUB_818000(uint8_t *ram, HmRegs *r)
   hm_jsl(ram, r, 0x8046, 0x81);
   hm_CalculateTileinFront(ram, r);
   hm_rtl(ram, r);
+  if (g_hm_bag_take) { g_hm_bag_take = 0; return; }   /* the native build's bag: out of it */
 
   uint16_t it = hm_bus_rd8(ram, db(r, ITEM));
   r->x = it;

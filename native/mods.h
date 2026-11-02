@@ -22,6 +22,8 @@ bool mods_hud(uint32_t *px, int w);
  * 1 left, 2 right) going down or up; the buttons it presses this frame */
 void mods_mouse(int fx, int fy, int button, bool down);
 uint16_t mods_mouse_pad(uint16_t pad);
+/* the crop bag: key = its key is down (Q, left trigger, middle button) */
+uint16_t mods_bag_pad(uint16_t pad, bool key);
 void mods_ws_margins(int *left, int *right);
 enum { WS_BUDGET = 43 };
 

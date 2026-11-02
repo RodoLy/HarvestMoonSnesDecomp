@@ -151,6 +151,14 @@ el clima de mañana). La música sigue sonando.
   plantar con la forma que quieras. La bolsa y la energía se gastan con la
   9.ª semilla, como antes; un recuadro muestra las semillas que quedan y se
   guardan en tu diario.
+- **Mochila de cosechas** *(apagado por defecto)* — Q (el gatillo
+  izquierdo del mando, el botón central del ratón) guarda lo que cargas
+  sobre la cabeza en una mochila de 9 (cosechas, huevos, leche, comida);
+  con las manos libres saca lo último. Tira uno a la caja de envíos tú
+  mismo y luego pulsa Q desde el mismo sitio: el resto entra uno tras
+  otro, y el juego envía cada uno él mismo, así que el dinero y los
+  contadores son exactamente los suyos. La mochila se ve arriba a la
+  izquierda y se guarda en tu diario.
 - **Controles con ratón** *(apagado por defecto, en Controles → Teclado)* — como en Stardew
   Valley: clic izquierdo junto a ti usa la herramienta ahí, clic izquierdo
   más lejos camina hasta ahí (mantenlo para seguir al puntero), clic
@@ -357,13 +365,13 @@ imagen y la WRAM; ahí las mejoras están apagadas salvo con `--mods`.
 | `native/mods.c`, `native/pause.c` | las mejoras de la recompilación y el menú de pausa |
 | `native/config.c`, `native/i18n.c` | `config.ini` / `keybinds.ini` y los textos en tres idiomas |
 
-El C solo tiene cinco ganchos para las mejoras, con los valores
+El C solo tiene seis ganchos para las mejoras, con los valores
 de la ROM por defecto, así que el comprobador no ve diferencia:
 `g_hm_oam_right/left` (pantalla ancha), `g_hm_no_ending` (juego sin fin),
 `g_hm_year_suffix` ("4th", "5th"…), `g_hm_crops_passable` (caminar entre
-cultivos) y `g_hm_single_seed` (semillas de una en una; sus semillas van
-en bytes del diario que el juego nunca usa). El ratón solo pulsa los
-botones del propio juego.
+cultivos), `g_hm_single_seed` (semillas de una en una) y `g_hm_bag_take`
+(la mochila; ella y las semillas se guardan en bytes del diario que el
+juego nunca usa). El ratón solo pulsa los botones del propio juego.
 
 Las letras del launcher y del menú de pausa son Pixelify Sans y Tiny5
 (SIL Open Font License, `native/fonts/`); los iconos y la granja de noche

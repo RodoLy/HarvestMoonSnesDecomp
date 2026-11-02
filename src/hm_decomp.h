@@ -279,11 +279,20 @@ extern void (*g_hm_frame_hook)(uint8_t *ram);
  *   g_hm_single_seed: a seed bag sows one tile at a time, 9 per bag
  *     (the seeds' ToolUsed; g_hm_seeds_used, grass, corn, tomato, potato,
  *     turnip: the seeds gone from each open bag, kept in the saved game's
- *     unused bytes +20 to +25 by SaveGameSlot / LoadGameSlot). */
+ *     unused bytes +20 to +25 by SaveGameSlot / LoadGameSlot);
+ *   g_hm_bag_take: the crop bag gives back an item (SUB_818000 leaves
+ *     nothing on the map for it). */
 extern uint16_t g_hm_oam_right, g_hm_oam_left;
 extern int g_hm_no_ending;
 extern int g_hm_crops_passable;
 extern int g_hm_single_seed;
+/* g_hm_bag_on: the crop bag (native/mods.c) is on: its items (g_hm_bag,
+ * item ids, 0 = empty) are kept in the saved game's unused bytes +52 to
+ * +5B by SaveGameSlot / LoadGameSlot; g_hm_bag_take: the next SUB_818000
+ * (picking up) takes the item out of the bag: nothing is left on the map
+ * and no sound (it clears it). */
+extern int g_hm_bag_on, g_hm_bag_take;
+extern uint8_t g_hm_bag[9];
 extern uint8_t g_hm_seeds_used[5];
 extern uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 /* the loops' own entries the host needs (not checked on their own) */

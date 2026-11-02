@@ -112,6 +112,8 @@ uint16_t g_hm_oam_right = 0x0100, g_hm_oam_left = 0xFFF0;
 int g_hm_no_ending;
 int g_hm_crops_passable;
 int g_hm_single_seed;
+int g_hm_bag_on, g_hm_bag_take;
+uint8_t g_hm_bag[9];
 uint8_t g_hm_seeds_used[5];
 uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 

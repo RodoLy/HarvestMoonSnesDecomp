@@ -30,7 +30,7 @@ typedef struct {
   char language[8];                  /* "es", "en", "it" */
   bool show_launcher;                /* the launcher first, at start */
   /* improvements (the recompilation's quality-of-life package) */
-  bool fast_text, pause_menu, title_options, endless, walk_crops, single_seed, mouse;
+  bool fast_text, pause_menu, title_options, endless, walk_crops, single_seed, mouse, crop_bag;
   int day_length;                    /* 0 off; 1 1.5x, 2 2x, 3 3x, 4 4x */
   /* cheats */
   bool money, stamina, freeze_clock, stock, bags;
