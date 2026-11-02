@@ -223,6 +223,16 @@ tu ROM. La música sigue sonando.
   los contadores son exactamente los suyos. La pestaña Inventario del menú
   de pausa muestra la mochila y te deja elegir cuál sacar; se guarda en tu
   diario.
+- **Tu esposa te ayuda** *(apagado por defecto)* — casado y con sus diez
+  corazones (950+): háblale dos veces en un día y te ofrece ayuda en la
+  granja por un día, tres días o una semana. Esas mañanas (6:00-11:00)
+  llena comederos del establo y del gallinero y riega los cultivos secos,
+  como máximo la mitad del trabajo, caminando por la granja con sus
+  propios sprites (si le hablas, dice sus frases de siempre); si no estás
+  en la granja, el trabajo igual se hace. A las 11:00 se va a sus
+  quehaceres del mediodía, como en el juego (María, Nina y Ellen en la
+  granja, Ann y Eve en la bodega). Algunos días se viste como cuando era
+  soltera. Se guarda en tu diario.
 - **Controles con ratón** *(apagado por defecto, en Controles → Teclado)* — clic izquierdo junto a
   ti usa la herramienta ahí, clic izquierdo
   más lejos camina hasta ahí (mantenlo para seguir al puntero), clic

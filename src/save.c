@@ -20,7 +20,8 @@
  *   +1C0 the farm map from tile $C0 on, to the end of the slot
  *   (+1B-+2D and +52-+5F: unused. The native build's "one seed at a
  *   time" keeps its seeds in +20 = $5E and +21-+25, its crop bag in
- *   +52-+5A, with +5B = $BA.)
+ *   +52-+5A, with +5B = $BA; the wife's help, the last day she helps,
+ *   in +5C-+5D, with +5E = $A7.)
  *
  * The checksum is the 16-bit sum of the slot's 2048 words, taken with +2E
  * and +2F-+30 at 0.
@@ -33,6 +34,8 @@
 #define SEEDS_MARK_AT 0x20        /* the native build's seeds: +20 = $5E, +21-+25 */
 #define SEEDS_MARK    0x5E
 #define BAG_AT        0x52        /* the native build's crop bag: +52-+5A, +5B = $BA */
+#define WIFE_AT       0x5C        /* the native build's wife's help: +5C-+5D, +5E = $A7 */
+#define WIFE_MARK     0xA7
 #define BAG_MARK      0xBA
 #define SLOT_2        0x701000
 #define FARM_TILES    0x7EA4E6
@@ -137,6 +140,11 @@ void hm_SaveGameSlot(uint8_t *ram, HmRegs *r)
   if (g_hm_bag_on) {                                  /* the native build's crop bag */
     for (uint16_t i = 0; i < 9; i++) sram_w8(ram, r, (uint16_t)(BAG_AT + i), g_hm_bag[i]);
     sram_w8(ram, r, BAG_AT + 9, BAG_MARK);
+  }
+  if (g_hm_wife_on) {                                 /* the native build's wife's help */
+    sram_w8(ram, r, WIFE_AT, (uint8_t)g_hm_wife_until);
+    sram_w8(ram, r, WIFE_AT + 1, (uint8_t)(g_hm_wife_until >> 8));
+    sram_w8(ram, r, WIFE_AT + 2, WIFE_MARK);
   }
   for (uint16_t x = 0; x < 0x68; x++) sram_w8(ram, r, (uint16_t)(0x098 + x), hm_bus_rd8(ram, CHICKENS + x));
   for (uint16_t x = 0; x < 0xC0; x++) sram_w8(ram, r, (uint16_t)(0x100 + x), hm_bus_rd8(ram, COWS + x));
@@ -338,6 +346,11 @@ void hm_LoadGameSlot(uint8_t *ram, HmRegs *r)
     for (uint16_t i = 0; i < 9; i++)
       g_hm_bag[i] = marked ? hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, (uint16_t)(BAG_AT + i))) : 0;
   }
+  if (g_hm_wife_on) {                                 /* the native build's wife's help */
+    bool marked = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, WIFE_AT + 2)) == WIFE_MARK;
+    g_hm_wife_until = marked ? (uint16_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, WIFE_AT)) |
+                                          hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, WIFE_AT + 1)) << 8) : 0;
+  }
   uint16_t x;
   for (x = 0; x < 0x68; x++) {
     uint8_t v = sram8(ram, r, (uint16_t)(0x098 + x));
@@ -402,6 +415,7 @@ void hm_NewGameSetup(uint8_t *ram, HmRegs *r)
 {
   memset(g_hm_seeds_used, 0, sizeof g_hm_seeds_used);  /* the native build's seeds */
   memset(g_hm_bag, 0, sizeof g_hm_bag);                 /* and crop bag */
+  g_hm_wife_until = 0;                                  /* and the wife's help */
   for (unsigned i = 0; i < sizeof FIELDS / sizeof FIELDS[0]; i++) {
     const Field *f = &FIELDS[i];
     uint32_t to = f->data_bank ? db_addr(r, (uint16_t)f->from) : f->from;

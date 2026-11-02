@@ -20,6 +20,7 @@
 #include "ui.h"
 #include "host.h"
 #include "i18n.h"
+#include "wife.h"
 
 extern Ppu *g_ppu;
 
@@ -765,6 +766,7 @@ bool mods_bag_choose(int i)
 uint16_t mods_bag_pad(uint16_t pad, bool key)
 {
   g_hm_bag_on = bag_on();
+  g_hm_wife_on = g_cfg.wife_help;            /* the diary keeps her help (wife.c) */
   bool press = key && !s_bag.prev;
   s_bag.prev = key;
   if (!bag_on() || !hm_diary_loaded(g_ram) || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE ||
@@ -1154,6 +1156,7 @@ void mods_endless_restored(void)
 
 void mods_reset(void)
 {
+  wife_reset();
   memset(&s_cheat, 0, sizeof s_cheat);
   memset(&s_qol, 0, sizeof s_qol);
   memset(&s_end, 0, sizeof s_end);

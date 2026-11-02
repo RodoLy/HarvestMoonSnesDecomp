@@ -331,6 +331,18 @@ static const Pair kEs[] = {
   { "Load a diary to begin.", "Carga un diario para empezar." },
   { "Tap: take it out", "Toca: sácalo" },
   { "Tap a tool: hold it", "Toca una herramienta: tómala" },
+  { "Your wife helps", "Tu esposa te ayuda" },
+  { "Married, with her ten hearts: talk to her twice in a day and she offers to help on the farm for a day, three or a week. Mornings, she feeds the animals and waters the crops (half of the work at most), then goes to her own midday chores.", "Casado y con sus diez corazones: háblale dos veces en un día y te ofrece ayuda en la granja por un día, tres o una semana. Por las mañanas alimenta a los animales y riega los cultivos (la mitad del trabajo como máximo) y luego se va a sus quehaceres del mediodía." },
+  { "Leave the farm to me, darling!", "¡Déjame la granja, cariño!" },
+  { "I'll do half of the work every morning.", "Cada mañana haré la mitad del trabajo." },
+  { "Darling, may I help you", "Cariño, ¿te puedo ayudar" },
+  { "on the farm?", "en la granja?" },
+  { "One day", "Un día" },
+  { "Three days", "Tres días" },
+  { "A week", "Una semana" },
+  { "No, thanks", "No, gracias" },
+  { "Darling, may I help you on the farm?", "Cariño, ¿te puedo ayudar en la granja?" },
+  { "Leave the farm to me, darling! I'll do half of the work every morning.", "¡Déjame la granja, cariño! Cada mañana haré la mitad del trabajo." },
 };
 static const Pair kIt[] = {
   { "Cheats", "Trucchi" },
@@ -653,6 +665,18 @@ static const Pair kIt[] = {
   { "Load a diary to begin.", "Carica un diario per iniziare." },
   { "Tap: take it out", "Tocca: tiralo fuori" },
   { "Tap a tool: hold it", "Tocca un attrezzo: prendilo" },
+  { "Your wife helps", "Tua moglie ti aiuta" },
+  { "Married, with her ten hearts: talk to her twice in a day and she offers to help on the farm for a day, three or a week. Mornings, she feeds the animals and waters the crops (half of the work at most), then goes to her own midday chores.", "Sposato e con i suoi dieci cuori: parlale due volte in un giorno e ti offre aiuto alla fattoria per un giorno, tre o una settimana. Al mattino nutre gli animali e annaffia i raccolti (al massimo metà del lavoro), poi va alle sue faccende di mezzogiorno." },
+  { "Leave the farm to me, darling!", "Lascia a me la fattoria, caro!" },
+  { "I'll do half of the work every morning.", "Ogni mattina farò metà del lavoro." },
+  { "Darling, may I help you", "Caro, posso aiutarti" },
+  { "on the farm?", "alla fattoria?" },
+  { "One day", "Un giorno" },
+  { "Three days", "Tre giorni" },
+  { "A week", "Una settimana" },
+  { "No, thanks", "No, grazie" },
+  { "Darling, may I help you on the farm?", "Caro, posso aiutarti alla fattoria?" },
+  { "Leave the farm to me, darling! I'll do half of the work every morning.", "Lascia a me la fattoria, caro! Ogni mattina farò metà del lavoro." },
 };
 
 static const Pair *s_table;

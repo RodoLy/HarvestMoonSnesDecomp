@@ -295,6 +295,11 @@ extern int g_hm_single_seed;
 extern int g_hm_bag_on, g_hm_bag_take;
 extern uint8_t g_hm_bag[9];
 extern uint8_t g_hm_seeds_used[5];
+/* g_hm_wife_on: the wife's help (native/wife.c) is on; g_hm_wife_until:
+ * the last day she helps (year x 120 + season x 30 + day; 0 none), kept in
+ * the saved game's +5C-+5E by SaveGameSlot / LoadGameSlot */
+extern int g_hm_wife_on;
+extern uint16_t g_hm_wife_until;
 extern uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 /* the loops' own entries the host needs (not checked on their own) */
 void hm_IntroScreen_D871(uint8_t *ram, HmRegs *r);    /* intro.c: the demo check */

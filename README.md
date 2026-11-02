@@ -216,6 +216,15 @@ music keeps playing.
   each one itself, so money and counts are exactly its own. The pause
   menu's Inventory tab shows the bag and lets you pick which one to take
   out; it is kept in your diary.
+- **Your wife helps** *(off by default)* — married, with her ten hearts
+  (950+): talk to her twice in a day and she offers to help on the farm
+  for a day, three days or a week. Those mornings (6:00-11:00) she fills
+  troughs in the barn and the coop and waters dry crops, at most half of
+  the work, walking the farm in her own pictures (talk to her: her usual
+  lines); away from the farm the work gets done all the same. At 11:00 she
+  goes to her midday chores, as in the game (Maria, Nina and Ellen on the
+  farm, Ann and Eve in the tool shed). Some days she wears the clothes she
+  wore before the wedding. Kept in your diary.
 - **Mouse controls** *(off by default, in Controls → Keyboard)* — left click next to you uses the tool there, left click farther away walks there
   (hold it to follow the pointer), right click talks, picks up or
   opens. A thin square marks the tile under the pointer (light within
