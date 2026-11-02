@@ -333,6 +333,8 @@ whose count included it (56.14 % → 56.10 %).
 
 | File | What is there |
 |---|---|
+| `src/hm_vars.h` | the names of the game's variables that several files share (RAM, direct page, record fields) |
+| `src/hm_regs.h` | the console's registers, by their names in the SNES manuals |
 | `src/rng.c` | random numbers |
 | `src/math.c` | division |
 | `src/weather.c` | the weather |

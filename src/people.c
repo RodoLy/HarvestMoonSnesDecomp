@@ -7,19 +7,12 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_HEARTS_BASE ($7F1F1F). */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* The game's saved state, $7F:1Fxx (ram[] offsets 0x11Fxx) */
-#define KID1_AGE       0x11F37   /* 16b: the first child's days, from conception */
-#define KID2_AGE       0x11F39   /* 16b: the second child's */
-#define DAYS_MARRIED   0x11F3B   /* 16b */
-#define FLAGS_64       0x11F64   /* 16b story flags: $0080 the house at level 2 */
-#define WIFE_FLAGS     0x11F66   /* 16b: bits 0-4 the wife (Maria ... Eve) */
-#define FLAGS_6C       0x11F6C   /* 16b: $0080 the anniversary, $0100 / $0200 the
-                                    children's birthdays (they last a day) */
-#define FLAGS_6E       0x11F6E   /* 16b story flags: the children, below */
 #define CHILD1         0x0004
 #define CHILD2         0x0008
 #define CHILD_BORN     0x0010
@@ -116,7 +109,7 @@ static bool child_day(uint8_t *ram, HmRegs *r, uint32_t age_at, int16_t joy,
   r->c = age >= 60;
   if (age < 60) return false;
   if (age == 60) {
-    set_flag(ram, r, FLAGS_6E, CHILD_BORN);
+    set_flag(ram, r, HM_FLAGS_6E, CHILD_BORN);
     r->a = (uint16_t)joy;
     hm_jsl(ram, r, ret_joy, 0x83);
     hm_AddPlayerHappiness(ram, r);
@@ -124,54 +117,54 @@ static bool child_day(uint8_t *ram, HmRegs *r, uint32_t age_at, int16_t joy,
     return true;
   }
   if (every_120_days(ram, r, (uint16_t)(age - 60), ret_div))
-    set_flag(ram, r, FLAGS_6C, birthday_bit);
+    set_flag(ram, r, HM_FLAGS_6C, birthday_bit);
   return false;
 }
 
 void hm_WifePregnancyAndChildren(uint8_t *ram, HmRegs *r)
 {
-  hm_wr16(ram, FLAGS_6C, hm_rd16(ram, FLAGS_6C) & 0xFC7F);
-  uint16_t wife = hm_rd16(ram, WIFE_FLAGS);
+  hm_wr16(ram, HM_FLAGS_6C, hm_rd16(ram, HM_FLAGS_6C) & 0xFC7F);
+  uint16_t wife = hm_rd16(ram, HM_FLAGS_66);
   unsigned who = GIRLS;
   for (unsigned i = 0; i < GIRLS && who == GIRLS; i++)
     if (wife & (1u << i)) who = i;
   r->a = wife & (1u << (who == GIRLS ? 4 : who));
   if (who == GIRLS) return;                      /* not married */
 
-  uint16_t days = (uint16_t)(hm_rd16(ram, DAYS_MARRIED) + 1);
-  hm_wr16(ram, DAYS_MARRIED, days);
+  uint16_t days = (uint16_t)(hm_rd16(ram, HM_DAYS_MARRIED) + 1);
+  hm_wr16(ram, HM_DAYS_MARRIED, days);
   if (every_120_days(ram, r, days, 0x87E2))
-    set_flag(ram, r, FLAGS_6C, 0x0080);
+    set_flag(ram, r, HM_FLAGS_6C, 0x0080);
   r->a = wife & (1u << who);
 
   /* Another child? */
-  bool second = hm_rd16(ram, FLAGS_6E) & CHILD1;
+  bool second = hm_rd16(ram, HM_FLAGS_6E) & CHILD1;
   uint16_t hearts = hm_rd16(ram, HM_HEARTS_BASE + 2 * who);
   r->a = hearts;
   r->c = hearts >= (second ? 650 : 450);
   if (r->c) {
     r->c = days >= 20;
-    if (r->c && (hm_rd16(ram, FLAGS_64) & 0x0080)) {
-      if (!(hm_rd16(ram, FLAGS_6E) & CHILD1)) {
-        set_flag(ram, r, FLAGS_6E, CHILD1);
+    if (r->c && (hm_rd16(ram, HM_FLAGS_64) & 0x0080)) {
+      if (!(hm_rd16(ram, HM_FLAGS_6E) & CHILD1)) {
+        set_flag(ram, r, HM_FLAGS_6E, CHILD1);
       } else {
-        uint16_t age1 = hm_rd16(ram, KID1_AGE);
+        uint16_t age1 = hm_rd16(ram, HM_KID1_AGE);
         r->a = age1;
         r->c = age1 >= 90;
-        if (r->c) set_flag(ram, r, FLAGS_6E, CHILD2);
+        if (r->c) set_flag(ram, r, HM_FLAGS_6E, CHILD2);
       }
     } else if (r->c) {
-      r->a = hm_rd16(ram, FLAGS_64) & 0x0080;
+      r->a = hm_rd16(ram, HM_FLAGS_64) & 0x0080;
     } else {
       r->a = days;
     }
   }
 
-  r->a = hm_rd16(ram, FLAGS_6E) & CHILD1;
-  if (r->a && child_day(ram, r, KID1_AGE, 50, 0x8955, 0x896C, 0x0100))
+  r->a = hm_rd16(ram, HM_FLAGS_6E) & CHILD1;
+  if (r->a && child_day(ram, r, HM_KID1_AGE, 50, 0x8955, 0x896C, 0x0100))
     return;
-  r->a = hm_rd16(ram, FLAGS_6E) & CHILD2;
-  if (r->a) child_day(ram, r, KID2_AGE, 100, 0x89AC, 0x89C3, 0x0200);
+  r->a = hm_rd16(ram, HM_FLAGS_6E) & CHILD2;
+  if (r->a) child_day(ram, r, HM_KID2_AGE, 100, 0x89AC, 0x89C3, 0x0200);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

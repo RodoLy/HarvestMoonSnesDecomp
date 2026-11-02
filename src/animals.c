@@ -7,16 +7,11 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_COW_DATA, HM_CHICKEN_DATA, HM_SEASON,
- * HM_COW_N ($7F1F0A), HM_WEATHER_TOMORROW, HM_MAP_ID ($22) and
- * HM_GAME_STATE ($D2). */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
-/* Direct page */
-#define ANIMAL_PTR         0x72      /* long $72-$74: the animal's record (Get...Pointer) */
-#define ANIMAL_PTR_BANK    0x74      /* 8b: its bank ($7E) */
-#define DP_SLOT            0xCC      /* long $CC-$CE: the event slot just started */
 /* $7E / $80 are scratch, a different thing in each routine: */
 #define HAPPINESS_CHANGE   0x7E      /* AddCowHappiness: the change */
 #define OLD_HAPPINESS      0x80      /* AddCowHappiness: the happiness before it */
@@ -25,69 +20,17 @@
                                       * dividend (DivisionUnsigned) */
 #define DIVISOR            0x80      /* StartEnding: DivisionUnsigned's divisor */
 
-/* WRAM of the data bank */
-#define WEATHER_FLAGS      0x00196   /* 16b: the weather and day flags */
-#define TEXT_NAME          0x0889    /* 4 words $0889-$088F: the name the text prints */
-#define HM_GROWN_GRASS_N   0x0092E   /* 16b: CowEatsGrass leaves 1 when a cow ate */
-#define HM_CHICKENS_FED_N  0x00931   /* 8b: portions in the coop's feed box */
-#define HM_COWS_FED_STALLS 0x00932   /* 16b, one bit per stall */
-#define HM_DEAD_COW        0x00937   /* 8b */
-#define DOG_TIMER          0x00938   /* 8b: the dog's frames between moods */
-#define HORSE_TIMER        0x00939   /* 8b: the horse's frames between idle moves */
-#define CHICKEN_TIMERS     0x0093B   /* 16b per chicken */
-#define COW_TIMERS         0x00953   /* 16b per cow */
-#define TILE_AT_X          0x00985   /* 16b: where the script starts (StartScriptAtTileInFront) */
-#define TILE_AT_Y          0x00987   /* 16b */
-#define FESTIVAL_BEST      0x09B5    /* 8b: the best +04 so far (StartEnding) */
-
-/* WRAM $7F:1Fxx (ram[] offsets; WRAM_LONG gives the bus address $7F:1Fxx) */
-#define WRAM_LONG(a)       (0x7E0000 + (a))
-#define HM_CHICKENS_N      0x11F0B   /* 8b */
-#define PREGNANCY_DAYS     0x11F12   /* 8b: days until the pregnant cow gives birth */
-#define NEWBORN_HAPPINESS  0x11F2B   /* 8b: the happiness the calf will start with */
-#define DOG_X              0x11F2C   /* 16b: the dog's position */
-#define DOG_Y              0x11F2E   /* 16b */
-#define DOG_MAP            0x11F30   /* 8b: the map the dog is on */
-#define HORSE_MAP          0x11F31   /* 8b: the map the horse is on */
-#define HORSE_AGE          0x11F32   /* 8b: the horse's days; $15 = grown */
-#define HEN_EGGS           0x11F45   /* 16b: one bit per hen that lays tomorrow */
-#define ENDING_STEP        0x11F47   /* 8b: the ending's step */
-#define DEVELOPMENT        0x7F1F56  /* bus address: 16b, the ranch's development (%) */
-#define DOG_MOOD           0x11F58   /* 16b: one mood bit */
-#define FLAGS_5A           0x11F5A   /* 16b flags; $1000 = a cow was left out */
-#define FLAGS_5E           0x11F5E   /* 16b flags; bit 1 = the ending */
-#define NO_FEEDING         0x11F60   /* bit 0 */
-#define FLAGS_64           0x11F64   /* 16b story flags; bit 3 = a calf was born */
-#define FLAGS_68           0x11F68   /* 16b flags; $80 a dog, $0100 a horse */
-#define FLAGS_6E           0x11F6E   /* 16b flags */
-
 /* ROM tables */
 #define COW_FEED_FLAGS     0x82A571  /* ROM: dw 1 << n */
 #define HEN_EGG_FLAGS      0x83CA78  /* ROM: dw 1 << n */
 #define CHICKEN_SPAWN      0x83CA10  /* ROM: dw x, y per chicken slot (bought) */
 #define COW_SPAWN          0x83CA44  /* ROM: dw x, y per cow slot (in the barn) */
 
-/* Fields of an animal record ([$72],Y): cows 16 bytes at $7E:C1C6, chickens
- * 8 bytes at $7E:C286 */
-#define REC_STATUS         0x00      /* 8b status, cows and chickens */
-#define CHICKEN_MAP        0x01      /* 8b: the map it is on */
-#define CHICKEN_DAYS       0x02      /* 8b: a counter (nights as an egg / a chick / hungry) */
-#define CHICKEN_X          0x04      /* 16b: position */
-#define CHICKEN_Y          0x06      /* 16b */
-#define COW_DAILY          0x01      /* 8b: flags; bits 0-2 daily, COW_POTION */
-#define COW_MAP            0x02      /* 8b: the map it is on */
-#define COW_DAYS           0x03      /* 8b: days as a calf / left cranky, sick, pregnant */
-#define COW_HAPPINESS      0x04      /* 8b */
-#define COW_DAYS_OUT       0x05      /* 8b: days out of the barn (cranky at 10) */
-#define COW_X              0x08      /* 16b: position */
-#define COW_Y              0x0A      /* 16b */
-#define COW_NAME           0x0C      /* 4 bytes: its name */
-
 static void slot_pointer(uint8_t *ram, HmRegs *r, uint16_t base, unsigned shift)
 {
   uint16_t ptr = (uint16_t)((uint16_t)(r->a << shift) + base);
-  hm_dp_w16(ram, r, ANIMAL_PTR, ptr);
-  *hm_dp(ram, r, ANIMAL_PTR_BANK) = 0x7E;
+  hm_dp_w16(ram, r, HM_ANIMAL_PTR, ptr);
+  *hm_dp(ram, r, HM_ANIMAL_PTR_BANK) = 0x7E;
   r->a = (uint16_t)((ptr & 0xFF00) | 0x7E);   /* SEP #$20; LDA #$7E keeps B */
 }
 
@@ -111,7 +54,7 @@ void hm_AddCowHappiness(uint8_t *ram, HmRegs *r)
   uint16_t change = r->a;
   hm_dp_w16(ram, r, HAPPINESS_CHANGE, change);
   r->y = COW_HAPPINESS;
-  uint32_t at = hm_dp_long(ram, r, ANIMAL_PTR, COW_HAPPINESS);
+  uint32_t at = hm_dp_long(ram, r, HM_ANIMAL_PTR, COW_HAPPINESS);
   uint16_t old = hm_bus_rd8(ram, at);
   hm_dp_w16(ram, r, OLD_HAPPINESS, old);
   uint32_t sum = (uint32_t)old + change;
@@ -202,7 +145,7 @@ static uint8_t s_nowhere;
 static uint8_t *field(uint8_t *ram, HmRegs *r, uint8_t off)
 {
   r->y = off;
-  uint8_t *p = hm_bus_ram(ram, hm_dp_long(ram, r, ANIMAL_PTR, off));
+  uint8_t *p = hm_bus_ram(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, off));
   return p ? p : &s_nowhere;
 }
 
@@ -231,7 +174,7 @@ static bool one_in(uint8_t *ram, HmRegs *r, uint8_t n, uint16_t ret)
 }
 static void graze(uint8_t *ram, HmRegs *r, uint16_t ret) { call(ram, r, ret, 0x82, hm_CowEatsGrass); }
 static bool grass_eaten(const uint8_t *ram) { return hm_rd16(ram, HM_GROWN_GRASS_N) != 0; }
-static uint16_t weather_flags(const uint8_t *ram) { return hm_rd16(ram, WEATHER_FLAGS); }
+static uint16_t weather_flags(const uint8_t *ram) { return hm_rd16(ram, HM_WEATHER_FLAGS); }
 
 /* PHX; PHX; TXA; JSL Get...Pointer; PLX (one copy of X stays pushed). */
 static void animal_begin(uint8_t *ram, HmRegs *r, uint16_t i, uint16_t ret, HmRoutine get)
@@ -250,19 +193,19 @@ static void animal_end(uint8_t *ram, HmRegs *r)    /* PLX at the bottom */
 /* 1. ── feeding the cows ── */
 static void cow_cranky(uint8_t *ram, HmRegs *r)
 {
-  if (*field(ram, r, REC_STATUS) & COW_PREGNANT) return;
+  if (*field(ram, r, ANIMAL_STATUS) & COW_PREGNANT) return;
   if (*field(ram, r, COW_DAILY) & COW_POTION) return;
-  if (*field(ram, r, REC_STATUS) & COW_SICK) return;
-  *field(ram, r, REC_STATUS) |= COW_CRANKY;
+  if (*field(ram, r, ANIMAL_STATUS) & COW_SICK) return;
+  *field(ram, r, ANIMAL_STATUS) |= COW_CRANKY;
   *field(ram, r, COW_DAYS) = 3;
-  *field(ram, r, COW_DAYS_OUT) = 0;
+  *field(ram, r, COW_HITS) = 0;
   cow_happiness(ram, r, -30, 0xBE2B);
 }
 
 static void cow_after_meal(uint8_t *ram, HmRegs *r)
 {
-  if (*field(ram, r, COW_DAYS_OUT) == 10) { cow_cranky(ram, r); return; }
-  if (hm_rd16(ram, FLAGS_5A) & 0x1000) {
+  if (*field(ram, r, COW_HITS) == 10) { cow_cranky(ram, r); return; }
+  if (hm_rd16(ram, HM_FLAGS_5A) & 0x1000) {
     if (*field(ram, r, COW_MAP) == MAP_BARN) return;
     if (one_in(ram, r, 16, 0xBDC8)) {
       cow_happiness(ram, r, -8, 0xBDD3);
@@ -288,10 +231,10 @@ static void cow_hungry(uint8_t *ram, HmRegs *r, int16_t change, uint16_t ret, ui
 {
   cow_happiness(ram, r, change, ret);
   if (one_in(ram, r, sick_odds, 0xBD56) &&
-      !(*field(ram, r, REC_STATUS) & COW_PREGNANT) &&
+      !(*field(ram, r, ANIMAL_STATUS) & COW_PREGNANT) &&
       !(*field(ram, r, COW_DAILY) & COW_POTION) &&
-      !(*field(ram, r, REC_STATUS) & COW_SICK)) {
-    *field(ram, r, REC_STATUS) |= COW_SICK;
+      !(*field(ram, r, ANIMAL_STATUS) & COW_SICK)) {
+    *field(ram, r, ANIMAL_STATUS) |= COW_SICK;
     *field(ram, r, COW_DAYS) = 7;
     cow_happiness(ram, r, -12, 0xBD94);
     player_happiness(ram, r, -30, 0xBD9D);
@@ -301,15 +244,15 @@ static void cow_hungry(uint8_t *ram, HmRegs *r, int16_t change, uint16_t ret, ui
 
 static void feed_cow(uint8_t *ram, HmRegs *r, uint16_t i)
 {
-  uint8_t status = *field(ram, r, REC_STATUS);
+  uint8_t status = *field(ram, r, ANIMAL_STATUS);
   if (!(status & COW_EXISTS) || (status & COW_NEWBORN)) return;
-  if (*field(ram, r, REC_STATUS) & COW_CALF) {
+  if (*field(ram, r, ANIMAL_STATUS) & COW_CALF) {
     if (*field(ram, r, COW_MAP) < 4) graze(ram, r, 0xBE3E);
     return;
   }
   if (*field(ram, r, COW_MAP) == MAP_BARN) {
-    uint16_t stall = (*field(ram, r, REC_STATUS) & COW_PREGNANT) ? 12 : i;
-    if (hm_bus_rd16(ram, COW_FEED_FLAGS + 2u * stall) & hm_rd16(ram, HM_COWS_FED_STALLS))
+    uint16_t stall = (*field(ram, r, ANIMAL_STATUS) & COW_PREGNANT) ? 12 : i;
+    if (hm_bus_rd16(ram, COW_FEED_FLAGS + 2u * stall) & hm_rd16(ram, HM_COW_TROUGHS))
       cow_after_meal(ram, r);
     else
       cow_hungry(ram, r, -8, 0xBD18, 4);
@@ -329,69 +272,69 @@ static void feed_cow(uint8_t *ram, HmRegs *r, uint16_t i)
 static void cow_birth(uint8_t *ram, HmRegs *r)
 {
   if (*field(ram, r, COW_MAP) != MAP_BARN) return;
-  hm_wr16(ram, FLAGS_64, hm_rd16(ram, FLAGS_64) | 0x0008);
-  uint8_t *status = field(ram, r, REC_STATUS);
+  hm_wr16(ram, HM_FLAGS_64, hm_rd16(ram, HM_FLAGS_64) | 0x0008);
+  uint8_t *status = field(ram, r, ANIMAL_STATUS);
   *status = (uint8_t)((*status | COW_GAVE_BIRTH) & ~COW_PREGNANT);
-  ram[NEWBORN_HAPPINESS] = 20;
+  ram[HM_NEWBORN_HAPPINESS] = 20;
   uint8_t happiness = *field(ram, r, COW_HAPPINESS);
-  if (happiness >= 192) ram[NEWBORN_HAPPINESS] = 100;
-  else if (happiness >= 96) ram[NEWBORN_HAPPINESS] = 50;
+  if (happiness >= 192) ram[HM_NEWBORN_HAPPINESS] = 100;
+  else if (happiness >= 96) ram[HM_NEWBORN_HAPPINESS] = 50;
 }
 
 static void cow_dies_if_sick(uint8_t *ram, HmRegs *r, uint16_t i)
 {
   if (weather_flags(ram) & 0x001A) return;
   if (ram[HM_WEATHER_TOMORROW] >= 6) return;       /* festival tomorrow */
-  *field(ram, r, REC_STATUS) = 0;
+  *field(ram, r, ANIMAL_STATUS) = 0;
   ram[HM_COW_N]--;
-  hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) | 0x0040);
+  hm_wr16(ram, HM_FLAGS_6E, hm_rd16(ram, HM_FLAGS_6E) | 0x0040);
   ram[HM_DEAD_COW] = (uint8_t)i;
 }
 
 static void cow_grows(uint8_t *ram, HmRegs *r, uint16_t i)
 {
-  if (!(*field(ram, r, REC_STATUS) & COW_EXISTS)) return;
+  if (!(*field(ram, r, ANIMAL_STATUS) & COW_EXISTS)) return;
   (void)field(ram, r, COW_HAPPINESS);              /* LDA happiness, unused */
   *field(ram, r, COW_DAILY) &= 0xF8;
-  uint8_t status = *field(ram, r, REC_STATUS);
+  uint8_t status = *field(ram, r, ANIMAL_STATUS);
   if (status & COW_NEWBORN) {
     if (++*field(ram, r, COW_DAYS) == 14) {
       *field(ram, r, COW_DAYS) = 0;
-      uint8_t *s = field(ram, r, REC_STATUS);
+      uint8_t *s = field(ram, r, ANIMAL_STATUS);
       *s = (uint8_t)((*s | COW_CALF) & ~COW_NEWBORN);
     }
     return;
   }
-  if (*field(ram, r, REC_STATUS) & COW_CALF) {
+  if (*field(ram, r, ANIMAL_STATUS) & COW_CALF) {
     if (++*field(ram, r, COW_DAYS) == 21) {
       *field(ram, r, COW_DAYS) = 0;
-      uint8_t *s = field(ram, r, REC_STATUS);
+      uint8_t *s = field(ram, r, ANIMAL_STATUS);
       *s = (uint8_t)((*s | COW_ADULT) & ~COW_CALF);
       *field(ram, r, COW_DAYS) = 0;
-      hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) | 0x1000);
+      hm_wr16(ram, HM_FLAGS_6E, hm_rd16(ram, HM_FLAGS_6E) | 0x1000);
     }
     return;
   }
-  hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) | 0x1000);
-  if (*field(ram, r, REC_STATUS) & COW_CRANKY) {
-    if (--*field(ram, r, COW_DAYS) == 0) *field(ram, r, REC_STATUS) &= ~COW_CRANKY;
+  hm_wr16(ram, HM_FLAGS_6E, hm_rd16(ram, HM_FLAGS_6E) | 0x1000);
+  if (*field(ram, r, ANIMAL_STATUS) & COW_CRANKY) {
+    if (--*field(ram, r, COW_DAYS) == 0) *field(ram, r, ANIMAL_STATUS) &= ~COW_CRANKY;
     return;
   }
-  if (*field(ram, r, REC_STATUS) & COW_SICK) {
+  if (*field(ram, r, ANIMAL_STATUS) & COW_SICK) {
     uint8_t *days = field(ram, r, COW_DAYS);
     if (*days == 0 || --*days == 0) cow_dies_if_sick(ram, r, i);
     return;
   }
   if (*field(ram, r, COW_DAILY) & COW_POTION) {
-    *field(ram, r, REC_STATUS) |= COW_PREGNANT;
+    *field(ram, r, ANIMAL_STATUS) |= COW_PREGNANT;
     *field(ram, r, COW_DAILY) &= 0x7F;
     return;
   }
-  if (!(*field(ram, r, REC_STATUS) & COW_PREGNANT)) return;
+  if (!(*field(ram, r, ANIMAL_STATUS) & COW_PREGNANT)) return;
   uint8_t *days = field(ram, r, COW_DAYS);
   if (*days != 0) {
     (*days)--;
-    if (--ram[PREGNANCY_DAYS] != 0) return;
+    if (--ram[HM_PREGNANCY_DAYS] != 0) return;
   }
   cow_birth(ram, r);
 }
@@ -399,16 +342,16 @@ static void cow_grows(uint8_t *ram, HmRegs *r, uint16_t i)
 /* 3. ── feeding the chickens ── */
 static void feed_hen(uint8_t *ram, HmRegs *r)
 {
-  if (!(*field(ram, r, REC_STATUS) & HEN_EXISTS)) return;
-  if (!(*field(ram, r, REC_STATUS) & (HEN_EGG | HEN_CHICK | HEN_ADULT))) {
-    *field(ram, r, REC_STATUS) = 0;                 /* no stage: it dies */
-    ram[HM_CHICKENS_N]--;
+  if (!(*field(ram, r, ANIMAL_STATUS) & HEN_EXISTS)) return;
+  if (!(*field(ram, r, ANIMAL_STATUS) & (HEN_EGG | HEN_CHICK | HEN_ADULT))) {
+    *field(ram, r, ANIMAL_STATUS) = 0;              /* no stage: it dies */
+    ram[HM_CHICKEN_N]--;
     player_happiness(ram, r, -30, 0xC083);
   }
-  if (!(*field(ram, r, REC_STATUS) & HEN_ADULT)) return;
+  if (!(*field(ram, r, ANIMAL_STATUS) & HEN_ADULT)) return;
   bool fed;
   if (*field(ram, r, CHICKEN_MAP) == MAP_COOP) {
-    if (ram[HM_CHICKENS_FED_N]) { ram[HM_CHICKENS_FED_N]--; return; }
+    if (ram[HM_CHICKENS_FED]) { ram[HM_CHICKENS_FED]--; return; }
     fed = false;
   } else if (*field(ram, r, CHICKEN_MAP) >= 4) {
     fed = false;
@@ -417,38 +360,38 @@ static void feed_hen(uint8_t *ram, HmRegs *r)
     fed = grass_eaten(ram) && !(weather_flags(ram) & 0x020A);
   }
   if (!fed) {
-    *field(ram, r, REC_STATUS) |= HEN_HUNGRY;
+    *field(ram, r, ANIMAL_STATUS) |= HEN_HUNGRY;
     *field(ram, r, CHICKEN_DAYS) = 3;
   }
   if (!(weather_flags(ram) & 0x0410)) return;
-  if (hm_rd16(ram, FLAGS_6E) & 0x0020) return;     /* only one per night */
+  if (hm_rd16(ram, HM_FLAGS_6E) & 0x0020) return;  /* only one per night */
   if (*field(ram, r, CHICKEN_MAP) >= 4) return;
-  *field(ram, r, REC_STATUS) = HEN_EXISTS;         /* lost: dies tomorrow */
-  hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) | 0x0020);
+  *field(ram, r, ANIMAL_STATUS) = HEN_EXISTS;      /* lost: dies tomorrow */
+  hm_wr16(ram, HM_FLAGS_6E, hm_rd16(ram, HM_FLAGS_6E) | 0x0020);
 }
 
 /* 4. ── the chickens grow up ── */
 static void hen_grows(uint8_t *ram, HmRegs *r)
 {
-  if (!(*field(ram, r, REC_STATUS) & HEN_EXISTS)) return;
-  if (*field(ram, r, REC_STATUS) & HEN_EGG) {
+  if (!(*field(ram, r, ANIMAL_STATUS) & HEN_EXISTS)) return;
+  if (*field(ram, r, ANIMAL_STATUS) & HEN_EGG) {
     uint8_t *nights = field(ram, r, CHICKEN_DAYS);
     if (*nights != 3 && ++*nights != 3) return;
-    if (ram[HM_CHICKENS_N] == 12) return;         /* no room: keeps waiting */
+    if (ram[HM_CHICKEN_N] == 12) return;          /* no room: keeps waiting */
     *field(ram, r, CHICKEN_DAYS) = 0;
-    uint8_t *s = field(ram, r, REC_STATUS);
+    uint8_t *s = field(ram, r, ANIMAL_STATUS);
     *s = (uint8_t)((*s | HEN_CHICK) & 0xBD);
-    hm_bus_wr16(ram, hm_dp_long(ram, r, ANIMAL_PTR, CHICKEN_X), 0x00D8);
-    hm_bus_wr16(ram, hm_dp_long(ram, r, ANIMAL_PTR, CHICKEN_Y), 0x00B8);
+    hm_bus_wr16(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, CHICKEN_X), 0x00D8);
+    hm_bus_wr16(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, CHICKEN_Y), 0x00B8);
     r->y = CHICKEN_Y;
-    ram[HM_CHICKENS_N]++;
-    hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) & 0xDFFF);
+    ram[HM_CHICKEN_N]++;
+    hm_wr16(ram, HM_FLAGS_6E, hm_rd16(ram, HM_FLAGS_6E) & 0xDFFF);
     return;
   }
-  if (!(*field(ram, r, REC_STATUS) & HEN_CHICK)) return;
+  if (!(*field(ram, r, ANIMAL_STATUS) & HEN_CHICK)) return;
   if (++*field(ram, r, CHICKEN_DAYS) != 7) return;
   *field(ram, r, CHICKEN_DAYS) = 0;
-  uint8_t *s = field(ram, r, REC_STATUS);
+  uint8_t *s = field(ram, r, ANIMAL_STATUS);
   *s = (uint8_t)((*s | HEN_ADULT) & ~HEN_CHICK);
   *field(ram, r, CHICKEN_DAYS) = 0;
 }
@@ -456,21 +399,21 @@ static void hen_grows(uint8_t *ram, HmRegs *r)
 /* 5. ── who lays an egg tomorrow ── */
 static void hen_lays(uint8_t *ram, HmRegs *r, uint16_t i)
 {
-  if (!(*field(ram, r, REC_STATUS) & HEN_EXISTS)) return;
-  if (!(*field(ram, r, REC_STATUS) & HEN_ADULT)) return;
-  if (*field(ram, r, REC_STATUS) & HEN_HUNGRY) {
+  if (!(*field(ram, r, ANIMAL_STATUS) & HEN_EXISTS)) return;
+  if (!(*field(ram, r, ANIMAL_STATUS) & HEN_ADULT)) return;
+  if (*field(ram, r, ANIMAL_STATUS) & HEN_HUNGRY) {
     uint8_t *nights = field(ram, r, CHICKEN_DAYS);
-    if (--*nights == 0) *field(ram, r, REC_STATUS) &= ~HEN_HUNGRY;
+    if (--*nights == 0) *field(ram, r, ANIMAL_STATUS) &= ~HEN_HUNGRY;
     return;
   }
   if (*field(ram, r, CHICKEN_MAP) != MAP_COOP) return;
-  hm_wr16(ram, HEN_EGGS, hm_bus_rd16(ram, HEN_EGG_FLAGS + 2u * i) | hm_rd16(ram, HEN_EGGS));
-  hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) | 0x0400);
+  hm_wr16(ram, HM_HEN_EGGS, hm_bus_rd16(ram, HEN_EGG_FLAGS + 2u * i) | hm_rd16(ram, HM_HEN_EGGS));
+  hm_wr16(ram, HM_FLAGS_6E, hm_rd16(ram, HM_FLAGS_6E) | 0x0400);
 }
 
 void hm_CowFeedingAndStatus(uint8_t *ram, HmRegs *r)
 {
-  bool feeding = !(hm_rd16(ram, NO_FEEDING) & 0x0001);
+  bool feeding = !(hm_rd16(ram, HM_FLAGS_60) & 0x0001);
   if (feeding) {
     for (uint16_t i = 0; i < 12; i++) {
       animal_begin(ram, r, i, 0xBC73, hm_GetCowPointer);
@@ -478,14 +421,14 @@ void hm_CowFeedingAndStatus(uint8_t *ram, HmRegs *r)
       animal_end(ram, r);
     }
   }
-  hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) & 0xEFBF);
+  hm_wr16(ram, HM_FLAGS_6E, hm_rd16(ram, HM_FLAGS_6E) & 0xEFBF);
   for (uint16_t i = 0; i < 12; i++) {
     animal_begin(ram, r, i, 0xBE63, hm_GetCowPointer);
     cow_grows(ram, r, i);
     animal_end(ram, r);
   }
-  if (!(hm_rd16(ram, NO_FEEDING) & 0x0001)) {
-    hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) & 0xFFDF);
+  if (!(hm_rd16(ram, HM_FLAGS_60) & 0x0001)) {
+    hm_wr16(ram, HM_FLAGS_6E, hm_rd16(ram, HM_FLAGS_6E) & 0xFFDF);
     for (uint16_t i = 0; i < 13; i++) {
       animal_begin(ram, r, i, 0xC04C, hm_GetChickenPointer);
       feed_hen(ram, r);
@@ -497,8 +440,8 @@ void hm_CowFeedingAndStatus(uint8_t *ram, HmRegs *r)
     hen_grows(ram, r);
     animal_end(ram, r);
   }
-  hm_wr16(ram, HEN_EGGS, 0);
-  hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) & 0xFBFF);
+  hm_wr16(ram, HM_HEN_EGGS, 0);
+  hm_wr16(ram, HM_FLAGS_6E, hm_rd16(ram, HM_FLAGS_6E) & 0xFBFF);
   for (uint16_t i = 0; i < 13; i++) {
     animal_begin(ram, r, i, 0xC207, hm_GetChickenPointer);
     hen_lays(ram, r, i);
@@ -507,11 +450,11 @@ void hm_CowFeedingAndStatus(uint8_t *ram, HmRegs *r)
 
   r->x = 13;
   r->c = 1;                                        /* CPX #13 matched */
-  r->a = hm_rd16(ram, FLAGS_68) & 0x0100;
+  r->a = hm_rd16(ram, HM_FLAGS_68) & 0x0100;
   if (r->a) {
-    uint8_t v = ram[HORSE_AGE];
+    uint8_t v = ram[HM_HORSE_AGE];
     r->c = v >= 0x15;
-    if (v != 0x15) ram[HORSE_AGE] = ++v;
+    if (v != 0x15) ram[HM_HORSE_AGE] = ++v;
     r->a = (uint16_t)(0x0100 | v);
   }
 }
@@ -534,8 +477,8 @@ static uint16_t free_slot(uint8_t *ram, HmRegs *r, uint16_t slots, uint16_t ret,
     pointer(ram, r);
     hm_rtl(ram, r);
     hm_pull8(ram, r); hm_pull8(ram, r);                                  /* PLX */
-    r->y = REC_STATUS;
-    uint8_t in_use = hm_bus_rd8(ram, hm_dp_long(ram, r, ANIMAL_PTR, REC_STATUS)) & 1;
+    r->y = ANIMAL_STATUS;
+    uint8_t in_use = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, ANIMAL_STATUS)) & 1;
     r->a = (uint16_t)((r->a & 0xFF00) | in_use);
     if (!in_use) break;
     x++;
@@ -547,12 +490,12 @@ static uint16_t free_slot(uint8_t *ram, HmRegs *r, uint16_t slots, uint16_t ret,
 static void put8(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t v)
 {
   r->y = at;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, ANIMAL_PTR, at), v);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, at), v);
 }
 static void put16(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t v)
 {
   r->y = at;
-  hm_bus_wr16(ram, hm_dp_long(ram, r, ANIMAL_PTR, at), v);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, at), v);
 }
 /* its place from a table of (x, y) words: TXA; ASL; ASL; TAX ... */
 static void spawn_from_table(uint8_t *ram, HmRegs *r, uint32_t table,
@@ -589,17 +532,17 @@ void hm_AddNewChicken(uint8_t *ram, HmRegs *r)
   r->a = 0;
   r->c = source >= 1;                                    /* CMP #1 */
   if (source == 1) {
-    put8(ram, r, REC_STATUS, 0x09);
+    put8(ram, r, ANIMAL_STATUS, 0x09);
     spawn_from_table(ram, r, CHICKEN_SPAWN, CHICKEN_X, CHICKEN_Y);
   } else if (r->c = source >= 2, source == 2) {          /* CMP #2 */
-    put8(ram, r, REC_STATUS, 0x09);
+    put8(ram, r, ANIMAL_STATUS, 0x09);
     uint8_t s = ram[HM_SEASON];
     r->c = (unsigned)s + 4 > 0xFF;                       /* CLC; ADC #4 */
     put8(ram, r, CHICKEN_MAP, (uint8_t)(s + 4));
     put16(ram, r, CHICKEN_X, 0x0238);
     put16(ram, r, CHICKEN_Y, 0x0318);
   } else {
-    put8(ram, r, REC_STATUS, 0x43);
+    put8(ram, r, ANIMAL_STATUS, 0x43);
     put16(ram, r, CHICKEN_X, 0x00E8);
     put16(ram, r, CHICKEN_Y, 0x00B8);
   }
@@ -625,13 +568,13 @@ void hm_AddNewCow(uint8_t *ram, HmRegs *r)
   put8(ram, r, COW_MAP, 0x27);
   put8(ram, r, COW_DAYS, 0);
   put8(ram, r, COW_HAPPINESS, 0);
-  put8(ram, r, COW_DAYS_OUT, 0);
+  put8(ram, r, COW_HITS, 0);
   put8(ram, r, COW_DAILY, 0);
-  put8(ram, r, REC_STATUS, 0x05);
+  put8(ram, r, ANIMAL_STATUS, 0x05);
   r->a = 0x0005;
   if (source != 0) {                                     /* born */
-    put8(ram, r, REC_STATUS, 0x03);
-    put8(ram, r, COW_HAPPINESS, ram[NEWBORN_HAPPINESS]);
+    put8(ram, r, ANIMAL_STATUS, 0x03);
+    put8(ram, r, COW_HAPPINESS, ram[HM_NEWBORN_HAPPINESS]);
     r->a = 70;
     hm_jsl(ram, r, 0xC96C, 0x83);
     hm_AddPlayerHappiness(ram, r);
@@ -724,23 +667,23 @@ static bool same_place(HmRegs *r, uint8_t m, uint8_t t, uint16_t y_m, int groups
 
 static uint8_t record8(uint8_t *ram, HmRegs *r, uint16_t at)
 {
-  return hm_bus_rd8(ram, hm_dp_long(ram, r, ANIMAL_PTR, at));
+  return hm_bus_rd8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, at));
 }
 static uint16_t record16(uint8_t *ram, HmRegs *r, uint16_t at)
 {
-  return hm_bus_rd16(ram, hm_dp_long(ram, r, ANIMAL_PTR, at));
+  return hm_bus_rd16(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, at));
 }
 /* LDY #0; LDA [$72]; AND #bit */
 static uint8_t status_bit(uint8_t *ram, HmRegs *r, uint8_t bit)
 {
-  r->y = REC_STATUS;
-  return lda8(r, record8(ram, r, REC_STATUS) & bit);
+  r->y = ANIMAL_STATUS;
+  return lda8(r, record8(ram, r, ANIMAL_STATUS) & bit);
 }
 /* REP; LDA [$72],Y (+x / +y) into $0985 / $0987 */
 static void place_from_record(uint8_t *ram, HmRegs *r, uint16_t at)
 {
-  r->y = at;     r->a = record16(ram, r, at);     hm_wr16(ram, TILE_AT_X, r->a);
-  r->y = at + 2; r->a = record16(ram, r, at + 2); hm_wr16(ram, TILE_AT_Y, r->a);
+  r->y = at;     r->a = record16(ram, r, at);     hm_wr16(ram, HM_TILE_IN_FRONT_X, r->a);
+  r->y = at + 2; r->a = record16(ram, r, at + 2); hm_wr16(ram, HM_TILE_IN_FRONT_Y, r->a);
 }
 /* TXA; CLC; ADC #base; LDX #0; (LDY script); JSL StartScriptAtTileInFront */
 static void start_script(uint8_t *ram, HmRegs *r, uint16_t n, uint16_t base, uint16_t script,
@@ -779,12 +722,12 @@ static void place_chickens(uint8_t *ram, HmRegs *r, uint8_t map)
       start_script(ram, r, r->x, 0x24, 0, 0xC39D);
       r->y = 0;
       lda8(r, 3);
-      hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, 0), 3); /* STA [$CC],Y */
+      hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, 0), 3); /* STA [$CC],Y */
     } else if (status_bit(ram, r, 0x04)) {
       start_script(ram, r, r->x, 0x24, 1, 0xC3C6);
     } else if (status_bit(ram, r, 0x08)) {
       start_script(ram, r, r->x, 0x24, 2, 0xC3E4);
-      clear_word_of_slot(ram, r, CHICKEN_TIMERS);
+      clear_word_of_slot(ram, r, HM_CHICKEN_TIMERS);
     } else {
       start_script(ram, r, r->x, 0x24, 0x5F, 0xC400);
     }
@@ -797,7 +740,7 @@ static void place_chickens(uint8_t *ram, HmRegs *r, uint8_t map)
 /* raining ($0196 bit 1) and the cow not in the barn: the wet script */
 static uint16_t cow_script(uint8_t *ram, HmRegs *r, uint16_t wet, uint16_t dry)
 {
-  r->a = hm_rd16(ram, WEATHER_FLAGS) & 0x0002;
+  r->a = hm_rd16(ram, HM_WEATHER_FLAGS) & 0x0002;
   if (r->a) {
     r->y = COW_MAP;
     uint8_t m = lda8(r, record8(ram, r, COW_MAP));
@@ -830,11 +773,11 @@ static void place_cows(uint8_t *ram, HmRegs *r, uint8_t map)
       r->c = (stall >> 14) & 1;                          /* ASL; ASL */
       r->y = COW_X;
       r->a = hm_bus_rd16(ram, COW_SPAWN + r->x);
-      hm_wr16(ram, TILE_AT_X, r->a);
+      hm_wr16(ram, HM_TILE_IN_FRONT_X, r->a);
       r->x = (uint16_t)(r->x + 2);
       r->y = COW_Y;
       r->a = hm_bus_rd16(ram, COW_SPAWN + r->x);
-      hm_wr16(ram, TILE_AT_Y, r->a);
+      hm_wr16(ram, HM_TILE_IN_FRONT_Y, r->a);
       r->x = pull16(ram, r);                             /* PLX */
     } else {
       if (!same_place(r, record8(ram, r, COW_MAP), map, COW_MAP, 5)) goto next;
@@ -849,9 +792,9 @@ static void place_cows(uint8_t *ram, HmRegs *r, uint8_t map)
     } else if (status_bit(ram, r, 0x08)) {
       ret = 0xC631;
       if (status_bit(ram, r, 0x80)) {
-        r->y = REC_STATUS;
-        uint8_t st = lda8(r, record8(ram, r, REC_STATUS) & 0x7F);
-        hm_bus_wr8(ram, hm_dp_long(ram, r, ANIMAL_PTR, REC_STATUS), st);
+        r->y = ANIMAL_STATUS;
+        uint8_t st = lda8(r, record8(ram, r, ANIMAL_STATUS) & 0x7F);
+        hm_bus_wr8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, ANIMAL_STATUS), st);
         script = 5;
       } else if (status_bit(ram, r, 0x40)) script = 8;
       else if (status_bit(ram, r, 0x20)) script = 7;
@@ -861,7 +804,7 @@ static void place_cows(uint8_t *ram, HmRegs *r, uint8_t map)
       goto next;
     }
     start_script(ram, r, r->x, 0x18, script, ret);
-    clear_word_of_slot(ram, r, COW_TIMERS);
+    clear_word_of_slot(ram, r, HM_COW_TIMERS);
   next:
     r->x = (uint16_t)(pull16(ram, r) + 1);
     r->c = r->x >= 12;
@@ -875,35 +818,35 @@ void hm_PlaceAnimalsOnMap(uint8_t *ram, HmRegs *r)
   place_cows(ram, r, map);
 
   /* the dog */
-  if ((r->a = hm_rd16(ram, FLAGS_68) & 0x0080)
+  if ((r->a = hm_rd16(ram, HM_FLAGS_68) & 0x0080)
       && !(r->a = hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0800)
-      && same_place(r, ram[DOG_MAP], map, NO_Y, 5)) {
-    r->a = hm_rd16(ram, DOG_X); hm_wr16(ram, TILE_AT_X, r->a);
-    r->a = hm_rd16(ram, DOG_Y); hm_wr16(ram, TILE_AT_Y, r->a);
+      && same_place(r, ram[HM_DOG_MAP], map, NO_Y, 5)) {
+    r->a = hm_rd16(ram, HM_DOG_X); hm_wr16(ram, HM_TILE_IN_FRONT_X, r->a);
+    r->a = hm_rd16(ram, HM_DOG_Y); hm_wr16(ram, HM_TILE_IN_FRONT_Y, r->a);
     r->a = 0x0016; r->x = 0; r->y = 0x0011;
     hm_jsl(ram, r, 0xC725, 0x84);
     hm_StartScriptAtTileInFront(ram, r);
     hm_rtl(ram, r);
     r->a = 1;
-    hm_wr16(ram, DOG_MOOD, 1);
-    ram[DOG_TIMER] = 0;
+    hm_wr16(ram, HM_DOG_MOOD, 1);
+    ram[HM_DOG_TIMER] = 0;
   }
 
   /* the horse */
-  if ((r->a = hm_rd16(ram, FLAGS_68) & 0x0100)
+  if ((r->a = hm_rd16(ram, HM_FLAGS_68) & 0x0100)
       && !(r->a = hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0010)
-      && same_place(r, ram[HORSE_MAP], map, NO_Y, 4)) {
-    r->a = 0x0110; hm_wr16(ram, TILE_AT_X, 0x0110);
-    r->a = 0x0140; hm_wr16(ram, TILE_AT_Y, 0x0140);
+      && same_place(r, ram[HM_HORSE_MAP], map, NO_Y, 4)) {
+    r->a = 0x0110; hm_wr16(ram, HM_TILE_IN_FRONT_X, 0x0110);
+    r->a = 0x0140; hm_wr16(ram, HM_TILE_IN_FRONT_Y, 0x0140);
     r->y = 0x0013;
-    uint8_t age = lda8(r, ram[HORSE_AGE]);
+    uint8_t age = lda8(r, ram[HM_HORSE_AGE]);
     r->c = age >= 0x15;
     if (age == 0x15) r->y = 0x0010;                      /* grown */
     r->a = 0x0017; r->x = 0;
     hm_jsl(ram, r, 0xC800, 0x84);
     hm_StartScriptAtTileInFront(ram, r);
     hm_rtl(ram, r);
-    ram[HORSE_TIMER] = 0;
+    ram[HM_HORSE_TIMER] = 0;
   }
 }
 
@@ -927,7 +870,7 @@ static void count_animals(uint8_t *ram, HmRegs *r, uint16_t slots, uint16_t ret,
     hm_rtl(ram, r);
     hm_pull8(ram, r); hm_pull8(ram, r);                                         /* PLX */
     hm_pull8(ram, r); hm_pull8(ram, r);                                         /* PLY */
-    if (hm_bus_rd8(ram, hm_dp_long(ram, r, ANIMAL_PTR, REC_STATUS)) & 1) count++;
+    if (hm_bus_rd8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, ANIMAL_STATUS)) & 1) count++;
   }
   r->x = slots;
   r->y = count;
@@ -954,30 +897,30 @@ void hm_StartEnding(uint8_t *ram, HmRegs *r)
 {
   r->a = 0; r->x = 0x002E; r->y = 0;
   call(ram, r, 0xF4E6, 0x84, hm_StartEventScriptLong);
-  hm_bus_wr16(ram, (uint32_t)r->db << 16 | WEATHER_FLAGS, 0);
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5E)) | 0x0002);
-  hm_bus_wr16(ram, WRAM_LONG(FLAGS_5E), r->a);
+  hm_bus_wr16(ram, (uint32_t)r->db << 16 | HM_WEATHER_FLAGS, 0);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E)) | 0x0002);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5E), r->a);
   r->a &= 0xFF00;
-  hm_bus_wr8(ram, WRAM_LONG(ENDING_STEP), 0);
-  hm_bus_wr8(ram, (uint32_t)r->db << 16 | FESTIVAL_BEST, 0);
+  hm_bus_wr8(ram, WRAM_LONG(HM_ENDING_STEP), 0);
+  hm_bus_wr8(ram, (uint32_t)r->db << 16 | HM_FESTIVAL_BEST, 0);
   r->a = 0x00B1;
   for (uint16_t i = 0; i < 4; i++)
-    hm_bus_wr16(ram, ((uint32_t)r->db << 16 | TEXT_NAME) + 2u * i, 0x00B1);
+    hm_bus_wr16(ram, ((uint32_t)r->db << 16 | HM_TEXT_NAME) + 2u * i, 0x00B1);
   for (uint16_t cow = 0; cow != 12; cow++) {
     hm_push8(ram, r, (uint8_t)(cow >> 8)); hm_push8(ram, r, (uint8_t)cow);   /* PHX */
     r->a = cow;
     call(ram, r, 0xF521, 0x83, hm_GetCowPointer);
-    r->a = (uint16_t)((r->a & 0xFF00) | (*field(ram, r, REC_STATUS) & 0x01));
+    r->a = (uint16_t)((r->a & 0xFF00) | (*field(ram, r, ANIMAL_STATUS) & 0x01));
     if (r->a & 0xFF) {
       uint8_t love = *field(ram, r, COW_HAPPINESS);
-      uint8_t best = hm_bus_rd8(ram, (uint32_t)r->db << 16 | FESTIVAL_BEST);
+      uint8_t best = hm_bus_rd8(ram, (uint32_t)r->db << 16 | HM_FESTIVAL_BEST);
       r->a = (uint16_t)((r->a & 0xFF00) | love);
       r->c = love >= best;
       if (r->c) {
-        hm_bus_wr8(ram, (uint32_t)r->db << 16 | FESTIVAL_BEST, love);
+        hm_bus_wr8(ram, (uint32_t)r->db << 16 | HM_FESTIVAL_BEST, love);
         for (uint16_t i = 0; i < 4; i++) {
           r->a = *field(ram, r, (uint8_t)(COW_NAME + i));  /* LDA #0; XBA; LDA */
-          hm_bus_wr16(ram, ((uint32_t)r->db << 16 | TEXT_NAME) + 2u * i, r->a);
+          hm_bus_wr16(ram, ((uint32_t)r->db << 16 | HM_TEXT_NAME) + 2u * i, r->a);
         }
       }
     }
@@ -987,7 +930,7 @@ void hm_StartEnding(uint8_t *ram, HmRegs *r)
     r->c = 1;
   }
   call(ram, r, 0xF57F, 0x82, hm_CalculateFarmDevelopment);
-  hm_dp_w16(ram, r, MUL_FACTOR, hm_bus_rd16(ram, DEVELOPMENT));
+  hm_dp_w16(ram, r, MUL_FACTOR, hm_bus_rd16(ram, WRAM_LONG(HM_RANCH_DEVELOPMENT)));
   r->a = 0x000A;
   /* the flags Multiply16 saves (PHP): 16-bit, N = Z = V = 0 (the last
    * ADC of CalculateFarmDevelopment cannot overflow), C = 1 (its last
@@ -1000,7 +943,7 @@ void hm_StartEnding(uint8_t *ram, HmRegs *r)
   r->a = 0x0127;
   hm_dp_w16(ram, r, DIVISOR, 0x0127);
   call(ram, r, 0xF59B, 0x83, hm_DivisionUnsigned);
-  hm_bus_wr16(ram, DEVELOPMENT, r->a);
+  hm_bus_wr16(ram, WRAM_LONG(HM_RANCH_DEVELOPMENT), r->a);
   r->c = r->a >= 0x0064;
-  if (r->c) { r->a = 0x0064; hm_bus_wr16(ram, DEVELOPMENT, 0x0064); }
+  if (r->c) { r->a = 0x0064; hm_bus_wr16(ram, WRAM_LONG(HM_RANCH_DEVELOPMENT), 0x0064); }
 }

@@ -22,6 +22,7 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_regs.h"
 
 /* ── Names of the memory locations used here ────────────────────────────── */
 
@@ -39,12 +40,6 @@
 #define MUL16_LOW  0x011E /* 16b: low x low */
 #define MUL16_HIGH_A 0x0120 /* 16b: (A's high x low) << 8 */
 #define MUL16_HIGH_B 0x0122 /* 16b: (low x $7E's high) << 8 */
-
-/* Console registers (bank $00) */
-#define WRMPYA     0x004202 /* 8b: the multiplier's first factor */
-#define WRMPYB     0x004203 /* 8b: its second factor; writing it starts it */
-#define WRDIVL     0x004204 /* 16b: the divider's dividend (WRDIVL/H) */
-#define WRDIVB     0x004206 /* 8b: the divisor; writing it starts it */
 
 void hm_DivisionUnsigned(uint8_t *ram, HmRegs *r)
 {

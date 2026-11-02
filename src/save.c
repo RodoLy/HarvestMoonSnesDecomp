@@ -29,6 +29,7 @@
 #include <string.h>
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 #define SLOT_1        0x700000    /* SRAM: the first slot */
 #define SEEDS_MARK_AT 0x20        /* the native build's seeds: +20 = $5E, +21-+25 */
@@ -38,60 +39,12 @@
 #define WIFE_MARK     0xA7
 #define BAG_MARK      0xBA
 #define SLOT_2        0x701000    /* SRAM: the second slot */
-#define FARM_TILES    0x7EA4E6    /* the farm map's tile types, 64 x 64 bytes */
-#define COWS          0x7EC1C6    /* the 12 cows, 16 bytes each (HM_COW_DATA) */
-#define CHICKENS      0x7EC286    /* the 13 chickens, 8 bytes each (HM_CHICKEN_DATA) */
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: the clock (HM_YEAR ... HM_DAY), the bags
- * (HM_SEEDS_GRASS_N ... HM_FEED_CHICKS_N), HM_COW_N, HM_WEATHER_TOMORROW,
- * HM_MAX_STAMINA, HM_TOOL_SELECTED, HM_TOOL_BACKPACK, HM_STORED_WOOD,
- * HM_STORED_GRASS, HM_HEARTS_BASE, HM_HAPPINESS, HM_DOG_HUGS, HM_MONEY and
- * HM_SHED_ITEMS. */
-#define WRAM_LONG(a)      (0x7E0000 + (a))   /* a ram[] offset as a bus address */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* WRAM of the data bank (through db_addr) */
-#define WEATHER_FLAGS     0x0196   /* 16b: weather and day flags */
-#define PLAYER_NAME       0x0881   /* 4 bytes: the player's name */
-#define DOG_NAME          0x0899   /* 4 bytes */
-#define HORSE_NAME        0x089D   /* 4 bytes */
-#define CAN_WATER         0x0926   /* 8b: water left in the watering can */
-#define DEAD_COW          0x0937   /* 8b */
 #define SAVE_SLOT         0x098E   /* 8b: the slot saved last (0 or 1) */
-#define VISIT_NIGHTS      0x09A3   /* 8b: nights counted for a visit (day.c) */
-
-/* WRAM $7F:1Fxx: the game's saved state (ram[] offsets 0x11Fxx; WRAM_LONG
- * gives the bus address) */
-#define CHICKENS_N        0x11F0B  /* 8b: chickens owned */
-#define PREGNANCY_DAYS    0x11F12  /* 8b: days until the pregnant cow gives birth */
-#define PLANTED_GRASS     0x11F29  /* 16b */
-#define NEWBORN_HAPPINESS 0x11F2B  /* 8b: the happiness the calf will start with */
-#define DOG_X             0x11F2C  /* 16b: the dog's position */
-#define DOG_Y             0x11F2E  /* 16b */
-#define DOG_MAP           0x11F30  /* 8b: the map the dog is on */
-#define HORSE_MAP         0x11F31  /* 8b: the map the horse is on */
-#define HORSE_AGE         0x11F32  /* 8b: the horse's days */
-#define BUILD_NIGHTS      0x11F35  /* 8b: nights the house has been building (day.c) */
-#define POWER_BERRIES     0x11F36  /* 8b: power berries eaten */
-#define KID1_AGE          0x11F37  /* 16b: the first child's days, from conception */
-#define KID2_AGE          0x11F39  /* 16b: the second child's */
-#define PREGNANCY         0x11F3B  /* 16b: the wife's pregnancy */
-#define KID1_NAME         0x11F3D  /* 4 bytes: the first child's name */
-#define KID2_NAME         0x11F41  /* 4 bytes: the second child's */
-#define HEN_EGGS          0x11F45  /* 16b: one bit per hen that lays tomorrow */
-#define SHIPPED_CORN      0x11F4A  /* 16b each: the crops shipped */
-#define SHIPPED_TOMATOES  0x11F4C
-#define SHIPPED_TURNIPS   0x11F4E
-#define SHIPPED_POTATOES  0x11F50
-#define FLAGS_60          0x11F60  /* 16b flags: $0800 both slots were cleared */
-#define FLAGS_64          0x11F64  /* 16b story flags (saved: $64-$72) */
-#define FLAGS_66          0x11F66
-#define FLAGS_68          0x11F68
-#define FLAGS_6A          0x11F6A
-#define FLAGS_6C          0x11F6C
-#define FLAGS_6E          0x11F6E
-#define FLAGS_70          0x11F70
-#define FLAGS_72          0x11F72
 
 /* Direct page */
 #define SLOT_PTR          0x72   /* 24b $72-$74: the slot in SRAM */
@@ -220,95 +173,95 @@ static const Field FIELDS[] = {
   { SAVE_CHICKEN_FEED,         HM_FEED_CHICKS_N,                  1, 1 },
   /* cows, chickens */
   { SAVE_COWS_N,               WRAM_LONG(HM_COW_N),               1, 0 },
-  { SAVE_CHICKENS_N,           WRAM_LONG(CHICKENS_N),             1, 0 },
+  { SAVE_CHICKENS_N,           WRAM_LONG(HM_CHICKEN_N),             1, 0 },
   { SAVE_WEATHER,              HM_WEATHER_TOMORROW,               1, 1 },
   { SAVE_MAX_STAMINA,          HM_MAX_STAMINA,                    1, 1 },
   { SAVE_TOOL,                 HM_TOOL_SELECTED,                  1, 1 },
-  { SAVE_WATER,                CAN_WATER,                         1, 1 },
-  { SAVE_PREGNANCY_DAYS,       WRAM_LONG(PREGNANCY_DAYS),         1, 0 },
-  { SAVE_NEWBORN_HAPPINESS,    WRAM_LONG(NEWBORN_HAPPINESS),      1, 0 },
+  { SAVE_WATER,                HM_CAN_WATER,                         1, 1 },
+  { SAVE_PREGNANCY_DAYS,       WRAM_LONG(HM_PREGNANCY_DAYS),         1, 0 },
+  { SAVE_NEWBORN_HAPPINESS,    WRAM_LONG(HM_NEWBORN_HAPPINESS),      1, 0 },
   /* dog map */
-  { SAVE_DOG_MAP,              WRAM_LONG(DOG_MAP),                1, 0 },
-  { SAVE_HORSE_MAP,            WRAM_LONG(HORSE_MAP),              1, 0 },
-  { SAVE_HORSE_AGE,            WRAM_LONG(HORSE_AGE),              1, 0 },
+  { SAVE_DOG_MAP,              WRAM_LONG(HM_DOG_MAP),                1, 0 },
+  { SAVE_HORSE_MAP,            WRAM_LONG(HM_HORSE_MAP),              1, 0 },
+  { SAVE_HORSE_AGE,            WRAM_LONG(HM_HORSE_AGE),              1, 0 },
   /* development */
-  { SAVE_BUILD_NIGHTS,         WRAM_LONG(BUILD_NIGHTS),           1, 0 },
+  { SAVE_BUILD_NIGHTS,         WRAM_LONG(HM_BUILD_NIGHTS),           1, 0 },
   /* power berries */
-  { SAVE_POWER_BERRIES,        WRAM_LONG(POWER_BERRIES),          1, 0 },
-  { SAVE_VISIT_NIGHTS,         VISIT_NIGHTS,                      1, 1 },
-  { SAVE_DEAD_COW,             DEAD_COW,                          1, 1 },
+  { SAVE_POWER_BERRIES,        WRAM_LONG(HM_POWER_BERRIES),          1, 0 },
+  { SAVE_VISIT_NIGHTS,         HM_VISIT_NIGHTS,                      1, 1 },
+  { SAVE_DEAD_COW,             HM_DEAD_COW,                          1, 1 },
   /* backpack */
   { SAVE_BACKPACK,             HM_TOOL_BACKPACK,                  1, 1 },
   /* wood, fodder */
   { SAVE_WOOD,                 WRAM_LONG(HM_STORED_WOOD),         2, 0 },
   { SAVE_FODDER,               WRAM_LONG(HM_STORED_GRASS),        2, 0 },
-  { SAVE_WEATHER_FLAGS,        WEATHER_FLAGS,                     2, 1 },
+  { SAVE_WEATHER_FLAGS,        HM_WEATHER_FLAGS,                     2, 1 },
   /* planted grass */
-  { SAVE_PLANTED_GRASS,        WRAM_LONG(PLANTED_GRASS),          2, 0 },
+  { SAVE_PLANTED_GRASS,        WRAM_LONG(HM_PLANTED_GRASS),          2, 0 },
   /* hearts: Maria .. Eve */
   { SAVE_HEARTS,               WRAM_LONG(HM_HEARTS_BASE),         2, 0 },
   { SAVE_HEARTS + 2,           WRAM_LONG(HM_HEARTS_BASE + 2),     2, 0 },
   { SAVE_HEARTS + 4,           WRAM_LONG(HM_HEARTS_BASE + 4),     2, 0 },
   { SAVE_HEARTS + 6,           WRAM_LONG(HM_HEARTS_BASE + 6),     2, 0 },
   { SAVE_HEARTS + 8,           WRAM_LONG(HM_HEARTS_BASE + 8),     2, 0 },
-  { SAVE_FLAGS_64,             WRAM_LONG(FLAGS_64),               2, 0 },
-  { SAVE_FLAGS_66,             WRAM_LONG(FLAGS_66),               2, 0 },
-  { SAVE_FLAGS_68,             WRAM_LONG(FLAGS_68),               2, 0 },
-  { SAVE_FLAGS_6A,             WRAM_LONG(FLAGS_6A),               2, 0 },
+  { SAVE_FLAGS_64,             WRAM_LONG(HM_FLAGS_64),               2, 0 },
+  { SAVE_FLAGS_66,             WRAM_LONG(HM_FLAGS_66),               2, 0 },
+  { SAVE_FLAGS_68,             WRAM_LONG(HM_FLAGS_68),               2, 0 },
+  { SAVE_FLAGS_6A,             WRAM_LONG(HM_FLAGS_6A),               2, 0 },
   /* dog position */
-  { SAVE_DOG_X,                WRAM_LONG(DOG_X),                  2, 0 },
-  { SAVE_DOG_Y,                WRAM_LONG(DOG_Y),                  2, 0 },
+  { SAVE_DOG_X,                WRAM_LONG(HM_DOG_X),                  2, 0 },
+  { SAVE_DOG_Y,                WRAM_LONG(HM_DOG_Y),                  2, 0 },
   /* happiness */
   { SAVE_HAPPINESS,            WRAM_LONG(HM_HAPPINESS),           2, 0 },
-  { SAVE_HEN_EGGS,             WRAM_LONG(HEN_EGGS),               2, 0 },
-  { SAVE_FLAGS_6C,             WRAM_LONG(FLAGS_6C),               2, 0 },
-  { SAVE_FLAGS_6E,             WRAM_LONG(FLAGS_6E),               2, 0 },
-  { SAVE_FLAGS_70,             WRAM_LONG(FLAGS_70),               2, 0 },
-  { SAVE_FLAGS_72,             WRAM_LONG(FLAGS_72),               2, 0 },
+  { SAVE_HEN_EGGS,             WRAM_LONG(HM_HEN_EGGS),               2, 0 },
+  { SAVE_FLAGS_6C,             WRAM_LONG(HM_FLAGS_6C),               2, 0 },
+  { SAVE_FLAGS_6E,             WRAM_LONG(HM_FLAGS_6E),               2, 0 },
+  { SAVE_FLAGS_70,             WRAM_LONG(HM_FLAGS_70),               2, 0 },
+  { SAVE_FLAGS_72,             WRAM_LONG(HM_FLAGS_72),               2, 0 },
   /* family */
-  { SAVE_PREGNANCY,            WRAM_LONG(PREGNANCY),              2, 0 },
-  { SAVE_KID1_AGE,             WRAM_LONG(KID1_AGE),               2, 0 },
-  { SAVE_KID2_AGE,             WRAM_LONG(KID2_AGE),               2, 0 },
+  { SAVE_PREGNANCY,            WRAM_LONG(HM_DAYS_MARRIED),              2, 0 },
+  { SAVE_KID1_AGE,             WRAM_LONG(HM_KID1_AGE),               2, 0 },
+  { SAVE_KID2_AGE,             WRAM_LONG(HM_KID2_AGE),               2, 0 },
   /* shipped */
-  { SAVE_SHIPPED_CORN,         WRAM_LONG(SHIPPED_CORN),           2, 0 },
-  { SAVE_SHIPPED_TOMATOES,     WRAM_LONG(SHIPPED_TOMATOES),       2, 0 },
-  { SAVE_SHIPPED_TURNIPS,      WRAM_LONG(SHIPPED_TURNIPS),        2, 0 },
-  { SAVE_SHIPPED_POTATOES,     WRAM_LONG(SHIPPED_POTATOES),       2, 0 },
+  { SAVE_SHIPPED_CORN,         WRAM_LONG(HM_SHIPPED_CORN),           2, 0 },
+  { SAVE_SHIPPED_TOMATOES,     WRAM_LONG(HM_SHIPPED_TOMATOES),       2, 0 },
+  { SAVE_SHIPPED_TURNIPS,      WRAM_LONG(HM_SHIPPED_TURNIPS),        2, 0 },
+  { SAVE_SHIPPED_POTATOES,     WRAM_LONG(HM_SHIPPED_POTATOES),       2, 0 },
   /* dog hugs */
   { SAVE_DOG_HUGS,             WRAM_LONG(HM_DOG_HUGS),            2, 0 },
   /* money */
   { SAVE_MONEY,                WRAM_LONG(HM_MONEY),               2, 0 },
   { SAVE_MONEY_HIGH,           WRAM_LONG(HM_MONEY + 2),           1, 0 },
   /* player's name */
-  { SAVE_PLAYER_NAME,          PLAYER_NAME,                       1, 1 },
-  { SAVE_PLAYER_NAME + 1,      PLAYER_NAME + 1,                   1, 1 },
-  { SAVE_PLAYER_NAME + 2,      PLAYER_NAME + 2,                   1, 1 },
-  { SAVE_PLAYER_NAME + 3,      PLAYER_NAME + 3,                   1, 1 },
+  { SAVE_PLAYER_NAME,          HM_PLAYER_NAME,                       1, 1 },
+  { SAVE_PLAYER_NAME + 1,      HM_PLAYER_NAME + 1,                   1, 1 },
+  { SAVE_PLAYER_NAME + 2,      HM_PLAYER_NAME + 2,                   1, 1 },
+  { SAVE_PLAYER_NAME + 3,      HM_PLAYER_NAME + 3,                   1, 1 },
   /* the shed */
   { SAVE_SHED,                 WRAM_LONG(HM_SHED_ITEMS),          1, 0 },
   { SAVE_SHED + 1,             WRAM_LONG(HM_SHED_ITEMS + 1),      1, 0 },
   { SAVE_SHED + 2,             WRAM_LONG(HM_SHED_ITEMS + 2),      1, 0 },
   { SAVE_SHED + 3,             WRAM_LONG(HM_SHED_ITEMS + 3),      1, 0 },
   /* dog's name */
-  { SAVE_DOG_NAME,             DOG_NAME,                          1, 1 },
-  { SAVE_DOG_NAME + 1,         DOG_NAME + 1,                      1, 1 },
-  { SAVE_DOG_NAME + 2,         DOG_NAME + 2,                      1, 1 },
-  { SAVE_DOG_NAME + 3,         DOG_NAME + 3,                      1, 1 },
+  { SAVE_DOG_NAME,             HM_DOG_NAME,                          1, 1 },
+  { SAVE_DOG_NAME + 1,         HM_DOG_NAME + 1,                      1, 1 },
+  { SAVE_DOG_NAME + 2,         HM_DOG_NAME + 2,                      1, 1 },
+  { SAVE_DOG_NAME + 3,         HM_DOG_NAME + 3,                      1, 1 },
   /* horse's name */
-  { SAVE_HORSE_NAME,           HORSE_NAME,                        1, 1 },
-  { SAVE_HORSE_NAME + 1,       HORSE_NAME + 1,                    1, 1 },
-  { SAVE_HORSE_NAME + 2,       HORSE_NAME + 2,                    1, 1 },
-  { SAVE_HORSE_NAME + 3,       HORSE_NAME + 3,                    1, 1 },
+  { SAVE_HORSE_NAME,           HM_HORSE_NAME,                        1, 1 },
+  { SAVE_HORSE_NAME + 1,       HM_HORSE_NAME + 1,                    1, 1 },
+  { SAVE_HORSE_NAME + 2,       HM_HORSE_NAME + 2,                    1, 1 },
+  { SAVE_HORSE_NAME + 3,       HM_HORSE_NAME + 3,                    1, 1 },
   /* first child */
-  { SAVE_KID1_NAME,            WRAM_LONG(KID1_NAME),              1, 0 },
-  { SAVE_KID1_NAME + 1,        WRAM_LONG(KID1_NAME + 1),          1, 0 },
-  { SAVE_KID1_NAME + 2,        WRAM_LONG(KID1_NAME + 2),          1, 0 },
-  { SAVE_KID1_NAME + 3,        WRAM_LONG(KID1_NAME + 3),          1, 0 },
+  { SAVE_KID1_NAME,            WRAM_LONG(HM_KID1_NAME),              1, 0 },
+  { SAVE_KID1_NAME + 1,        WRAM_LONG(HM_KID1_NAME + 1),          1, 0 },
+  { SAVE_KID1_NAME + 2,        WRAM_LONG(HM_KID1_NAME + 2),          1, 0 },
+  { SAVE_KID1_NAME + 3,        WRAM_LONG(HM_KID1_NAME + 3),          1, 0 },
   /* second child */
-  { SAVE_KID2_NAME,            WRAM_LONG(KID2_NAME),              1, 0 },
-  { SAVE_KID2_NAME + 1,        WRAM_LONG(KID2_NAME + 1),          1, 0 },
-  { SAVE_KID2_NAME + 2,        WRAM_LONG(KID2_NAME + 2),          1, 0 },
-  { SAVE_KID2_NAME + 3,        WRAM_LONG(KID2_NAME + 3),          1, 0 },
+  { SAVE_KID2_NAME,            WRAM_LONG(HM_KID2_NAME),              1, 0 },
+  { SAVE_KID2_NAME + 1,        WRAM_LONG(HM_KID2_NAME + 1),          1, 0 },
+  { SAVE_KID2_NAME + 2,        WRAM_LONG(HM_KID2_NAME + 2),          1, 0 },
+  { SAVE_KID2_NAME + 3,        WRAM_LONG(HM_KID2_NAME + 3),          1, 0 },
 };
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -343,10 +296,10 @@ void hm_SaveGameSlot(uint8_t *ram, HmRegs *r)
     sram_w8(ram, r, WIFE_AT + 1, (uint8_t)(g_hm_wife_until >> 8));
     sram_w8(ram, r, WIFE_AT + 2, WIFE_MARK);
   }
-  for (uint16_t x = 0; x < 0x68; x++) sram_w8(ram, r, (uint16_t)(SAVE_CHICKEN_RECORDS + x), hm_bus_rd8(ram, CHICKENS + x));
-  for (uint16_t x = 0; x < 0xC0; x++) sram_w8(ram, r, (uint16_t)(SAVE_COW_RECORDS + x), hm_bus_rd8(ram, COWS + x));
+  for (uint16_t x = 0; x < 0x68; x++) sram_w8(ram, r, (uint16_t)(SAVE_CHICKEN_RECORDS + x), hm_bus_rd8(ram, WRAM_LONG(HM_CHICKEN_DATA) + x));
+  for (uint16_t x = 0; x < 0xC0; x++) sram_w8(ram, r, (uint16_t)(SAVE_COW_RECORDS + x), hm_bus_rd8(ram, WRAM_LONG(HM_COW_DATA) + x));
   for (uint16_t x = 0xC0; x < 0xF00; x++)
-    sram_w8(ram, r, (uint16_t)(SAVE_FARM_MAP + x - 0xC0), hm_bus_rd8(ram, FARM_TILES + x));
+    sram_w8(ram, r, (uint16_t)(SAVE_FARM_MAP + x - 0xC0), hm_bus_rd8(ram, WRAM_LONG(HM_FARM_TILES) + x));
 
   sram_w8(ram, r, SAVE_LAST_SAVED, 0);
   sram_w16(ram, r, SAVE_CHECKSUM, 0);
@@ -405,7 +358,7 @@ void hm_LoadGameSlotResume(uint8_t *ram, HmRegs *r)
   for (unsigned i = 0; i < 4; i++) {
     r->y = (uint16_t)(SAVE_PLAYER_NAME + i);
     v = sram8(ram, r, r->y);
-    hm_bus_wr8(ram, db_addr(r, (uint16_t)(PLAYER_NAME + i)), v);
+    hm_bus_wr8(ram, db_addr(r, (uint16_t)(HM_PLAYER_NAME + i)), v);
   }
   r->a = (uint16_t)((a & 0xFF00) | v);
   r->x = 1;
@@ -463,8 +416,8 @@ static void clear_slot(uint8_t *ram, HmRegs *r, uint16_t *a)
 void hm_CheckSRAMIntegrity(uint8_t *ram, HmRegs *r)
 {
   hm_bus_wr8(ram, db_addr(r, SAVE_SLOT), 0);
-  uint16_t a = (uint16_t)(hm_rd16(ram, FLAGS_60) & 0xF7FF);
-  hm_wr16(ram, FLAGS_60, a);
+  uint16_t a = (uint16_t)(hm_rd16(ram, HM_FLAGS_60) & 0xF7FF);
+  hm_wr16(ram, HM_FLAGS_60, a);
   hm_dp_w16(ram, r, SLOT1_FAILED, 0);
   point_at_slot(ram, r, 0);
   a = 0x0070;                                         /* LDA #0; SEP; LDA #$70 */
@@ -482,8 +435,8 @@ void hm_CheckSRAMIntegrity(uint8_t *ram, HmRegs *r)
     clear_slot(ram, r, &a);
     a = hm_dp_r16(ram, r, SLOT1_FAILED);
     if (a) {
-      a = (uint16_t)(hm_rd16(ram, FLAGS_60) | 0x0800);
-      hm_wr16(ram, FLAGS_60, a);
+      a = (uint16_t)(hm_rd16(ram, HM_FLAGS_60) | 0x0800);
+      hm_wr16(ram, HM_FLAGS_60, a);
     }
   }
   r->a = a;
@@ -503,11 +456,6 @@ void hm_CheckSRAMIntegrity(uint8_t *ram, HmRegs *r)
  * Y = $1000, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_LOAD_FARM 0xB677   /* JSL LoadDefaultFarmMap at $83:B674 */
-#define LONG_NAMES    0x08D5   /* DB: 16-bit copies of the names: the player's, */
-#define DOG_LONG_NAME   0x08DD /*     the dog's, */
-#define HORSE_LONG_NAME 0x08E5 /*     the horse's, */
-#define KID1_LONG_NAME  0x08ED /*     the children's */
-#define KID2_LONG_NAME  0x08F5
 
 void hm_LoadGameSlot(uint8_t *ram, HmRegs *r)
 {
@@ -517,9 +465,9 @@ void hm_LoadGameSlot(uint8_t *ram, HmRegs *r)
   r->c = 1;                                           /* CMP #0 */
   /* where each name's letters start in the slot, and their 16-bit copies */
   static const struct { uint16_t at, copy; } NAMES[5] = {
-    { SAVE_PLAYER_NAME, LONG_NAMES }, { SAVE_DOG_NAME, DOG_LONG_NAME },
-    { SAVE_HORSE_NAME, HORSE_LONG_NAME }, { SAVE_KID1_NAME, KID1_LONG_NAME },
-    { SAVE_KID2_NAME, KID2_LONG_NAME } };
+    { SAVE_PLAYER_NAME, HM_PLAYER_NAME_WORDS }, { SAVE_DOG_NAME, HM_DOG_NAME_WORDS },
+    { SAVE_HORSE_NAME, HM_HORSE_NAME_WORDS }, { SAVE_KID1_NAME, HM_KID1_NAME_WORDS },
+    { SAVE_KID2_NAME, HM_KID2_NAME_WORDS } };
   for (unsigned i = 0; i < sizeof FIELDS / sizeof FIELDS[0]; i++) {
     const Field *f = &FIELDS[i];
     uint32_t to = f->data_bank ? db_addr(r, (uint16_t)f->from) : f->from;
@@ -559,12 +507,12 @@ void hm_LoadGameSlot(uint8_t *ram, HmRegs *r)
   for (x = 0; x < 0x68; x++) {
     uint8_t v = sram8(ram, r, (uint16_t)(SAVE_CHICKEN_RECORDS + x));
     r->a = (uint16_t)((r->a & 0xFF00) | v);
-    hm_bus_wr8(ram, CHICKENS + x, v);
+    hm_bus_wr8(ram, WRAM_LONG(HM_CHICKEN_DATA) + x, v);
   }
   for (x = 0; x < 0xC0; x++) {
     uint8_t v = sram8(ram, r, (uint16_t)(SAVE_COW_RECORDS + x));
     r->a = (uint16_t)((r->a & 0xFF00) | v);
-    hm_bus_wr8(ram, COWS + x, v);
+    hm_bus_wr8(ram, WRAM_LONG(HM_COW_DATA) + x, v);
   }
   r->x = 0xC0; r->y = SAVE_FARM_MAP;
   r->a = hm_dp_r16(ram, r, SLOT_PTR);
@@ -578,7 +526,7 @@ void hm_LoadGameSlot(uint8_t *ram, HmRegs *r)
   for (x = 0xC0; x < 0xF00; x++) {
     uint8_t v = hm_bus_rd8(ram, hm_dp_long(ram, r, SAVED_SLOT_PTR, (uint16_t)(SAVE_FARM_MAP + x - 0xC0)));
     r->a = (uint16_t)((r->a & 0xFF00) | v);
-    hm_bus_wr8(ram, FARM_TILES + x, v);
+    hm_bus_wr8(ram, WRAM_LONG(HM_FARM_TILES) + x, v);
   }
   r->x = 0xF00;
   r->y = 0x1000;
@@ -629,7 +577,7 @@ void hm_NewGameSetup(uint8_t *ram, HmRegs *r)
     else              hm_bus_wr16(ram, to, v);
   }
   for (unsigned n = 0; n < 12; n++)                   /* player, dog, horse */
-    hm_bus_wr16(ram, db_addr(r, (uint16_t)(LONG_NAMES + 2 * n)), 0x00B1);
+    hm_bus_wr16(ram, db_addr(r, (uint16_t)(HM_PLAYER_NAME_WORDS + 2 * n)), 0x00B1);
   r->a = 0x00B1;
   hm_jsl(ram, r, RET_NEW_FARM, 0x82);
   hm_LoadDefaultFarmMap(ram, r);

@@ -19,20 +19,11 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ────────────────────────────── */
 
 /* Direct page */
-#define GAME_STATE   0xD2     /* 16b flags (HM_GAME_STATE); bit 4 = carrying */
-#define PLAYER_X     0xD6     /* 16b: the player's position */
-#define PLAYER_Y     0xD8
-#define COLLIDE_X    0xDF     /* 16b: the position of who moves */
-#define COLLIDE_Y    0xE1     /* 16b */
-#define COLLIDE_AHEAD 0xE3    /* 16b: how far ahead to look */
-#define COLLIDE_STEP_X 0xE5   /* 16b: the step */
-#define COLLIDE_STEP_Y 0xE7   /* 16b */
-#define COLLIDE_TILE_1 0xE9   /* 16b: CollideMap's output: the first corner's tile type */
-#define COLLIDE_TILE_2 0xEB   /* 16b: the second corner's tile type */
 #define COLLIDE_RESULT 0x7E   /* 16b: CollideMap's answer: (first blocked) << 1 |
                                  (second blocked) */
 #define LOOK_X       0x80     /* 16b: CollideEventObjects / CollidePlayer: the point
@@ -47,20 +38,9 @@
 #define SOLID_TO     0x8E     /* 16b: where the tile's solid part ends in it (16, or 8) */
 #define SOLID_FROM   0x90     /* 16b: where it starts (0, or 8) */
 #define TILE_PROPERTY 0x92    /* 8b: the tile's property (GetTileProperty) */
-#define EVENT_SLOT   0xCC     /* 24b $CC-$CE: the current event slot */
-#define EVENT_SLOT_BANK 0xCE  /* 8b: its bank */
 
 /* WRAM */
-#define MAP_ID       0x0022   /* the map shown: 0-3 the farm (one per season) */
-#define MAP_TILES    0x09B6   /* the current map's tile types (DB:) */
 #define SLOTS        0xB586   /* the event slots, $7E:B586, 49 of $40 bytes */
-#define FLAGS_60     0x7F1F60 /* 16b flags: $4000 nothing blocks */
-
-/* Fields of an event slot (see eventcmds.c) */
-#define SLOT_IN_USE  0x00     /* 8b: in use; bit 1 = passable */
-#define SLOT_PRESSED 0x0C     /* 8b: set by CollideEventObjects */
-#define SLOT_X       0x1A     /* 16b: position */
-#define SLOT_Y       0x1C     /* 16b */
 
 static uint16_t dp16(uint8_t *ram, const HmRegs *r, unsigned a) { return hm_dp_r16(ram, r, a); }
 static void set16(uint8_t *ram, const HmRegs *r, unsigned a, uint16_t v) { hm_dp_w16(ram, r, a, v); }
@@ -98,11 +78,11 @@ static uint16_t sub(HmRegs *r, uint16_t a, uint16_t b) { r->c = 1; return sbc(r,
  * the farm is 64 tiles wide. */
 static bool crop_for_player(uint8_t *ram, const HmRegs *r)
 {
-  if (ram[MAP_ID] > 3) return false;
-  if (dp16(ram, r, COLLIDE_X) != dp16(ram, r, PLAYER_X) || dp16(ram, r, COLLIDE_Y) != dp16(ram, r, PLAYER_Y)) return false;
+  if (ram[HM_MAP_ID] > 3) return false;
+  if (dp16(ram, r, HM_COLLIDE_X) != dp16(ram, r, HM_PLAYER_X) || dp16(ram, r, HM_COLLIDE_Y) != dp16(ram, r, HM_PLAYER_Y)) return false;
   uint16_t x = dp16(ram, r, POINT_X), y = dp16(ram, r, POINT_Y);
   if (x >= 0x400 || y >= 0x400) return false;
-  uint8_t t = hm_bus_rd8(ram, ((uint32_t)r->db << 16) + MAP_TILES + (uint16_t)((y >> 4) * 64 + (x >> 4)));
+  uint8_t t = hm_bus_rd8(ram, ((uint32_t)r->db << 16) + HM_MAP_TILES + (uint16_t)((y >> 4) * 64 + (x >> 4)));
   return t >= 0x1E && t <= 0x6F;
 }
 
@@ -137,26 +117,26 @@ void hm_CollideTileCorner(uint8_t *ram, HmRegs *r)
   *hm_dp(ram, r, TILE_PROPERTY) = prop;
   r->a = pull16(ram, r);
   r->c = r->a >= 1;                                        /* CMP #1 */
-  set16(ram, r, r->a == 1 ? COLLIDE_TILE_2 : COLLIDE_TILE_1, r->x);
+  set16(ram, r, r->a == 1 ? HM_COLLIDE_TILE_2 : HM_COLLIDE_TILE_1, r->x);
 
   bool blocked;
   if (prop & 0x01) {
     blocked = true;
   } else if (prop & 0x02) {
-    if (dp16(ram, r, COLLIDE_STEP_Y) == 0) set16(ram, r, SOLID_TO, 8);
+    if (dp16(ram, r, HM_COLLIDE_STEP_Y) == 0) set16(ram, r, SOLID_TO, 8);
     blocked = !(dp16(ram, r, POINT_X) & 8);
   } else if (prop & 0x04) {
-    if (dp16(ram, r, COLLIDE_STEP_Y) == 0) set16(ram, r, SOLID_FROM, 8);
+    if (dp16(ram, r, HM_COLLIDE_STEP_Y) == 0) set16(ram, r, SOLID_FROM, 8);
     blocked = (dp16(ram, r, POINT_X) & 8) != 0;
   } else if (prop & 0x08) {
-    if (dp16(ram, r, COLLIDE_STEP_X) == 0) set16(ram, r, SOLID_TO, 8);
+    if (dp16(ram, r, HM_COLLIDE_STEP_X) == 0) set16(ram, r, SOLID_TO, 8);
     blocked = !(dp16(ram, r, POINT_Y) & 8);
   } else if (prop & 0x10) {
-    if (dp16(ram, r, COLLIDE_STEP_X) == 0) set16(ram, r, SOLID_FROM, 8);
+    if (dp16(ram, r, HM_COLLIDE_STEP_X) == 0) set16(ram, r, SOLID_FROM, 8);
     blocked = (dp16(ram, r, POINT_Y) & 8) != 0;
   } else {
     blocked = false;
-    if (dp16(ram, r, GAME_STATE) & 0x0010) {               /* carrying */
+    if (dp16(ram, r, HM_GAME_STATE) & 0x0010) {            /* carrying */
       r->c = r->x >= 0xC0;
       if (r->c) {
         r->c = r->x >= 0xD0;
@@ -219,8 +199,8 @@ void hm_CollideMap(uint8_t *ram, HmRegs *r)
   uint16_t dir = r->a;
   r->c = (dir & 0x8000) != 0;                              /* ASL; TAX */
   r->x = (uint16_t)(dir << 1);
-  uint16_t x = dp16(ram, r, COLLIDE_X), y = dp16(ram, r, COLLIDE_Y);
-  uint16_t e3 = dp16(ram, r, COLLIDE_AHEAD), e5 = dp16(ram, r, COLLIDE_STEP_X), e7 = dp16(ram, r, COLLIDE_STEP_Y);
+  uint16_t x = dp16(ram, r, HM_COLLIDE_X), y = dp16(ram, r, HM_COLLIDE_Y);
+  uint16_t e3 = dp16(ram, r, HM_COLLIDE_AHEAD), e5 = dp16(ram, r, HM_COLLIDE_STEP_X), e7 = dp16(ram, r, HM_COLLIDE_STEP_Y);
   uint16_t code, kept;
   switch (dir) {
   case 0:                                                  /* y grows */
@@ -281,12 +261,12 @@ void hm_CollideEventObjects(uint8_t *ram, HmRegs *r)
 {
   uint16_t dir = r->a;
   r->x = dir;                                              /* TAX */
-  r->a = hm_bus_rd16(ram, FLAGS_60) & 0x4000;
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0x4000;
   if (!r->a) {
     r->c = (dir & 0x8000) != 0;                            /* TXA; ASL; TAX */
     r->x = (uint16_t)(dir << 1);
-    uint16_t x = dp16(ram, r, COLLIDE_X), y = dp16(ram, r, COLLIDE_Y);
-    uint16_t e3 = dp16(ram, r, COLLIDE_AHEAD), e5 = dp16(ram, r, COLLIDE_STEP_X), e7 = dp16(ram, r, COLLIDE_STEP_Y);
+    uint16_t x = dp16(ram, r, HM_COLLIDE_X), y = dp16(ram, r, HM_COLLIDE_Y);
+    uint16_t e3 = dp16(ram, r, HM_COLLIDE_AHEAD), e5 = dp16(ram, r, HM_COLLIDE_STEP_X), e7 = dp16(ram, r, HM_COLLIDE_STEP_Y);
     uint16_t px, py;
     switch (dir) {
     case 0: px = add(r, x, 0x0C); py = adc(r, adc(r, add(r, y, e7), e3), 0x0C); break;
@@ -297,42 +277,42 @@ void hm_CollideEventObjects(uint8_t *ram, HmRegs *r)
     set16(ram, r, LOOK_X, px);
     set16(ram, r, LOOK_Y, py);
 
-    uint16_t saved_cc = dp16(ram, r, EVENT_SLOT);
-    uint8_t saved_ce = *hm_dp(ram, r, EVENT_SLOT_BANK);
+    uint16_t saved_cc = dp16(ram, r, HM_EVENT_SLOT);
+    uint8_t saved_ce = *hm_dp(ram, r, HM_EVENT_SLOT_BANK);
     push16(ram, r, saved_cc);
     hm_push8(ram, r, saved_ce);
-    set16(ram, r, EVENT_SLOT, SLOTS);
-    *hm_dp(ram, r, EVENT_SLOT_BANK) = 0x7E;
+    set16(ram, r, HM_EVENT_SLOT, SLOTS);
+    *hm_dp(ram, r, HM_EVENT_SLOT_BANK) = 0x7E;
     set16(ram, r, OBJECT_FOUND, 0);
     for (uint16_t i = 0; i < 0x31; i++) {
-      hm_bus_wr8(ram, hm_dp_long(ram, r, EVENT_SLOT, SLOT_PRESSED), 0);
-      uint8_t used = hm_bus_rd8(ram, hm_dp_long(ram, r, EVENT_SLOT, SLOT_IN_USE));
+      hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_PRESSED), 0);
+      uint8_t used = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_IN_USE));
       if (used) {
-        r->a = sub(r, px, hm_bus_rd16(ram, hm_dp_long(ram, r, EVENT_SLOT, SLOT_X)));
+        r->a = sub(r, px, hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_X)));
         r->c = r->a >= 0x19;
         if (!r->c) {
-          r->a = sub(r, py, hm_bus_rd16(ram, hm_dp_long(ram, r, EVENT_SLOT, SLOT_Y)));
+          r->a = sub(r, py, hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_Y)));
           r->c = r->a >= 0x19;
           if (!r->c && dp16(ram, r, OBJECT_FOUND) == 0) {
-            hm_bus_wr8(ram, hm_dp_long(ram, r, EVENT_SLOT, SLOT_PRESSED), 1);
-            uint8_t b = hm_bus_rd8(ram, hm_dp_long(ram, r, EVENT_SLOT, SLOT_IN_USE));
+            hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_PRESSED), 1);
+            uint8_t b = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_IN_USE));
             if (!(b & 2)) set16(ram, r, OBJECT_FOUND, 1);
           }
         }
       }
-      set16(ram, r, EVENT_SLOT, add(r, dp16(ram, r, EVENT_SLOT), 0x40));
+      set16(ram, r, HM_EVENT_SLOT, add(r, dp16(ram, r, HM_EVENT_SLOT), 0x40));
       r->c = (uint16_t)(i + 1) >= 0x31;                    /* INX; CPX #$31 */
     }
     bool hit = dp16(ram, r, OBJECT_FOUND) != 0;
-    *hm_dp(ram, r, EVENT_SLOT_BANK) = hm_pull8(ram, r);
-    set16(ram, r, EVENT_SLOT, pull16(ram, r));
+    *hm_dp(ram, r, HM_EVENT_SLOT_BANK) = hm_pull8(ram, r);
+    set16(ram, r, HM_EVENT_SLOT, pull16(ram, r));
     if (hit) {
       r->x = 0; r->y = 0; r->a = 1;
       return;
     }
   }
-  r->x = dp16(ram, r, COLLIDE_STEP_X);
-  r->y = dp16(ram, r, COLLIDE_STEP_Y);
+  r->x = dp16(ram, r, HM_COLLIDE_STEP_X);
+  r->y = dp16(ram, r, HM_COLLIDE_STEP_Y);
   r->a = 0;
 }
 
@@ -347,8 +327,8 @@ void hm_CollidePlayer(uint8_t *ram, HmRegs *r)
   uint16_t dir = r->a;
   r->c = (dir & 0x8000) != 0;
   r->x = (uint16_t)(dir << 1);
-  uint16_t x = dp16(ram, r, COLLIDE_X), y = dp16(ram, r, COLLIDE_Y);
-  uint16_t e5 = dp16(ram, r, COLLIDE_STEP_X), e7 = dp16(ram, r, COLLIDE_STEP_Y);
+  uint16_t x = dp16(ram, r, HM_COLLIDE_X), y = dp16(ram, r, HM_COLLIDE_Y);
+  uint16_t e5 = dp16(ram, r, HM_COLLIDE_STEP_X), e7 = dp16(ram, r, HM_COLLIDE_STEP_Y);
   uint16_t px = x, py = y;
   switch (dir) {
   case 0: py = add(r, y, e7); break;
@@ -358,10 +338,10 @@ void hm_CollidePlayer(uint8_t *ram, HmRegs *r)
   }
   set16(ram, r, LOOK_X, px);
   set16(ram, r, LOOK_Y, py);
-  r->a = add(r, sub(r, px, dp16(ram, r, PLAYER_X)), 0x0C);
+  r->a = add(r, sub(r, px, dp16(ram, r, HM_PLAYER_X)), 0x0C);
   r->c = r->a >= 0x19;
   if (!r->c) {
-    r->a = add(r, sub(r, py, dp16(ram, r, PLAYER_Y)), 0x0C);
+    r->a = add(r, sub(r, py, dp16(ram, r, HM_PLAYER_Y)), 0x0C);
     r->c = r->a >= 0x19;
     if (!r->c) {
       r->a = 1; r->x = 0; r->y = 0;
@@ -369,6 +349,6 @@ void hm_CollidePlayer(uint8_t *ram, HmRegs *r)
     }
   }
   r->a = 0;
-  r->x = dp16(ram, r, COLLIDE_STEP_X);
-  r->y = dp16(ram, r, COLLIDE_STEP_Y);
+  r->x = dp16(ram, r, HM_COLLIDE_STEP_X);
+  r->y = dp16(ram, r, HM_COLLIDE_STEP_Y);
 }

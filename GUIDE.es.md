@@ -344,6 +344,8 @@ $80:9553), cuya cuenta lo incluía (56,14 % → 56,10 %).
 
 | Archivo | Qué hay |
 |---|---|
+| `src/hm_vars.h` | los nombres de las variables del juego que comparten varios archivos (RAM, página directa, campos de los registros) |
+| `src/hm_regs.h` | los registros de la consola, con sus nombres de los manuales de la SNES |
 | `src/rng.c` | números al azar |
 | `src/math.c` | división |
 | `src/weather.c` | el clima |

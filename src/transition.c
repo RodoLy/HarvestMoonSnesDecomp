@@ -10,12 +10,11 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
+#include "hm_regs.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_GAME_STATE ($D2),
- * HM_PLAYER_ACTION ($D4), HM_ANIM_REQUEST ($0901), HM_ITEM_ON_HAND ($091D),
- * HM_TIME_RUNNING ($0973) and HM_CGRAM_SHADOW ($7F:0900). */
-#define WRAM_LONG(a)      (0x7E0000 + (a))   /* a ram[] offset as a bus address */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* Direct page */
 #define NMI_STATUS        0x00   /* 8b: set by the NMI, cleared before a wait */
@@ -25,49 +24,6 @@
 #define SOURCE_PTR        0x72   /* 24b $72-$74: StartColourAnimation's list; the DMA's
                                     source */
 #define SOURCE_PTR_BANK   0x74   /* 8b: SOURCE_PTR's bank */
-#define FADE_FROM         0x92   /* 8b: the fade's starting brightness */
-#define FADE_SPEED        0x93   /* 8b: frames per brightness level */
-#define FADE_TO           0x94   /* 8b: the brightness it ends at */
-#define LOAD_BUDGET       0xC7   /* 16b: bytes the sprite loader may send this frame */
-#define PLAYER_X          0xD6   /* 16b: the player's position */
-#define PLAYER_Y          0xD8   /* 16b */
-#define PLAYER_DIRECTION  0xDA   /* 16b: the way the player faces */
-#define CAMERA_X          0xF5   /* 16b: the camera's position */
-#define CAMERA_Y          0xF7   /* 16b */
-
-/* WRAM of the data bank (through db / rd8 / wr8) */
-#define WANTED_SONG       0x0110   /* 8b: the song asked for */
-#define PLAYING_SONG      0x0117   /* 8b: the song playing */
-#define BG2_X             0x0140   /* 16b: BG2's scroll (scroll.c) */
-#define BG2_Y             0x0142   /* 16b */
-#define WEATHER_FLAGS     0x0196   /* 16b: weather and day flags: bit 1 rain, 2 snow,
-                                      14 a map to go to */
-#define PLAYER_TILE_1     0x0878   /* 16b: the tile type under the player's front corner */
-#define HM_WAIT_FLAGS     0x08FD   /* 16b: what the player may do to go on */
-#define HM_WAIT_FRAMES    0x08FF   /* 16b: frames left */
-#define FOOTPRINT_X       0x0907   /* 16b: where the last footprint was left */
-#define FOOTPRINT_Y       0x0909   /* 16b */
-#define PLAYER_SCREEN_X   0x090B   /* 16b: where the player is on the screen */
-#define PLAYER_SCREEN_Y   0x090D   /* 16b */
-#define STEP_COUNT        0x0919   /* 8b: moves since the last footprint */
-#define BG2_DRIFT_TIMER   0x091C   /* 8b: frames to the clouds' next drift (scroll.c) */
-#define ITEM_FLAGS        0x0974   /* 8b: the map object to spawn: its flags, */
-#define ITEM_ROUTINE      0x0975   /*     its routine, */
-#define ITEM_STATE        0x0976   /*     its state, */
-#define ITEM_X            0x0980   /*     its position */
-#define ITEM_Y            0x0982
-#define ITEM              0x0984   /* 8b: the item being worked on */
-#define DOOR_STEP         0x098A   /* 8b: frames of the walk out of a door */
-#define TRANSITION_MAP    0x098B   /* 8b: the map a transition goes to */
-
-/* WRAM $7F:1Fxx (ram[] offsets 0x11Fxx; WRAM_LONG gives the bus address) */
-#define FLAGS_5A          0x11F5A  /* 16b flags: $0200 cleared on a new map */
-#define FLAGS_5C          0x11F5C  /* 16b flags: $01 the time stays stopped, $02 no
-                                      weather layer */
-#define FLAGS_5E          0x11F5E  /* 16b flags: $02 no animals, $8000 keep the music */
-#define FLAGS_60          0x11F60  /* 16b flags: $08 go to map $3C; $40 (without $0100)
-                                      holds a transition */
-#define FLAGS_7A          0x11F7A  /* 16b: the scene flags */
 
 /* ROM: the weather's colour cycles (bank $80) */
 #define RAIN_COLOURS_0    0xB9D7
@@ -78,9 +34,6 @@
 #define LAYER3_COLOURS_1  0xB9EF
 #define LAYER3_COLOURS_2  0xB9F2
 #define LAYER3_COLOURS_3  0xB9F5
-
-/* The console's registers */
-#define BBAD_CGDATA       0x22     /* $2122: a copy to CGRAM */
 
 typedef void Fn(uint8_t *ram, HmRegs *r);
 
@@ -169,7 +122,7 @@ static void weather_picture(uint8_t *ram, HmRegs *r, uint8_t picture, uint16_t a
 static void objects_frame(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t entry)
 {
   r->a = 0x1800;                                           /* REP #$20 */
-  hm_dp_w16(ram, r, LOAD_BUDGET, 0x1800);
+  hm_dp_w16(ram, r, HM_LOAD_BUDGET, 0x1800);
   jsl(ram, r, at, 0x81, hm_RunItemsOnMap);
   jsl(ram, r, (uint16_t)(at + 4), 0x84, hm_RunEventSlots);
   jsl(ram, r, (uint16_t)(at + 8), 0x85, hm_AnimateGameObjects);
@@ -192,7 +145,7 @@ void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r)
   hm_push8(ram, r, kind);
   set_a8(r, kind & 0x20);
   if (kind & 0x20) {
-    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5C)) & 0x0001);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) & 0x0001);
     if (!r->a) { set_a8(r, 1); wr8(ram, r, HM_TIME_RUNNING, 1); }
   }
   kind = hm_pull8(ram, r);                                 /* PLA */
@@ -201,16 +154,16 @@ void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r)
   if (weather) {
     set_a8(r, kind & 0x80);
     if (!(kind & 0x80)) {
-      r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x0004);
+      r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0x0004);
       if (r->a) weather = false;
     }
   }
   if (weather) {
-    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5C)) & 0x0002);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) & 0x0002);
     if (r->a) weather = false;
   }
   if (weather) {
-    r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x0002);
+    r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0x0002);
     if (r->a) {                                            /* rain */
       weather_picture(ram, r, 0x57, 0x9793);
       colour_cycle(ram, r, 0x97AE, RAIN_COLOURS_0, 0x0C, 0);
@@ -218,14 +171,14 @@ void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r)
       colour_cycle(ram, r, 0x97E4, RAIN_COLOURS_2, 0x0E, 2);
       colour_cycle(ram, r, 0x97FF, RAIN_COLOURS_3, 0x0F, 3);
     } else {
-      r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x0004);
+      r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0x0004);
       if (r->a) {                                          /* snow, before 17:00 */
         uint8_t hour = hm_bus_rd8(ram, WRAM_LONG(HM_HOUR));
         set_a8(r, hour);
         r->c = hour >= 0x11;
         if (hour < 0x11) weather_picture(ram, r, 0x58, 0x9821);
       } else {
-        r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x0008);
+        r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0x0008);
         if (r->a) {
           weather_picture(ram, r, 0x59, 0x9838);
           colour_cycle(ram, r, 0x9853, LAYER3_COLOURS_0, 0x0C, 0);
@@ -262,30 +215,30 @@ void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0x98F0, 0x80, hm_StartLastPreparedDMA);
 
   hm_dp_w16(ram, r, STEP_SIZE, 0);                         /* REP #$30 */
-  r->a = dp16(ram, r, CAMERA_X);
-  wr16(ram, r, BG2_X, r->a);
-  r->a = dp16(ram, r, CAMERA_Y);
-  wr16(ram, r, BG2_Y, r->a);
+  r->a = dp16(ram, r, HM_CAMERA_X);
+  wr16(ram, r, HM_BG2_X, r->a);
+  r->a = dp16(ram, r, HM_CAMERA_Y);
+  wr16(ram, r, HM_BG2_Y, r->a);
   set_a8(r, *hm_dp(ram, r, HM_MAP_ID));
   r->c = *hm_dp(ram, r, HM_MAP_ID) >= 0x26;
   if (*hm_dp(ram, r, HM_MAP_ID) == 0x26) {                 /* the tool shed */
     r->a = 0x0100;
-    wr16(ram, r, BG2_Y, 0x0100);
+    wr16(ram, r, HM_BG2_Y, 0x0100);
   }
-  wr8(ram, r, BG2_DRIFT_TIMER, 0);
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5A)) & 0xFDFF);
-  hm_bus_wr16(ram, WRAM_LONG(FLAGS_5A), r->a);
+  wr8(ram, r, HM_BG2_DRIFT_TIMER, 0);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5A)) & 0xFDFF);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5A), r->a);
   r->a = 0;
-  hm_bus_wr16(ram, WRAM_LONG(FLAGS_7A), 0);
-  wr16(ram, r, PLAYER_TILE_1, 0);
-  r->a = dp16(ram, r, PLAYER_X);
-  wr16(ram, r, FOOTPRINT_X, r->a);
-  r->a = dp16(ram, r, PLAYER_Y);
-  wr16(ram, r, FOOTPRINT_Y, r->a);
-  wr8(ram, r, DOOR_STEP, 0);
-  wr8(ram, r, STEP_COUNT, 0);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_7A), 0);
+  wr16(ram, r, HM_PLAYER_TILE_1, 0);
+  r->a = dp16(ram, r, HM_PLAYER_X);
+  wr16(ram, r, HM_FOOTPRINT_X, r->a);
+  r->a = dp16(ram, r, HM_PLAYER_Y);
+  wr16(ram, r, HM_FOOTPRINT_Y, r->a);
+  wr8(ram, r, HM_DOOR_STEP, 0);
+  wr8(ram, r, HM_STEP_COUNT, 0);
   state_off(ram, r, 0x0080);
-  wr16(ram, r, HM_WAIT_FLAGS, 0);
+  wr16(ram, r, HM_SCRIPT_BUTTONS, 0);
   wr16(ram, r, HM_WAIT_FRAMES, 0);
   state_off(ram, r, 0x1000);
 
@@ -297,26 +250,26 @@ void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r)
     bool tool = held == 0x0D || held == 0x0E || held == 0x0F;
     if (!tool) { r->c = held >= 0x57; tool = held == 0x57; }
     if (!tool) {
-      wr8(ram, r, ITEM, held);
+      wr8(ram, r, HM_ITEM, held);
       r->y = 1;                                            /* REP #$20; LDY #1 */
       jsl(ram, r, 0x997F, 0x81, hm_GetItemSprite);
-      r->a = rd16(ram, r, PLAYER_SCREEN_X);
-      wr16(ram, r, ITEM_X, r->a);
-      r->a = rd16(ram, r, PLAYER_SCREEN_Y);
-      wr16(ram, r, ITEM_Y, r->a);
+      r->a = rd16(ram, r, HM_PLAYER_SCREEN_X);
+      wr16(ram, r, HM_ITEM_X, r->a);
+      r->a = rd16(ram, r, HM_PLAYER_SCREEN_Y);
+      wr16(ram, r, HM_ITEM_Y, r->a);
       set_a8(r, 1);
-      wr8(ram, r, ITEM_FLAGS, 1);
-      wr8(ram, r, ITEM_ROUTINE, 1);
+      wr8(ram, r, HM_ITEM_FLAGS, 1);
+      wr8(ram, r, HM_ITEM_ROUTINE, 1);
       set_a8(r, 2);
-      wr8(ram, r, ITEM_STATE, 2);
+      wr8(ram, r, HM_ITEM_STATE, 2);
       jsl(ram, r, 0x99A0, 0x81, hm_SpawnMapObject);
-      uint32_t s = 0x14u + dp16(ram, r, PLAYER_DIRECTION); /* REP #$30; CLC; ADC $DA */
+      uint32_t s = 0x14u + dp16(ram, r, HM_PLAYER_DIRECTION); /* REP #$30; CLC; ADC $DA */
       r->c = s > 0xFFFF;
       r->a = (uint16_t)s;
       wr16(ram, r, HM_ANIM_REQUEST, r->a);
       empty = false;
     } else {
-      uint32_t s = dp16(ram, r, PLAYER_DIRECTION);         /* LDA #0; CLC; ADC $DA */
+      uint32_t s = dp16(ram, r, HM_PLAYER_DIRECTION);      /* LDA #0; CLC; ADC $DA */
       r->c = 0;
       r->a = (uint16_t)s;
       wr16(ram, r, HM_ANIM_REQUEST, r->a);
@@ -329,7 +282,7 @@ void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r)
 
   jsl(ram, r, 0x99CD, 0x81, hm_CreatePlayerObject);
   jsl(ram, r, 0x99D1, 0x81, hm_PlayerFrame);
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5E)) & 0x0002);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E)) & 0x0002);
   if (!r->a) jsl(ram, r, 0x99E0, 0x83, hm_PlaceAnimalsOnMap);
   r->a = 0;
   set_dp16(ram, r, HM_PLAYER_ACTION, 0);
@@ -337,15 +290,15 @@ void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0x99EF, 0x83, hm_SetSong);
   jsl(ram, r, 0x99F3, 0x83, hm_StartSong);
   jsl(ram, r, 0x99F7, 0x82, hm_ToolUsedSound2);
-  set_a8(r, rd8(ram, r, WANTED_SONG));
-  wr8(ram, r, PLAYING_SONG, (uint8_t)r->a);
+  set_a8(r, rd8(ram, r, HM_WANTED_SONG));
+  wr8(ram, r, HM_PLAYING_SONG, (uint8_t)r->a);
   jsl_flags(ram, r, 0x9A03, 0x80, hm_WaitForNMI, entry, 0);
   objects_frame(ram, r, 0x9A0E, entry);
   objects_frame(ram, r, 0x9A31, entry);
   jsl(ram, r, 0x9A4D, 0x80, hm_ResetForceBlank);
-  *hm_dp(ram, r, FADE_FROM) = 3;
-  *hm_dp(ram, r, FADE_SPEED) = 3;
-  *hm_dp(ram, r, FADE_TO) = 0x0F;
+  *hm_dp(ram, r, HM_FADE_FROM) = 3;
+  *hm_dp(ram, r, HM_FADE_FRAMES) = 3;
+  *hm_dp(ram, r, HM_FADE_TO) = 0x0F;
   r->a = (uint16_t)((r->a & 0xFF00) | 0x0F);
   jsl_flags(ram, r, 0x9A5F, 0x80, hm_ScreenFadeIn, entry, 0);
 }
@@ -362,10 +315,10 @@ void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_EnterMap(uint8_t *ram, HmRegs *r)
 {
-  r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x3FDE); /* REP #$30 */
-  wr16(ram, r, WEATHER_FLAGS, r->a);
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5C)) & 0xFFF0);
-  hm_bus_wr16(ram, WRAM_LONG(FLAGS_5C), r->a);
+  r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0x3FDE); /* REP #$30 */
+  wr16(ram, r, HM_WEATHER_FLAGS, r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) & 0xFFF0);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5C), r->a);
   r->a = (uint16_t)(dp16(ram, r, HM_GAME_STATE) | 0x4000);
   set_dp16(ram, r, HM_GAME_STATE, r->a);
   r->a = 0x7000;
@@ -376,12 +329,12 @@ void hm_EnterMap(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0x9707, 0x85, hm_InitializeOBJs);
   jsl(ram, r, 0x970B, 0x81, hm_ClearItemRecords);
   jsl(ram, r, 0x970F, 0x84, hm_ClearAllEventSlots);
-  uint8_t map = rd8(ram, r, TRANSITION_MAP);               /* SEP #$20 */
+  uint8_t map = rd8(ram, r, HM_TRANSITION_MAP);            /* SEP #$20 */
   set_a8(r, map);
   *hm_dp(ram, r, HM_MAP_ID) = map;
   jsl(ram, r, 0x971A, 0x83, hm_StartMapEvents);
   jsl(ram, r, 0x971E, 0x84, hm_RunEventSlots);
-  set_a8(r, rd8(ram, r, TRANSITION_MAP));                  /* SEP #$20 */
+  set_a8(r, rd8(ram, r, HM_TRANSITION_MAP));               /* SEP #$20 */
   jsl(ram, r, 0x9727, 0x80, hm_LoadAndShowMap);
 }
 
@@ -396,26 +349,26 @@ void hm_EnterMap(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_SetScreenTransition(uint8_t *ram, HmRegs *r)
 {
-  r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x4000); /* REP #$30 */
+  r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0x4000); /* REP #$30 */
   if (!r->a) return;
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5E)) & 0x8000);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E)) & 0x8000);
   if (!r->a) {
-    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_60)) & 0x0100);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0x0100);
     if (!r->a) {
-      r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_60)) & 0x0040);
+      r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0x0040);
       if (r->a) return;
     }
-    uint8_t map = rd8(ram, r, TRANSITION_MAP);             /* SEP #$20 */
+    uint8_t map = rd8(ram, r, HM_TRANSITION_MAP);          /* SEP #$20 */
     set_a8(r, map);
     *hm_dp(ram, r, HM_MAP_ID) = map;
     jsl(ram, r, 0x96A3, 0x80, hm_PickMapMusic);
     jsl(ram, r, 0x96A7, 0x83, hm_FadeOutSongSlowly);
   }
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_60)) & 0x0008); /* REP #$20 */
-  if (r->a) { set_a8(r, 0x3C); wr8(ram, r, TRANSITION_MAP, 0x3C); }
-  set_a8(r, 0x0F); *hm_dp(ram, r, FADE_FROM) = 0x0F;       /* SEP #$20 */
-  set_a8(r, 0x03); *hm_dp(ram, r, FADE_SPEED) = 0x03;
-  set_a8(r, 0x01); *hm_dp(ram, r, FADE_TO) = 0x01;
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0x0008); /* REP #$20 */
+  if (r->a) { set_a8(r, 0x3C); wr8(ram, r, HM_TRANSITION_MAP, 0x3C); }
+  set_a8(r, 0x0F); *hm_dp(ram, r, HM_FADE_FROM) = 0x0F;    /* SEP #$20 */
+  set_a8(r, 0x03); *hm_dp(ram, r, HM_FADE_FRAMES) = 0x03;
+  set_a8(r, 0x01); *hm_dp(ram, r, HM_FADE_TO) = 0x01;
   jsl(ram, r, 0x96CB, 0x80, hm_ScreenFadeOut);
   jsl(ram, r, 0x96CF, 0x80, hm_ForceBlank);
   hm_EnterMap(ram, r);                         /* runs on into it */

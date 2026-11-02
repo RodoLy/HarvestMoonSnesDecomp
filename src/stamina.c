@@ -27,12 +27,7 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
-
-/* WRAM (ram[] offsets); also used, from hm_ram.h: HM_MAX_STAMINA,
- * HM_CURRENT_STAMINA, HM_EXHAUSTION, HM_GAME_STATE ($D2), HM_ANIM_REQUEST,
- * HM_PLAYER_ACTION ($D4) and HM_HOUR */
-#define STAMINA_FROZEN_FLAGS  0x11F60   /* $7F1F60: 16b flags; bit 3 = energy frozen */
-#define HM_LUNCH_CHOICE       0x0924    /* DB: 8b, which lunch the player eats (0..2) */
+#include "hm_vars.h"
 
 /* Direct page: scratch ChangeStamina leaves behind */
 #define STAMINA_CHANGE        0x92      /* 8b: the change */
@@ -54,7 +49,7 @@ void hm_ChangeStamina(uint8_t *ram, HmRegs *r)
   *hm_dp(ram, r, STAMINA_CHANGE) = (uint8_t)change;
   *hm_dp(ram, r, STAMINA_CHANGE16) = (uint8_t)change;
   *hm_dp(ram, r, STAMINA_CHANGE16_HIGH) = r->n ? 0xFF : 0x00;
-  if (hm_rd16(ram, STAMINA_FROZEN_FLAGS) & 0x0008) {
+  if (hm_rd16(ram, HM_FLAGS_60) & 0x0008) {
     r->a = 0x0008;                       /* LDA flags; AND #8: X, Y, C untouched */
     return;
   }
@@ -159,7 +154,7 @@ void hm_HaveLunch(uint8_t *ram, HmRegs *r)
   hm_jsl(ram, r, RET_LUNCH_ROLL, 0x80);
   hm_RNGReturn0toA(ram, r);
   hm_rtl(ram, r);
-  hm_bus_wr8(ram, (uint32_t)r->db << 16 | HM_LUNCH_CHOICE, (uint8_t)r->a);
+  hm_bus_wr8(ram, (uint32_t)r->db << 16 | HM_MEAL_CHOICE, (uint8_t)r->a);
   hm_dp_w16(ram, r, HM_GAME_STATE, (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0004));
   r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0400);
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);

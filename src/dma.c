@@ -12,6 +12,8 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
+#include "hm_regs.h"
 
 /* ── Names of the memory locations used here (as in video.c) ────────────── */
 
@@ -26,9 +28,6 @@
 #define DMA_SOURCE      0x72   /* 24b $72-$74: the source */
 #define DMA_SOURCE_BANK 0x74   /* 8b: its bank */
 #define LETTER_EXTRA    0x7E   /* 16b: CopyLetterToVram's 16 x A (extra bytes per half) */
-#define LOAD_BUDGET     0xC7   /* 16b: bytes the loader may still send this frame */
-
-#define BBAD_VRAM       0x18   /* $2118: a copy to VRAM */
 
 /* The DMA registers: $4300 + 16 x channel (through the data bank) */
 #define DMA_REGS        0x4300u
@@ -67,7 +66,7 @@ void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r)
   hm_bus_wr16(ram, regs + A1T, hm_dp_r16(ram, r, DMA_SOURCE));  /* A1TxL/H */
   hm_bus_wr8(ram, regs + A1B, *hm_dp(ram, r, DMA_SOURCE_BANK)); /* A1Bx */
   hm_bus_wr16(ram, regs + DAS, size);                           /* DASxL/H */
-  hm_dp_w16(ram, r, LOAD_BUDGET, (uint16_t)(hm_dp_r16(ram, r, LOAD_BUDGET) - hm_bus_rd16(ram, regs + DAS)));
+  hm_dp_w16(ram, r, HM_LOAD_BUDGET, (uint16_t)(hm_dp_r16(ram, r, HM_LOAD_BUDGET) - hm_bus_rd16(ram, regs + DAS)));
 
   uint8_t *to_start = hm_dp(ram, r, DMA_WAITING);
   *to_start |= hm_bus_rd8(ram, DMA_CHANNEL_FLAGS + ch);

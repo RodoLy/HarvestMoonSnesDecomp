@@ -20,18 +20,11 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
-/* WRAM $7F:1Fxx (bus addresses) */
-#define FLAGS_5A        0x7F1F5A  /* 16b flags: SCENE_RUNNING, SCENE_DONE */
-#define HOUR            0x7F1F1C  /* 8b: the hour (HM_HOUR) */
-#define SHIPPED_LOW     0x7F1F07  /* 16b: the money shipped today (HM_SHIPPING_MONEY), */
-#define SHIPPED_HIGH    0x7F1F09  /* 8b: its third byte */
-/* Data bank */
-#define INPUT_STATE     0x019A    /* DB: 8b, the input mode (HM_INPUT_STATE) */
-#define TEXT_BOX_LINES  0x0191    /* DB: 8b, the lines of the next text box (0 = pick) */
 /* Direct page: HM_GAME_STATE ($D2, bit 6 = a change of map) and HM_MAP_ID ($22) */
-#define SCENE_RUNNING   0x0400    /* FLAGS_5A bit 10: the shipping scene is running */
-#define SCENE_DONE      0x0800    /* FLAGS_5A bit 11: its script says to show the text */
+#define SCENE_RUNNING   0x0400    /* HM_FLAGS_5A bit 10: the shipping scene is running */
+#define SCENE_DONE      0x0800    /* HM_FLAGS_5A bit 11: its script says to show the text */
 
 static uint32_t db_(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static void jsl(uint8_t *ram, HmRegs *r, uint16_t ret, uint8_t bank, void (*fn)(uint8_t *, HmRegs *))
@@ -44,30 +37,30 @@ static void set_a8(HmRegs *r, uint8_t v) { r->a = (uint16_t)((r->a & 0xFF00) | v
 
 void hm_ShippingSceneDialogue(uint8_t *ram, HmRegs *r)
 {
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5A) & SCENE_DONE);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5A)) & SCENE_DONE);
   if (!r->a) return;
   r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0040);
   if (r->a) return;
   r->a = 0x0002;
-  hm_bus_wr16(ram, db_(r, INPUT_STATE), 0x0002);
+  hm_bus_wr16(ram, db_(r, HM_INPUT_STATE), 0x0002);
   r->x = 0x031A;                                           /* the day's shipping */
-  r->a = hm_bus_rd16(ram, SHIPPED_LOW);
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_SHIPPING_MONEY));
   if (!r->a) {
-    set_a8(r, hm_bus_rd8(ram, SHIPPED_HIGH));
+    set_a8(r, hm_bus_rd8(ram, WRAM_LONG(HM_SHIPPING_MONEY_HIGH)));
     if (!(r->a & 0xFF)) r->x = 0x031B;                     /* nothing shipped */
   }
   set_a8(r, 0);
-  hm_bus_wr8(ram, db_(r, TEXT_BOX_LINES), 0);
+  hm_bus_wr8(ram, db_(r, HM_TEXT_BOX_LINES), 0);
   jsl(ram, r, 0x81A2, 0x83, hm_StartTextBox);
   r->a = 0x0006; r->x = 0x0000; r->y = 0x0027;
   jsl(ram, r, 0x81B1, 0x84, hm_StartEventScript);
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5A) & ~SCENE_RUNNING);
-  hm_bus_wr16(ram, FLAGS_5A, r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5A)) & ~SCENE_RUNNING);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5A), r->a);
 }
 
 void hm_ShippingScene(uint8_t *ram, HmRegs *r)
 {
-  uint8_t hour = hm_bus_rd8(ram, HOUR);
+  uint8_t hour = hm_bus_rd8(ram, WRAM_LONG(HM_HOUR));
   set_a8(r, hour);
   r->c = hour >= 17;
   if (hour != 17) return;
@@ -76,9 +69,9 @@ void hm_ShippingScene(uint8_t *ram, HmRegs *r)
   r->c = map >= 4;
   if (map >= 4) return;                                    /* not on the farm */
   set_a8(r, 0);
-  hm_bus_wr8(ram, db_(r, INPUT_STATE), 0);
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5A) | SCENE_RUNNING);
-  hm_bus_wr16(ram, FLAGS_5A, r->a);
+  hm_bus_wr8(ram, db_(r, HM_INPUT_STATE), 0);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5A)) | SCENE_RUNNING);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5A), r->a);
   r->a = 0x0006; r->x = 0x0000; r->y = 0x0026;
   jsl(ram, r, 0x8164, 0x84, hm_StartEventScriptLong);
   hm_ShippingSceneDialogue(ram, r);                        /* falls into it */

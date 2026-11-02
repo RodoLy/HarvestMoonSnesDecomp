@@ -25,17 +25,16 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
+#include "hm_regs.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_SEASON and HM_HOUR
- * ($7F1F19 / $7F1F1C; WRAM_LONG gives their bus addresses). */
-#define WRAM_LONG(a)    (0x7E0000 + (a))
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* WRAM of the data bank: one byte per channel (+ n) */
 #define DELAY   0x014A          /* 8b: frames left of this step */
 #define COLOUR  0x015A          /* 8b: the colour it changes */
 #define ROW     0x016A          /* 8b: the palette row */
-#define WEATHER_FLAGS   0x0196  /* 16b: weather and day flags; bits 1 / 3 rain, snow */
 #define PALETTE_COPY    0x0900  /* the palette ($7F:0900, HM_CGRAM_SHADOW) */
 
 /* Direct page */
@@ -48,7 +47,6 @@
 #define DMA_SOURCE_BANK 0x74    /* 8b */
 #define DMA_CHANNEL     0x27    /* 8b: AddProgrammedDMA's channel (dma.c) */
 #define DMA_B_ADDRESS   0x29    /* 8b: its destination register */
-#define BBAD_CGRAM      0x22    /* $2122: a copy to CGRAM */
 #define CHANNEL_N       0x7E    /* 16b: times3's channel number; StartMapColourAnimations:
                                    the part of the day */
 #define MAP_ROW         0x80    /* 16b: StartMapColourAnimations: the map, then 6 x the
@@ -113,7 +111,7 @@ void hm_RunColourAnimations(uint8_t *ram, HmRegs *r)
   *hm_dp(ram, r, UNKNOWN_92) = 0;
   *hm_dp(ram, r, ANY_RAN) = 0;
   r->y = 0;
-  r->a = hm_bus_rd16(ram, db_addr(r, WEATHER_FLAGS)) & 0x000A;
+  r->a = hm_bus_rd16(ram, db_addr(r, HM_WEATHER_FLAGS)) & 0x000A;
   if (!r->a) r->y = 4;
   for (;;) {
     uint16_t x = times3(ram, r, r->y);
@@ -199,7 +197,7 @@ void hm_RunColourAnimations(uint8_t *ram, HmRegs *r)
   }
   /* send the palette: channel 5, to $2122 (CGRAM), from $7F:0900 */
   *hm_dp(ram, r, DMA_CHANNEL) = 5;
-  *hm_dp(ram, r, DMA_B_ADDRESS) = BBAD_CGRAM;
+  *hm_dp(ram, r, DMA_B_ADDRESS) = BBAD_CGDATA;
   r->y = 0x0100;
   r->x = 0;
   set16(ram, r, DMA_SOURCE, PALETTE_COPY);

@@ -16,6 +16,8 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
+#include "hm_regs.h"
 
 /* ── Names of the memory locations used here ────────────────────────────── */
 
@@ -27,122 +29,10 @@
 /* WRAM of the data bank */
 #define STACK_TOP         0x1F00 /* the stack starts here (S), the WRAM's first bank
                                     ends at $2000 */
-#define PAD1              0x0124 /* 16b: pad 1's buttons held (joypad.c) */
-#define PAD1_LAST         0x0126 /* 16b: last frame's */
-#define PAD1_NEW          0x0128 /* 16b: pressed this frame (HM_JOY_NEW elsewhere) */
-#define PAD1_UP           0x012A /* 16b: let go this frame */
-#define PAD2              0x0130 /* 16b: the same for pad 2 */
-#define PAD2_LAST         0x0132
-#define PAD2_NEW          0x0134
-#define PAD2_UP           0x0136
-#define UNKNOWN_0148      0x0148 /* 8b: cleared here and by FirstNightReset (day.c);
-                                    nothing found reads it */
 #define WRAM_LOW_END      0x2000 /* the first $2000 bytes of WRAM, seen in every bank */
 #define WRAM_REST         0x7E2000u /* bus address: the rest of bank $7E */
 #define WRAM_REST_SIZE    0xE000
 #define WRAM_BANK_7F      0x7F0000u /* bus address: the bank $7F, all of it */
-
-/* The CPU's registers ($42xx) */
-#define NMITIMEN          0x4200 /* NMI, line IRQ and automatic pad reading on / off */
-#define WRIO              0x4201 /* the I/O port */
-#define WRMPYA            0x4202 /* multiplier: first number */
-#define WRMPYB            0x4203 /* multiplier: second number (starts it) */
-#define WRDIVL            0x4204 /* divider: the number divided (16b) */
-#define WRDIVH            0x4205
-#define WRDIVB            0x4206 /* divider: the divisor (starts it) */
-#define HTIMEL            0x4207 /* the IRQ's dot (16b) */
-#define HTIMEH            0x4208
-#define VTIMEL            0x4209 /* the IRQ's line (16b) */
-#define VTIMEH            0x420A
-#define MDMAEN            0x420B /* starts the DMA channels */
-#define HDMAEN            0x420C /* the HDMA channels on */
-#define MEMSEL            0x420D /* bit 0: FastROM */
-#define RDNMI             0x4210 /* read-only from here to $421F */
-#define TIMEUP            0x4211
-#define HVBJOY            0x4212
-#define RDIO              0x4213
-#define RDDIVL            0x4214
-#define RDDIVH            0x4215
-#define RDMPYL            0x4216
-#define RDMPYH            0x4217
-#define JOY1L             0x4218
-#define JOY1H             0x4219
-#define JOY2L             0x421A
-#define JOY2H             0x421B
-#define JOY3L             0x421C
-#define JOY3H             0x421D
-#define JOY4L             0x421E
-#define JOY4H             0x421F
-
-/* The picture chip's registers ($21xx) */
-#define INIDISP           0x2100 /* forced blank (bit 7) and brightness */
-#define OBSEL             0x2101 /* sprite sizes and graphics address */
-#define OAMADDL           0x2102 /* OAM address (16b) */
-#define OAMADDH           0x2103
-#define OAMDATA           0x2104 /* OAM data (written twice) */
-#define BGMODE            0x2105
-#define MOSAIC            0x2106
-#define BG1SC             0x2107 /* the backgrounds' tile maps */
-#define BG2SC             0x2108
-#define BG3SC             0x2109
-#define BG4SC             0x210A
-#define BG12NBA           0x210B /* the backgrounds' graphics */
-#define BG34NBA           0x210C
-#define BG1HOFS           0x210D /* the scrolls (written twice) */
-#define BG1VOFS           0x210E
-#define BG2HOFS           0x210F
-#define BG2VOFS           0x2110
-#define BG3HOFS           0x2111
-#define BG3VOFS           0x2112
-#define BG4HOFS           0x2113
-#define BG4VOFS           0x2114
-#define VMAIN             0x2115 /* VRAM increment */
-#define VMADDL            0x2116 /* VRAM address (16b) */
-#define VMADDH            0x2117
-#define VMDATAL           0x2118 /* VRAM data (16b) */
-#define VMDATAH           0x2119
-#define M7SEL             0x211A /* mode 7 (the matrix and centre written twice) */
-#define M7A               0x211B
-#define M7B               0x211C
-#define M7C               0x211D
-#define M7D               0x211E
-#define M7X               0x211F
-#define M7Y               0x2120
-#define CGADD             0x2121 /* CGRAM address */
-#define CGDATA            0x2122 /* CGRAM data (written twice) */
-#define W12SEL            0x2123 /* the windows */
-#define W34SEL            0x2124
-#define WOBJSEL           0x2125
-#define WH0               0x2126
-#define WH1               0x2127
-#define WH2               0x2128
-#define WH3               0x2129
-#define WBGLOG            0x212A
-#define WOBJLOG           0x212B
-#define TM                0x212C /* main screen layers */
-#define TS                0x212D /* sub screen layers */
-#define TMW               0x212E
-#define TSW               0x212F
-#define CGWSEL            0x2130 /* colour math */
-#define CGADSUB           0x2131
-#define COLDATA           0x2132 /* the fixed colour */
-#define SETINI            0x2133
-#define MPYL              0x2134 /* read-only from here to $213F */
-#define MPYM              0x2135
-#define MPYH              0x2136
-#define SLHV              0x2137
-#define RDOAM             0x2138
-#define RDVRAML           0x2139
-#define RDVRAMH           0x213A
-#define RDCGRAM           0x213B
-#define OPHCT             0x213C
-#define OPVCT             0x213D
-#define STAT77            0x213E
-#define STAT78            0x213F
-#define WMDATA            0x2180 /* the WRAM port: data */
-#define WMADDL            0x2181 /* its address (24b) */
-#define WMADDM            0x2182
-#define WMADDH            0x2183
 
 typedef void Fn(uint8_t *ram, HmRegs *r);
 
@@ -214,7 +104,7 @@ void hm_RESET(uint8_t *ram, HmRegs *r)
   r->x = 0;
   do { hm_bus_wr16(ram, WRAM_BANK_7F + r->x, 0); r->x += 2; } while (r->x != 0);
   r->c = 1;                                                /* CPX #0 */
-  static const uint16_t PADS[8] = { PAD1, PAD1_NEW, PAD1_LAST, PAD1_UP, PAD2, PAD2_NEW, PAD2_LAST, PAD2_UP };
+  static const uint16_t PADS[8] = { HM_PAD1_HELD, HM_PAD1_NEW, HM_PAD1_LAST, HM_PAD1_UP, HM_PAD2_HELD, HM_PAD2_NEW, HM_PAD2_LAST, HM_PAD2_UP };
   for (int i = 0; i < 8; i++) wr16(ram, r, PADS[i], 0);
   r->a = 0x8000;                                           /* the sound program at $AD:8000 */
   hm_dp_w16(ram, r, SOUND_PROGRAM, 0x8000);
@@ -234,7 +124,7 @@ void hm_RESET(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0x8628, 0x83, hm_CheckSRAMIntegrity);
   set_a8(r, 0x80);                                         /* SEP #$20; REP #$10 */
   wr8(ram, r, INIDISP, 0x80);                              /* the screen off */
-  wr8(ram, r, UNKNOWN_0148, 0);
+  wr8(ram, r, HM_UNKNOWN_0148, 0);
   wr8(ram, r, NMITIMEN, 0x80);                             /* the NMI on */
   wr8(ram, r, INIDISP, 0);
   /* CLI; JML IntroScreen: the check stops here and puts its frame back */

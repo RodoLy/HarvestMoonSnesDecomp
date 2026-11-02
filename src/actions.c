@@ -14,106 +14,26 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ────────────────────────────── */
 /* Direct page ($00-$FF; the hm_dp_* helpers take these offsets) */
-#define GAME_STATE    HM_GAME_STATE   /* $D2: bit 5 hot spring, 6 = an action runs,
-                                       * 7 walked by a script, 8 watching TV */
-#define ACTION        HM_PLAYER_ACTION /* $D4: the player's action (animation) */
-#define FACING        0xDA       /* 16b: the player's facing */
 #define BUG_PTR       0x01       /* 16b: the pointer PlayerAction_46's bug writes through */
-#define EVENT_SLOT    0xCC       /* long $CC-$CE: the current event slot (SetEventSlotPointer) */
 /* $72-$74 and $7E-$80 mean different things in different routines: */
 #define MONEY_ARG     0x72       /* AddMoney's amount, 24b with MONEY_ARG_HIGH */
 #define MONEY_ARG_HIGH 0x74
-#define ANIMAL_PTR    0x72       /* long $72-$74: the animal's record (GetCowPointer /
-                                  * GetChickenPointer) */
 #define ROOM_NEEDED   0x7E       /* room_for: 16 x the chickens, then the room needed */
 #define ROOM_COWS     0x80       /* room_for: 16 x the cows */
 #define NEST_COLUMN   0x7E       /* PlayerAction_53: the column of the tile in front */
-#define TV_CHANNEL8   0x92       /* 8b, tv(): 8 x TV_FORECAST */
-
-/* WRAM of the data bank ($0100-$1FFF; through rd8 / rd16 / wr8 / wr16) */
-#define LOADED_TOOL_SOUND 0x0119 /* 8b: whose noises are loaded; 0 = load them again */
-#define JOY_HELD      0x0124     /* 16b: pad 1's buttons held (bit 15 = B) */
-#define JOY_NEW       0x0128     /* 16b: buttons pressed this frame */
-#define BG2_Y         0x0142     /* 16b: BG2's scroll, up-down */
-#define ARROW_PLACE   0x018A     /* 8b: the menu arrow's place */
-#define ARROW_BLINK   0x018B     /* 8b: the arrow's blink */
-#define ANSWER        0x018F     /* DB: the yes / no answer (0 = yes) */
-#define TEXT_BOX_LINES 0x0191    /* 8b: the lines of the next text box */
-#define WEATHER_FLAGS 0x0196     /* 16b: weather and day flags; bits 1 / 3 the ranch is
-                                  * closed, bit 4 the TV stays off, bit $2000 a name is
-                                  * to be written (the names screen) */
-#define INPUT_STATE   HM_INPUT_STATE /* $019A: 2 while a text box waits */
-#define TEXT_BOX_STATE 0x019B    /* 8b: the text box's state bits */
-#define PLAYER_TILE_1 0x0878     /* 16b: the tile types under the player (playerstate.c) */
-#define PLAYER_TILE_2 0x087A     /* 16b */
-/* HM_ANIM_REQUEST ($0901, hm_ram.h): the player's animation */
-#define PLAYER_TURN   0x0911     /* 16b: the direction being tried (playerinput.c) */
-#define IN_HAND       HM_ITEM_ON_HAND /* $091D: the item in hand */
-/* HM_TOOL_SELECTED ($0921, hm_ram.h): the tool in hand */
-#define STEP          0x096F     /* DB: the action's step */
-#define FRAMES        0x0970     /* DB: its frame counter */
-#define TIME_RUNNING  HM_TIME_RUNNING /* $0973: bit 1 = the day ends, bit 2 = sleep */
-#define FRONT_X       0x0985     /* 16b: the tile in front (CalculateTileInFront) */
-#define FRONT_Y       0x0987     /* 16b */
-#define TV_FORECAST   0x0990     /* 8b: what the TV shows (its channel) */
-#define NAME_FOR      0x099F     /* 8b: whose name the names screen writes (0 the
-                                  * player, 1 a cow bought, 2 a calf, 3 the dog...) */
-#define DEALER_SLOT   0x09A0     /* 8b: the event slot of the cow being sold */
-#define SOLD_CHICKEN_SLOT 0x09A1 /* 8b: the event slot of the chicken being sold */
-#define FENCE_PIECES  0x09A4     /* 8 bytes: the piece (1-6, 0 none) at each place */
-#define EDIT_X        0x09AD     /* 16b: the tile being changed, pixels */
-#define EDIT_Y        0x09AF     /* 16b */
-#define MAP_ANIM_RUNNING 0x00CF  /* 16b: a map animation is running (read as $00CF) */
+#define TV_CHANNEL8   0x92       /* 8b, tv(): 8 x HM_TV_FORECAST */
 
 /* WRAM $7F:1Fxx, the game's saved state: bus addresses (WRAM_LONG of the
  * ram[] offsets 0x11Fxx that hm_ram.h uses) */
-#define WRAM_LONG(a)  (0x7E0000 + (a))
-#define SHED_ITEMS    WRAM_LONG(HM_SHED_ITEMS) /* $7F:1F00: the shed, one bit per tool */
-#define SHED_ROW_1    (SHED_ITEMS + 1)  /* its second byte (a bit per tool) */
-#define SHED_ROW_2    (SHED_ITEMS + 2)  /* its third byte */
-#define SHIPPED_LOW   WRAM_LONG(HM_SHIPPING_MONEY)   /* $7F:1F07: 24b, low word */
-#define SHIPPED_HIGH  (SHIPPED_LOW + 2)  /* its third byte */
-#define COWS          WRAM_LONG(HM_COW_N)  /* $7F:1F0A, 8b: cows owned */
-#define CHICKENS      0x7F1F0B   /* 8b: chickens owned */
-#define LUMBER        WRAM_LONG(HM_STORED_WOOD)  /* $7F:1F0C, 16b: lumber in stock */
-#define LUMBER_NEEDED 0x7F1F0E   /* 16b: lumber the extension needs (250 / 500) */
-#define SALE_PRICE    0x7F1F15   /* 24b: what a sale pays (low word) */
-#define SALE_PRICE_HIGH 0x7F1F17 /*   its third byte */
-#define YEAR          WRAM_LONG(HM_YEAR)    /* $7F:1F18: 0 = the first year */
-#define SEASON        WRAM_LONG(HM_SEASON)  /* $7F:1F19 */
-#define HEARTS        WRAM_LONG(HM_HEARTS_BASE) /* $7F:1F1F: 5 x 16b, the girls' affection */
-#define HEARTS_MARIA  (HEARTS + 0)
-#define HEARTS_ANN    (HEARTS + 2)
-#define HEARTS_NINA   (HEARTS + 4)
-#define HEARTS_ELLEN  (HEARTS + 6)
-#define HEARTS_EVE    (HEARTS + 8)
-#define ROOM          0x7F1F29   /* 16b: the barn's room (16 per animal) */
-#define BUILD_NIGHTS  0x7F1F35   /* 8b: nights the house has been building */
-#define EGGS          0x7F1F45   /* 16b: one bit per nest with an egg */
-#define DAY_FLAGS     0x7F1F5A   /* 16b flags: $02 a cow comes tomorrow, $04 / $08 sell
-                                  * a chicken / cow, $20 an animal bought today */
-#define FLAGS_5E      0x7F1F5E   /* 16b flags: $0800 the long walk to bed, $1000 what
-                                  * it waits for (set by a map event) */
-#define FLAGS_60      0x7F1F60   /* 16b flags: $1000 / $2000 a chicken / cow at the
-                                  * festival */
-#define FLAGS_64      0x7F1F64   /* 16b story flags: $80 the second extension */
-#define FLAGS_66      0x7F1F66   /* 16b story flags: bits 0-4 the girl married (a bit
-                                  * each), $80 the work on the house, $4000 / $8000 the
-                                  * festival entries */
-#define FLAGS_68      0x7F1F68   /* 16b story flags: $01 the ranch is open */
-#define FLAGS_6E      0x7F1F6E   /* 16b story flags: $10 no bed, $4000 the clock */
-#define FLAGS_70      0x7F1F70   /* 16b flags: $04 the first spring or summer */
-#define FLAGS_78      0x7F1F78   /* 16b: the fence pieces put up, a bit each */
-
-/* Records */
-#define ANIMAL_FLAGS  0          /* an animal's record: 8b, cows: bits 1-2 sick or
-                                  * pregnant, bits 4-6 the age */
-#define ANIMAL_X      4          /* 16b: a chicken's place */
-#define ANIMAL_Y      6          /* 16b */
-#define SLOT_FLAGS    1          /* an event slot's flags (eventcmds.c) */
+#define HEARTS_MARIA  (WRAM_LONG(HM_HEARTS_BASE) + 0)
+#define HEARTS_ANN    (WRAM_LONG(HM_HEARTS_BASE) + 2)
+#define HEARTS_NINA   (WRAM_LONG(HM_HEARTS_BASE) + 4)
+#define HEARTS_ELLEN  (WRAM_LONG(HM_HEARTS_BASE) + 6)
+#define HEARTS_EVE    (WRAM_LONG(HM_HEARTS_BASE) + 8)
 
 /* ROM tables */
 #define PICK_UP_TABLE 0x82CFB4   /* DATA8_82CFB4: per tile type x 4 + season, an item */
@@ -150,7 +70,7 @@ static void jsr(uint8_t *ram, HmRegs *r, uint16_t at, Step *fn)
 /* LDA $096F (8 bits) */
 static uint8_t step(uint8_t *ram, HmRegs *r)
 {
-  uint8_t s = rd8(ram, r, STEP);
+  uint8_t s = rd8(ram, r, HM_INTERACTION_STEP);
   set_a8(r, s);
   return s;
 }
@@ -162,13 +82,13 @@ static bool is(HmRegs *r, uint8_t k)
 }
 static void next_step(uint8_t *ram, HmRegs *r)               /* INC $096F */
 {
-  wr8(ram, r, STEP, (uint8_t)(rd8(ram, r, STEP) + 1));
+  wr8(ram, r, HM_INTERACTION_STEP, (uint8_t)(rd8(ram, r, HM_INTERACTION_STEP) + 1));
 }
 /* INC $0970; LDA $0970; CMP #n: has the counter reached n? */
 static bool count_to(uint8_t *ram, HmRegs *r, uint8_t n)
 {
-  uint8_t f = (uint8_t)(rd8(ram, r, FRAMES) + 1);
-  wr8(ram, r, FRAMES, f);
+  uint8_t f = (uint8_t)(rd8(ram, r, HM_INTERACTION_FRAMES) + 1);
+  wr8(ram, r, HM_INTERACTION_FRAMES, f);
   set_a8(r, f);
   r->c = f >= n;
   return f == n;
@@ -176,13 +96,13 @@ static bool count_to(uint8_t *ram, HmRegs *r, uint8_t n)
 /* $D2 &= ~bits / |= bits (16 bits; A = the new $D2) */
 static void state_off(uint8_t *ram, HmRegs *r, uint16_t bits)
 {
-  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) & ~bits);
-  hm_dp_w16(ram, r, GAME_STATE, r->a);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) & ~bits);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
 }
 static void state_on(uint8_t *ram, HmRegs *r, uint16_t bits)
 {
-  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) | bits);
-  hm_dp_w16(ram, r, GAME_STATE, r->a);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | bits);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
 }
 /* the action is over: $D2 bit 6 off */
 static void done(uint8_t *ram, HmRegs *r) { state_off(ram, r, 0x0040); }
@@ -190,9 +110,9 @@ static void done(uint8_t *ram, HmRegs *r) { state_off(ram, r, 0x0040); }
 static void text_x(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   set_a8(r, 2);
-  wr8(ram, r, INPUT_STATE, 2);
+  wr8(ram, r, HM_INPUT_STATE, 2);
   set_a8(r, 0);
-  wr8(ram, r, TEXT_BOX_LINES, 0);
+  wr8(ram, r, HM_TEXT_BOX_LINES, 0);
   jsl(ram, r, at, 0x83, hm_StartTextBox);
 }
 static void say(uint8_t *ram, HmRegs *r, uint16_t text, uint16_t at)
@@ -203,7 +123,7 @@ static void say(uint8_t *ram, HmRegs *r, uint16_t text, uint16_t at)
 /* LDA $019A; CMP #$02: is the text box still waiting? */
 static bool text_open(uint8_t *ram, HmRegs *r)
 {
-  uint8_t v = rd8(ram, r, INPUT_STATE);
+  uint8_t v = rd8(ram, r, HM_INPUT_STATE);
   set_a8(r, v);
   r->c = v >= 2;
   return v == 2;
@@ -211,7 +131,7 @@ static bool text_open(uint8_t *ram, HmRegs *r)
 /* LDA $018F (8 bits): 0 = yes */
 static bool said_no(uint8_t *ram, HmRegs *r)
 {
-  uint8_t v = rd8(ram, r, ANSWER);
+  uint8_t v = rd8(ram, r, HM_ANSWER);
   set_a8(r, v);
   return v != 0;
 }
@@ -225,16 +145,16 @@ static void walk(uint8_t *ram, HmRegs *r, uint16_t action, uint16_t facing)
 {
   state_on(ram, r, 0x0080);
   r->a = action;
-  hm_dp_w16(ram, r, ACTION, action);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, action);
   r->a = facing;
-  hm_dp_w16(ram, r, FACING, facing);
-  wr16(ram, r, PLAYER_TURN, facing);
+  hm_dp_w16(ram, r, HM_PLAYER_DIRECTION, facing);
+  wr16(ram, r, HM_PLAYER_TURN, facing);
 }
 /* the player's own animation: action a with sprite s ($0901), UpdatePlayerObject */
 static void pose(uint8_t *ram, HmRegs *r, uint16_t action, uint16_t sprite, uint16_t at)
 {
   r->a = action;
-  hm_dp_w16(ram, r, ACTION, action);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, action);
   r->a = sprite;
   wr16(ram, r, HM_ANIM_REQUEST, sprite);
   jsr(ram, r, at, hm_UpdatePlayerObject);
@@ -248,17 +168,17 @@ static void tile_ahead(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t
 /* LDA $0973; ORA #bits; STA $0973 (8 bits) */
 static void time_flag(uint8_t *ram, HmRegs *r, uint8_t bits)
 {
-  uint8_t v = (uint8_t)(rd8(ram, r, TIME_RUNNING) | bits);
+  uint8_t v = (uint8_t)(rd8(ram, r, HM_TIME_RUNNING) | bits);
   set_a8(r, v);
-  wr8(ram, r, TIME_RUNNING, v);
+  wr8(ram, r, HM_TIME_RUNNING, v);
 }
 /* the player holds item i and the "carrying" action (4) */
 static void hold(uint8_t *ram, HmRegs *r, uint8_t item)
 {
   set_a8(r, item);
-  wr8(ram, r, IN_HAND, item);
+  wr8(ram, r, HM_ITEM_ON_HAND, item);
   r->a = 4;
-  hm_dp_w16(ram, r, ACTION, 4);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 4);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -279,15 +199,15 @@ static void tv(uint8_t *ram, HmRegs *r, const Tv *t)
 {
   step(ram, r);
   if (is(r, 1)) {
-    r->a = rd16(ram, r, MAP_ANIM_RUNNING);
+    r->a = rd16(ram, r, HM_MAP_ANIM);
     if (r->a) return;
     jsl(ram, r, t->at_weather, 0x82, hm_TvWeatherForecast);
-    uint8_t ch = rd8(ram, r, TV_FORECAST);
+    uint8_t ch = rd8(ram, r, HM_TV_FORECAST);
     r->a = ch;                                             /* LDA #0; XBA; LDA */
     uint8_t v = ch;
     for (int i = 0; i < 3; i++) { r->c = v >> 7; v = (uint8_t)(v << 1); }
     *hm_dp(ram, r, TV_CHANNEL8) = v;
-    uint8_t season = hm_bus_rd8(ram, SEASON);
+    uint8_t season = hm_bus_rd8(ram, WRAM_LONG(HM_SEASON));
     r->c = season >> 7;
     uint16_t sum = (uint16_t)((uint8_t)(season << 1) + v);  /* ASL; CLC; ADC $92 */
     r->c = sum > 0xFF;
@@ -299,7 +219,7 @@ static void tv(uint8_t *ram, HmRegs *r, const Tv *t)
       r->x = r->a;
       text_x(ram, r, t->at_text);
     }
-    r->a = (uint8_t)(rd8(ram, r, TV_FORECAST) + 1);        /* LDA #0; XBA; LDA; INC */
+    r->a = (uint8_t)(rd8(ram, r, HM_TV_FORECAST) + 1);     /* LDA #0; XBA; LDA; INC */
     if (t->base) {                                         /* CLC; ADC #base */
       uint32_t sum = (uint32_t)r->a + t->base;
       r->c = sum > 0xFFFF;
@@ -317,7 +237,7 @@ static void tv(uint8_t *ram, HmRegs *r, const Tv *t)
     return;
   }
   state_on(ram, r, 0x0100);
-  r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x0010);
+  r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0x0010);
   if (!r->a) map_animation(ram, r, t->base, t->at_on);
   next_step(ram, r);
 }
@@ -351,7 +271,7 @@ void hm_PlayerAction_13(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_PlayerAction_10(uint8_t *ram, HmRegs *r)
 {
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_6E) & 0x0010);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_6E)) & 0x0010);
   if (r->a) { done(ram, r); return; }
   step(ram, r);
   if (is(r, 1)) {
@@ -375,7 +295,7 @@ void hm_PlayerAction_10(uint8_t *ram, HmRegs *r)
   if (is(r, 3)) {
     bool long_walk = false;
     for (uint16_t bit = 1; bit <= 0x10 && !long_walk; bit = (uint16_t)(bit << 1)) {
-      r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_66) & bit);
+      r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) & bit);
       long_walk = r->a != 0;
     }
     if (!long_walk) {
@@ -385,8 +305,8 @@ void hm_PlayerAction_10(uint8_t *ram, HmRegs *r)
       time_flag(ram, r, 0x02);
       return;
     }
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5E) | 0x0800);
-    hm_bus_wr16(ram, FLAGS_5E, r->a);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E)) | 0x0800);
+    hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5E), r->a);
     walk(ram, r, 1, 3);
     if (!count_to(ram, r, 0x1E)) return;
     next_step(ram, r);
@@ -394,13 +314,13 @@ void hm_PlayerAction_10(uint8_t *ram, HmRegs *r)
     return;
   }
   if (is(r, 4)) {
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5E) & 0x1000);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E)) & 0x1000);
     if (r->a) time_flag(ram, r, 0x02);
     return;
   }
-  r->a = rd16(ram, r, PLAYER_TILE_1);
-  r->c = r->a >= rd16(ram, r, PLAYER_TILE_2);
-  if (r->a != rd16(ram, r, PLAYER_TILE_2)) { done(ram, r); return; }
+  r->a = rd16(ram, r, HM_PLAYER_TILE_1);
+  r->c = r->a >= rd16(ram, r, HM_PLAYER_TILE_2);
+  if (r->a != rd16(ram, r, HM_PLAYER_TILE_2)) { done(ram, r); return; }
   say(ram, r, 0x000A, 0xD80E);
   next_step(ram, r);
 }
@@ -414,8 +334,8 @@ void hm_PlayerAction_11(uint8_t *ram, HmRegs *r)
   step(ram, r);
   if (is(r, 1)) {
     r->a = 0x00C2;
-    wr16(ram, r, PLAYER_TILE_1, 0x00C2);
-    wr16(ram, r, PLAYER_TILE_2, 0x00C2);
+    wr16(ram, r, HM_PLAYER_TILE_1, 0x00C2);
+    wr16(ram, r, HM_PLAYER_TILE_2, 0x00C2);
     done(ram, r);
     return;
   }
@@ -431,21 +351,21 @@ void hm_PlayerAction_11(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 static void diary_open(uint8_t *ram, HmRegs *r)
 {
-  wr16(ram, r, BG2_Y, 0);
+  wr16(ram, r, HM_BG2_Y, 0);
   set_a8(r, 3);
-  wr8(ram, r, INPUT_STATE, 3);
-  uint8_t v = (uint8_t)(rd8(ram, r, TEXT_BOX_STATE) | 0x20);
+  wr8(ram, r, HM_INPUT_STATE, 3);
+  uint8_t v = (uint8_t)(rd8(ram, r, HM_TEXT_BOX_STATE) | 0x20);
   set_a8(r, v);
-  wr8(ram, r, TEXT_BOX_STATE, v);
+  wr8(ram, r, HM_TEXT_BOX_STATE, v);
   next_step(ram, r);
-  wr8(ram, r, ARROW_BLINK, 0);
+  wr8(ram, r, HM_ARROW_BLINK, 0);
 }
 void hm_PlayerAction_14(uint8_t *ram, HmRegs *r)
 {
   step(ram, r);
   if (is(r, 1)) { diary_open(ram, r); return; }
   if (is(r, 2)) {
-    uint8_t v = rd8(ram, r, INPUT_STATE);
+    uint8_t v = rd8(ram, r, HM_INPUT_STATE);
     set_a8(r, v);
     r->c = v >= 3;
     if (v == 3) return;
@@ -457,10 +377,10 @@ void hm_PlayerAction_14(uint8_t *ram, HmRegs *r)
   if (is(r, 3)) {
     if (text_open(ram, r)) return;
     set_a8(r, 1);
-    wr8(ram, r, STEP, 1);
+    wr8(ram, r, HM_INTERACTION_STEP, 1);
     return;
   }
-  wr8(ram, r, ARROW_PLACE, 0);
+  wr8(ram, r, HM_ARROW_PLACE, 0);
   next_step(ram, r);
   diary_open(ram, r);
 }
@@ -492,7 +412,7 @@ void hm_PlayerAction_1E(uint8_t *ram, HmRegs *r)
   }
   if (text_open(ram, r)) return;
   if (!said_no(ram, r)) {
-    uint32_t sum = (uint32_t)hm_bus_rd8(ram, SEASON) + 0x0372;
+    uint32_t sum = (uint32_t)hm_bus_rd8(ram, WRAM_LONG(HM_SEASON)) + 0x0372;
     r->c = sum > 0xFFFF;
     r->x = (uint16_t)sum;
     text_x(ram, r, 0xDC46);
@@ -562,12 +482,12 @@ TAKE(3D, 0x7B) TAKE(3E, 0x7C)
 static void fence_place(uint8_t *ram, HmRegs *r, uint16_t x, uint16_t y, uint16_t n, uint16_t at)
 {
   r->a = 0x00FB;
-  r->x = x; wr16(ram, r, EDIT_X, x);
-  r->y = y; wr16(ram, r, EDIT_Y, y);
+  r->x = x; wr16(ram, r, HM_EDIT_X, x);
+  r->y = y; wr16(ram, r, HM_EDIT_Y, y);
   jsl(ram, r, at, 0x81, hm_ChangeMapTile);
   r->a = n;
   r->x = n;
-  uint8_t piece = rd8(ram, r, (uint16_t)(FENCE_PIECES + r->x));
+  uint8_t piece = rd8(ram, r, (uint16_t)(HM_FENCE_PIECES + r->x));
   set_a8(r, piece);
   if (piece) {
     r->y = r->x;
@@ -575,10 +495,10 @@ static void fence_place(uint8_t *ram, HmRegs *r, uint16_t x, uint16_t y, uint16_
     r->c = (r->a >> 15) & 1;
     r->a = (uint16_t)(r->a << 1);
     r->x = r->a;
-    r->a = (uint16_t)(hm_bus_rd16(ram, PIECE_BITS + r->x) & hm_bus_rd16(ram, FLAGS_78));
+    r->a = (uint16_t)(hm_bus_rd16(ram, PIECE_BITS + r->x) & hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_78)));
     if (!r->a) {
       r->x = r->y;
-      uint16_t sum = (uint16_t)(rd8(ram, r, (uint16_t)(FENCE_PIECES + r->x)) + 0x1D);
+      uint16_t sum = (uint16_t)(rd8(ram, r, (uint16_t)(HM_FENCE_PIECES + r->x)) + 0x1D);
       r->c = sum > 0xFF;
       hold(ram, r, (uint8_t)sum);
       done(ram, r);
@@ -586,8 +506,8 @@ static void fence_place(uint8_t *ram, HmRegs *r, uint16_t x, uint16_t y, uint16_
     }
   }
   r->a = 0x00A1;
-  r->x = rd16(ram, r, EDIT_X);
-  r->y = rd16(ram, r, EDIT_Y);
+  r->x = rd16(ram, r, HM_EDIT_X);
+  r->y = rd16(ram, r, HM_EDIT_Y);
   jsl(ram, r, 0xF59F, 0x82, hm_EditTileOnMap);
   done(ram, r);
 }
@@ -618,8 +538,8 @@ void hm_PlayerAction_50(uint8_t *ram, HmRegs *r) { fence_place(ram, r, 0x0210, 0
 
 static void day_flag(uint8_t *ram, HmRegs *r, uint16_t bits)
 {
-  r->a = (uint16_t)(hm_bus_rd16(ram, DAY_FLAGS) | bits);
-  hm_bus_wr16(ram, DAY_FLAGS, r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5A)) | bits);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5A), r->a);
 }
 static void say_done(uint8_t *ram, HmRegs *r, uint16_t text, uint16_t at)
 {
@@ -636,7 +556,7 @@ static bool room_for(uint8_t *ram, HmRegs *r, uint16_t first, uint16_t second)
   hm_dp_w16(ram, r, ROOM_COWS, b);
   uint32_t sum = (uint32_t)a + b;
   hm_dp_w16(ram, r, ROOM_NEEDED, (uint16_t)sum);
-  r->a = hm_bus_rd16(ram, ROOM);
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_PLANTED_GRASS));
   r->c = r->a >= (uint16_t)sum;
   return r->c;
 }
@@ -667,31 +587,31 @@ void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r)
 {
   step(ram, r);
   if (is(r, 1)) {
-    r->a = rd16(ram, r, JOY_HELD);
+    r->a = rd16(ram, r, HM_PAD1_HELD);
     if (r->a & 0x8000) {                                   /* B: close */
       jsl(ram, r, 0xE222, 0x83, hm_CloseTextBox);
       set_a8(r, 1);
-      wr8(ram, r, INPUT_STATE, 1);
-      r->a = (uint16_t)(rd16(ram, r, JOY_NEW) & 0xFF7F);
-      wr16(ram, r, JOY_NEW, r->a);
+      wr8(ram, r, HM_INPUT_STATE, 1);
+      r->a = (uint16_t)(rd16(ram, r, HM_PAD1_NEW) & 0xFF7F);
+      wr16(ram, r, HM_PAD1_NEW, r->a);
       done(ram, r);
       return;
     }
     if (text_open(ram, r)) return;
-    uint8_t pick = rd8(ram, r, ANSWER);
+    uint8_t pick = rd8(ram, r, HM_ANSWER);
     set_a8(r, pick);
     r->c = 1;
     if (pick != 0) {
       r->c = pick >= 1;
       if (pick == 1) {
-        r->a = (uint16_t)(hm_bus_rd16(ram, DAY_FLAGS) & 0x0020);
+        r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5A)) & 0x0020);
         if (r->a) { say_done(ram, r, 0x03B6, 0xDF57); return; }
-        set_a8(r, hm_bus_rd8(ram, CHICKENS));
+        set_a8(r, hm_bus_rd8(ram, WRAM_LONG(HM_CHICKEN_N)));
         r->c = (uint8_t)r->a >= 0x0C;
         if ((uint8_t)r->a == 0x0C) { say_done(ram, r, 0x03B7, 0xE169); return; }
         say(ram, r, 0x030A, 0xDF3A);
         set_a8(r, 3);
-        wr8(ram, r, STEP, 3);
+        wr8(ram, r, HM_INTERACTION_STEP, 3);
         return;
       }
       r->c = pick >= 2;
@@ -707,34 +627,34 @@ void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r)
         return;
       }
     }
-    r->a = (uint16_t)(hm_bus_rd16(ram, DAY_FLAGS) & 0x0020);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5A)) & 0x0020);
     if (r->a) { say_done(ram, r, 0x03B6, 0xDF00); return; }
-    set_a8(r, hm_bus_rd8(ram, COWS));
+    set_a8(r, hm_bus_rd8(ram, WRAM_LONG(HM_COW_N)));
     r->c = (uint8_t)r->a >= 0x0C;
     if ((uint8_t)r->a == 0x0C) { say_done(ram, r, 0x03B7, 0xE03D); return; }
     say(ram, r, 0x0307, 0xDEE3);
     set_a8(r, 2);
-    wr8(ram, r, STEP, 2);
+    wr8(ram, r, HM_INTERACTION_STEP, 2);
     return;
   }
   if (is(r, 2)) {                                          /* a cow: sure? */
     if (text_open(ram, r)) return;
     if (said_no(ram, r)) { say_done(ram, r, 0x0303, 0xE0DC); return; }
-    if (!room_for(ram, r, hm_bus_rd8(ram, CHICKENS), (uint16_t)(hm_bus_rd8(ram, COWS) + 1))) {
+    if (!room_for(ram, r, hm_bus_rd8(ram, WRAM_LONG(HM_CHICKEN_N)), (uint16_t)(hm_bus_rd8(ram, WRAM_LONG(HM_COW_N)) + 1))) {
       say_done(ram, r, 0x0306, 0xE01B);
       return;
     }
     if (!pay(ram, r, 0xFE0C, 0xE05D)) { say_done(ram, r, 0x0304, 0xE077); return; }
     say_done(ram, r, 0x0308, 0xE099);
     day_flag(ram, r, 0x0022);
-    one_more(ram, r, COWS);
+    one_more(ram, r, WRAM_LONG(HM_COW_N));
     happiness(ram, r, 0x0014, 0xE0C6);
     return;
   }
   if (is(r, 3)) {                                          /* a chicken: sure? */
     if (text_open(ram, r)) return;
     if (said_no(ram, r)) { say_done(ram, r, 0x0303, 0xE20F); return; }
-    if (!room_for(ram, r, (uint16_t)(hm_bus_rd8(ram, CHICKENS) + 1), hm_bus_rd8(ram, COWS))) {
+    if (!room_for(ram, r, (uint16_t)(hm_bus_rd8(ram, WRAM_LONG(HM_CHICKEN_N)) + 1), hm_bus_rd8(ram, WRAM_LONG(HM_COW_N)))) {
       say_done(ram, r, 0x0306, 0xE145);
       return;
     }
@@ -743,13 +663,13 @@ void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r)
     r->a = 2;
     jsl(ram, r, 0xE1D9, 0x83, hm_AddNewChicken);
     day_flag(ram, r, 0x0020);
-    one_more(ram, r, CHICKENS);
+    one_more(ram, r, WRAM_LONG(HM_CHICKEN_N));
     happiness(ram, r, 0x000A, 0xE1FA);
     return;
   }
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_68) & 0x0001);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_68)) & 0x0001);
   if (!r->a) { done(ram, r); return; }
-  r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x000A);
+  r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0x000A);
   if (r->a) { say_done(ram, r, 0x03D0, 0xDE77); return; }
   say(ram, r, 0x0305, 0xDE5C);
   next_step(ram, r);
@@ -758,13 +678,13 @@ void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r)
 /* B closes the menu: CloseTextBox (at a), $019A = 1, $0128 bit 7 off */
 static bool menu_cancelled(uint8_t *ram, HmRegs *r, uint16_t at)
 {
-  r->a = rd16(ram, r, JOY_HELD);
+  r->a = rd16(ram, r, HM_PAD1_HELD);
   if (!(r->a & 0x8000)) return false;
   jsl(ram, r, at, 0x83, hm_CloseTextBox);
   set_a8(r, 1);
-  wr8(ram, r, INPUT_STATE, 1);
-  r->a = (uint16_t)(rd16(ram, r, JOY_NEW) & 0xFF7F);
-  wr16(ram, r, JOY_NEW, r->a);
+  wr8(ram, r, HM_INPUT_STATE, 1);
+  r->a = (uint16_t)(rd16(ram, r, HM_PAD1_NEW) & 0xFF7F);
+  wr16(ram, r, HM_PAD1_NEW, r->a);
   done(ram, r);
   return true;
 }
@@ -787,7 +707,7 @@ static void sign_menu(uint8_t *ram, HmRegs *r, const Sign *sg)
   }
   if (menu_cancelled(ram, r, sg->at_close)) return;
   if (text_open(ram, r)) return;
-  uint8_t pick = rd8(ram, r, ANSWER);
+  uint8_t pick = rd8(ram, r, HM_ANSWER);
   set_a8(r, pick);
   unsigned k = 0;
   for (unsigned i = 0; i < sg->n; i++) {
@@ -823,7 +743,7 @@ void hm_PlayerAction_41(uint8_t *ram, HmRegs *r)
 {
   state_on(ram, r, 0x0020);
   r->a = 3;
-  hm_dp_w16(ram, r, ACTION, 3);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 3);
   done(ram, r);
   set_a8(r, 0x0C);
   r->n = 0;
@@ -841,7 +761,7 @@ void hm_PlayerAction_42(uint8_t *ram, HmRegs *r)
   step(ram, r);
   if (is(r, 1)) {
     r->x = 0x030C;
-    set_a8(r, (uint8_t)(hm_bus_rd8(ram, SHED_ROW_1) & 0x04));
+    set_a8(r, (uint8_t)(hm_bus_rd8(ram, WRAM_LONG(HM_SHED_ITEMS + 1)) & 0x04));
     if (!(r->a & 0xFF)) {
       uint8_t tool = rd8(ram, r, HM_TOOL_SELECTED);
       set_a8(r, tool);
@@ -850,27 +770,27 @@ void hm_PlayerAction_42(uint8_t *ram, HmRegs *r)
     }
     text_x(ram, r, 0xE755);
     set_a8(r, 2);
-    wr8(ram, r, STEP, 2);
+    wr8(ram, r, HM_INTERACTION_STEP, 2);
     return;
   }
   if (is(r, 2)) {
     if (text_open(ram, r)) return;
     set_a8(r, 3);
-    wr8(ram, r, STEP, 3);
+    wr8(ram, r, HM_INTERACTION_STEP, 3);
     set_a8(r, 1);
-    wr8(ram, r, NAME_FOR, 1);
-    uint8_t v = (uint8_t)(hm_bus_rd8(ram, SHED_ROW_1) | 0x04);
+    wr8(ram, r, HM_NAME_FOR, 1);
+    uint8_t v = (uint8_t)(hm_bus_rd8(ram, WRAM_LONG(HM_SHED_ITEMS + 1)) | 0x04);
     set_a8(r, v);
-    hm_bus_wr8(ram, SHED_ROW_1, v);
-    r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) | 0x2000);
-    wr16(ram, r, WEATHER_FLAGS, r->a);
+    hm_bus_wr8(ram, WRAM_LONG(HM_SHED_ITEMS + 1), v);
+    r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) | 0x2000);
+    wr16(ram, r, HM_WEATHER_FLAGS, r->a);
     return;
   }
   if (is(r, 3)) { done(ram, r); return; }
   walk(ram, r, 1, 2);
   if (count_to(ram, r, 0x20)) {
     set_a8(r, 1);
-    wr8(ram, r, STEP, 1);
+    wr8(ram, r, HM_INTERACTION_STEP, 1);
   }
 }
 
@@ -904,13 +824,13 @@ void hm_PlayerAction_42(uint8_t *ram, HmRegs *r)
 static void set_step(uint8_t *ram, HmRegs *r, uint8_t s)
 {
   set_a8(r, s);
-  wr8(ram, r, STEP, s);
+  wr8(ram, r, HM_INTERACTION_STEP, s);
 }
 /* LDY #0; LDA [$72],Y; AND #mask */
 static uint8_t cow_bits(uint8_t *ram, HmRegs *r, uint8_t mask)
 {
   r->y = 0;
-  uint8_t v = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, ANIMAL_PTR, ANIMAL_FLAGS)) & mask);
+  uint8_t v = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, ANIMAL_STATUS)) & mask);
   set_a8(r, v);
   return v;
 }
@@ -927,7 +847,7 @@ static void dealer_comes_at(uint8_t *ram, HmRegs *r, uint16_t at)
 static void dealer_comes(uint8_t *ram, HmRegs *r) { dealer_comes_at(ram, r, 0xE858); }  /* $81:E84D */
 static bool flag_60_bit(uint8_t *ram, HmRegs *r, uint16_t bit)
 {
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_60) & bit);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & bit);
   return r->a != 0;
 }
 static bool flag_60(uint8_t *ram, HmRegs *r) { return flag_60_bit(ram, r, 0x2000); }
@@ -940,8 +860,8 @@ static void leaves(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t y, uint16_t at_
 }
 /* the animal leaves too (its slot runs event y), its record goes, one less */
 typedef struct Animal { uint16_t slot; uint8_t first; uint16_t event; Step *record; uint32_t count; } Animal;
-static const Animal k_cow = { DEALER_SLOT, 0x18, 0x0022, hm_GetCowPointer, COWS };
-static const Animal k_chicken = { SOLD_CHICKEN_SLOT, 0x24, 0x0024, hm_GetChickenPointer, CHICKENS };
+static const Animal k_cow = { HM_SOLD_COW_SLOT, 0x18, 0x0022, hm_GetCowPointer, WRAM_LONG(HM_COW_N) };
+static const Animal k_chicken = { HM_SOLD_CHICKEN_SLOT, 0x24, 0x0024, hm_GetChickenPointer, WRAM_LONG(HM_CHICKEN_N) };
 
 static void animal_record(uint8_t *ram, HmRegs *r, const Animal *an, uint16_t at)
 {
@@ -958,12 +878,12 @@ static void animal_leaves(uint8_t *ram, HmRegs *r, const Animal *an, uint16_t at
   animal_record(ram, r, an, at_rec);
   r->y = 0;
   set_a8(r, 0);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, ANIMAL_PTR, ANIMAL_FLAGS), 0);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, ANIMAL_STATUS), 0);
   uint8_t n = (uint8_t)(hm_bus_rd8(ram, an->count) - 1);
   set_a8(r, n);
   hm_bus_wr8(ram, an->count, n);
   set_step(ram, r, 4);
-  wr8(ram, r, FRAMES, 0);
+  wr8(ram, r, HM_INTERACTION_FRAMES, 0);
 }
 static void cow_leaves(uint8_t *ram, HmRegs *r, uint16_t at_event, uint16_t at_cow)
 {
@@ -975,9 +895,9 @@ static void animal_stays(uint8_t *ram, HmRegs *r, uint16_t slot, uint16_t at)
   r->a = rd8(ram, r, slot);
   jsl(ram, r, at, 0x84, hm_SetEventSlotPointer);
   r->y = SLOT_FLAGS;
-  uint8_t v = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, EVENT_SLOT, SLOT_FLAGS)) | 0xA8);
+  uint8_t v = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS)) | 0xA8);
   set_a8(r, v);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, EVENT_SLOT, SLOT_FLAGS), v);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS), v);
 }
 
 /* SEP; LDA #0; XBA; LDA $09A0; SEC; SBC #$18; REP; JSL GetCowPointer */
@@ -996,12 +916,12 @@ void hm_PlayerAction_43(uint8_t *ram, HmRegs *r)
   case 0:
     dealer_cow(ram, r, 0xE7FF);
     if (cow_bits(ram, r, 0x06) || cow_bits(ram, r, 0x70)) { dealer_comes(ram, r); return; }
-    set_a8(r, hm_bus_rd8(ram, YEAR));
+    set_a8(r, hm_bus_rd8(ram, WRAM_LONG(HM_YEAR)));
     if (!(r->a & 0xFF)) { dealer_comes(ram, r); return; }
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_66) & 0x8000);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) & 0x8000);
     if (r->a) { dealer_comes(ram, r); return; }
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_66) | 0x8000);
-    hm_bus_wr16(ram, FLAGS_66, r->a);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) | 0x8000);
+    hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_66), r->a);
     event_long(ram, r, 0x0008, 0x007C, 0xE83F);
     set_step(ram, r, 7);
     return;
@@ -1014,7 +934,7 @@ void hm_PlayerAction_43(uint8_t *ram, HmRegs *r)
       return;
     }
     set_a8(r, 2);
-    wr8(ram, r, INPUT_STATE, 2);
+    wr8(ram, r, HM_INPUT_STATE, 2);
     dealer_cow(ram, r, 0xE894);
     {
       uint16_t text = 0x030E, at = 0xE8B3;
@@ -1023,7 +943,7 @@ void hm_PlayerAction_43(uint8_t *ram, HmRegs *r)
       else if (cow_bits(ram, r, 0x70)) { text = 0x030D; at = 0xE8E3; next = 5; }
       r->x = text;
       set_a8(r, 0);
-      wr8(ram, r, TEXT_BOX_LINES, 0);
+      wr8(ram, r, HM_TEXT_BOX_LINES, 0);
       jsl(ram, r, at, 0x83, hm_StartTextBox);
       set_step(ram, r, next);
     }
@@ -1036,9 +956,9 @@ void hm_PlayerAction_43(uint8_t *ram, HmRegs *r)
     return;
   case 3:
     if (text_open(ram, r)) return;
-    r->a = hm_bus_rd16(ram, SALE_PRICE);
+    r->a = hm_bus_rd16(ram, WRAM_LONG(HM_SALE_PRICE));
     hm_dp_w16(ram, r, MONEY_ARG, r->a);
-    set_a8(r, hm_bus_rd8(ram, SALE_PRICE_HIGH));
+    set_a8(r, hm_bus_rd8(ram, WRAM_LONG(HM_SALE_PRICE_HIGH)));
     *hm_dp(ram, r, MONEY_ARG_HIGH) = (uint8_t)r->a;
     jsl(ram, r, 0xE979, 0x83, hm_AddMoney);
     leaves(ram, r, 0x0007, 0x0023, 0xE982, 0xE991);
@@ -1047,7 +967,7 @@ void hm_PlayerAction_43(uint8_t *ram, HmRegs *r)
     return;
   case 4:
     if (!count_to(ram, r, 0x42)) return;
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
     if (flag_60(ram, r)) { dealer_comes(ram, r); return; }
     done(ram, r);
     return;
@@ -1055,13 +975,13 @@ void hm_PlayerAction_43(uint8_t *ram, HmRegs *r)
     if (text_open(ram, r)) return;
     leaves(ram, r, 0x0007, 0x0023, 0xEA22, 0xEA31);
     set_step(ram, r, 6);
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
     return;
   case 6:
     if (!count_to(ram, r, 0x40)) return;
     done(ram, r);
     if (flag_60(ram, r)) return;
-    animal_stays(ram, r, DEALER_SLOT, 0xEA73);
+    animal_stays(ram, r, HM_SOLD_COW_SLOT, 0xEA73);
     return;
   case 7:
     if (!count_to(ram, r, 0x42)) return;
@@ -1080,23 +1000,23 @@ void hm_PlayerAction_43(uint8_t *ram, HmRegs *r)
     leaves(ram, r, 0x0008, 0x007D, 0xEB18, 0xEB27);
     cow_leaves(ram, r, 0xEB39, 0xEB4A);
     {
-      uint8_t v = (uint8_t)(hm_bus_rd8(ram, SHED_ROW_2) | 0x20);
+      uint8_t v = (uint8_t)(hm_bus_rd8(ram, WRAM_LONG(HM_SHED_ITEMS + 2)) | 0x20);
       set_a8(r, v);
-      hm_bus_wr8(ram, SHED_ROW_2, v);
+      hm_bus_wr8(ram, WRAM_LONG(HM_SHED_ITEMS + 2), v);
     }
     happiness(ram, r, 0xFFCE, 0xEB7B);
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_60) | 0x2000);
-    hm_bus_wr16(ram, FLAGS_60, r->a);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) | 0x2000);
+    hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_60), r->a);
     return;
   case 0x0A:
     if (text_open(ram, r)) return;
     leaves(ram, r, 0x0008, 0x007D, 0xEBA0, 0xEBAF);
     set_step(ram, r, 0x0B);
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
     return;
   default:                                                 /* $0B */
     if (!count_to(ram, r, 0x42)) return;
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
     dealer_comes(ram, r);
     return;
   }
@@ -1124,14 +1044,14 @@ void hm_PlayerAction_44(uint8_t *ram, HmRegs *r)
   }
   switch (k) {
   case 0: {
-    uint8_t season = hm_bus_rd8(ram, SEASON);
+    uint8_t season = hm_bus_rd8(ram, WRAM_LONG(HM_SEASON));
     set_a8(r, season);
     r->c = season >= 2;
     if (season != 2) { dealer_comes_at(ram, r, 0xEC6F); return; }
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_66) & 0x4000);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) & 0x4000);
     if (r->a) { dealer_comes_at(ram, r, 0xEC6F); return; }
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_66) | 0x4000);
-    hm_bus_wr16(ram, FLAGS_66, r->a);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) | 0x4000);
+    hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_66), r->a);
     event_long(ram, r, 0x0008, 0x007C, 0xEC56);
     set_step(ram, r, 7);
     return;
@@ -1156,9 +1076,9 @@ void hm_PlayerAction_44(uint8_t *ram, HmRegs *r)
     return;
   case 3:
     if (text_open(ram, r)) return;
-    r->a = hm_bus_rd16(ram, SALE_PRICE);
+    r->a = hm_bus_rd16(ram, WRAM_LONG(HM_SALE_PRICE));
     hm_dp_w16(ram, r, MONEY_ARG, r->a);
-    set_a8(r, hm_bus_rd8(ram, SALE_PRICE_HIGH));
+    set_a8(r, hm_bus_rd8(ram, WRAM_LONG(HM_SALE_PRICE_HIGH)));
     *hm_dp(ram, r, MONEY_ARG_HIGH) = (uint8_t)r->a;
     jsl(ram, r, 0xED3C, 0x83, hm_AddMoney);
     leaves(ram, r, 0x0007, 0x0023, 0xED45, 0xED54);
@@ -1167,7 +1087,7 @@ void hm_PlayerAction_44(uint8_t *ram, HmRegs *r)
     return;
   case 4:
     if (!count_to(ram, r, 0x42)) return;
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
     if (flag_60_bit(ram, r, 0x1000)) { dealer_comes_at(ram, r, 0xEC6F); return; }
     done(ram, r);
     return;
@@ -1175,13 +1095,13 @@ void hm_PlayerAction_44(uint8_t *ram, HmRegs *r)
     if (text_open(ram, r)) return;
     leaves(ram, r, 0x0007, 0x0023, 0xEDE5, 0xEDF4);
     set_step(ram, r, 6);
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
     return;
   case 6:
     if (!count_to(ram, r, 0x42)) return;
     done(ram, r);
     if (flag_60_bit(ram, r, 0x1000)) return;
-    animal_stays(ram, r, SOLD_CHICKEN_SLOT, 0xEE36);
+    animal_stays(ram, r, HM_SOLD_CHICKEN_SLOT, 0xEE36);
     return;
   case 7:
     if (!count_to(ram, r, 0x42)) return;
@@ -1199,27 +1119,27 @@ void hm_PlayerAction_44(uint8_t *ram, HmRegs *r)
     if (text_open(ram, r)) return;
     leaves(ram, r, 0x0008, 0x007D, 0xEEDB, 0xEEEA);
     animal_leaves(ram, r, &k_chicken, 0xEEFC, 0xEF0D);
-    r->y = ANIMAL_X;
-    r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, ANIMAL_PTR, ANIMAL_X));
-    wr16(ram, r, FRONT_X, r->a);
-    r->y = ANIMAL_Y;
-    r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, ANIMAL_PTR, ANIMAL_Y));
-    wr16(ram, r, FRONT_Y, r->a);
+    r->y = CHICKEN_X;
+    r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, CHICKEN_X));
+    wr16(ram, r, HM_TILE_IN_FRONT_X, r->a);
+    r->y = CHICKEN_Y;
+    r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, CHICKEN_Y));
+    wr16(ram, r, HM_TILE_IN_FRONT_Y, r->a);
     r->a = 0x0010; r->x = 0; r->y = 0x001F;
     jsl(ram, r, 0xEF4A, 0x84, hm_StartScriptAtTileInFront);
     happiness(ram, r, 0xFFEC, 0xEF53);
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_60) | 0x1000);
-    hm_bus_wr16(ram, FLAGS_60, r->a);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) | 0x1000);
+    hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_60), r->a);
     return;
   case 0x0A:
     if (text_open(ram, r)) return;
     leaves(ram, r, 0x0008, 0x007D, 0xEF78, 0xEF87);
     set_step(ram, r, 0x0B);
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
     return;
   default:
     if (!count_to(ram, r, 0x42)) return;
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
     dealer_comes_at(ram, r, 0xEC6F);
     return;
   }
@@ -1248,15 +1168,15 @@ void hm_PlayerAction_45(uint8_t *ram, HmRegs *r)
     if (text_open(ram, r)) return;
     set_step(ram, r, 4);
     set_a8(r, 2);
-    wr8(ram, r, NAME_FOR, 2);
-    r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) | 0x2000);
-    wr16(ram, r, WEATHER_FLAGS, r->a);
+    wr8(ram, r, HM_NAME_FOR, 2);
+    r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) | 0x2000);
+    wr16(ram, r, HM_WEATHER_FLAGS, r->a);
     return;
   }
   if (is(r, 4)) { done(ram, r); return; }
   if (count_to(ram, r, 0x08)) {
     set_step(ram, r, 1);
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
   }
 }
 
@@ -1276,19 +1196,19 @@ void hm_PlayerAction_46(uint8_t *ram, HmRegs *r)
   if (is(r, 1)) {
     if (!count_to(ram, r, 0x42)) return;
     set_a8(r, 2);
-    wr8(ram, r, INPUT_STATE, 2);
+    wr8(ram, r, HM_INPUT_STATE, 2);
     r->x = 0x031A;
-    r->a = hm_bus_rd16(ram, SHIPPED_LOW);
+    r->a = hm_bus_rd16(ram, WRAM_LONG(HM_SHIPPING_MONEY));
     if (r->a) {                                            /* the bug */
       r->a = 0x8D00;
       uint32_t at = (((uint32_t)r->db << 16) + hm_dp_r16(ram, r, BUG_PTR) + r->y) & 0xFFFFFF;
       hm_bus_wr16(ram, at, 0x8D00);
       jsl(ram, r, 0xF0C4, 0x83, hm_StartTextBox);
     } else {
-      set_a8(r, hm_bus_rd8(ram, SHIPPED_HIGH));
+      set_a8(r, hm_bus_rd8(ram, WRAM_LONG(HM_SHIPPING_MONEY_HIGH)));
       if (!(r->a & 0xFF)) r->x = 0x031B;
       set_a8(r, 0);
-      wr8(ram, r, TEXT_BOX_LINES, 0);
+      wr8(ram, r, HM_TEXT_BOX_LINES, 0);
       jsl(ram, r, 0xF0C4, 0x83, hm_StartTextBox);
     }
     set_step(ram, r, 2);
@@ -1298,7 +1218,7 @@ void hm_PlayerAction_46(uint8_t *ram, HmRegs *r)
     if (text_open(ram, r)) return;
     leaves(ram, r, 0x0006, 0x0027, 0xF0E3, 0xF0F2);
     set_step(ram, r, 3);
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
     return;
   }
   if (is(r, 3)) {
@@ -1344,37 +1264,37 @@ void hm_PlayerAction_47(uint8_t *ram, HmRegs *r)
   if (is(r, 3)) {
     if (text_open(ram, r)) return;
     if (said_no(ram, r)) { say(ram, r, 0x0136, 0xF2CC); set_step(ram, r, 1); return; }
-    r->a = hm_bus_rd16(ram, LUMBER_NEEDED);
+    r->a = hm_bus_rd16(ram, WRAM_LONG(HM_LUMBER_NEEDED));
     r->c = r->a >= 0x00FA;
     bool paid = r->a == 0x00FA ? pay(ram, r, 0xFE0C, 0xF259) : pay(ram, r, 0xFC18, 0xF23F);
     if (!paid) { say(ram, r, 0x0304, 0xF2B0); set_step(ram, r, 1); return; }
-    r->a = (uint16_t)(~hm_bus_rd16(ram, LUMBER_NEEDED) + 1);   /* EOR #$FFFF; INC */
+    r->a = (uint16_t)(~hm_bus_rd16(ram, WRAM_LONG(HM_LUMBER_NEEDED)) + 1); /* EOR #$FFFF; INC */
     jsl(ram, r, 0xF26E, 0x83, hm_AddWood);
     say(ram, r, 0x0135, 0xF281);
     set_step(ram, r, 1);
     set_a8(r, 0);
-    hm_bus_wr8(ram, BUILD_NIGHTS, 0);
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_66) | 0x0080);
-    hm_bus_wr16(ram, FLAGS_66, r->a);
+    hm_bus_wr8(ram, WRAM_LONG(HM_BUILD_NIGHTS), 0);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) | 0x0080);
+    hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_66), r->a);
     return;
   }
   if (!count_to(ram, r, 0x20)) return;
-  set_a8(r, hm_bus_rd8(ram, YEAR));
+  set_a8(r, hm_bus_rd8(ram, WRAM_LONG(HM_YEAR)));
   if (!(r->a & 0xFF)) {
-    uint8_t season = hm_bus_rd8(ram, SEASON);
+    uint8_t season = hm_bus_rd8(ram, WRAM_LONG(HM_SEASON));
     set_a8(r, season);
     r->c = season >= 2;
     if (season < 2) {
-      r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_70) | 0x0004);
-      hm_bus_wr16(ram, FLAGS_70, r->a);
+      r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_70)) | 0x0004);
+      hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_70), r->a);
     }
   }
-  wr8(ram, r, FRAMES, 0);
+  wr8(ram, r, HM_INTERACTION_FRAMES, 0);
   uint16_t offer = 0x013B, need = 0x01F4;
-  r->a = hm_bus_rd16(ram, LUMBER_NEEDED);
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_LUMBER_NEEDED));
   r->c = r->a >= 0x00FA;
   if (r->a == 0x00FA) { offer = 0x0134; need = 0x00FA; }
-  r->a = hm_bus_rd16(ram, LUMBER);
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_STORED_WOOD));
   r->c = r->a >= need;
   if (r->c) {
     r->x = offer;
@@ -1407,12 +1327,12 @@ void hm_PlayerAction_48(uint8_t *ram, HmRegs *r)
   step(ram, r);
   if (is(r, 1)) {
     if (text_open(ram, r)) return;
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_64) & 0x0080);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_64)) & 0x0080);
     if (!r->a) {
-      r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_70) & 0x0004);
+      r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_70)) & 0x0004);
       if (r->a) {
-        r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_6E) | 0x4000);
-        hm_bus_wr16(ram, FLAGS_6E, r->a);
+        r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_6E)) | 0x4000);
+        hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_6E), r->a);
         say(ram, r, 0x025C, 0xF386);
         set_step(ram, r, 3);
         return;
@@ -1431,8 +1351,8 @@ void hm_PlayerAction_48(uint8_t *ram, HmRegs *r)
     return;
   }
   if (!count_to(ram, r, 0x20)) return;
-  wr8(ram, r, FRAMES, 0);
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_64) & 0x0080);
+  wr8(ram, r, HM_INTERACTION_FRAMES, 0);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_64)) & 0x0080);
   if (!r->a) {
     happiness(ram, r, 0x0032, 0xF315);
     r->x = 0x013D;
@@ -1462,7 +1382,7 @@ void hm_PlayerAction_49(uint8_t *ram, HmRegs *r)
     return;
   }
   if (!count_to(ram, r, 0x20)) return;
-  wr8(ram, r, FRAMES, 0);
+  wr8(ram, r, HM_INTERACTION_FRAMES, 0);
   say(ram, r, 0x0300, 0xF43E);
   set_step(ram, r, 1);
 }
@@ -1494,7 +1414,7 @@ static void drink(uint8_t *ram, HmRegs *r, const Drink *d)
     if (text_open(ram, r)) return;
     pose(ram, r, 0x0019, d->sprite, d->at_pose);
     happiness(ram, r, d->joy, d->at_joy);
-    wr8(ram, r, FRAMES, 0);
+    wr8(ram, r, HM_INTERACTION_FRAMES, 0);
     set_step(ram, r, 4);
     return;
   }
@@ -1506,7 +1426,7 @@ static void drink(uint8_t *ram, HmRegs *r, const Drink *d)
     if (!count_to(ram, r, 0x64)) return;
     done(ram, r);
     r->a = 0;
-    hm_dp_w16(ram, r, ACTION, 0);
+    hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
     return;
   }
   say(ram, r, d->offer, d->at_offer);
@@ -1540,7 +1460,7 @@ void hm_PlayerAction_53(uint8_t *ram, HmRegs *r)
   tile_ahead(ram, r, 1, 0, 0, 0xF80E);
   hold(ram, r, 0x14);
   done(ram, r);
-  uint16_t v = rd16(ram, r, FRONT_X);
+  uint16_t v = rd16(ram, r, HM_TILE_IN_FRONT_X);
   for (int i = 0; i < 4; i++) { r->c = v & 1; v = (uint16_t)(v >> 1); }
   for (int i = 0; i < 4; i++) { r->c = v >> 15; v = (uint16_t)(v << 1); }
   r->a = v;
@@ -1554,8 +1474,8 @@ void hm_PlayerAction_53(uint8_t *ram, HmRegs *r)
       r->a = (uint16_t)(r->y << 1);
       r->c = 0;
       r->x = r->a;
-      r->a = (uint16_t)(hm_bus_rd16(ram, NEST_BITS + r->x) & hm_bus_rd16(ram, EGGS));
-      hm_bus_wr16(ram, EGGS, r->a);
+      r->a = (uint16_t)(hm_bus_rd16(ram, NEST_BITS + r->x) & hm_bus_rd16(ram, WRAM_LONG(HM_HEN_EGGS)));
+      hm_bus_wr16(ram, WRAM_LONG(HM_HEN_EGGS), r->a);
       return;
     }
   }
@@ -1571,7 +1491,7 @@ void hm_PlayerAction_56(uint8_t *ram, HmRegs *r)
 void hm_PlayerAction_57(uint8_t *ram, HmRegs *r)
 {
   r->x = 0x0491;
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_66) & 0x0002);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) & 0x0002);
   if (!r->a) r->x = 0x0246;
   text_x(ram, r, 0xFAA3);
   done(ram, r);
@@ -1589,7 +1509,7 @@ void hm_PlayerAction_35(uint8_t *ram, HmRegs *r)
   r->x = 0x0007;
   r->y = 0x0078;
   jsl(ram, r, 0xE37A, 0x83, hm_PlayEffectWithSongInstrument);
-  wr8(ram, r, LOADED_TOOL_SOUND, 0);
+  wr8(ram, r, HM_LOADED_TOOL_SOUND, 0);
   r->p = entry;
   jsl(ram, r, 0xE383, 0x82, hm_ToolUsedSound2);
   r->p = entry;

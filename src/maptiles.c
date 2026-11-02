@@ -29,30 +29,9 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
-/* Also used, from hm_ram.h: HM_MAP_ID ($22, the map being loaded),
- * HM_TOOL_SELECTED ($0921) and HM_TOOL_BACKPACK ($0923) */
-
-/* WRAM $7F:1Fxx (bus addresses) */
-#define SHED_ITEMS          0x7F1F00   /* the shed, one bit per item (+ the record's byte) */
-#define COWS                0x7F1F0A   /* 8b: cows owned */
-#define YEAR                0x7F1F18   /* 8b: 0 = the first year */
-#define SEASON              0x7F1F19   /* 8b: 0 spring ... 3 winter */
-#define DAY                 0x7F1F1B   /* 8b: 1..30 */
-#define POWER_BERRIES       0x7F1F36   /* 8b: power berries eaten */
-#define EGGS_LAID           0x7F1F45   /* 16b: one bit per hen that laid an egg */
-#define FLAGS_5A            0x7F1F5A   /* 16b flags; bit 0 = map $37 seen */
-#define FLAGS_64            0x7F1F64   /* 16b story flags (house extensions, a cow pregnant...) */
-#define FLAGS_66            0x7F1F66   /* 16b flags; bits 9-12 = the house painted */
-#define FLAGS_68            0x7F1F68   /* 16b flags; bit 0 = the shops are open */
-#define FLAGS_6A            0x7F1F6A   /* 16b flags; bits 0-3 = the gold tools on sale */
-#define FLAGS_6C            0x7F1F6C   /* 16b flags */
-#define FLAGS_6E            0x7F1F6E   /* 16b flags; bit 14 = the clock */
-
-/* WRAM of the data bank */
-#define WEATHER             0x0196     /* 16b: the weather and day flags */
-#define BARN_FODDER         0x0932     /* 16b: one bit per barn trough with food */
-#define COOP_FODDER         0x0934     /* 16b: one bit per coop trough with food */
+/* The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* ROM tables */
 #define TILE_TYPE_SHEET     0xA7F500   /* the tile types, laid out like the graphics sheet */
@@ -61,8 +40,8 @@
 #define GENERAL_STORE_LIST  0xBF27     /* $81:BF27: the general store's */
 #define ANIMAL_SHOP_LIST    0xBF6F     /* $81:BF6F: the animal shop's */
 #define POWER_FLOWER_PLACES 0x81AC49   /* x, y words; 10 places */
-#define TROUGH_BITS         0x82A571   /* a word per trough: its bit in BARN_FODDER / COOP_FODDER */
-#define HEN_BITS            0x81BF97   /* a word per hen: its bit in EGGS_LAID */
+#define TROUGH_BITS         0x82A571   /* a word per trough: its bit in HM_COW_TROUGHS / HM_CHICKEN_TROUGHS */
+#define HEN_BITS            0x81BF97   /* a word per hen: its bit in HM_HEN_EGGS */
 #define HEN_PLACES          0x83CA10   /* 4 bytes per hen: x, y in the coop */
 #define BARN_TROUGHS        0x81B0ED   /* 4 bytes per barn trough: x, y */
 #define COOP_TROUGHS        0x81B19F   /* 4 bytes per coop trough: x, y */
@@ -238,9 +217,9 @@ void hm_DrawShelfItem(uint8_t *ram, HmRegs *r)
   r->a = how;
   r->c = how >= 2;
   if (how != 2) {
-    bool owned = (rd8(ram, SHED_ITEMS + byte) & bit) != 0;
+    bool owned = (rd8(ram, WRAM_LONG(HM_SHED_ITEMS) + byte) & bit) != 0;
     r->c = how >= 1;
-    r->a = (uint16_t)((how & 0xFF00) | (rd8(ram, SHED_ITEMS + byte) & bit));
+    r->a = (uint16_t)((how & 0xFF00) | (rd8(ram, WRAM_LONG(HM_SHED_ITEMS) + byte) & bit));
     if (how == 1 ? !owned : owned) return;
   }
   uint16_t px = hm_bus_rd16(ram, hm_dp_long(ram, r, SHELF_LIST_PTR, y));
@@ -319,12 +298,12 @@ static bool cmp8(HmRegs *r, uint8_t v, uint8_t k) { r->c = v >= k; return v == k
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_ReplaceTilesFarm(uint8_t *ram, HmRegs *r)
 {
-  if (flag(ram, r, FLAGS_64, 0x0002)) stamp_typed(ram, r, 0x60, 0x0310, 0x0360, 0xAAD0, 0xAAD9);
-  if (flag(ram, r, FLAGS_64, 0x0001)) stamp_typed(ram, r, 0x5F, 0x0240, 0x02F0, 0xAAF4, 0xAAFD);
-  if (flag(ram, r, FLAGS_64, 0x0080))      stamp_typed(ram, r, 0x54, 0x0060, 0x0100, 0xAB1A, 0xAB23);
-  else if (flag(ram, r, FLAGS_64, 0x0040)) stamp_typed(ram, r, 0x53, 0x0060, 0x0100, 0xAB42, 0xAB4B);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0002)) stamp_typed(ram, r, 0x60, 0x0310, 0x0360, 0xAAD0, 0xAAD9);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0001)) stamp_typed(ram, r, 0x5F, 0x0240, 0x02F0, 0xAAF4, 0xAAFD);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0080))      stamp_typed(ram, r, 0x54, 0x0060, 0x0100, 0xAB1A, 0xAB23);
+  else if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0040)) stamp_typed(ram, r, 0x53, 0x0060, 0x0100, 0xAB42, 0xAB4B);
 
-  if (get8(ram, r, POWER_BERRIES)) {                    /* 8-bit A from here */
+  if (get8(ram, r, WRAM_LONG(HM_POWER_BERRIES))) {      /* 8-bit A from here */
     uint8_t n = 0;
     do {
       hm_push8(ram, r, n);                                /* PHA */
@@ -336,14 +315,14 @@ void hm_ReplaceTilesFarm(uint8_t *ram, HmRegs *r)
       r->c = n == 0xFF;                                   /* CLC; ADC #1 */
       n++;
       r->a = (uint16_t)((r->a & 0xFF00) | n);
-    } while (!cmp8(r, n, rd8(ram, POWER_BERRIES)));
+    } while (!cmp8(r, n, rd8(ram, WRAM_LONG(HM_POWER_BERRIES))));
   }
 
-  if (flag(ram, r, FLAGS_66, 0x0200)) stamp_typed(ram, r, 0x59, 0x0080, 0x0130, 0xABAE, 0xABB7);
-  if (flag(ram, r, FLAGS_66, 0x0400)) stamp_typed(ram, r, 0x58, 0x0060, 0x0130, 0xABD2, 0xABDB);
-  if (flag(ram, r, FLAGS_66, 0x0800)) stamp_typed(ram, r, 0x5A, 0x0090, 0x0130, 0xABF6, 0xABFF);
-  if (flag(ram, r, FLAGS_66, 0x1000)) stamp_typed(ram, r, 0x5C, 0x00B0, 0x0130, 0xAC1A, 0xAC23);
-  if (flag(ram, r, FLAGS_68, 0x1000)) stamp_typed(ram, r, 0xF5, 0x0120, 0x0140, 0xAC3E, 0xAC47);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0200)) stamp_typed(ram, r, 0x59, 0x0080, 0x0130, 0xABAE, 0xABB7);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0400)) stamp_typed(ram, r, 0x58, 0x0060, 0x0130, 0xABD2, 0xABDB);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0800)) stamp_typed(ram, r, 0x5A, 0x0090, 0x0130, 0xABF6, 0xABFF);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x1000)) stamp_typed(ram, r, 0x5C, 0x00B0, 0x0130, 0xAC1A, 0xAC23);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x1000)) stamp_typed(ram, r, 0xF5, 0x0120, 0x0140, 0xAC3E, 0xAC47);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -353,9 +332,9 @@ void hm_ReplaceTilesFarm(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_ReplaceTilesMountain(uint8_t *ram, HmRegs *r)
 {
-  if (flag(ram, r, db_(r, WEATHER), 0x0002) || flag(ram, r, db_(r, WEATHER), 0x0008))
+  if (flag(ram, r, db_(r, HM_WEATHER_FLAGS), 0x0002) || flag(ram, r, db_(r, HM_WEATHER_FLAGS), 0x0008))
     stamp(ram, r, 0xE2, 0x0180, 0x0020, 0xACC5);
-  if (flag(ram, r, FLAGS_64, 0x0002)) stamp_typed(ram, r, 0xE1, 0x0170, 0x0270, 0xACAC, 0xACB5);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0002)) stamp_typed(ram, r, 0xE1, 0x0170, 0x0270, 0xACAC, 0xACB5);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -368,13 +347,13 @@ typedef struct { uint16_t shell_x, shell_y, clock_x, clock_y, ret[4]; } House;
 
 static void house(uint8_t *ram, HmRegs *r, const House *h)
 {
-  if (flag(ram, r, db_(r, WEATHER), 0x0010)) stamp(ram, r, 0xEE, 0x0070, 0x00C0, h->ret[0]);
-  if (flag(ram, r, FLAGS_6C, 0x1000)) {
+  if (flag(ram, r, db_(r, HM_WEATHER_FLAGS), 0x0010)) stamp(ram, r, 0xEE, 0x0070, 0x00C0, h->ret[0]);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6C), 0x1000)) {
     stamp(ram, r, 0xFD, h->shell_x, h->shell_y, h->ret[1]);
     r->a = 0xD7; r->x = h->shell_x; r->y = (uint16_t)(h->shell_y + 0x10);
     jsl(ram, r, h->ret[2], 0x82, hm_EditTileOnMap);
   }
-  if (flag(ram, r, FLAGS_6E, 0x4000)) stamp(ram, r, 0xFE, h->clock_x, h->clock_y, h->ret[3]);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x4000)) stamp(ram, r, 0xFE, h->clock_x, h->clock_y, h->ret[3]);
 }
 void hm_ReplaceTilesHouse1(uint8_t *ram, HmRegs *r)
 {
@@ -412,15 +391,15 @@ static void seed_shelf(uint8_t *ram, HmRegs *r, uint16_t from, uint16_t to, uint
 }
 void hm_ReplaceTilesFlowerShop(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_68, 0x0001)) return;
-  uint8_t season = get8(ram, r, SEASON);
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) return;
+  uint8_t season = get8(ram, r, WRAM_LONG(HM_SEASON));
   if (cmp8(r, season, 1)) seed_shelf(ram, r, 0, 2, 0xAE02);
-  season = get8(ram, r, SEASON);
+  season = get8(ram, r, WRAM_LONG(HM_SEASON));
   if (season == 0) seed_shelf(ram, r, 2, 4, 0xAE2B);
-  season = get8(ram, r, SEASON);
+  season = get8(ram, r, WRAM_LONG(HM_SEASON));
   r->c = season >= 2;
   if (season < 2) item(ram, r, 5, 1, 2, 0xAE4E);
-  season = get8(ram, r, SEASON);
+  season = get8(ram, r, WRAM_LONG(HM_SEASON));
   r->c = season >= 2;
   if (season < 2) item(ram, r, 6, 1, 0, 0xAE68);
 }
@@ -435,22 +414,22 @@ void hm_ReplaceTilesFlowerShop(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_ReplaceTilesGeneralStore(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_68, 0x0001)) return;
-  if (!carrying(ram, r, 0x0D) && flag(ram, r, FLAGS_64, 0x0080)) item(ram, r, 1, 2, 0, 0xAEA5);
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) return;
+  if (!carrying(ram, r, 0x0D) && flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0080)) item(ram, r, 1, 2, 0, 0xAEA5);
   if (!carrying(ram, r, 0x0E)) item(ram, r, 2, 2, 0, 0xAEC3);
   if (!carrying(ram, r, 0x0F)) item(ram, r, 3, 2, 0, 0xAEE1);
-  if (!carrying(ram, r, 0x11) && flag(ram, r, FLAGS_6A, 0x0001)) item(ram, r, 4, 2, 0, 0xAF0A);
-  if (!carrying(ram, r, 0x12) && flag(ram, r, FLAGS_6A, 0x0002)) item(ram, r, 5, 2, 0, 0xAF33);
-  if (!carrying(ram, r, 0x13) && flag(ram, r, FLAGS_6A, 0x0004)) item(ram, r, 6, 2, 0, 0xAF5C);
-  if (!carrying(ram, r, 0x14) && flag(ram, r, FLAGS_6A, 0x0008)) item(ram, r, 7, 2, 0, 0xAF85);
+  if (!carrying(ram, r, 0x11) && flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0001)) item(ram, r, 4, 2, 0, 0xAF0A);
+  if (!carrying(ram, r, 0x12) && flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0002)) item(ram, r, 5, 2, 0, 0xAF33);
+  if (!carrying(ram, r, 0x13) && flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0004)) item(ram, r, 6, 2, 0, 0xAF5C);
+  if (!carrying(ram, r, 0x14) && flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0008)) item(ram, r, 7, 2, 0, 0xAF85);
   if (carrying(ram, r, 0x15)) return;
-  cmp8(r, get8(ram, r, YEAR), 1);
+  cmp8(r, get8(ram, r, WRAM_LONG(HM_YEAR)), 1);
   if (!r->c) {                                            /* the first year */
-    uint8_t season = get8(ram, r, SEASON);
+    uint8_t season = get8(ram, r, WRAM_LONG(HM_SEASON));
     if (season == 0) return;                              /* spring: not yet */
     cmp8(r, season, 2);
     if (!r->c) {                                          /* summer: from day 20 */
-      cmp8(r, get8(ram, r, DAY), 0x14);
+      cmp8(r, get8(ram, r, WRAM_LONG(HM_DAY)), 0x14);
       if (!r->c) return;
     }                                                     /* fall, winter: yes */
   }
@@ -466,9 +445,9 @@ void hm_ReplaceTilesGeneralStore(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_ReplaceTilesAnimalShop(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_68, 0x0001)) return;
-  if (!flag(ram, r, FLAGS_64, 0x0004) && flag(ram, r, FLAGS_6E, 0x1000) &&
-      !cmp8(r, get8(ram, r, COWS), 0x0C) && !carrying(ram, r, 0x0A))
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) return;
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0004) && flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x1000) &&
+      !cmp8(r, get8(ram, r, WRAM_LONG(HM_COW_N)), 0x0C) && !carrying(ram, r, 0x0A))
     item(ram, r, 1, 3, 0, 0xB007);
   if (!carrying(ram, r, 0x09)) item(ram, r, 2, 3, 0, 0xB025);
   if (!carrying(ram, r, 0x19)) item(ram, r, 3, 3, 0, 0xB043);
@@ -489,7 +468,7 @@ void hm_ReplaceTilesToolShed(uint8_t *ram, HmRegs *r)
   }
   r->y = 0x18;
   r->c = 1;
-  if (flag(ram, r, FLAGS_68, 0x2000)) stamp_typed(ram, r, 0xF0, 0x0070, 0x0020, 0xB09D, 0xB0A6);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x2000)) stamp_typed(ram, r, 0xF0, 0x0070, 0x0020, 0xB09D, 0xB0A6);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -525,13 +504,13 @@ static void by_bits(uint8_t *ram, HmRegs *r, uint16_t n, uint32_t bits, uint32_t
 void hm_ReplaceTilesBarn(uint8_t *ram, HmRegs *r)
 {
   item(ram, r, 0x1A, 0, 1, 0xB0B5);
-  by_bits(ram, r, 13, TROUGH_BITS, db_(r, BARN_FODDER), BARN_TROUGHS, 0x99, 0xB0E2);
+  by_bits(ram, r, 13, TROUGH_BITS, db_(r, HM_COW_TROUGHS), BARN_TROUGHS, 0x99, 0xB0E2);
 }
 void hm_ReplaceTilesCoop(uint8_t *ram, HmRegs *r)
 {
   item(ram, r, 0x19, 0, 1, 0xB12E);
-  by_bits(ram, r, 12, TROUGH_BITS, db_(r, COOP_FODDER), COOP_TROUGHS, 0x99, 0xB15D);
-  by_bits(ram, r, 13, HEN_BITS, EGGS_LAID, HEN_PLACES, 0xF1, 0xB194);
+  by_bits(ram, r, 12, TROUGH_BITS, db_(r, HM_CHICKEN_TROUGHS), COOP_TROUGHS, 0x99, 0xB15D);
+  by_bits(ram, r, 13, HEN_BITS, WRAM_LONG(HM_HEN_EGGS), HEN_PLACES, 0xF1, 0xB194);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -542,22 +521,22 @@ void hm_ReplaceTilesCoop(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_ReplaceTilesMountainCave(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_6C, 0x0011)) return;
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_6C), 0x0011)) return;
   stamp_kept(ram, r, 0xE4, 0x0070, 0x0160, 0xB1E9);
   stamp_kept(ram, r, 0xE4, 0x0070, 0x0130, 0xB200);
   stamp_kept(ram, r, 0xE4, 0x0060, 0x0170, 0xB217);
 }
 void hm_ReplaceTilesElfTunnel(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_64, 0x0002)) return;
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0002)) return;
   stamp_typed(ram, r, 0xEF, 0x0030, 0x0180, 0xB23B, 0xB244);
   stamp_typed(ram, r, 0xEF, 0x0020, 0x01B0, 0xB256, 0xB25F);
 }
 void hm_ReplaceTilesMap37(uint8_t *ram, HmRegs *r)
 {
-  if (flag(ram, r, FLAGS_5A, 0x0001)) return;
-  r->a = (uint16_t)(rd16(ram, FLAGS_5A) | 0x0001);
-  hm_bus_wr16(ram, FLAGS_5A, r->a);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_5A), 0x0001)) return;
+  r->a = (uint16_t)(rd16(ram, WRAM_LONG(HM_FLAGS_5A)) | 0x0001);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5A), r->a);
   stamp(ram, r, 0x9B, 0x0080, 0x0110, 0xB291);
 }
 

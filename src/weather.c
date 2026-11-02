@@ -11,16 +11,11 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_WEATHER_TOMORROW ($098C), HM_YEAR ($7F1F18),
- * HM_SEASON ($7F1F19) and HM_DAY ($7F1F1B). The ROM's chance tables and the
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. The ROM's chance tables and the
  * TV's are named further down, next to the routines that read them. */
-#define WEATHER_FLAGS      0x00196   /* 16b, written by SetWeatherFlags */
-#define STORY_FLAGS_64     0x11F64   /* $7F1F64: bit 0 summer storm seen,
-                                      * bit 1 winter storm seen */
-#define STORY_FLAGS_6E     0x11F6E   /* $7F1F6E */
-#define ITEM_FLAGS_6C      0x11F6C   /* $7F1F6C: bit 12 = turtle shell */
 #define HAS_TURTLE_SHELL   0x1000
 
 enum { SPRING, SUMMER, FALL, WINTER };
@@ -58,21 +53,21 @@ static void set_weather_flag(uint8_t *ram, HmRegs *r, int index)
 {
   r->x = (uint16_t)(index * 2);
   r->a = kWeatherFlagTable[index];
-  hm_wr16(ram, WEATHER_FLAGS, r->a);
+  hm_wr16(ram, HM_WEATHER_FLAGS, r->a);
 }
 
 static void mark_story_storm(uint8_t *ram, HmRegs *r, uint16_t bit64, uint16_t bit6e)
 {
-  hm_wr16(ram, STORY_FLAGS_64, hm_rd16(ram, STORY_FLAGS_64) | bit64);
-  r->a = hm_rd16(ram, STORY_FLAGS_6E) | bit6e;
-  hm_wr16(ram, STORY_FLAGS_6E, r->a);
+  hm_wr16(ram, HM_FLAGS_64, hm_rd16(ram, HM_FLAGS_64) | bit64);
+  r->a = hm_rd16(ram, HM_FLAGS_6E) | bit6e;
+  hm_wr16(ram, HM_FLAGS_6E, r->a);
 }
 
 void hm_SetWeatherFlags(uint8_t *ram, HmRegs *r)
 {
   uint8_t weather = ram[HM_WEATHER_TOMORROW];
   uint8_t season = ram[HM_SEASON];
-  hm_wr16(ram, WEATHER_FLAGS, 0);
+  hm_wr16(ram, HM_WEATHER_FLAGS, 0);
   r->a = weather;                                /* LDA #0; XBA; LDA weather */
   r->c = 1;                                      /* CMP #n with weather >= n */
 
@@ -82,7 +77,7 @@ void hm_SetWeatherFlags(uint8_t *ram, HmRegs *r)
     r->c = season >= SUMMER;
     if (season == SUMMER) {                      /* no LDX here: X untouched */
       r->a = kWeatherFlagTable[0];
-      hm_wr16(ram, WEATHER_FLAGS, r->a);
+      hm_wr16(ram, HM_WEATHER_FLAGS, r->a);
     }
     break;
   case HM_WEATHER_RAIN:
@@ -201,7 +196,7 @@ static void summer_night(uint8_t *ram, HmRegs *r)
   r->c = 0;                                      /* CMP #3 with season 1 */
 
   /* First-year summer storm. */
-  if (ram[HM_YEAR] == 0 && !(hm_rd16(ram, STORY_FLAGS_64) & 0x0001)) {
+  if (ram[HM_YEAR] == 0 && !(hm_rd16(ram, HM_FLAGS_64) & 0x0001)) {
     r->c = day >= 29;
     if (day == 29) {
       set_weather(ram, r, HM_WEATHER_THUNDER, HM_WEATHER_THUNDER);
@@ -224,7 +219,7 @@ static void summer_night(uint8_t *ram, HmRegs *r)
   r->a = chance(ram, kHurricaneChance, season);
   if (chance(ram, kHurricaneChance, season) != 0) {
     uint16_t faces = chance(ram, kHurricaneChance, season);
-    if (hm_rd16(ram, ITEM_FLAGS_6C) & HAS_TURTLE_SHELL)
+    if (hm_rd16(ram, HM_FLAGS_6C) & HAS_TURTLE_SHELL)
       faces = (uint16_t)(faces << 1);            /* the shell halves the chance */
     r->y = faces;
     if (roll_zero(ram, r, (uint8_t)faces, RET_HURRICANE)) {
@@ -244,7 +239,7 @@ static void winter_night(uint8_t *ram, HmRegs *r)
   r->c = day >= 30;
 
   /* First-year winter storm. */
-  if (ram[HM_YEAR] == 0 && !(hm_rd16(ram, STORY_FLAGS_64) & 0x0002)) {
+  if (ram[HM_YEAR] == 0 && !(hm_rd16(ram, HM_FLAGS_64) & 0x0002)) {
     r->c = day >= 7;
     if (day == 7) {
       set_weather(ram, r, HM_WEATHER_FAIR_STORY, HM_WEATHER_FAIR_STORY);
@@ -293,19 +288,18 @@ void hm_WeatherTomorrow(uint8_t *ram, HmRegs *r)
  * Leftovers: X = tomorrow's code; A = 0, or the value just stored;
  * C untouched.
  * ───────────────────────────────────────────────────────────────────────── */
-#define TV_FORECAST      0x00990    /* 8b: what the TV's forecast shows */
 #define TV_FORECAST_MAP  0x8281FD   /* ROM: tomorrow's code -> the forecast */
 
 void hm_TvWeatherForecast(uint8_t *ram, HmRegs *r)
 {
   r->x = ram[HM_WEATHER_TOMORROW];
-  ram[TV_FORECAST] = hm_bus_rd8(ram, TV_FORECAST_MAP + r->x);
-  uint16_t flags = hm_rd16(ram, WEATHER_FLAGS);
+  ram[HM_TV_FORECAST] = hm_bus_rd8(ram, TV_FORECAST_MAP + r->x);
+  uint16_t flags = hm_rd16(ram, HM_WEATHER_FLAGS);
   if (flags & 0x0010) {
-    ram[TV_FORECAST] = 0x0B;
+    ram[HM_TV_FORECAST] = 0x0B;
     r->a = 0x000B;
   } else if (flags & 0x0200) {
-    ram[TV_FORECAST] = 0x04;
+    ram[HM_TV_FORECAST] = 0x04;
     r->a = 0x0204;
   } else {
     r->a = 0;

@@ -24,48 +24,19 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
-/* Also used, from hm_ram.h: HM_INPUT_STATE ($019A), HM_ITEM_ON_HAND ($091D),
- * HM_GAME_STATE ($D2; bit 6 = a change of map / an action is pending) and
- * HM_PLAYER_ACTION ($D4) */
-
-/* WRAM $7F:1Fxx (bus addresses) */
-#define SEASON              0x7F1F19 /* 8b: 0 spring ... 3 winter (HM_SEASON) */
-#define WEEKDAY             0x7F1F1A /* 0 Sunday ... 6 Saturday */
-#define HOUR                0x7F1F1C /* 8b: the hour (HM_HOUR) */
-#define FLAGS_5A            0x7F1F5A /* 16b flags; bit 4 set by the jingle */
+/* The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* ROM tables */
 #define RULES               0x80B6F5 /* Unk_Table13 */
 #define PICK_ITEMS          0x82CFB4 /* DATA8_82CFB4 */
 #define SONG_INSTRUMENTS    0x80B8CD /* per song, its instrument (- 1) */
 
-/* WRAM of the data bank */
-#define INSTRUMENT_COUNT    0x0103   /* 8b: the instruments noted (PrepareSoundEffect's slot) */
-#define SOUND_EFFECT        0x0114   /* 8b: the sound effect to play / prepare */
-#define SOUND_BANK          0x0115   /* 8b: its bank */
-#define SONG_PLAYING        0x0118   /* 8b: the song playing (0 for none) */
-#define LOADED_TOOL_SOUND   0x0119   /* 8b: the item whose noises are loaded; 0 = load again */
-#define TEXT_BOX_LINES      0x0191   /* 8b: the lines of the next text box (0 = pick) */
-#define WEATHER_FLAGS       0x0196   /* 16b: weather and day flags; bit 4 opens some doors */
-#define PICKED_TILE_BYTE    0x091F   /* 8b: byte +0 of the tile picked up */
-#define INTERACTION         0x096E   /* 8b: the place a door goes to / the action to run */
-#define INTERACTION_STEP    0x096F   /* 8b: its step */
-#define INTERACTION_FRAMES  0x0970   /* 8b: its frame counter */
-
 /* Direct page */
-#define TILE_PROPERTIES     0x0D     /* long $0D-$0F: the map's tile property table */
 #define PICK_AT             0x7E     /* 16b: 4 x the tile type (the table offset) */
 #define RULE_NUMBER         0x92     /* 8b: the door's opening-hours rule */
 #define RULE_TEXT           0x93     /* 8b: the door's text */
-#define HM_PLAYER_X         0xD6     /* 16b: the player's position, pixels */
-#define HM_PLAYER_Y         0xD8     /* 16b */
-#define HM_PLAYER_DIRECTION 0xDA     /* 16b: the way the player faces */
-#define COLLIDE_X           0xDF     /* 16b: CollideEventObjects' input: the position */
-#define COLLIDE_Y           0xE1     /* 16b */
-#define COLLIDE_AHEAD       0xE3     /* 16b: how far ahead to look */
-#define COLLIDE_STEP_X      0xE5     /* 16b: the step */
-#define COLLIDE_STEP_Y      0xE7     /* 16b */
 
 static uint32_t db_addr(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static uint16_t dp16(uint8_t *ram, const HmRegs *r, unsigned a) { return hm_dp_r16(ram, r, a); }
@@ -75,14 +46,14 @@ static uint8_t lda8(HmRegs *r, uint8_t v)
   r->a = (uint16_t)((r->a & 0xFF00) | v);
   return v;
 }
-static uint8_t table8(uint8_t *ram, HmRegs *r, uint16_t y) { return hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPERTIES, y)); }
+static uint8_t table8(uint8_t *ram, HmRegs *r, uint16_t y) { return hm_bus_rd8(ram, hm_dp_long(ram, r, HM_TILE_PROPS, y)); }
 /* CPX #k: C = X >= k */
 static bool below(HmRegs *r, uint16_t k) { r->c = r->x >= k; return !r->c; }
 
 static void show_text(uint8_t *ram, HmRegs *r, uint16_t text, uint16_t ret)
 {
   hm_bus_wr8(ram, db_addr(r, HM_INPUT_STATE), 2);          /* input: a text box */
-  hm_bus_wr8(ram, db_addr(r, TEXT_BOX_LINES), 0);
+  hm_bus_wr8(ram, db_addr(r, HM_TEXT_BOX_LINES), 0);
   r->x = text;
   hm_jsl(ram, r, ret, 0x83);
   hm_StartTextBox(ram, r);
@@ -94,19 +65,19 @@ static bool rule_applies(uint8_t *ram, HmRegs *r, uint8_t rule)
 {
   lda8(r, rule & 0x02);
   if (rule & 0x02) {
-    uint8_t h = lda8(r, hm_bus_rd8(ram, HOUR));
+    uint8_t h = lda8(r, hm_bus_rd8(ram, WRAM_LONG(HM_HOUR)));
     r->c = h >= 0x11;
     if (r->c) return true;
   }
   lda8(r, rule & 0x04);
   if (rule & 0x04) {
-    uint8_t h = lda8(r, hm_bus_rd8(ram, HOUR));
+    uint8_t h = lda8(r, hm_bus_rd8(ram, WRAM_LONG(HM_HOUR)));
     r->c = h >= 0x11;
     if (!r->c) return true;
   }
   lda8(r, rule & 0x08);
   if (rule & 0x08) {
-    uint8_t d = lda8(r, hm_bus_rd8(ram, WEEKDAY));
+    uint8_t d = lda8(r, hm_bus_rd8(ram, WRAM_LONG(HM_WEEKDAY)));
     if (d != 0) {
       r->c = d >= 6;
       if (d != 6) return true;
@@ -114,17 +85,17 @@ static bool rule_applies(uint8_t *ram, HmRegs *r, uint8_t rule)
   }
   lda8(r, rule & 0x10);
   if (rule & 0x10) {
-    uint8_t d = lda8(r, hm_bus_rd8(ram, WEEKDAY));
+    uint8_t d = lda8(r, hm_bus_rd8(ram, WRAM_LONG(HM_WEEKDAY)));
     r->c = d >= 6;
     if (d == 6) return true;
   }
   lda8(r, rule & 0x20);
   if (rule & 0x20) {
-    if (lda8(r, hm_bus_rd8(ram, WEEKDAY)) == 0) return true;
+    if (lda8(r, hm_bus_rd8(ram, WRAM_LONG(HM_WEEKDAY))) == 0) return true;
   }
   lda8(r, rule & 0x80);
   if (!(rule & 0x80)) return false;
-  r->a = hm_bus_rd16(ram, db_addr(r, WEATHER_FLAGS)) & 0x0010;
+  r->a = hm_bus_rd16(ram, db_addr(r, HM_WEATHER_FLAGS)) & 0x0010;
   return r->a != 0;
 }
 
@@ -139,9 +110,9 @@ void hm_PressAOnTile(uint8_t *ram, HmRegs *r)
     r->y = (uint16_t)(at + 1);
     if (!(lda8(r, table8(ram, r, r->y)) & 0x01)) { lda8(r, 0); return; }
     r->y = at;
-    hm_bus_wr8(ram, db_addr(r, INTERACTION), lda8(r, table8(ram, r, at)));
-    hm_bus_wr8(ram, db_addr(r, INTERACTION_STEP), 0);
-    hm_bus_wr8(ram, db_addr(r, INTERACTION_FRAMES), 0);
+    hm_bus_wr8(ram, db_addr(r, HM_INTERACTION), lda8(r, table8(ram, r, at)));
+    hm_bus_wr8(ram, db_addr(r, HM_INTERACTION_STEP), 0);
+    hm_bus_wr8(ram, db_addr(r, HM_INTERACTION_FRAMES), 0);
     set16(ram, r, HM_GAME_STATE, (uint16_t)(dp16(ram, r, HM_GAME_STATE) | 0x0040));
     r->a = 0;
     set16(ram, r, HM_PLAYER_ACTION, 0);
@@ -151,7 +122,7 @@ void hm_PressAOnTile(uint8_t *ram, HmRegs *r)
   if (!below(r, 0xD0)) {                                   /* a sign */
     r->y = at;
     r->c = (type >> 14) & 1;
-    uint16_t text = hm_bus_rd16(ram, hm_dp_long(ram, r, TILE_PROPERTIES, at));
+    uint16_t text = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_TILE_PROPS, at));
     r->a = (uint16_t)((text & 0xFF00) | 0x00);
     show_text(ram, r, text, 0xAEB5);
     return;
@@ -177,7 +148,7 @@ void hm_PressAOnTile(uint8_t *ram, HmRegs *r)
   }
 
   /* the rest: things to pick up, or people and animals */
-  uint8_t season = lda8(r, hm_bus_rd8(ram, SEASON));
+  uint8_t season = lda8(r, hm_bus_rd8(ram, WRAM_LONG(HM_SEASON)));
   r->c = season >= 2;                                      /* CMP #2; CMP #3 */
   if (season != 2) r->c = season >= 3;
   if (season == 2 || season == 3) {
@@ -192,9 +163,9 @@ void hm_PressAOnTile(uint8_t *ram, HmRegs *r)
   r->y = (uint16_t)(at + 1);
   if (lda8(r, table8(ram, r, r->y)) & 0x80) {              /* pick it up */
     r->y = at;
-    hm_bus_wr8(ram, db_addr(r, PICKED_TILE_BYTE), lda8(r, table8(ram, r, at)));
+    hm_bus_wr8(ram, db_addr(r, HM_PICKED_TILE_BYTE), lda8(r, table8(ram, r, at)));
     set16(ram, r, PICK_AT, at);
-    uint32_t s = (uint32_t)at + hm_bus_rd8(ram, SEASON);   /* CLC; ADC $7E */
+    uint32_t s = (uint32_t)at + hm_bus_rd8(ram, WRAM_LONG(HM_SEASON)); /* CLC; ADC $7E */
     r->c = s > 0xFFFF;
     r->x = (uint16_t)s;
     r->a = (uint16_t)s;
@@ -208,11 +179,11 @@ void hm_PressAOnTile(uint8_t *ram, HmRegs *r)
     r->a = dp16(ram, r, HM_GAME_STATE) & 0x0020;           /* (both ways return) */
     return;
   }
-  set16(ram, r, COLLIDE_X, dp16(ram, r, HM_PLAYER_X));
-  set16(ram, r, COLLIDE_Y, dp16(ram, r, HM_PLAYER_Y));
-  set16(ram, r, COLLIDE_STEP_X, 0);
-  set16(ram, r, COLLIDE_STEP_Y, 0);
-  set16(ram, r, COLLIDE_AHEAD, 0x0010);
+  set16(ram, r, HM_COLLIDE_X, dp16(ram, r, HM_PLAYER_X));
+  set16(ram, r, HM_COLLIDE_Y, dp16(ram, r, HM_PLAYER_Y));
+  set16(ram, r, HM_COLLIDE_STEP_X, 0);
+  set16(ram, r, HM_COLLIDE_STEP_Y, 0);
+  set16(ram, r, HM_COLLIDE_AHEAD, 0x0010);
   r->a = dp16(ram, r, HM_PLAYER_DIRECTION);
   hm_jsl(ram, r, 0xAEFE, 0x83);
   hm_CollideEventObjects(ram, r);
@@ -285,39 +256,39 @@ static uint32_t db_at(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 1
 void hm_PlayerAction_04_Jingle(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
-  uint8_t state = hm_bus_rd8(ram, db_at(r, INTERACTION_STEP));
+  uint8_t state = hm_bus_rd8(ram, db_at(r, HM_INTERACTION_STEP));
   r->a = (uint16_t)((r->a & 0xFF00) | state);
   r->c = state >= 1;
   if (state != 1) {
-    hm_bus_wr8(ram, db_at(r, SOUND_EFFECT), 0x19);
-    hm_bus_wr8(ram, db_at(r, SOUND_BANK), 0x06);
-    r->a = hm_bus_rd8(ram, db_at(r, SONG_PLAYING));        /* LDA #0; XBA; LDA */
+    hm_bus_wr8(ram, db_at(r, HM_SOUND_EFFECT), 0x19);
+    hm_bus_wr8(ram, db_at(r, HM_SOUND_BANK), 0x06);
+    r->a = hm_bus_rd8(ram, db_at(r, HM_SONG_LOADED));      /* LDA #0; XBA; LDA */
     r->x = r->a;
     uint8_t n = (uint8_t)(hm_bus_rd8(ram, (SONG_INSTRUMENTS + r->x) & 0xFFFFFF) + 1);
     r->a = (uint16_t)((r->a & 0xFF00) | n);
-    hm_bus_wr8(ram, db_at(r, INSTRUMENT_COUNT), n);
+    hm_bus_wr8(ram, db_at(r, HM_INSTRUMENT_COUNT), n);
     hm_jsl(ram, r, 0xD69D, 0x83);
     hm_PrepareSoundEffect(ram, r);
     hm_rtl(ram, r);
     hm_jsl(ram, r, 0xD6A1, 0x83);
     hm_PlaySoundEffect0A(ram, r);
     hm_rtl(ram, r);
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5A) | 0x0010);
-    hm_bus_wr16(ram, FLAGS_5A, r->a);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5A)) | 0x0010);
+    hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5A), r->a);
     r->a = 0x0044;
     hm_jsl(ram, r, 0xD6B7, 0x81);
     hm_StartMapAnimation(ram, r);
     hm_rtl(ram, r);
-    hm_bus_wr8(ram, db_at(r, INTERACTION_STEP), (uint8_t)(hm_bus_rd8(ram, db_at(r, INTERACTION_STEP)) + 1));
+    hm_bus_wr8(ram, db_at(r, HM_INTERACTION_STEP), (uint8_t)(hm_bus_rd8(ram, db_at(r, HM_INTERACTION_STEP)) + 1));
     return;
   }
-  uint8_t count = (uint8_t)(hm_bus_rd8(ram, db_at(r, INTERACTION_FRAMES)) + 1);
-  hm_bus_wr8(ram, db_at(r, INTERACTION_FRAMES), count);
+  uint8_t count = (uint8_t)(hm_bus_rd8(ram, db_at(r, HM_INTERACTION_FRAMES)) + 1);
+  hm_bus_wr8(ram, db_at(r, HM_INTERACTION_FRAMES), count);
   r->a = (uint16_t)((r->a & 0xFF00) | count);
   r->c = count >= 0x20;
   if (count != 0x20) return;
   action_done(ram, r);                                       /* REP #$30 */
-  hm_bus_wr8(ram, db_at(r, LOADED_TOOL_SOUND), 0);
+  hm_bus_wr8(ram, db_at(r, HM_LOADED_TOOL_SOUND), 0);
   r->p = entry;
   hm_jsl(ram, r, 0xD6DF, 0x82);
   hm_ToolUsedSound2(ram, r);

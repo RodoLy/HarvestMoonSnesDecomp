@@ -9,30 +9,13 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_GAME_STATE ($D2) and
- * HM_INPUT_STATE ($019A). */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* Direct page */
 #define NMI_STATUS        0x00   /* 8b: set by the NMI (UpdateGraphics), cleared by the loop */
-#define FADE_FROM         0x92   /* 8b: ScreenFadeOut's arguments: the starting brightness, */
-#define FADE_FRAMES       0x93   /* 8b: frames per brightness level, */
-#define FADE_TO           0x94   /* 8b: the brightness it ends at */
-#define LOAD_BUDGET       0xC7   /* 16b: bytes the sprite piece loader may still send
-                                    this frame (objects.c) */
-
-/* WRAM of the data bank */
-#define BG3_Y             0x0146 /* 16b: BG3's scroll, up-down (the text box's layer) */
-#define TRANSITION_X      0x017D /* 16b: where the player appears after a transition */
-#define TRANSITION_Y      0x017F /* 16b */
-#define WEATHER_FLAGS     0x0196 /* 16b: weather and day flags; bit $2000 = a name is to
-                                    be written (the names screen) */
-#define HM_LUNCH_CHOICE   0x0924 /* 8b: the breakfast (0-3; stamina.c) */
-#define TRANSITION_MAP    0x098B /* 8b: the map a transition goes to */
-
-/* WRAM $7F:1Fxx (bus address) */
-#define FLAGS_68          0x7F1F68 /* 16b flags: bit 0 = the first day is over */
 
 typedef void Fn(uint8_t *ram, HmRegs *r);
 
@@ -71,9 +54,9 @@ void hm_SpawnAfterLoad(uint8_t *ram, HmRegs *r)
   *hm_dp(ram, r, HM_MAP_ID) = 0x15;
   jsl(ram, r, 0x8008, 0x80, hm_PickMapMusic);
   jsl(ram, r, 0x800C, 0x83, hm_FadeOutSongSlowly);
-  set_a8(r, 0x0F); *hm_dp(ram, r, FADE_FROM) = 0x0F;       /* SEP #$20 */
-  set_a8(r, 0x03); *hm_dp(ram, r, FADE_FRAMES) = 0x03;
-  set_a8(r, 0x01); *hm_dp(ram, r, FADE_TO) = 0x01;
+  set_a8(r, 0x0F); *hm_dp(ram, r, HM_FADE_FROM) = 0x0F;    /* SEP #$20 */
+  set_a8(r, 0x03); *hm_dp(ram, r, HM_FADE_FRAMES) = 0x03;
+  set_a8(r, 0x01); *hm_dp(ram, r, HM_FADE_TO) = 0x01;
   jsl(ram, r, 0x801E, 0x80, hm_ScreenFadeOut);
   jsl(ram, r, 0x8022, 0x80, hm_ForceBlank);
   jsl(ram, r, 0x8026, 0x80, hm_ZeroesVRAM);
@@ -81,23 +64,23 @@ void hm_SpawnAfterLoad(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0x802E, 0x83, hm_FirstNightReset);
   jsl(ram, r, 0x8032, 0x80, hm_PickMapMusic);
   r->a = 0x0100;                                           /* REP #$20 */
-  wr16(ram, r, BG3_Y, 0x0100);
+  wr16(ram, r, HM_BG3_Y, 0x0100);
   set_a8(r, 0x01);                                         /* SEP #$20 */
   wr8(ram, r, HM_INPUT_STATE, 0x01);
   r->a = 0x0088;                                           /* REP #$30 */
-  wr16(ram, r, TRANSITION_X, 0x0088);
+  wr16(ram, r, HM_TRANSITION_X, 0x0088);
   r->a = 0x0078;
-  wr16(ram, r, TRANSITION_Y, 0x0078);
+  wr16(ram, r, HM_TRANSITION_Y, 0x0078);
   set_a8(r, 0x15);                                         /* SEP #$20 */
-  wr8(ram, r, TRANSITION_MAP, 0x15);
+  wr8(ram, r, HM_TRANSITION_MAP, 0x15);
   jsl(ram, r, 0x805A, 0x82, hm_FindMostLovedName);
   jsl(ram, r, 0x805E, 0x80, hm_EnterMap);
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_68) & 0x0001);  /* REP #$20 */
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_68)) & 0x0001); /* REP #$20 */
   g_hm_next = 0x808083;
   if (!r->a) return;                                       /* BEQ GameLoop */
   set_a8(r, 0x03);                                         /* SEP #$20 */
   jsl(ram, r, 0x8071, 0x80, hm_RNGReturn0toA);
-  wr8(ram, r, HM_LUNCH_CHOICE, (uint8_t)r->a);             /* SEP #$20 */
+  wr8(ram, r, HM_MEAL_CHOICE, (uint8_t)r->a);              /* SEP #$20 */
   r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0004);   /* REP #$30 */
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   /* on into GameLoop: the check stops here (HM_TOLOOP) */
@@ -142,11 +125,11 @@ void hm_GameLoop(uint8_t *ram, HmRegs *r)
     hm_nmi(ram, r, 0x8085, (uint8_t)(entry | 0x20));       /* at the LDA, after the SEP */
   }
   r->a = 0x1800;                                           /* REP #$20 */
-  hm_dp_w16(ram, r, LOAD_BUDGET, 0x1800);
-  r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x2000);
+  hm_dp_w16(ram, r, HM_LOAD_BUDGET, 0x1800);
+  r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0x2000);
   if (r->a) {
-    r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0xDFFF);   /* REP #$30 */
-    wr16(ram, r, WEATHER_FLAGS, r->a);
+    r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0xDFFF); /* REP #$30 */
+    wr16(ram, r, HM_WEATHER_FLAGS, r->a);
     g_hm_next = 0x82E80C;
     return;                                                /* JML NamesScreen: the check stops */
   }

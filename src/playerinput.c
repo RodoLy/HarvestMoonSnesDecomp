@@ -22,44 +22,10 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_ANIM_REQUEST ($0901) and
- * HM_TOOL_SELECTED ($0921). */
-
-/* Direct page */
-#define GAME_STATE   0xD2     /* 16b flags (HM_GAME_STATE): $02 holding an item, $10
-                                 carrying, $0800 carrying the dog, $1000 an event */
-#define ACTION       0xD4     /* 16b: the player's action (HM_PLAYER_ACTION) */
-#define PLAYER_X     0xD6     /* 16b: the player's position */
-#define PLAYER_Y     0xD8
-#define FACING       0xDA     /* 16b: 0 down, 1 up, 2 right, 3 left */
-#define COLLIDE_X    0xDF     /* 16b: CollideMap's input: the position of who moves */
-#define COLLIDE_Y    0xE1     /* 16b */
-#define COLLIDE_AHEAD 0xE3    /* 16b: how far ahead to look */
-#define COLLIDE_STEP_X 0xE5   /* 16b: the step */
-#define COLLIDE_STEP_Y 0xE7   /* 16b */
-#define COLLIDE_TILE_1 0xE9   /* 16b: CollideMap's output: the first corner's tile type */
-#define COLLIDE_TILE_2 0xEB   /* 16b: the second corner's tile type */
-
-/* WRAM of the data bank */
-#define PAD_HELD     0x0124   /* 16b: the buttons held */
-#define PAD_NEW      0x0128   /* 16b: pressed this frame */
-#define PLAYER_TILE_1 0x0878  /* 16b: the tile types under the player's front corners */
-#define PLAYER_TILE_2 0x087A  /* 16b */
-#define PAD_SCRIPT   0x08FD   /* 16b: the buttons an event's script presses */
-#define TURN         0x0911   /* the direction being tried */
-#define HORSE_TIMER  0x0939   /* 8b: the horse's frames between idle animations */
-#define FRONT_X      0x0985   /* 16b: CalculateTileInFront's point */
-#define FRONT_Y      0x0987   /* 16b */
-
-/* The game's saved state, $7F:1Fxx (bus addresses) */
-#define DOG_X        0x7F1F2C /* 16b: the dog's position */
-#define DOG_Y        0x7F1F2E /* 16b */
-#define DOG_MAP      0x7F1F30 /* 8b: the map the dog is on */
-#define FLAGS_5C     0x7F1F5C /* 16b flags: $20 no control */
-#define FLAGS_60     0x7F1F60 /* 16b flags: $02 / $04 block the actions, $8000 no tools */
-#define OWNED        0x7F1F68   /* bit $80 the dog, $100 the horse */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* ROM */
 #define CAN_INTERACT 0x84C7B6   /* PlayerActionCanInteract: 1 = no */
@@ -82,11 +48,11 @@ static void jsl(uint8_t *ram, HmRegs *r, uint16_t ret, uint8_t bank, void (*fn)(
 /* LDA $D2; AND #bit (A = the result) */
 static bool state(uint8_t *ram, HmRegs *r, uint16_t bit)
 {
-  r->a = dp16(ram, r, GAME_STATE) & bit;
+  r->a = dp16(ram, r, HM_GAME_STATE) & bit;
   return r->a != 0;
 }
 /* LDA #v; STA $D4 */
-static void act(uint8_t *ram, HmRegs *r, uint16_t v) { r->a = v; set16(ram, r, ACTION, v); }
+static void act(uint8_t *ram, HmRegs *r, uint16_t v) { r->a = v; set16(ram, r, HM_PLAYER_ACTION, v); }
 /* CMP #k: C = A >= k */
 static bool is(HmRegs *r, uint16_t k) { r->c = r->a >= k; return r->a == k; }
 
@@ -104,13 +70,13 @@ static bool busy(uint8_t *ram, HmRegs *r)
 static void key_r(uint8_t *ram, HmRegs *r)                 /* whistle for the horse */
 {
   if (busy(ram, r)) return;
-  r->a = hm_bus_rd16(ram, OWNED) & 0x0100;
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_68)) & 0x0100;
   if (r->a) act(ram, r, 0x000D);
 }
 static void key_l(uint8_t *ram, HmRegs *r)                 /* whistle for the dog */
 {
   if (busy(ram, r)) return;
-  r->a = hm_bus_rd16(ram, OWNED) & 0x0080;
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_68)) & 0x0080;
   if (r->a) act(ram, r, 0x001B);
 }
 static void key_select(uint8_t *ram, HmRegs *r)            /* show the item in hand */
@@ -130,11 +96,11 @@ static void key_x(uint8_t *ram, HmRegs *r)
 static void key_y(uint8_t *ram, HmRegs *r)
 {
   if (busy(ram, r)) return;
-  r->a = dp16(ram, r, ACTION);
+  r->a = dp16(ram, r, HM_PLAYER_ACTION);
   if (is(r, 0x000F)) { act(ram, r, 0x0010); return; }
-  r->a = dp16(ram, r, ACTION);
+  r->a = dp16(ram, r, HM_PLAYER_ACTION);
   if (is(r, 0x0011)) { act(ram, r, 0x000F); return; }
-  r->a = dp16(ram, r, ACTION);
+  r->a = dp16(ram, r, HM_PLAYER_ACTION);
   if (is(r, 0x0012)) {
     act(ram, r, 0x0013);
     r->a = (uint16_t)((r->a & 0xFF00) | 0x03);
@@ -145,7 +111,7 @@ static void key_y(uint8_t *ram, HmRegs *r)
     wrw(ram, r, HM_ANIM_REQUEST, r->a);
     return;
   }
-  r->a = hm_bus_rd16(ram, FLAGS_60) & 0x8000;
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0x8000;
   if (r->a) return;
   uint8_t tool = hm_bus_rd8(ram, db_addr(r, HM_TOOL_SELECTED));
   r->a = (uint16_t)((r->a & 0xFF00) | tool);
@@ -164,19 +130,19 @@ static void tile_in_front(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint1
 {
   r->a = a; r->x = x; r->y = y;
   jsl(ram, r, ret_front, 0x81, hm_CalculateTileInFront);
-  r->x = rdw(ram, r, FRONT_X);
-  r->y = rdw(ram, r, FRONT_Y);
+  r->x = rdw(ram, r, HM_TILE_IN_FRONT_X);
+  r->y = rdw(ram, r, HM_TILE_IN_FRONT_Y);
   r->a = prop;
   jsl(ram, r, ret_prop, 0x82, hm_GetTileProperty);
 }
 /* $DF / $E1 = the player, no step, $E3 = how far */
 static void from_player(uint8_t *ram, HmRegs *r, uint16_t far)
 {
-  set16(ram, r, COLLIDE_AHEAD, far);
-  set16(ram, r, COLLIDE_X, dp16(ram, r, PLAYER_X));
-  set16(ram, r, COLLIDE_Y, dp16(ram, r, PLAYER_Y));
-  set16(ram, r, COLLIDE_STEP_X, 0);
-  set16(ram, r, COLLIDE_STEP_Y, 0);
+  set16(ram, r, HM_COLLIDE_AHEAD, far);
+  set16(ram, r, HM_COLLIDE_X, dp16(ram, r, HM_PLAYER_X));
+  set16(ram, r, HM_COLLIDE_Y, dp16(ram, r, HM_PLAYER_Y));
+  set16(ram, r, HM_COLLIDE_STEP_X, 0);
+  set16(ram, r, HM_COLLIDE_STEP_Y, 0);
 }
 static void key_b(uint8_t *ram, HmRegs *r)
 {
@@ -191,15 +157,15 @@ static void key_b(uint8_t *ram, HmRegs *r)
         far = 0x001C;
       } else {
         r->a = (uint16_t)(r->a & 0xFF00);
-        set16(ram, r, GAME_STATE, (uint16_t)(dp16(ram, r, GAME_STATE) | 0x0200));
+        set16(ram, r, HM_GAME_STATE, (uint16_t)(dp16(ram, r, HM_GAME_STATE) | 0x0200));
         far = 0x0021;
       }
       from_player(ram, r, far);
-      r->a = dp16(ram, r, FACING);
+      r->a = dp16(ram, r, HM_PLAYER_DIRECTION);
       jsl(ram, r, 0xCA7B, 0x83, hm_CollideMap);
       if (r->a == 0) {
-        set16(ram, r, COLLIDE_AHEAD, 0x0020);
-        r->a = dp16(ram, r, FACING);
+        set16(ram, r, HM_COLLIDE_AHEAD, 0x0020);
+        r->a = dp16(ram, r, HM_PLAYER_DIRECTION);
         jsl(ram, r, 0xCA8C, 0x83, hm_CollideEventObjects);
         if (is(r, 0)) { act(ram, r, 0x0003); return; }    /* jump */
       }
@@ -217,11 +183,11 @@ static void key_b(uint8_t *ram, HmRegs *r)
 static void way_blocked(uint8_t *ram, HmRegs *r)
 {
   from_player(ram, r, 0x0010);
-  r->a = rdw(ram, r, TURN);
+  r->a = rdw(ram, r, HM_PLAYER_TURN);
   jsl(ram, r, 0xCD2F, 0x83, hm_CollideMap);
   bool blocked = r->a != 0;
   if (!blocked) {
-    for (unsigned at = COLLIDE_TILE_1; at <= COLLIDE_TILE_2 && !blocked; at += 2) {
+    for (unsigned at = HM_COLLIDE_TILE_1; at <= HM_COLLIDE_TILE_2 && !blocked; at += 2) {
       uint16_t v = dp16(ram, r, at);
       r->a = (uint16_t)(v - 0xC0);
       r->c = v >= 0xC0;                                    /* SEC; SBC */
@@ -230,8 +196,8 @@ static void way_blocked(uint8_t *ram, HmRegs *r)
     }
   }
   if (!blocked) {
-    set16(ram, r, COLLIDE_AHEAD, 0x0010);
-    r->a = rdw(ram, r, TURN);
+    set16(ram, r, HM_COLLIDE_AHEAD, 0x0010);
+    r->a = rdw(ram, r, HM_PLAYER_TURN);
     jsl(ram, r, 0xCD60, 0x83, hm_CollideEventObjects);
     blocked = !is(r, 0);
   }
@@ -246,13 +212,13 @@ static void put_down(uint8_t *ram, HmRegs *r)
     { 2, 3, 0xCC4B, 0xCC5C }, { 3, 2, 0xCC7A, 0xCC88 },
     { 0, 1, 0xCCA3, 0xCCB1 }, { 0, 1, 0xCCCB, 0xCCD9 },
   };
-  r->a = dp16(ram, r, FACING);
+  r->a = dp16(ram, r, HM_PLAYER_DIRECTION);
   unsigned f = 0;
   if (!is(r, 0)) { if (is(r, 1)) f = 1; else if (is(r, 2)) f = 2; else if (is(r, 3)) f = 3; }
   bool free_side = false;
   for (unsigned k = 0; k < 2 && !free_side; k++) {
     r->a = k ? T[f].second : T[f].first;
-    wrw(ram, r, TURN, r->a);
+    wrw(ram, r, HM_PLAYER_TURN, r->a);
     hm_jsl(ram, r, k ? T[f].ret2 : T[f].ret1, 0x84);
     way_blocked(ram, r);
     hm_rtl(ram, r);
@@ -260,18 +226,18 @@ static void put_down(uint8_t *ram, HmRegs *r)
   }
   if (!free_side) {
     r->a = (uint16_t)f;
-    set16(ram, r, FACING, r->a);
-    wrw(ram, r, TURN, r->a);
+    set16(ram, r, HM_PLAYER_DIRECTION, r->a);
+    wrw(ram, r, HM_PLAYER_TURN, r->a);
     return;
   }
   act(ram, r, 0x0018);
-  wrw(ram, r, FRONT_X, dp16(ram, r, PLAYER_X));
-  wrw(ram, r, FRONT_Y, dp16(ram, r, PLAYER_Y));
+  wrw(ram, r, HM_TILE_IN_FRONT_X, dp16(ram, r, HM_PLAYER_X));
+  wrw(ram, r, HM_TILE_IN_FRONT_Y, dp16(ram, r, HM_PLAYER_Y));
   r->a = 0x0017; r->x = 0; r->y = 0x0014;
   jsl(ram, r, 0xCD07, 0x84, hm_StartScriptAtTileInFront);               /* the putting-down script */
-  wrw(ram, r, PLAYER_TILE_1, 0);
-  wrw(ram, r, PLAYER_TILE_2, 0);
-  hm_bus_wr8(ram, db_addr(r, HORSE_TIMER), 0);
+  wrw(ram, r, HM_PLAYER_TILE_1, 0);
+  wrw(ram, r, HM_PLAYER_TILE_2, 0);
+  hm_bus_wr8(ram, db_addr(r, HM_HORSE_TIMER), 0);
 }
 /* carrying the dog ($D2 bit $800): let it go in front, if no object is in
  * the way and three points ahead (CalculateTileInFront with three offsets)
@@ -283,7 +249,7 @@ static void let_dog_go(uint8_t *ram, HmRegs *r)
     { 0, 7, 0xCB5C, 0xCB6B }, { 1, 0x0A, 0xCB8B, 0xCB9A }, { 1, 0, 0xCBBA, 0xCBC9 },
   };
   from_player(ram, r, 0x0010);
-  r->a = dp16(ram, r, FACING);
+  r->a = dp16(ram, r, HM_PLAYER_DIRECTION);
   jsl(ram, r, 0xCB43, 0x83, hm_CollideEventObjects);
   if (!is(r, 0)) return;
   for (unsigned i = 0; i < 3; i++) {
@@ -303,21 +269,21 @@ static void let_dog_go(uint8_t *ram, HmRegs *r)
     r->c = r->x >= 0xD0;
     if (!r->c) return;
   }
-  r->a = rdw(ram, r, FRONT_X);
-  hm_bus_wr16(ram, DOG_X, r->a);                           /* the dog's place */
-  r->a = rdw(ram, r, FRONT_Y);
-  hm_bus_wr16(ram, DOG_Y, r->a);
+  r->a = rdw(ram, r, HM_TILE_IN_FRONT_X);
+  hm_bus_wr16(ram, WRAM_LONG(HM_DOG_X), r->a);             /* the dog's place */
+  r->a = rdw(ram, r, HM_TILE_IN_FRONT_Y);
+  hm_bus_wr16(ram, WRAM_LONG(HM_DOG_Y), r->a);
   r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, HM_MAP_ID));
-  hm_bus_wr8(ram, DOG_MAP, *hm_dp(ram, r, HM_MAP_ID));     /* and map */
+  hm_bus_wr8(ram, WRAM_LONG(HM_DOG_MAP), *hm_dp(ram, r, HM_MAP_ID)); /* and map */
   act(ram, r, 0x0016);
-  r->a = (uint16_t)(0x0800 ^ 0xFFFF) & dp16(ram, r, GAME_STATE);
-  set16(ram, r, GAME_STATE, r->a);
+  r->a = (uint16_t)(0x0800 ^ 0xFFFF) & dp16(ram, r, HM_GAME_STATE);
+  set16(ram, r, HM_GAME_STATE, r->a);
 }
 static void key_a(uint8_t *ram, HmRegs *r)
 {
   if (state(ram, r, 0x0800)) { let_dog_go(ram, r); return; }
   if (state(ram, r, 0x0010)) { put_down(ram, r); return; }
-  r->a = hm_bus_rd16(ram, FLAGS_60) & 0x0006;
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0x0006;
   if (r->a) {                                              /* (in the hot spring?) */
     tile_in_front(ram, r, 0, 7, 7, 0xCB0C, 0, 0xCB1B);
     r->c = r->x >= 0xF5;
@@ -339,36 +305,36 @@ static void script_buttons(uint8_t *ram, HmRegs *r)        /* CODE_84C804 */
     { K_A, key_a }, { K_B, key_b }, { K_SELECT, key_select }, { K_X, key_x },
     { K_R, key_r }, { K_L, key_l }, { K_Y, key_y },
   };
-  r->a = rdw(ram, r, PAD_SCRIPT);
+  r->a = rdw(ram, r, HM_SCRIPT_BUTTONS);
   for (unsigned i = 0; i < sizeof B / sizeof B[0]; i++)
     if (r->a & B[i].bit) { B[i].fn(ram, r); return; }
 }
 static void keys_pressed(uint8_t *ram, HmRegs *r)          /* PlayerActionKeysPressed */
 {
   if (state(ram, r, 0x1000)) { script_buttons(ram, r); return; }
-  r->a = dp16(ram, r, ACTION);
+  r->a = dp16(ram, r, HM_PLAYER_ACTION);
   if (is(r, 0x000F)) goto y;                               /* the rod, ready */
-  r->a = rdw(ram, r, PAD_NEW);
+  r->a = rdw(ram, r, HM_PAD1_NEW);
   if (r->a & K_A) { key_a(ram, r); return; }
   if (state(ram, r, 0x0020)) return;
-  r->a = rdw(ram, r, PAD_HELD);
+  r->a = rdw(ram, r, HM_PAD1_HELD);
   if (r->a & K_B) { key_b(ram, r); return; }
-  r->a = rdw(ram, r, PAD_NEW);
+  r->a = rdw(ram, r, HM_PAD1_NEW);
   if (r->a & K_SELECT) { key_select(ram, r); return; }
   if (r->a & K_X) { key_x(ram, r); return; }
   if (r->a & K_R) { key_r(ram, r); return; }
   if (r->a & K_L) { key_l(ram, r); return; }
 y:
-  r->a = rdw(ram, r, PAD_NEW);
+  r->a = rdw(ram, r, HM_PAD1_NEW);
   if (r->a & K_Y) key_y(ram, r);
 }
 /* an arrow: walk that way, then the buttons */
 static void walk(uint8_t *ram, HmRegs *r, uint16_t dir)
 {
   act(ram, r, 0x0001);
-  set16(ram, r, FACING, dir);
+  set16(ram, r, HM_PLAYER_DIRECTION, dir);
   r->a = dir;
-  wrw(ram, r, TURN, dir);
+  wrw(ram, r, HM_PLAYER_TURN, dir);
   keys_pressed(ram, r);
 }
 static bool arrows(uint8_t *ram, HmRegs *r, uint16_t pad_at)
@@ -385,27 +351,27 @@ static bool arrows(uint8_t *ram, HmRegs *r, uint16_t pad_at)
  * the event's pad, $08FD: an arrow, else a button. */
 void hm_ReadEventPad(uint8_t *ram, HmRegs *r)
 {
-  if (!arrows(ram, r, PAD_SCRIPT)) script_buttons(ram, r);
+  if (!arrows(ram, r, HM_SCRIPT_BUTTONS)) script_buttons(ram, r);
 }
 
 void hm_PlayerMovementInputs(uint8_t *ram, HmRegs *r)
 {
   if (state(ram, r, 0x00C4)) return;                       /* can't act now */
-  r->a = dp16(ram, r, ACTION);
+  r->a = dp16(ram, r, HM_PLAYER_ACTION);
   if (is(r, 0x0003)) return;                               /* in the air */
-  r->a = hm_bus_rd16(ram, FLAGS_5C) & 0x0020;
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) & 0x0020;
   if (r->a) return;
   if (state(ram, r, 0x1000)) { hm_ReadEventPad(ram, r); return; }   /* an event's pad */
   if (!state(ram, r, 0x4000)) return;
-  r->a = dp16(ram, r, ACTION);
+  r->a = dp16(ram, r, HM_PLAYER_ACTION);
   if (is(r, 0x0011) || is(r, 0x0012)) {                    /* fishing: only Y */
-    r->a = rdw(ram, r, PAD_NEW);
+    r->a = rdw(ram, r, HM_PAD1_NEW);
     if (r->a & K_Y) key_y(ram, r);
     return;
   }
-  r->x = dp16(ram, r, ACTION);
+  r->x = dp16(ram, r, HM_PLAYER_ACTION);
   uint8_t no = hm_bus_rd8(ram, (CAN_INTERACT + r->x) & 0xFFFFFF);
   r->a = (uint16_t)((r->a & 0xFF00) | no);
   if (no) return;                                          /* busy with an action */
-  if (!arrows(ram, r, PAD_HELD)) keys_pressed(ram, r);
+  if (!arrows(ram, r, HM_PAD1_HELD)) keys_pressed(ram, r);
 }

@@ -15,7 +15,7 @@
 #include "hm_ram.h"   /* from the recompilation project */
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_RNG_STATE ($7E:0100-0102). */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* Direct page used by RNGReturn0toA */
 #define ROLL_LAST_FACE    0x92   /* 8b: n, then n-1 */

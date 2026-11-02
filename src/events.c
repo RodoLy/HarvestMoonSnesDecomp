@@ -18,15 +18,13 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_PLAYER_ACTION ($D4), HM_RNG_LAST ($DE) and
- * HM_INPUT_STATE ($019A). */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 #define CC_SLOTS_BASE      0xB586   /* $7E:B586 */
 #define CC_SLOT_SIZE       64
 #define EVENTS_BANK_TABLE  0x8494CD /* ROM: dl $B38000, $B48000 */
-#define HM_TILE_IN_FRONT_X 0x00985  /* 16b, the tile the player faces */
-#define HM_TILE_IN_FRONT_Y 0x00987
 
 /* Direct page. The scratch words $7E / $80 mean a different thing in each
  * routine (each is left behind as a leftover): */
@@ -46,68 +44,7 @@
 #define GROUP_LONG         0xC9   /* 24b: ... and the group's table of scripts */
 #define GROUPS_SHORT       0x75   /* 24b: StartEventScript: the same two */
 #define GROUP_SHORT        0x78
-#define OBJ_X              0x9B   /* 16b: the game object routines' arguments (objects.c): */
-#define OBJ_Y              0x9D   /*      the position, */
-#define OBJ_FLIP           0x9F   /*      the flip (here the slot's animation), */
-#define OBJ_SPRITE         0xA1   /*      the sprite, */
-#define OBJ_NUMBER         0xA5   /*      the object's number */
 #define WANDER_TIMER       0x92   /* 8b: WanderSlot: a copy of the step timer (+06) */
-#define DP_SCRIPT_POS      0xC9   /* 24b $C9-$CB: the position in the event script */
-#define DP_SCRIPT_BANK     0xCB   /* 8b: its bank */
-#define DP_SLOT            0xCC   /* 24b $CC-$CE: the current event slot (CC slot) */
-#define DP_SLOT_BANK       0xCE   /* 8b: DP_SLOT's bank */
-#define COLLIDE_X          0xDF   /* 16b: CollideMap's input: the position of who moves */
-#define COLLIDE_Y          0xE1   /* 16b */
-#define COLLIDE_AHEAD      0xE3   /* 16b: how far ahead to look */
-#define COLLIDE_STEP_X     0xE5   /* 16b: the step */
-#define COLLIDE_STEP_Y     0xE7   /* 16b */
-#define COLLIDE_TILE_1     0xE9   /* 16b: CollideMap's output: the first corner's tile type */
-#define COLLIDE_TILE_2     0xEB   /* 16b: the second corner's tile type */
-
-/* WRAM $7F:1Fxx (bus addresses): flags, some of them for one frame */
-#define FLAGS_5A           0x7F1F5A
-#define FLAGS_5C           0x7F1F5C
-#define FLAGS_5E           0x7F1F5E
-#define FLAGS_60           0x7F1F60
-
-/* Fields of an event slot ([$CC],Y) */
-#define SLOT_IN_USE        0x00   /* 8b: bit 0 in use */
-#define SLOT_FLAGS         0x01   /* 8b: bit 0 has a sprite, 1 create the object, 2 the
-                                     sprite changed, 3 wanders, 4 frozen, 5 walks,
-                                     6 destroy the object, 7 may leave its area */
-#define SLOT_ANIM_ENTRY    0x02   /* 8b: the entry in its animation table (the direction) */
-#define SLOT_STEP_X        0x03   /* 8b signed: the step */
-#define SLOT_STEP_Y        0x04   /* 8b signed */
-#define SLOT_STEP_DELAY    0x05   /* 8b: frames between steps, StepSlot reloads SLOT_STEP_TIMER
-                                     from it */
-#define SLOT_STEP_TIMER    0x06   /* 8b: frames until the next step */
-#define SLOT_WALK_STEPS    0x07   /* 8b: steps of a walk */
-#define SLOT_STEPS_LEFT    0x08   /* 8b: steps left of this walk */
-#define SLOT_RANGE_X       0x09   /* 8b: how far it may wander from home, across */
-#define SLOT_RANGE_Y       0x0A   /* 8b: down */
-#define SLOT_WALK_DELAY    0x0B   /* 8b: a walk's frames between steps */
-#define SLOT_PRESSED       0x0C   /* 8b: the player pressed A on it (CollideEventObjects) */
-#define SLOT_STATE         0x0E   /* 8b: here the tile type ahead */
-#define SLOT_FORCED_DIR    0x0F   /* 8b: the direction the script forces: 1 down, 2 up,
-                                     4 right, 8 left */
-#define SLOT_FRAMES        0x10   /* 16b: the wait, in frames */
-#define SLOT_OBJECT        0x12   /* 16b: its game object */
-#define SLOT_ANIMATION     0x14   /* 16b: the object's animation (a byte x 64) */
-#define SLOT_SPRITE        0x16   /* 16b: the object's sprite */
-#define SLOT_LAST_SPRITE   0x18   /* 16b: the sprite last given to the object */
-#define SLOT_X             0x1A   /* 16b: position */
-#define SLOT_Y             0x1C   /* 16b */
-#define SLOT_HOME_X        0x1E   /* 16b: the middle of its area */
-#define SLOT_HOME_Y        0x20   /* 16b */
-#define SLOT_SCRIPT        0x30   /* 16b: where its script is */
-#define SLOT_SCRIPT_BANK   0x32   /* 8b */
-#define SLOT_ANIM_TABLE    0x33   /* 16b: its standing animation table, $B3:<word> */
-#define SLOT_WALK_TABLE    0x36   /* 16b: its walking animation table */
-#define SLOT_NUMBER        0x3F   /* 8b: its own number */
-
-/* Slot numbers (see PlaceAnimalsOnMap in animals.c) */
-#define COW_SLOT0          0x18   /* cows: $18 + n */
-#define CHICKEN_SLOT0      0x24   /* chickens: $24 + n */
 
 /* ─────────────────────────────────────────────────────────────────────────
  * SetEventSlotPointer ($84:887C, JSL, RTL). A = slot number; $CC-$CE = its address
@@ -120,8 +57,8 @@ void hm_SetEventSlotPointer(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, SLOT_OFFSET, offset);
   uint32_t address = (uint32_t)CC_SLOTS_BASE + offset;
   r->c = address > 0xFFFF;
-  hm_dp_w16(ram, r, DP_SLOT, (uint16_t)address);
-  *hm_dp(ram, r, DP_SLOT_BANK) = 0x7E;
+  hm_dp_w16(ram, r, HM_EVENT_SLOT, (uint16_t)address);
+  *hm_dp(ram, r, HM_EVENT_SLOT_BANK) = 0x7E;
   r->a = (uint16_t)((address & 0xFF00) | 0x7E);  /* SEP #$20; LDA #$7E */
 }
 
@@ -135,11 +72,11 @@ void hm_ResetCurrentEventSlotLong(uint8_t *ram, HmRegs *r)
   static const uint8_t bytes[] = { SLOT_FLAGS, SLOT_FORCED_DIR, SLOT_STEP_X, SLOT_STEP_Y, SLOT_STEP_DELAY,
                                    SLOT_STEP_TIMER, SLOT_PRESSED };
   static const uint8_t words[] = { SLOT_FRAMES, SLOT_X, SLOT_Y, SLOT_OBJECT, SLOT_ANIMATION };
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_IN_USE), 1);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_IN_USE), 1);
   for (unsigned i = 0; i < sizeof bytes; i++)
-    hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, bytes[i]), 0);
+    hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, bytes[i]), 0);
   for (unsigned i = 0; i < sizeof words; i++)
-    hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, words[i]), 0);
+    hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, words[i]), 0);
   r->a = 0;
   r->y = SLOT_ANIMATION;
 }
@@ -152,11 +89,11 @@ void hm_ResetCurrentEventSlotLong(uint8_t *ram, HmRegs *r)
 void hm_ResetCurrentEventSlotShort(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t zero_bytes[] = { SLOT_FORCED_DIR, SLOT_STEP_X, SLOT_STEP_Y, SLOT_STEP_DELAY, SLOT_STEP_TIMER };
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_IN_USE), 1);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FLAGS), 1);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_IN_USE), 1);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS), 1);
   for (unsigned i = 0; i < sizeof zero_bytes; i++)
-    hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, zero_bytes[i]), 0);
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FRAMES), 0);
+    hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, zero_bytes[i]), 0);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FRAMES), 0);
   r->a = 0;
   r->y = SLOT_FRAMES;
 }
@@ -208,12 +145,12 @@ static void start_script(uint8_t *ram, HmRegs *r, const ScriptStart *s)
   r->c = (script >> 15) & 1;                     /* ASL of $80 */
   uint16_t offset = hm_bus_rd16(ram, hm_dp_long(ram, r, s->group_dp, (uint16_t)(script << 1)));
   uint8_t bank = *hm_dp(ram, r, s->group_dp + 2);
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_SCRIPT), offset);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_SCRIPT_BANK), bank);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_SCRIPT), offset);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_SCRIPT_BANK), bank);
   r->x = 2;
   if (s->short_reset) {
-    hm_dp_w16(ram, r, DP_SCRIPT_POS, offset);
-    *hm_dp(ram, r, DP_SCRIPT_BANK) = bank;
+    hm_dp_w16(ram, r, HM_SCRIPT_POS, offset);
+    *hm_dp(ram, r, HM_SCRIPT_BANK) = bank;
     jsr(ram, r, s->ret_reset, hm_ResetCurrentEventSlotShort);
   } else {
     jsr(ram, r, s->ret_reset, hm_ResetCurrentEventSlotLong);
@@ -229,7 +166,7 @@ static uint16_t start_script_numbered(uint8_t *ram, HmRegs *r, const ScriptStart
   start_script(ram, r, s);
   uint8_t lo = hm_pull8(ram, r);
   slot = (uint16_t)(lo | hm_pull8(ram, r) << 8);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_NUMBER), (uint8_t)slot);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_NUMBER), (uint8_t)slot);
   r->a = slot;
   r->y = SLOT_NUMBER;
   return slot;
@@ -251,9 +188,9 @@ void hm_StartScriptAtTileInFront(uint8_t *ram, HmRegs *r)
 {
   static const ScriptStart s = { 0x80FE, 0x814B, GROUPS_LONG, GROUP_LONG, false };
   start_script_numbered(ram, r, &s);
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_X), hm_rd16(ram, HM_TILE_IN_FRONT_X));
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_X), hm_rd16(ram, HM_TILE_IN_FRONT_X));
   r->a = hm_rd16(ram, HM_TILE_IN_FRONT_Y);
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_Y), r->a);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_Y), r->a);
   r->y = SLOT_Y;
 }
 
@@ -275,7 +212,7 @@ void hm_ClearAllEventSlots(uint8_t *ram, HmRegs *r)
     hm_rtl(ram, r);
     r->y = SLOT_IN_USE;
     r->a &= 0xFF00;
-    hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_IN_USE), 0);
+    hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_IN_USE), 0);
     hm_pull8(ram, r); hm_pull8(ram, r);                                  /* PLX */
   }
   r->x = 0x31;
@@ -290,15 +227,15 @@ void hm_ClearAllEventSlots(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_SetSlotAnimation(uint8_t *ram, HmRegs *r)
 {
-  uint16_t entry = hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_ENTRY));
+  uint16_t entry = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_ENTRY));
   hm_dp_w16(ram, r, ANIM_ENTRY, entry);
   uint16_t y = (uint16_t)(entry * 3);
   uint16_t word = hm_bus_rd16(ram, hm_dp_long(ram, r, ANIM_TABLE, y));
   hm_push8(ram, r, (uint8_t)(y >> 8)); hm_push8(ram, r, (uint8_t)y);   /* PHY */
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_SPRITE), word);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_SPRITE), word);
   hm_pull8(ram, r); hm_pull8(ram, r);                                  /* PLY */
   r->a = (uint16_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, ANIM_TABLE, (uint16_t)(y + 2))) << 6);
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIMATION), r->a);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIMATION), r->a);
   r->y = SLOT_ANIMATION;
   r->c = 0;
 }
@@ -316,10 +253,10 @@ void hm_FreeEventSlot(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
   r->y = SLOT_IN_USE;
   r->a &= 0xFF00;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_IN_USE), 0);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_IN_USE), 0);
   r->y = SLOT_OBJECT;
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_OBJECT));
-  hm_dp_w16(ram, r, OBJ_NUMBER, r->a);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_OBJECT));
+  hm_dp_w16(ram, r, HM_OBJ_NUMBER, r->a);
   hm_jsl(ram, r, 0x803D, 0x85);
   hm_DestroyGameObject(ram, r);
   hm_rtl(ram, r);
@@ -336,7 +273,7 @@ void hm_FreeEventSlot(uint8_t *ram, HmRegs *r)
 static uint8_t slot8(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   r->y = at;
-  uint8_t v = hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, at));
+  uint8_t v = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, at));
   r->a = (uint16_t)((r->a & 0xFF00) | v);
   return v;
 }
@@ -345,11 +282,11 @@ void hm_StepSlot(uint8_t *ram, HmRegs *r)
 {
   if (!(slot8(ram, r, SLOT_FLAGS) & 0x20)) { r->a &= 0xFF20; return; }  /* AND #$20 */
   uint8_t timer = (uint8_t)(slot8(ram, r, SLOT_STEP_TIMER) - 1);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_STEP_TIMER), timer);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_STEP_TIMER), timer);
   if (slot8(ram, r, SLOT_STEP_TIMER)) return;
   uint8_t reload = slot8(ram, r, SLOT_STEP_DELAY);
   r->y = SLOT_STEP_TIMER;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_STEP_TIMER), reload);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_STEP_TIMER), reload);
   int8_t dx = (int8_t)slot8(ram, r, SLOT_STEP_X);
   hm_dp_w16(ram, r, STEP_DX, (uint16_t)(int16_t)dx);
   int8_t dy = (int8_t)slot8(ram, r, SLOT_STEP_Y);
@@ -357,11 +294,11 @@ void hm_StepSlot(uint8_t *ram, HmRegs *r)
   static const uint8_t at[2] = { SLOT_X, SLOT_Y };
   for (int i = 0; i < 2; i++) {
     r->y = at[i];
-    uint16_t pos = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, at[i]));
+    uint16_t pos = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, at[i]));
     uint32_t sum = (uint32_t)pos + hm_dp_r16(ram, r, i ? STEP_DY : STEP_DX);
     r->c = sum > 0xFFFF;
     r->a = (uint16_t)sum;
-    hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, at[i]), r->a);
+    hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, at[i]), r->a);
   }
 }
 
@@ -404,17 +341,17 @@ static void put8(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t v)
 {
   r->y = at;
   r->a = (uint16_t)((r->a & 0xFF00) | v);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, at), v);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, at), v);
 }
 static void store8(uint8_t *ram, HmRegs *r, uint16_t at)   /* STA [$CC],Y */
 {
   r->y = at;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, at), (uint8_t)r->a);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, at), (uint8_t)r->a);
 }
 static uint16_t slot16(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   r->y = at;
-  return r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, at));
+  return r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, at));
 }
 /* A = 0; LDA (8 bits): the byte zero-extended */
 static uint16_t slot8_ext(uint8_t *ram, HmRegs *r, uint16_t at)
@@ -562,15 +499,15 @@ void hm_WanderSlot(uint8_t *ram, HmRegs *r)
   /* looking ahead */
   int8_t dx = (int8_t)slot8(ram, r, SLOT_STEP_X);
   if (!dx && !slot8(ram, r, SLOT_STEP_Y)) return;
-  hm_dp_w16(ram, r, COLLIDE_X, slot16(ram, r, SLOT_X));
-  hm_dp_w16(ram, r, COLLIDE_Y, slot16(ram, r, SLOT_Y));
+  hm_dp_w16(ram, r, HM_COLLIDE_X, slot16(ram, r, SLOT_X));
+  hm_dp_w16(ram, r, HM_COLLIDE_Y, slot16(ram, r, SLOT_Y));
   int8_t sx = (int8_t)slot8_ext(ram, r, SLOT_STEP_X);
   if (sx < 0) r->a = (uint8_t)-sx;               /* EOR #$FF; INC (8 bits) */
-  hm_dp_w16(ram, r, COLLIDE_STEP_X, r->a);
+  hm_dp_w16(ram, r, HM_COLLIDE_STEP_X, r->a);
   int8_t sy = (int8_t)slot8_ext(ram, r, SLOT_STEP_Y);
   if (sy < 0) r->a = (uint8_t)-sy;
-  hm_dp_w16(ram, r, COLLIDE_STEP_Y, r->a);
-  hm_dp_w16(ram, r, COLLIDE_AHEAD, 0);
+  hm_dp_w16(ram, r, HM_COLLIDE_STEP_Y, r->a);
+  hm_dp_w16(ram, r, HM_COLLIDE_AHEAD, 0);
 
   int ahead;
   if (slot8(ram, r, SLOT_FLAGS) & 0x80) {
@@ -581,7 +518,7 @@ void hm_WanderSlot(uint8_t *ram, HmRegs *r)
     hm_rtl(ram, r);
     uint16_t blocked = r->a;
     hm_push8(ram, r, (uint8_t)(blocked >> 8)); hm_push8(ram, r, (uint8_t)blocked);  /* PHA */
-    uint16_t first = hm_dp_r16(ram, r, COLLIDE_TILE_1);
+    uint16_t first = hm_dp_r16(ram, r, HM_COLLIDE_TILE_1);
     r->a = first;
     store8(ram, r, SLOT_STATE);
     hm_pull8(ram, r); hm_pull8(ram, r);          /* PLA */
@@ -592,7 +529,7 @@ void hm_WanderSlot(uint8_t *ram, HmRegs *r)
     if (ahead == 2) ahead = may_pass_e1(ram, r) ? 0 : 1;
     if (ahead) { stop_here(ram, r); return; }
   }
-  ahead = tile_ahead(r, hm_dp_r16(ram, r, COLLIDE_TILE_2));
+  ahead = tile_ahead(r, hm_dp_r16(ram, r, HM_COLLIDE_TILE_2));
   if (ahead == 2) ahead = may_pass_e1(ram, r) ? 0 : 1;
   if (ahead) { stop_here(ram, r); return; }
 
@@ -641,8 +578,8 @@ void hm_UpdateSlotSprite(uint8_t *ram, HmRegs *r)
     jsr(ram, r, RET_STEP, hm_StepSlot);
   }
   static const struct { uint8_t field, dp; } to_object[5] = {
-    { SLOT_OBJECT, OBJ_NUMBER }, { SLOT_ANIMATION, OBJ_FLIP }, { SLOT_X, OBJ_X }, { SLOT_Y, OBJ_Y },
-    { SLOT_SPRITE, OBJ_SPRITE } };
+    { SLOT_OBJECT, HM_OBJ_NUMBER }, { SLOT_ANIMATION, HM_OBJ_FLIP }, { SLOT_X, HM_OBJ_X }, { SLOT_Y, HM_OBJ_Y },
+    { SLOT_SPRITE, HM_OBJ_SPRITE } };
   for (int i = 0; i < 5; i++)
     hm_dp_w16(ram, r, to_object[i].dp, slot16(ram, r, to_object[i].field));
 
@@ -653,9 +590,9 @@ void hm_UpdateSlotSprite(uint8_t *ram, HmRegs *r)
   } else if (flags & 0x02) {
     r->a = (uint16_t)((r->a & 0xFF00) | 0x02);
     object_call(ram, r, RET_NEW_OBJECT, hm_CreateGameObject);
-    r->a = hm_dp_r16(ram, r, OBJ_NUMBER);
+    r->a = hm_dp_r16(ram, r, HM_OBJ_NUMBER);
     r->y = SLOT_OBJECT;
-    hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_OBJECT), r->a);
+    hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_OBJECT), r->a);
   } else if (flags & 0x04) {
     r->a = (uint16_t)((r->a & 0xFF00) | 0x04);
     uint16_t sprite = slot16(ram, r, SLOT_SPRITE);
@@ -669,7 +606,7 @@ void hm_UpdateSlotSprite(uint8_t *ram, HmRegs *r)
   }
   slot16(ram, r, SLOT_SPRITE);
   r->y = SLOT_LAST_SPRITE;
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_LAST_SPRITE), r->a);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_LAST_SPRITE), r->a);
   put8(ram, r, SLOT_FLAGS, slot8(ram, r, SLOT_FLAGS) & 0xE9);
 }
 
@@ -709,23 +646,23 @@ static void (*const EVENT_COMMANDS[90])(uint8_t *, HmRegs *) = {
 void hm_EventInstructionInterpreter(uint8_t *ram, HmRegs *r)
 {
   r->y = SLOT_SCRIPT;
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_SCRIPT));
-  hm_dp_w16(ram, r, DP_SCRIPT_POS, r->a);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_SCRIPT));
+  hm_dp_w16(ram, r, HM_SCRIPT_POS, r->a);
   r->y = SLOT_SCRIPT_BANK;
-  uint8_t bank = hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_SCRIPT_BANK));
+  uint8_t bank = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_SCRIPT_BANK));
   r->a = (uint16_t)((r->a & 0xFF00) | bank);
-  *hm_dp(ram, r, DP_SCRIPT_BANK) = bank;
-  uint8_t cmd = hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SCRIPT_POS, 0));   /* LDA #0; XBA; LDA [$C9] */
+  *hm_dp(ram, r, HM_SCRIPT_BANK) = bank;
+  uint8_t cmd = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_SCRIPT_POS, 0));   /* LDA #0; XBA; LDA [$C9] */
   r->a = (uint16_t)(cmd << 1);                                    /* REP #$20; ASL; TAX */
   r->c = 0;
   r->x = r->a;
   if (cmd < 90) jsr(ram, r, 0x826C, EVENT_COMMANDS[cmd]);
-  r->a = hm_dp_r16(ram, r, DP_SCRIPT_POS);                        /* REP #$30 */
+  r->a = hm_dp_r16(ram, r, HM_SCRIPT_POS);                        /* REP #$30 */
   r->y = SLOT_SCRIPT;
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_SCRIPT), r->a);
-  r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, DP_SCRIPT_BANK));
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_SCRIPT), r->a);
+  r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, HM_SCRIPT_BANK));
   r->y = SLOT_SCRIPT_BANK;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_SCRIPT_BANK), (uint8_t)r->a);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_SCRIPT_BANK), (uint8_t)r->a);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -758,34 +695,34 @@ void hm_RunEventSlots(uint8_t *ram, HmRegs *r)
     hm_GetRNG(ram, r);
     hm_rtl(ram, r);
     *hm_dp(ram, r, HM_RNG_LAST) = (uint8_t)r->a;
-    hm_dp_w16(ram, r, DP_SLOT, CC_SLOTS_BASE);
+    hm_dp_w16(ram, r, HM_EVENT_SLOT, CC_SLOTS_BASE);
     r->a = 0xB57E;                                              /* SEP #$20; LDA #$7E */
-    *hm_dp(ram, r, DP_SLOT_BANK) = 0x7E;
+    *hm_dp(ram, r, HM_EVENT_SLOT_BANK) = 0x7E;
     r->x = 0;
     do {
       hm_push8(ram, r, (uint8_t)(r->x >> 8));                   /* PHX */
       hm_push8(ram, r, (uint8_t)r->x);
       r->y = SLOT_IN_USE;
-      uint8_t used = hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_IN_USE));
+      uint8_t used = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_IN_USE));
       r->a = (uint16_t)((r->a & 0xFF00) | (used & 0x01));
       if (used & 0x01) {
         r->y = SLOT_FRAMES;
-        r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FRAMES));
+        r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FRAMES));
         if (r->a) {                                             /* DEC A; STA */
           r->a = (uint16_t)(r->a - 1);
-          hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FRAMES), r->a);
+          hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FRAMES), r->a);
         }
         for (;;) {
           r->y = SLOT_FRAMES;
-          r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FRAMES));
+          r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FRAMES));
           if (r->a) break;
           r->y = SLOT_FLAGS;
-          uint8_t flags = hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FLAGS));
+          uint8_t flags = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS));
           r->a = (uint16_t)((r->a & 0xFF00) | (flags & 0x08));
           if (!(flags & 0x08)) {
             r->y = SLOT_STEP_X;
             r->a = 0;
-            hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_STEP_X), 0);
+            hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_STEP_X), 0);
           }
           jsr(ram, r, 0x81DC, hm_EventInstructionInterpreter);
         }
@@ -794,20 +731,20 @@ void hm_RunEventSlots(uint8_t *ram, HmRegs *r)
         r->a = (uint16_t)((r->a & 0xFF00) | (uint8_t)de);
         *hm_dp(ram, r, HM_RNG_LAST) = (uint8_t)de;
         r->y = SLOT_FLAGS;
-        uint8_t flags = hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FLAGS));
+        uint8_t flags = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS));
         r->a = (uint16_t)((r->a & 0xFF00) | (flags & 0x01));
         if (flags & 0x01) jsr(ram, r, 0x8208, hm_UpdateSlotSprite);
       }
-      uint32_t next = (uint32_t)hm_dp_r16(ram, r, DP_SLOT) + CC_SLOT_SIZE;  /* REP #$30; CLC; ADC */
+      uint32_t next = (uint32_t)hm_dp_r16(ram, r, HM_EVENT_SLOT) + CC_SLOT_SIZE; /* REP #$30; CLC; ADC */
       r->a = (uint16_t)next;
-      hm_dp_w16(ram, r, DP_SLOT, r->a);
+      hm_dp_w16(ram, r, HM_EVENT_SLOT, r->a);
       uint8_t lo = hm_pull8(ram, r);                            /* PLX; INX */
       r->x = (uint16_t)((lo | hm_pull8(ram, r) << 8) + 1);
       r->c = r->x >= 0x31;
     } while (r->x != 0x31);
   }
   static const struct { uint32_t at; uint16_t keep; } clear[4] = {
-    { FLAGS_5A, 0xFE2F }, { FLAGS_5C, 0xFBFF }, { FLAGS_5E, 0xFFBF }, { FLAGS_60, 0xFFEF } };
+    { WRAM_LONG(HM_FLAGS_5A), 0xFE2F }, { WRAM_LONG(HM_FLAGS_5C), 0xFBFF }, { WRAM_LONG(HM_FLAGS_5E), 0xFFBF }, { WRAM_LONG(HM_FLAGS_60), 0xFFEF } };
   for (int i = 0; i < 4; i++) {
     r->a = (uint16_t)(hm_bus_rd16(ram, clear[i].at) & clear[i].keep);
     hm_bus_wr16(ram, clear[i].at, r->a);

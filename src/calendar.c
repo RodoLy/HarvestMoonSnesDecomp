@@ -15,10 +15,10 @@
  * ───────────────────────────────────────────────────────────────────────── */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_SEASON ($7F1F19), HM_WEEKDAY ($7F1F1A) and
- * HM_DAY ($7F1F1B). */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* ROM tables of text codes */
 #define SEASON_NAMES    0x828AD9  /* 16 bytes per season */
@@ -26,7 +26,6 @@
 #define ORDINAL_NAMES   0x828BF9  /* 4 bytes per suffix: st, nd, rd, th */
 
 /* The text buffers (data bank WRAM) */
-#define SEASON_TEXT     0x008B3   /* 6 x 16b */
 #define WEEKDAY_TEXT    0x008BF   /* 9 x 16b */
 #define ORDINAL_TEXT    0x008D1   /* 2 x 16b */
 
@@ -43,7 +42,7 @@ static void copy_text(uint8_t *ram, HmRegs *r, uint32_t table, uint16_t x, uint3
 
 void hm_LoadDateNames(uint8_t *ram, HmRegs *r)
 {
-  copy_text(ram, r, SEASON_NAMES, (uint16_t)(ram[HM_SEASON] << 4), SEASON_TEXT, 6);
+  copy_text(ram, r, SEASON_NAMES, (uint16_t)(ram[HM_SEASON] << 4), HM_SEASON_TEXT, 6);
   copy_text(ram, r, WEEKDAY_NAMES, (uint16_t)(ram[HM_WEEKDAY] << 5), WEEKDAY_TEXT, 9);
 
   uint8_t day = ram[HM_DAY];

@@ -13,10 +13,8 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
-
-#define BBAD_VRAM       0x18   /* $2118: a copy to VRAM */
-#define BBAD_OAM        0x04   /* $2104: a copy to OAM */
-#define BBAD_CGRAM      0x22   /* $2122: a copy to CGRAM */
+#include "hm_vars.h"
+#include "hm_regs.h"
 
 /* Direct page. The prepared DMAs (AddProgrammedDMA's arguments and notes): */
 #define DMA_CHANNEL     0x27   /* the channel prepared (the last one) */
@@ -39,18 +37,13 @@
 #define CAMERA_SPEED    0x1E   /* pixels per frame */
 #define PIXELS_IN_TILE_X 0x20  /* pixels inside the tile (0-7), across */
 #define PIXELS_IN_TILE_Y 0x21  /*   and down */
-/* $22 is HM_MAP_ID, $ED-$F3 HM_CAM_MIN_X ... HM_CAM_MAX_Y (hm_ram.h) */
-#define PLAYER_X        0xD6   /* the player's position */
-#define PLAYER_Y        0xD8
-#define CAMERA_X        0xF5   /* the camera's position */
-#define CAMERA_Y        0xF7
 /* Others: */
 #define NMI_STATUS      0x00   /* the frame's work is done (set by UpdateGraphics) */
 #define MAP_RECORD      0x18   /* BackgroundsManager: the map's record (data bank) */
 #define INIDISP_COPY    0x24   /* the game's copy of INIDISP */
 #define OAM_CHANNEL     0x9A   /* the MDMAEN bit for the sprite table */
 #define OAM_USED        0xAF   /* bytes of the WRAM sprite table filled (PrepareOAMData) */
-#define COPY_AT         0xBF   /* CopySpritePiecesToVRAM: the LOAD_COPIES entry (offset) */
+#define COPY_AT         0xBF   /* CopySpritePiecesToVRAM: the HM_LOAD_COPIES entry (offset) */
 /* $7E-$88 mean a different thing in each routine: */
 #define BRIGHTNESS      0x7E   /* SetBrightness: the new brightness (written as $80:007E) */
 #define PICTURE_AT      0x7E   /* CopyMapPictureToVRAM: the offset in DECOMP_BUFFER */
@@ -74,19 +67,8 @@
 
 /* Data-bank variables (or long, in bank $80) */
 #define CAMERA_BG       HM_CAM_X  /* $013C-$0147: BG1-BG3's scroll, H then V, 16b each */
-#define ENTRY_X         0x017D    /* DB: where the player starts on the map */
-#define ENTRY_Y         0x017F
-#define LAYER_SIZE      0x0181    /* DB: the size of the layers (an index of LAYER_SIZES) */
-#define LAYER_KIND      0x0182    /* DB: 3 or more sets MAP_FLAGS bit 0 (the map scrolls) */
+#define LAYER_KIND      0x0182    /* DB: 3 or more sets HM_WEATHER_FLAGS bit 0 (the map scrolls) */
 #define TEXT_AT         (0x800000 | HM_TEXT_X)   /* the text position (long) */
-#define PRINT_LEFT      0x018C    /* DB: PrintDigit's power of ten (digits left) */
-#define PRINT_NUMBER    0x0192    /* DB: 24b, the number PrintDigit prints */
-#define GRAPHIC_PRESET  0x0195    /* DB: the map's graphics preset */
-#define MAP_FLAGS       0x0196    /* DB: bit 0 the map scrolls, bit 5 dropped with FLAGS_5C
-                                   * bit 0, bit 15 a picture stored as it is */
-#define TEXT_FLAGS      0x019B    /* DB: the text printer's flags (bit 7: a digit printed) */
-#define PLAYER_NAME     0x0881    /* DB: the slot's player's name, 4 letters */
-#define SEASON_TEXT     0x08B3    /* DB: the season's name, 6 x 16b (LoadDateNames) */
 #define PRESET_NUMBER   0x8019B6  /* $19B6: the preset ManageGraphicPresets was given */
 #define SCROLL_COPIES   0x19C0    /* $19C0-$19CE: words, cleared */
 #define SCROLL_COPIES_LAST 0x19CE
@@ -96,17 +78,10 @@
 #define BGSC_BYTES_LAST 0x19E8
 #define BGSC_NO_SIZE    0x8019E3  /* $19E3/$19E5/$19E7/$19E9: BGnSC without the size bits */
 #define OBJ_GRAPHICS    0x8019EA  /* $19EA: the sprites' graphics in VRAM (words) */
-/* WRAM $7F:1Fxx (ram[] offsets 0x11Fxx; WRAM_LONG gives the bus address) */
-#define WRAM_LONG(a)    (0x7E0000 + (a))
-#define FLAGS_5C        0x11F5C   /* 16b flags: bit 0 drops MAP_FLAGS bit 5 */
-#define FLAGS_5E        0x11F5E   /* 16b flags: bit 1 no map extras */
 /* Long addresses */
 #define DECOMP_BUFFER   0x7E2000  /* where pictures and tilemaps are unpacked */
-#define OAM_COPY        0x7EA000  /* the WRAM copy of the sprite table */
-#define OAM_COPY_HIGH   0x7EA200  /* its high table */
-#define LOAD_COPIES     0x7EA420  /* the loader's list: 6 bytes each */
-#define COPY_BANK       2         /* in a LOAD_COPIES entry: the source's bank */
-#define COPY_VRAM       4         /* in a LOAD_COPIES entry: the VRAM address */
+#define COPY_BANK       2         /* in a HM_LOAD_COPIES entry: the source's bank */
+#define COPY_VRAM       4         /* in a HM_LOAD_COPIES entry: the VRAM address */
 #define COPY_SIZE       6
 
 /* ROM */
@@ -114,8 +89,8 @@
 #define OFF_SCREEN      0x808426  /* $00F0 */
 #define CHANNEL_BITS    0x808B3C  /* db 1 << ch */
 #define MAPS_GRAPHICS_TABLE 0x80AA7C
-#define LAYER_SIZES     0x80AA68  /* by LAYER_SIZE: MAP_ROW_LENGTH */
-#define LAYER_SIZES_2   0x80AA72  /* by LAYER_SIZE: CAMERA_IN_ROW */
+#define LAYER_SIZES     0x80AA68  /* by HM_MAP_WIDTH: MAP_ROW_LENGTH */
+#define LAYER_SIZES_2   0x80AA72  /* by HM_MAP_WIDTH: CAMERA_IN_ROW */
 #define BLOCK_TILES     0x82E666  /* DrawTileBlock3x2's tiles */
 #define BLOCK_PLACES    0x82E73E  /* DrawTileBlock3x2: per block, its VRAM address */
 #define BAR_VRAM_AT     0x82EB49  /* DrawScreenBar: the address */
@@ -134,30 +109,6 @@
 #define VRAM_LETTERS    0x5000    /* the text box's letters */
 #define VRAM_SHORT      0x7000    /* a layer picture here (maps below $5B) skips rows */
 #define VRAM_BOX_MAP    0x7800    /* the text box's tilemap */
-
-/* The console's registers (with the data bank, or bank $00) */
-#define INIDISP         0x002100  /* forced blank, brightness */
-#define OAMADDL         0x2102    /* OAM address (16b) */
-#define BG1HOFS         0x210D    /* BG1 scroll, across (+ 2 per layer) */
-#define BG1VOFS         0x210E    /*   and down */
-#define VMAIN           0x2115    /* how the VRAM address moves */
-#define VMADDL          0x2116    /* VRAM address (16b) */
-#define M7SEL           0x211A
-#define CGADD           0x2121    /* CGRAM address */
-#define COLDATA         0x2132
-#define NMITIMEN        0x4200    /* the interrupts */
-#define MDMAEN          0x420B    /* starts the DMA channels (bit = channel) */
-#define DMAP0           0x4300    /* DMA channel 0: mode (+ $10 per channel) */
-#define BBAD0           0x4301    /*   its destination register ($21xx) */
-#define A1T0L           0x4302    /*   its source address */
-#define A1B0            0x4304    /*   its source bank */
-#define DAS0L           0x4305    /*   its size (16b) */
-#define DMAP4           0x4340    /* DMA channel 4: mode */
-#define BBAD4           0x4341    /*   its destination register */
-#define A1T4L           0x4342    /*   its source address */
-#define A1T4H           0x4343
-#define A1B4            0x4344    /*   its source bank */
-#define DAS4L           0x4345    /*   its size (16b) */
 
 static uint32_t db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static void set_a8(HmRegs *r, uint8_t v) { r->a = (uint16_t)((r->a & 0xFF00) | v); }
@@ -383,7 +334,7 @@ void hm_ZeroesCGRAM(uint8_t *ram, HmRegs *r)
 {
   blank_no_interrupts(ram, r);
   wr16(ram, r, CGADD, 0);
-  dma_go(ram, r, 0, 0x09, BBAD_CGRAM, ZERO_WORD, 0x03FF);
+  dma_go(ram, r, 0, 0x09, BBAD_CGDATA, ZERO_WORD, 0x03FF);
 }
 void hm_ZeroesPartialVRAM(uint8_t *ram, HmRegs *r)
 {
@@ -403,16 +354,16 @@ void hm_UnusedHideSprites(uint8_t *ram, HmRegs *r)
   r->x = 0;
   wr16(ram, r, OAMADDL, 0);
   wr8(ram, r, DMAP4, 0); wr8(ram, r, BBAD4, BBAD_OAM);
-  wr8(ram, r, A1T4L, (uint8_t)OAM_COPY); wr8(ram, r, A1T4H, (uint8_t)(OAM_COPY >> 8));
-  wr8(ram, r, A1B4, (uint8_t)(OAM_COPY >> 16));
+  wr8(ram, r, A1T4L, (uint8_t)WRAM_LONG(HM_OAM_COPY)); wr8(ram, r, A1T4H, (uint8_t)(WRAM_LONG(HM_OAM_COPY) >> 8));
+  wr8(ram, r, A1B4, (uint8_t)(WRAM_LONG(HM_OAM_COPY) >> 16));
   r->x = hm_dp_r16(ram, r, OAM_USED);
   wr16(ram, r, DAS4L, r->x);
   wr8(ram, r, MDMAEN, 0x10);
   r->x = 0x0100;
   wr16(ram, r, OAMADDL, 0x0100);
   wr8(ram, r, DMAP4, 0); wr8(ram, r, BBAD4, BBAD_OAM);
-  wr8(ram, r, A1T4L, (uint8_t)OAM_COPY_HIGH); wr8(ram, r, A1T4H, (uint8_t)(OAM_COPY_HIGH >> 8));
-  wr8(ram, r, A1B4, (uint8_t)(OAM_COPY_HIGH >> 16));
+  wr8(ram, r, A1T4L, (uint8_t)WRAM_LONG(HM_OAM_COPY_HIGH)); wr8(ram, r, A1T4H, (uint8_t)(WRAM_LONG(HM_OAM_COPY_HIGH) >> 8));
+  wr8(ram, r, A1B4, (uint8_t)(WRAM_LONG(HM_OAM_COPY_HIGH) >> 16));
   r->c = 0;                                                /* CLC; ADC #2 */
   r->x = 0x0020;
   wr16(ram, r, DAS4L, 0x0020);
@@ -504,15 +455,15 @@ void hm_CopySpritePiecesToVRAM(uint8_t *ram, HmRegs *r)
   for (;;) {
     uint16_t x = hm_dp_r16(ram, r, COPY_AT);
     r->x = x;
-    r->a = hm_bus_rd16(ram, LOAD_COPIES + x);
+    r->a = hm_bus_rd16(ram, WRAM_LONG(HM_LOAD_COPIES) + x);
     if (r->a == 0xFFFF) break;
     for (int half = 0; half < 2; half++) {
-      uint32_t vram = hm_bus_rd16(ram, LOAD_COPIES + COPY_VRAM + x) + 0x100u * half;
-      uint32_t src = hm_bus_rd16(ram, LOAD_COPIES + x) + 0x200u * half;
+      uint32_t vram = hm_bus_rd16(ram, WRAM_LONG(HM_LOAD_COPIES) + COPY_VRAM + x) + 0x100u * half;
+      uint32_t src = hm_bus_rd16(ram, WRAM_LONG(HM_LOAD_COPIES) + x) + 0x200u * half;
       wr16(ram, r, VMADDL, (uint16_t)vram);
       wr16(ram, r, A1T0L, (uint16_t)src);
       wr16(ram, r, DAS0L, 0x0040);
-      wr8(ram, r, A1B0, hm_bus_rd8(ram, LOAD_COPIES + COPY_BANK + x));
+      wr8(ram, r, A1B0, hm_bus_rd8(ram, WRAM_LONG(HM_LOAD_COPIES) + COPY_BANK + x));
       wr8(ram, r, MDMAEN, 0x01);
       r->x = hm_dp_r16(ram, r, COPY_AT);
     }
@@ -788,9 +739,9 @@ static uint16_t rd16_db(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_b
  * is the position's (its 16-bit load) */
 static void digit_now(uint8_t *ram, HmRegs *r, uint8_t which, uint16_t at)
 {
-  wr8(ram, r, PRINT_LEFT, which);
-  uint8_t flags = (uint8_t)(hm_bus_rd8(ram, db(r, TEXT_FLAGS)) & 0x7F);
-  wr8(ram, r, TEXT_FLAGS, flags);
+  wr8(ram, r, HM_PRINT_LEFT, which);
+  uint8_t flags = (uint8_t)(hm_bus_rd8(ram, db(r, HM_TEXT_BOX_STATE)) & 0x7F);
+  wr8(ram, r, HM_TEXT_BOX_STATE, flags);
   r->a = (uint16_t)((hm_bus_rd16(ram, TEXT_AT) & 0xFF00) | flags);
   jsl(ram, r, at, 0x83, hm_PrintDigit);
   jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_StartProgrammedDMA);
@@ -813,7 +764,7 @@ void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r)
   for (uint16_t i = 0; i < 4; i++) {                       /* the name */
     push16(ram, r, i);
     hm_bus_wr16(ram, TEXT_AT, hm_dp_r16(ram, r, NAME_AT));
-    letter_now(ram, r, hm_bus_rd8(ram, db(r, (uint16_t)(PLAYER_NAME + i))), 0xE43C);
+    letter_now(ram, r, hm_bus_rd8(ram, db(r, (uint16_t)(HM_PLAYER_NAME + i))), 0xE43C);
     hm_dp_w16(ram, r, NAME_AT, (uint16_t)(hm_dp_r16(ram, r, NAME_AT) + 8));
     pull16(ram, r);
   }
@@ -822,8 +773,8 @@ void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r)
   push16(ram, r, entry);
   hm_bus_wr16(ram, TEXT_AT, hm_bus_rd16(ram, SAVE_LINES + entry));
   uint8_t year = hm_bus_rd8(ram, WRAM_LONG(HM_YEAR));
-  wr8(ram, r, PRINT_NUMBER, (uint8_t)(year + 1));
-  wr16(ram, r, PRINT_NUMBER + 1, 0);
+  wr8(ram, r, HM_PRINT_NUMBER, (uint8_t)(year + 1));
+  wr16(ram, r, HM_PRINT_NUMBER + 1, 0);
   digit_now(ram, r, 0, 0xE481);
   next_letter(ram);
   uint16_t suffix[2] = { hm_bus_rd16(ram, YEAR_SUFFIXES + 4u * year), hm_bus_rd16(ram, YEAR_SUFFIXES + 4u * year + 2) };
@@ -838,8 +789,8 @@ void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r)
   entry = (uint16_t)(entry + 2);
   push16(ram, r, entry);
   hm_bus_wr16(ram, TEXT_AT, hm_bus_rd16(ram, SAVE_LINES + entry));
-  wr8(ram, r, PRINT_NUMBER, hm_bus_rd8(ram, WRAM_LONG(HM_DAY)));
-  wr16(ram, r, PRINT_NUMBER + 1, 0);
+  wr8(ram, r, HM_PRINT_NUMBER, hm_bus_rd8(ram, WRAM_LONG(HM_DAY)));
+  wr16(ram, r, HM_PRINT_NUMBER + 1, 0);
   digit_now(ram, r, 1, 0xE512);
   pull16(ram, r);                                          /* PLX; PHX */
   push16(ram, r, entry);
@@ -847,7 +798,7 @@ void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r)
   r->c = at8 > 0xFFFF;
   hm_bus_wr16(ram, TEXT_AT, (uint16_t)at8);
   r->a = (uint16_t)(at8 & 0xFF00);                         /* SEP; LDA #0 */
-  wr8(ram, r, PRINT_LEFT, 0);
+  wr8(ram, r, HM_PRINT_LEFT, 0);
   jsl(ram, r, 0xE531, 0x83, hm_PrintDigit);
   jsl(ram, r, 0xE535, 0x80, hm_StartProgrammedDMA);
   jsl(ram, r, 0xE53B, 0x82, hm_LoadDateNames);
@@ -856,7 +807,7 @@ void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r)
   hm_bus_wr16(ram, TEXT_AT, hm_bus_rd16(ram, SAVE_LINES + entry));
   for (uint16_t i = 0; i < 6; i++) {                       /* the season's name */
     if (i) next_letter(ram);
-    letter_now(ram, r, rd16_db(ram, r, (uint16_t)(SEASON_TEXT + 2 * i)), (uint16_t)(0xE552 + 0x1C * i));
+    letter_now(ram, r, rd16_db(ram, r, (uint16_t)(HM_SEASON_TEXT + 2 * i)), (uint16_t)(0xE552 + 0x1C * i));
   }
 }
 
@@ -944,27 +895,27 @@ void hm_BackgroundsManager(uint8_t *ram, HmRegs *r)
   r->c = map >= HM_MAP_FIRST_PICTURE;                      /* CMP #$57 */
   if (map < HM_MAP_FIRST_PICTURE) {
     set_a8(r, rec8(ram, r));
-    wr8(ram, r, GRAPHIC_PRESET, (uint8_t)r->a);            /* the graphics preset */
+    wr8(ram, r, HM_GRAPHIC_PRESET, (uint8_t)r->a);         /* the graphics preset */
     jsl(ram, r, 0xA7E9, 0x80, hm_ManageGraphicPresets);
     r->y++;
-    r->a = (uint16_t)(rec16(ram, r) | rd16_db(ram, r, MAP_FLAGS));
-    wr16(ram, r, MAP_FLAGS, r->a);
-    r->a = hm_bus_rd16(ram, WRAM_LONG(FLAGS_5C)) & 0x0001;
+    r->a = (uint16_t)(rec16(ram, r) | rd16_db(ram, r, HM_WEATHER_FLAGS));
+    wr16(ram, r, HM_WEATHER_FLAGS, r->a);
+    r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) & 0x0001;
     if (r->a) {
-      r->a = rd16_db(ram, r, MAP_FLAGS) & 0xFFDF;
-      wr16(ram, r, MAP_FLAGS, r->a);
+      r->a = rd16_db(ram, r, HM_WEATHER_FLAGS) & 0xFFDF;
+      wr16(ram, r, HM_WEATHER_FLAGS, r->a);
     }
     r->y = (uint16_t)(r->y + 2);
   }
   set_a8(r, rec8(ram, r));
-  wr8(ram, r, LAYER_SIZE, (uint8_t)r->a);                  /* the layer size */
+  wr8(ram, r, HM_MAP_WIDTH, (uint8_t)r->a);                /* the layer size */
   r->y++;
   set_a8(r, rec8(ram, r));
   wr8(ram, r, LAYER_KIND, (uint8_t)r->a);
   r->c = (uint8_t)r->a >= 3;
   if (r->c) {
-    r->a = rd16_db(ram, r, MAP_FLAGS) | 0x0001;
-    wr16(ram, r, MAP_FLAGS, r->a);
+    r->a = rd16_db(ram, r, HM_WEATHER_FLAGS) | 0x0001;
+    wr16(ram, r, HM_WEATHER_FLAGS, r->a);
   }
   r->y++;
   set_a8(r, rec8(ram, r));
@@ -1017,7 +968,7 @@ void hm_BackgroundsManager(uint8_t *ram, HmRegs *r)
     hm_dp_w16(ram, r, PICTURE_VRAM, r->a);                 /* its VRAM address */
     r->y = (uint16_t)(r->y + 2);
     packed_source(ram, r);
-    r->a = rd16_db(ram, r, MAP_FLAGS) & 0x8000;
+    r->a = rd16_db(ram, r, HM_WEATHER_FLAGS) & 0x8000;
     if (!r->a) {
       jsl(ram, r, 0xA8EB, 0x83, hm_DecompressTileMap);
     } else {                                               /* stored as it is */
@@ -1035,20 +986,20 @@ void hm_BackgroundsManager(uint8_t *ram, HmRegs *r)
     set_a8(r, *hm_dp(ram, r, PICTURES_LEFT));
     r->c = *hm_dp(ram, r, PICTURES_LEFT) >= 1;
     if (*hm_dp(ram, r, PICTURES_LEFT) == 1) {
-      r->a = hm_bus_rd16(ram, WRAM_LONG(FLAGS_5E)) & 0x0002;
+      r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E)) & 0x0002;
       if (!r->a) jsl(ram, r, 0xA920, 0x81, hm_RunMapExtras);
     }
-    hm_dp_w16(ram, r, CAMERA_X, 0);
-    hm_dp_w16(ram, r, CAMERA_Y, 0);
+    hm_dp_w16(ram, r, HM_CAMERA_X, 0);
+    hm_dp_w16(ram, r, HM_CAMERA_Y, 0);
     hm_dp_w16(ram, r, VRAM_COLUMN, 0x0410);
     hm_dp_w16(ram, r, VRAM_ROW, 0x0A00);
     hm_dp_w16(ram, r, WRAM_COLUMN, 0);
     hm_dp_w16(ram, r, WRAM_ROW, 0);
     *hm_dp(ram, r, PIXELS_IN_TILE_X) = 0;
     *hm_dp(ram, r, PIXELS_IN_TILE_Y) = 0;
-    hm_dp_w16(ram, r, PLAYER_X, 0);
-    hm_dp_w16(ram, r, PLAYER_Y, 0);
-    r->x = (uint16_t)(hm_bus_rd8(ram, db(r, LAYER_SIZE)) << 1);
+    hm_dp_w16(ram, r, HM_PLAYER_X, 0);
+    hm_dp_w16(ram, r, HM_PLAYER_Y, 0);
+    r->x = (uint16_t)(hm_bus_rd8(ram, db(r, HM_MAP_WIDTH)) << 1);
     r->a = hm_bus_rd16(ram, LAYER_SIZES + r->x);
     hm_dp_w16(ram, r, MAP_ROW_LENGTH, r->a);
     r->c = r->a >= 0x0040;                                 /* SEC; SBC */
@@ -1122,6 +1073,6 @@ void hm_BackgroundsManager(uint8_t *ram, HmRegs *r)
   if (map >= HM_MAP_FIRST_PICTURE) return;
   set_a8(r, 0x08);
   *hm_dp(ram, r, CAMERA_SPEED) = 0x08;
-  walk_camera(ram, r, PLAYER_X, ENTRY_X, 0xAA0B, hm_ScrollCameraRight);
-  walk_camera(ram, r, PLAYER_Y, ENTRY_Y, 0xAA29, hm_UpdateBGOffset);
+  walk_camera(ram, r, HM_PLAYER_X, HM_TRANSITION_X, 0xAA0B, hm_ScrollCameraRight);
+  walk_camera(ram, r, HM_PLAYER_Y, HM_TRANSITION_Y, 0xAA29, hm_UpdateBGOffset);
 }

@@ -23,14 +23,14 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
+#include "hm_regs.h"
 
 #define ROW_BUFFER_1   0x0746   /* DB: the first half's 32 entries */
 #define ROW_BUFFER_2   0x07C6   /* DB: the second half's */
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_CAM_X / HM_CAM_Y ($013C /
- * $013E: BG1's scroll) and the camera's limits HM_CAM_MIN_X ($ED),
- * HM_CAM_MIN_Y ($EF), HM_CAM_MAX_X ($F1), HM_CAM_MAX_Y ($F3). */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* Direct page */
 #define VRAM_COLUMN    0x10   /* 16b: the VRAM position of the next column */
@@ -54,25 +54,10 @@
 #define RUN2_MAP_AT    0x82   /* 16b: the second run's place in the map */
 #define RUN2_BUFFER_AT 0x84   /* 16b: its place in the buffer */
 #define ROW_INNER      0x86   /* 16b: ROW_OFFSET / 4 */
-#define PLAYER_X       0xD6   /* 16b: the player's position */
-#define PLAYER_Y       0xD8   /* 16b */
-#define PLAYER_DIRECTION 0xDA /* 16b: the way the player faces: 0 down, 1 up, 2 right, 3 left */
-#define CAMERA_X       0xF5   /* 16b: the camera's position */
-#define CAMERA_Y       0xF7   /* 16b */
-
-/* WRAM of the data bank (through db_addr) */
-#define WEATHER_FLAGS  0x0196   /* 16b: bit 0 the map scrolls; BG2: bits 1, 2 (clouds), 3 */
-#define CAMERA_SPEED_X 0x087C   /* 16b: the camera's own movement per frame */
-#define CAMERA_SPEED_Y 0x087E   /* 16b */
-#define CAMERA_FRAMES  0x0880   /* 8b: for how many frames */
-#define PLAYER_SCREEN_X 0x090B  /* 16b: where the player is on the screen */
-#define PLAYER_SCREEN_Y 0x090D  /* 16b */
-#define BG2_DRIFT_TIMER 0x091C  /* 8b: frames to the clouds' next drift (to 10) */
 
 /* Video memory */
 #define BG1_MAP        0x2000   /* $7E:2000: the whole map's BG1 tilemap */
 #define BG1_VRAM       0x6000   /* VRAM: the window of it (64 x 32 entries) */
-#define BBAD_VRAM      0x18     /* $2118: a copy to VRAM */
 
 static uint32_t db_addr(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static uint16_t dp16(uint8_t *ram, const HmRegs *r, unsigned a) { return hm_dp_r16(ram, r, a); }
@@ -280,7 +265,7 @@ static bool follow(uint8_t *ram, HmRegs *r, unsigned pos, uint16_t bg, unsigned 
   }
   r->c = room >= dp16(ram, r, CAMERA_SPEED);
   if (room < dp16(ram, r, CAMERA_SPEED)) set16(ram, r, CAMERA_SPEED, room);
-  r->a = hm_bus_rd16(ram, db_addr(r, WEATHER_FLAGS)) & 0x0001;
+  r->a = hm_bus_rd16(ram, db_addr(r, HM_WEATHER_FLAGS)) & 0x0001;
   return r->a != 0;
 }
 /* forwards: offset += speed; at 8 or more, -8 and a new line */
@@ -318,7 +303,7 @@ static bool backwards(uint8_t *ram, HmRegs *r, unsigned sub)
 /* UpdateBGOffset ($80:A0AB): the camera goes down. */
 void hm_UpdateBGOffset(uint8_t *ram, HmRegs *r)
 {
-  if (follow(ram, r, CAMERA_Y, HM_CAM_Y, HM_CAM_MIN_Y, HM_CAM_MAX_Y, true) && forwards(ram, r, SUB_Y)) {
+  if (follow(ram, r, HM_CAMERA_Y, HM_CAM_Y, HM_CAM_MIN_Y, HM_CAM_MAX_Y, true) && forwards(ram, r, SUB_Y)) {
     hm_jsl(ram, r, 0xA0DF, 0x80);
     hm_LoadMapRowBelow(ram, r);
     hm_rtl(ram, r);
@@ -327,7 +312,7 @@ void hm_UpdateBGOffset(uint8_t *ram, HmRegs *r)
 /* ScrollCameraUp ($80:A0E1): the camera goes up. */
 void hm_ScrollCameraUp(uint8_t *ram, HmRegs *r)
 {
-  if (follow(ram, r, CAMERA_Y, HM_CAM_Y, HM_CAM_MIN_Y, HM_CAM_MAX_Y, false) && backwards(ram, r, SUB_Y)) {
+  if (follow(ram, r, HM_CAMERA_Y, HM_CAM_Y, HM_CAM_MIN_Y, HM_CAM_MAX_Y, false) && backwards(ram, r, SUB_Y)) {
     hm_jsl(ram, r, 0xA11A, 0x80);
     hm_LoadMapRowAbove(ram, r);
     hm_rtl(ram, r);
@@ -336,7 +321,7 @@ void hm_ScrollCameraUp(uint8_t *ram, HmRegs *r)
 /* ScrollCameraRight ($80:A11C): the camera goes right. */
 void hm_ScrollCameraRight(uint8_t *ram, HmRegs *r)
 {
-  if (follow(ram, r, CAMERA_X, HM_CAM_X, HM_CAM_MIN_X, HM_CAM_MAX_X, true) && forwards(ram, r, SUB_X)) {
+  if (follow(ram, r, HM_CAMERA_X, HM_CAM_X, HM_CAM_MIN_X, HM_CAM_MAX_X, true) && forwards(ram, r, SUB_X)) {
     hm_jsl(ram, r, 0xA150, 0x80);
     hm_LoadMapColumnRight(ram, r);
     hm_rtl(ram, r);
@@ -345,7 +330,7 @@ void hm_ScrollCameraRight(uint8_t *ram, HmRegs *r)
 /* ScrollCameraLeft ($80:A152): the camera goes left. */
 void hm_ScrollCameraLeft(uint8_t *ram, HmRegs *r)
 {
-  if (follow(ram, r, CAMERA_X, HM_CAM_X, HM_CAM_MIN_X, HM_CAM_MAX_X, false) && backwards(ram, r, SUB_X)) {
+  if (follow(ram, r, HM_CAMERA_X, HM_CAM_X, HM_CAM_MIN_X, HM_CAM_MAX_X, false) && backwards(ram, r, SUB_X)) {
     hm_jsl(ram, r, 0xA18B, 0x80);
     hm_LoadMapColumnLeft(ram, r);
     hm_rtl(ram, r);
@@ -393,8 +378,8 @@ static void place_axis(uint8_t *ram, HmRegs *r, unsigned pos, unsigned low, unsi
 }
 void hm_PlaceCameraOnMapEntry(uint8_t *ram, HmRegs *r)
 {
-  place_axis(ram, r, PLAYER_X, HM_CAM_MIN_X, HM_CAM_MAX_X, PLAYER_SCREEN_X, SUB_X, CAMERA_X);
-  place_axis(ram, r, PLAYER_Y, HM_CAM_MIN_Y, HM_CAM_MAX_Y, PLAYER_SCREEN_Y, SUB_Y, CAMERA_Y);
+  place_axis(ram, r, HM_PLAYER_X, HM_CAM_MIN_X, HM_CAM_MAX_X, HM_PLAYER_SCREEN_X, SUB_X, HM_CAMERA_X);
+  place_axis(ram, r, HM_PLAYER_Y, HM_CAM_MIN_Y, HM_CAM_MAX_Y, HM_PLAYER_SCREEN_Y, SUB_Y, HM_CAMERA_Y);
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
@@ -408,8 +393,6 @@ void hm_PlaceCameraOnMapEntry(uint8_t *ram, HmRegs *r)
  *    BG2 moves with the camera (when the camera moves) and every 10 frames
  *    ($091C) drifts one pixel right and one up; bit 3: BG2 = the camera.
  * ═════════════════════════════════════════════════════════════════════════ */
-#define BG2_X 0x0140   /* DB: 16b, BG2's scroll across */
-#define BG2_Y 0x0142   /* DB: 16b, up-down */
 
 static uint16_t rdw(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_rd16(ram, db_addr(r, a)); }
 static void wrw(uint8_t *ram, const HmRegs *r, uint16_t a, uint16_t v) { hm_bus_wr16(ram, db_addr(r, a), v); }
@@ -423,24 +406,24 @@ static bool at_limit(uint8_t *ram, HmRegs *r, uint16_t v, unsigned a, unsigned b
 }
 static void drift(uint8_t *ram, HmRegs *r)
 {
-  uint8_t t = (uint8_t)(hm_bus_rd8(ram, db_addr(r, BG2_DRIFT_TIMER)) + 1);
+  uint8_t t = (uint8_t)(hm_bus_rd8(ram, db_addr(r, HM_BG2_DRIFT_TIMER)) + 1);
   r->a = (uint16_t)((r->a & 0xFF00) | t);
-  hm_bus_wr8(ram, db_addr(r, BG2_DRIFT_TIMER), t);
+  hm_bus_wr8(ram, db_addr(r, HM_BG2_DRIFT_TIMER), t);
   r->c = t >= 0x0A;
   if (t != 0x0A) return;
-  hm_bus_wr8(ram, db_addr(r, BG2_DRIFT_TIMER), 0);
-  uint16_t x = rdw(ram, r, BG2_X);
-  wrw(ram, r, BG2_X, (uint16_t)(x + 1));
-  uint16_t y = rdw(ram, r, BG2_Y);
+  hm_bus_wr8(ram, db_addr(r, HM_BG2_DRIFT_TIMER), 0);
+  uint16_t x = rdw(ram, r, HM_BG2_X);
+  wrw(ram, r, HM_BG2_X, (uint16_t)(x + 1));
+  uint16_t y = rdw(ram, r, HM_BG2_Y);
   r->c = y >= 1;
   r->a = (uint16_t)(y - 1);
-  wrw(ram, r, BG2_Y, r->a);
+  wrw(ram, r, HM_BG2_Y, r->a);
 }
 static void follow_bg2(uint8_t *ram, HmRegs *r)
 {
-  wrw(ram, r, BG2_X, dp16(ram, r, CAMERA_X));
-  r->a = dp16(ram, r, CAMERA_Y);
-  wrw(ram, r, BG2_Y, r->a);
+  wrw(ram, r, HM_BG2_X, dp16(ram, r, HM_CAMERA_X));
+  r->a = dp16(ram, r, HM_CAMERA_Y);
+  wrw(ram, r, HM_BG2_Y, r->a);
 }
 void hm_MoveSecondBackground(uint8_t *ram, HmRegs *r)
 {
@@ -450,32 +433,32 @@ void hm_MoveSecondBackground(uint8_t *ram, HmRegs *r)
   if (map == 0x26) return;
   r->c = map >= 0x31;
   if (r->c) {                                             /* parallax maps */
-    r->a = dp16(ram, r, CAMERA_Y);
+    r->a = dp16(ram, r, HM_CAMERA_Y);
     if (at_limit(ram, r, r->a, HM_CAM_MIN_Y, HM_CAM_MAX_Y)) return;
-    r->a = dp16(ram, r, CAMERA_X);
-    wrw(ram, r, BG2_X, r->a);
+    r->a = dp16(ram, r, HM_CAMERA_X);
+    wrw(ram, r, HM_BG2_X, r->a);
     uint16_t speed = dp16(ram, r, CAMERA_SPEED);
     r->c = speed >> 15;
     r->a = (uint16_t)(speed << 1);
     set16(ram, r, CAMERA_SPEED, r->a);
-    r->a = dp16(ram, r, PLAYER_DIRECTION);
+    r->a = dp16(ram, r, HM_PLAYER_DIRECTION);
     r->c = r->a >= 2;
     if (r->a == 2) return;
     r->c = r->a >= 3;
     if (r->a == 3) return;
-    uint16_t y = dp16(ram, r, CAMERA_Y);
+    uint16_t y = dp16(ram, r, HM_CAMERA_Y);
     r->a = (uint16_t)((y >> 1) + 0x80);                   /* LSR; CLC; ADC #$80 */
     r->c = (uint32_t)(y >> 1) + 0x80 > 0xFFFF;
-    wrw(ram, r, BG2_Y, r->a);
+    wrw(ram, r, HM_BG2_Y, r->a);
     return;
   }
-  if ((r->a = rdw(ram, r, WEATHER_FLAGS) & 0x0002)) { follow_bg2(ram, r); return; }
-  if (!(r->a = rdw(ram, r, WEATHER_FLAGS) & 0x0004)) {
-    if ((r->a = rdw(ram, r, WEATHER_FLAGS) & 0x0008)) follow_bg2(ram, r);
+  if ((r->a = rdw(ram, r, HM_WEATHER_FLAGS) & 0x0002)) { follow_bg2(ram, r); return; }
+  if (!(r->a = rdw(ram, r, HM_WEATHER_FLAGS) & 0x0004)) {
+    if ((r->a = rdw(ram, r, HM_WEATHER_FLAGS) & 0x0008)) follow_bg2(ram, r);
     return;
   }
   /* the clouds: with the camera, then the drift */
-  uint16_t dir = dp16(ram, r, PLAYER_DIRECTION);
+  uint16_t dir = dp16(ram, r, HM_PLAYER_DIRECTION);
   r->a = dir;
   unsigned d = 4;
   for (unsigned k = 0; k < 4; k++) {
@@ -484,10 +467,10 @@ void hm_MoveSecondBackground(uint8_t *ram, HmRegs *r)
   }
   if (d < 4) {
     bool vertical = d < 2;
-    r->a = dp16(ram, r, vertical ? CAMERA_Y : CAMERA_X);
+    r->a = dp16(ram, r, vertical ? HM_CAMERA_Y : HM_CAMERA_X);
     if (!at_limit(ram, r, r->a, vertical ? HM_CAM_MIN_Y : HM_CAM_MIN_X,
                   vertical ? HM_CAM_MAX_Y : HM_CAM_MAX_X)) {
-      uint16_t at = vertical ? BG2_Y : BG2_X;
+      uint16_t at = vertical ? HM_BG2_Y : HM_BG2_X;
       uint16_t v = rdw(ram, r, at), s = dp16(ram, r, CAMERA_SPEED);
       if (d == 0 || d == 2) { r->a = (uint16_t)(v + s); r->c = (uint32_t)v + s > 0xFFFF; }
       else { r->a = (uint16_t)(v - s); r->c = v >= s; }
@@ -506,14 +489,14 @@ void hm_MoveSecondBackground(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_AutoMapScrolling(uint8_t *ram, HmRegs *r)
 {
-  uint32_t timer = (uint32_t)r->db << 16 | CAMERA_FRAMES;
+  uint32_t timer = (uint32_t)r->db << 16 | HM_CAMERA_FRAMES;
   uint8_t t = hm_bus_rd8(ram, timer);
   r->a = (uint16_t)((r->a & 0xFF00) | t);
   if (!t) return;
   t--;
   r->a = (uint16_t)((r->a & 0xFF00) | t);
   hm_bus_wr8(ram, timer, t);
-  static const uint16_t pos[] = { CAMERA_X, CAMERA_Y }, speed[] = { CAMERA_SPEED_X, CAMERA_SPEED_Y },
+  static const uint16_t pos[] = { HM_CAMERA_X, HM_CAMERA_Y }, speed[] = { HM_CAMERA_SPEED_X, HM_CAMERA_SPEED_Y },
                         bg[] = { HM_CAM_X, HM_CAM_Y };
   for (int i = 0; i < 2; i++) {
     uint32_t sum = (uint32_t)hm_dp_r16(ram, r, pos[i]) + hm_bus_rd16(ram, (uint32_t)r->db << 16 | speed[i]);

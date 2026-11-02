@@ -13,14 +13,8 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
-/* Also used, from hm_ram.h: HM_ANIM_REQUEST ($0901, the player's animation
- * to play), HM_TOOL_SELECTED ($0921, the item in hand), HM_GAME_STATE ($D2,
- * bit 3 = no stamina) and HM_PLAYER_ACTION ($D4) */
-#define TOOL_FRAMES      0x091B   /* DB: 8b, frames of the tool's use (its sound at $18) */
-#define CAN_WATER        0x0926   /* DB: 8b, water left in the watering can */
-#define FLAGS_5A         0x7F1F5A /* 16b flags; bit $10 = the bell calls the cows */
-#define PLAYER_DIRECTION 0xDA     /* direct page, 16b: the way the player faces (0-3) */
 #ifndef SEED_TOSS
 #define SEED_TOSS      0x74
 #endif
@@ -45,7 +39,7 @@ static void animation(uint8_t *ram, HmRegs *r, uint16_t n)
 /* LDA #base; CLC; ADC $DA: one animation per direction */
 static void facing(uint8_t *ram, HmRegs *r, uint16_t base)
 {
-  uint32_t s = (uint32_t)base + hm_dp_r16(ram, r, PLAYER_DIRECTION);
+  uint32_t s = (uint32_t)base + hm_dp_r16(ram, r, HM_PLAYER_DIRECTION);
   r->c = s > 0xFFFF;
   animation(ram, r, (uint16_t)s);
 }
@@ -73,8 +67,8 @@ void hm_ToolAnimationMiraclePotion(uint8_t *ram, HmRegs *r) { facing(ram, r, 0xA
 void hm_ToolAnimationBell(uint8_t *ram, HmRegs *r)
 {
   facing(ram, r, 0x60);
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5A) | 0x0010);
-  hm_bus_wr16(ram, FLAGS_5A, r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5A)) | 0x0010);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5A), r->a);
 }
 void hm_ToolAnimationGrassSeeds(uint8_t *ram, HmRegs *r)    { seeds(ram, r); }
 void hm_ToolAnimationPaint(uint8_t *ram, HmRegs *r)         { animation(ram, r, 0x44); }
@@ -90,10 +84,10 @@ void hm_ToolAnimationWateringCan(uint8_t *ram, HmRegs *r)
   if (answer == 2) {
     facing(ram, r, 0x70);
     r->a = (uint16_t)((r->a & 0xFF00) | 0x14);
-    hm_bus_wr8(ram, db_addr(r, CAN_WATER), 0x14);
+    hm_bus_wr8(ram, db_addr(r, HM_CAN_WATER), 0x14);
     return;
   }
-  uint8_t water = hm_bus_rd8(ram, db_addr(r, CAN_WATER));
+  uint8_t water = hm_bus_rd8(ram, db_addr(r, HM_CAN_WATER));
   r->a = (uint16_t)((r->a & 0xFF00) | water);
   facing(ram, r, water ? 0x68 : 0x6C);
 }
@@ -134,7 +128,7 @@ void hm_StartToolAnimation(uint8_t *ram, HmRegs *r)
     return;
   }
   jsr(ram, r, 0x90BA, hm_CheckToolSuccessForSound);
-  hm_bus_wr8(ram, db_addr(r, TOOL_FRAMES), 0);
+  hm_bus_wr8(ram, db_addr(r, HM_TOOL_FRAMES), 0);
   uint8_t item = hm_bus_rd8(ram, db_addr(r, HM_TOOL_SELECTED));
   r->c = item >> 7;                                        /* ASL (8 bits) */
   r->a = r->x = (uint8_t)(item << 1);

@@ -10,6 +10,7 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ROM tables */
 #define ITEM_SPRITES  0x8196AF   /* DATA8_8196AF: per item, a pointer to its sprites */
@@ -32,111 +33,31 @@
 #define SHELVES       0x81BE0F   /* 8 bytes a tool: */
 #define SHELF_Y       2          /*   +0 X, +2 Y, */
 #define SHELF_TILE    4          /*   +4 the tile (ChangeMapTile's arguments), */
-#define SHELF_ROW     6          /*   +6 a row of SHED_ROWS, +7 its bit */
+#define SHELF_ROW     6          /*   +6 a row of HM_SHED_ITEMS, +7 its bit */
 #define STALL_BITS    0x82A571   /* Cow_Feed_Flags: one bit per feed box */
 
 /* Data-bank variables. The item being worked on (a copy of its map object's
  * record, see objects.c): */
-#define FLAGS         0x0974     /* DB: its flags (bit 2: sprite of the jump) */
-#define ITEM_ROUTINE  0x0975     /* DB: its routine (1 = RunItemRoutine) */
-#define STATE         0x0976     /* DB: the item's state */
 #define OBJECT        0x0978     /* DB: its game object */
-#define ITEM_SPRITE   0x097A     /* DB: its sprite */
 #define ITEM_SPRITE_SHOWN 0x097C /* DB: the sprite its game object shows */
-#define ITEM_FLIP     0x097E     /* DB: its flip */
-#define ITEM_X        0x0980     /* DB: its position */
-#define ITEM_Y        0x0982
-#define ITEM          0x0984     /* DB: the item being worked on */
-/* The player: */
-#define IN_HAND       0x091D     /* DB: the item the player holds */
-#define CARRIED_SLOT  0x0920     /* DB: the CC slot (animal) being carried */
-/* $0921 / $0923 are HM_TOOL_SELECTED / HM_TOOL_BACKPACK, $0927-$092D the bags'
- * counts HM_SEEDS_*_N / HM_FEED_*_N (hm_ram.h) */
-#define FRONT_X       0x0985     /* DB: the tile in front (CalculateTileInFront) */
-#define FRONT_Y       0x0987
-#define PLAYER_SCREEN_X 0x090B   /* DB: where the player is on the screen */
-#define PLAYER_SCREEN_Y 0x090D
 /* Others: */
-#define SOUND_EFFECT  0x0114     /* DB: the sound effect PlaySoundEffect0A plays */
-#define SOUND_BANK    0x0115     /* DB: its bank */
-#define ANSWER        0x018F     /* DB: the yes / no answer (0 = yes) */
-#define TEXT_BOX_LINES 0x0191    /* DB: the lines of the next text box */
-#define MAP_FLAGS     0x0196     /* DB: bit 1: no Sunday market */
-#define INPUT_STATE   0x019A     /* DB: 2 while a text box waits */
-#define COWS_FED      0x0930     /* DB: portions in the barn's feed boxes */
-#define CHICKENS_FED  0x0931     /* DB: portions in the coop's feed boxes */
-#define COW_TROUGHS   0x0932     /* DB: 16b, one bit per barn feed box with food */
-#define CHICKEN_TROUGHS 0x0934   /* DB: 16b, the same in the coop */
 #define EGG_SPOT      0x09AC     /* DB: the festival egg place in front (1-5) */
-#define EDIT_X        0x09AD     /* DB: the tile of that place */
-#define EDIT_Y        0x09AF
-
-/* WRAM $7F:1Fxx (ram[] offsets 0x11Fxx; WRAM_LONG gives the bus address) */
-#define WRAM_LONG(a)  (0x7E0000 + (a))
-#define SHED_ROWS     0x7F1F00   /* bus address of HM_SHED_ITEMS: 4 rows of bits */
-/* $7F:1F07 is HM_SHIPPING_MONEY, $7F:1F1A HM_WEEKDAY, $7F:1F1C HM_HOUR */
-#define SHIPPED_CORN  0x11F4A    /* 16b each: the crops shipped */
-#define SHIPPED_TOMATOES 0x11F4C
-#define SHIPPED_TURNIPS 0x11F4E
-#define SHIPPED_POTATOES 0x11F50
-#define FLAGS_5C      0x11F5C    /* 16b flags: bit 4 shipping at an object, bit 6 shipped */
-#define FLAGS_5E      0x11F5E    /* 16b flags: bit 0 an item shipped this frame */
-#define FLAGS_66      0x11F66    /* 16b flags: bit 13 the spring's event seen today */
-#define FLAGS_6E      0x11F6E    /* 16b flags: bit 13 an egg is hatching */
-#define FLAGS_74      0x11F74    /* 16b day flags: bit 5 the festival eggs vanish, bit 6
-                                  * one was placed */
 
 /* The map objects (objects.c) */
-#define ITEM_RECORDS  0x7EB4E6   /* 10 records of 16 bytes: */
 #define ITEM_RECORD_SIZE 0x10
-#define MOBJ_FLAGS    0x0        /*   +0 flags (bit 0 in use, 1 drawn on the map, 2 kept
-                                  *   off screen) */
-#define MOBJ_ROUTINE  0x1        /*   +1 its routine */
-#define MOBJ_STATE    0x2        /*   +2 the state */
-#define MOBJ_ITEM     0x3        /*   +3 the item */
-#define MOBJ_GOBJ     0x4        /*   +4 its game object (then sprite, shown, flip, X, Y) */
-#define MOBJ_SPRITE_SHOWN 0x8    /*   +8 the sprite shown */
-
-/* An animal's record (animals.c) */
-#define REC_STATUS    0x00       /* 8b status */
-#define CHICKEN_MAP   0x01       /* 8b: the map it is on */
-#define CHICKEN_X     0x04       /* 16b: position */
-#define CHICKEN_Y     0x06
 
 /* Direct page */
 #define MAP_OBJ_PTR   0x07       /* long $07-$09: the map object worked on */
 #define MAP_OBJ_PTR_BANK 0x09
-#define TILE_PROPS    0x0D       /* long $0D-$0F: the map's tile property table (4 bytes
-                                  * a type) */
 /* $22 is HM_MAP_ID (hm_ram.h) */
 #define SPRITE_LIST   0x72       /* GetItemSprite: long $72-$74, the item's sprite list */
 #define SPRITE_LIST_BANK 0x74
 #define MONEY         0x72       /* AddMoney's amount (24b, $72-$74) */
 #define MONEY_HIGH    0x74
-#define ANIMAL_PTR    0x72       /* AnimalSetDown: long $72-$74, the animal's record */
 #define TEMP_7E       0x7E       /* scratch: what times3 (and GetItemSprite) multiply */
 #define SHORT_OF      0x80       /* shop_answer: 4 if the money was short, else 0 */
 #define SHED_BIT      0x92       /* PutToolOnShelf: the tool's bit (TakeToolFromShelf: its
                                   * complement) */
-#define OBJ_X         0x9B       /* the game object routines' arguments (objects.c) */
-#define OBJ_Y         0x9D
-#define OBJ_FLIP      0x9F
-#define OBJ_SPRITE    0xA1
-#define OBJ_NUMBER    0xA5       /* the object's number */
-#define OBJ_RESULT    0xA7       /* ReadGameObject: $FFFF on screen, $FFFD out of the map */
-#define EVENT_SLOT    0xCC       /* long $CC-$CE: the event slot just started */
-#define MAP_ANIM      0xCF       /* long $CF-$D1: the map animation's next step (0 = none) */
-#define MAP_ANIM_BANK 0xD1
-#define GAME_STATE    0xD2       /* DP: bit 1 = holding something */
-#define ACTION        0xD4       /* DP: the player's action (3 jump, 5 throw...) */
-#define PLAYER_X      0xD6       /* the player's position */
-#define PLAYER_Y      0xD8
-#define FACING        0xDA       /* the way he faces: 0 down, 1 up, 2 right, 3 left */
-#define COLLIDE_X     0xDF       /* CollideEventObjects: the position of who moves */
-#define COLLIDE_Y     0xE1
-#define COLLIDE_AHEAD 0xE3       /*   how far ahead to look */
-#define COLLIDE_STEP_X 0xE5      /*   the step */
-#define COLLIDE_STEP_Y 0xE7
 
 static uint32_t db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 
@@ -151,7 +72,7 @@ static uint32_t db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 |
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_GetItemSprite(uint8_t *ram, HmRegs *r)
 {
-  uint16_t item = hm_bus_rd8(ram, db(r, ITEM));
+  uint16_t item = hm_bus_rd8(ram, db(r, HM_ITEM));
   hm_dp_w16(ram, r, TEMP_7E, item);
   r->x = (uint16_t)(item * 3);                             /* ASL; CLC; ADC (no carry) */
   hm_dp_w16(ram, r, SPRITE_LIST, hm_bus_rd16(ram, ITEM_SPRITES + r->x));
@@ -162,12 +83,12 @@ void hm_GetItemSprite(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, TEMP_7E, which);
   uint32_t y3 = (uint32_t)(uint16_t)(which << 1) + which;  /* ASL; CLC; ADC $7E */
   r->y = (uint16_t)y3;
-  hm_bus_wr16(ram, db(r, ITEM_SPRITE), hm_bus_rd16(ram, hm_dp_long(ram, r, SPRITE_LIST, r->y)));
+  hm_bus_wr16(ram, db(r, HM_ITEM_SPRITE), hm_bus_rd16(ram, hm_dp_long(ram, r, SPRITE_LIST, r->y)));
   r->y = (uint16_t)(r->y + 2);
   uint16_t flip = (uint16_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, SPRITE_LIST, r->y)) << 6);
   r->c = 0;                                                /* the last ASL */
   r->a = flip;
-  hm_bus_wr16(ram, db(r, ITEM_FLIP), flip);
+  hm_bus_wr16(ram, db(r, HM_ITEM_FLIP), flip);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -182,22 +103,22 @@ void hm_GetItemSprite(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_PutItemDown(uint8_t *ram, HmRegs *r)
 {
-  hm_bus_wr8(ram, db(r, FLAGS), 1);
-  hm_bus_wr8(ram, db(r, ITEM_ROUTINE), 1);
-  hm_bus_wr8(ram, db(r, STATE), 0);
-  uint8_t item = hm_bus_rd8(ram, db(r, IN_HAND));
-  hm_bus_wr8(ram, db(r, ITEM), item);
-  uint32_t sum = 2u + hm_dp_r16(ram, r, FACING);
+  hm_bus_wr8(ram, db(r, HM_ITEM_FLAGS), 1);
+  hm_bus_wr8(ram, db(r, HM_ITEM_ROUTINE), 1);
+  hm_bus_wr8(ram, db(r, HM_ITEM_STATE), 0);
+  uint8_t item = hm_bus_rd8(ram, db(r, HM_ITEM_ON_HAND));
+  hm_bus_wr8(ram, db(r, HM_ITEM), item);
+  uint32_t sum = 2u + hm_dp_r16(ram, r, HM_PLAYER_DIRECTION);
   r->c = sum > 0xFFFF;
   r->a = (uint16_t)sum;
   r->y = r->a;
   hm_jsl(ram, r, 0x8025, 0x81);
   hm_GetItemSprite(ram, r);
   hm_rtl(ram, r);
-  r->a = hm_dp_r16(ram, r, PLAYER_X);
-  hm_bus_wr16(ram, db(r, ITEM_X), r->a);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, PLAYER_Y) + 2);
-  hm_bus_wr16(ram, db(r, ITEM_Y), r->a);
+  r->a = hm_dp_r16(ram, r, HM_PLAYER_X);
+  hm_bus_wr16(ram, db(r, HM_ITEM_X), r->a);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_PLAYER_Y) + 2);
+  hm_bus_wr16(ram, db(r, HM_ITEM_Y), r->a);
   hm_jsl(ram, r, 0x8037, 0x81);
   hm_SpawnMapObject(ram, r);
   hm_rtl(ram, r);
@@ -214,28 +135,28 @@ void hm_PutItemDown(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
   if (g_hm_bag_take) { g_hm_bag_take = 0; return; }   /* the native build's bag: out of it */
 
-  uint16_t it = hm_bus_rd8(ram, db(r, ITEM));
+  uint16_t it = hm_bus_rd8(ram, db(r, HM_ITEM));
   r->x = it;
   uint8_t change = hm_bus_rd8(ram, TILE_CHANGES + it);
   r->a = (uint16_t)((it & 0xFF00) | change);
   if (change) {
     r->c = (change >> 6) & 1;                              /* ASL; ASL (16 bits) */
     r->y = (uint16_t)(change << 2);
-    r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPS, r->y)); /* LDA #0; XBA; LDA [$0D],Y */
-    r->x = hm_bus_rd16(ram, db(r, FRONT_X));
-    r->y = hm_bus_rd16(ram, db(r, FRONT_Y));
+    r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_TILE_PROPS, r->y)); /* LDA #0; XBA; LDA [$0D],Y */
+    r->x = hm_bus_rd16(ram, db(r, HM_TILE_IN_FRONT_X));
+    r->y = hm_bus_rd16(ram, db(r, HM_TILE_IN_FRONT_Y));
     hm_jsl(ram, r, 0x8071, 0x81);
     hm_ChangeMapTile(ram, r);
     hm_rtl(ram, r);
   }
-  it = hm_bus_rd8(ram, db(r, ITEM));
+  it = hm_bus_rd8(ram, db(r, HM_ITEM));
   r->x = it;
   uint8_t sound = hm_bus_rd8(ram, ITEM_SOUNDS + it);
   r->a = (uint16_t)((it & 0xFF00) | sound);
   if (!sound) return;
   r->a = (uint16_t)((r->a & 0xFF00) | 0x06);
-  hm_bus_wr8(ram, db(r, SOUND_EFFECT), 0x08);
-  hm_bus_wr8(ram, db(r, SOUND_BANK), 0x06);
+  hm_bus_wr8(ram, db(r, HM_SOUND_EFFECT), 0x08);
+  hm_bus_wr8(ram, db(r, HM_SOUND_BANK), 0x06);
   hm_jsl(ram, r, 0x8098, 0x83);
   hm_PlaySoundEffect0A(ram, r);
   hm_rtl(ram, r);
@@ -304,7 +225,7 @@ static uint16_t add16(HmRegs *r, uint16_t v, uint16_t k)
 /* "LDA #$00; XBA; LDA $0984" (8 bits): A = the item, high byte 0 */
 static uint16_t item_word(uint8_t *ram, HmRegs *r)
 {
-  r->a = rd8(ram, r, ITEM);
+  r->a = rd8(ram, r, HM_ITEM);
   return r->a;
 }
 
@@ -313,44 +234,44 @@ static uint16_t item_word(uint8_t *ram, HmRegs *r)
 static void remove_object(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t b)
 {
   r->a = rd16(ram, r, OBJECT);
-  hm_dp_w16(ram, r, OBJ_NUMBER, r->a);
+  hm_dp_w16(ram, r, HM_OBJ_NUMBER, r->a);
   jsl(ram, r, a, 0x85, hm_DestroyGameObject);
   if (b) jsl(ram, r, b, 0x81, hm_FreeMapObject);
 }
 /* the player stops (action 0) and no longer holds anything ($D2 bit 1) */
 static void hands_free(uint8_t *ram, HmRegs *r)
 {
-  hm_dp_w16(ram, r, ACTION, 0);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) & ~0x0002);
-  hm_dp_w16(ram, r, GAME_STATE, r->a);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) & ~0x0002);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
 }
 static void hands_full(uint8_t *ram, HmRegs *r)
 {
-  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) | 0x0002);
-  hm_dp_w16(ram, r, GAME_STATE, r->a);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0002);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
 }
 static void set_state(uint8_t *ram, HmRegs *r, uint8_t s)
 {
   set_a8(r, s);
-  wr8(ram, r, STATE, s);
+  wr8(ram, r, HM_ITEM_STATE, s);
 }
 /* SEP #$20; LDA #$02; STA $019A; [X = text]; LDA #$00; STA $0191;
  * JSL StartTextBox (at a) */
 static void say(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   set_a8(r, 0);
-  wr8(ram, r, TEXT_BOX_LINES, 0);
+  wr8(ram, r, HM_TEXT_BOX_LINES, 0);
   jsl(ram, r, at, 0x83, hm_StartTextBox);
 }
 static void wait_for_input(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 2);
-  wr8(ram, r, INPUT_STATE, 2);
+  wr8(ram, r, HM_INPUT_STATE, 2);
 }
 /* "LDA $019A; CMP #$02": still waiting for the text box? */
 static bool text_open(uint8_t *ram, HmRegs *r)
 {
-  uint8_t v = rd8(ram, r, INPUT_STATE);
+  uint8_t v = rd8(ram, r, HM_INPUT_STATE);
   set_a8(r, v);
   r->c = v >= 2;
   return v == 2;
@@ -371,8 +292,8 @@ static void tile_ahead(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t
  * X = its type, A = the property */
 static void tile_property(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t at)
 {
-  r->x = rd16(ram, r, FRONT_X);
-  r->y = rd16(ram, r, FRONT_Y);
+  r->x = rd16(ram, r, HM_TILE_IN_FRONT_X);
+  r->y = rd16(ram, r, HM_TILE_IN_FRONT_Y);
   r->a = a;
   jsl(ram, r, at, 0x82, hm_GetTileProperty);
 }
@@ -385,18 +306,18 @@ static bool cpx(HmRegs *r, uint16_t k)
 /* the item where the player is, two pixels lower ($0980 / $0982) */
 static void follow_player(uint8_t *ram, HmRegs *r)
 {
-  r->a = hm_dp_r16(ram, r, PLAYER_X);
-  wr16(ram, r, ITEM_X, r->a);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, PLAYER_Y) + 2);
-  wr16(ram, r, ITEM_Y, r->a);
+  r->a = hm_dp_r16(ram, r, HM_PLAYER_X);
+  wr16(ram, r, HM_ITEM_X, r->a);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_PLAYER_Y) + 2);
+  wr16(ram, r, HM_ITEM_Y, r->a);
 }
 /* the item at the tile in front */
 static void to_tile_ahead(uint8_t *ram, HmRegs *r)
 {
-  r->a = rd16(ram, r, FRONT_X);
-  wr16(ram, r, ITEM_X, r->a);
-  r->a = rd16(ram, r, FRONT_Y);
-  wr16(ram, r, ITEM_Y, r->a);
+  r->a = rd16(ram, r, HM_TILE_IN_FRONT_X);
+  wr16(ram, r, HM_ITEM_X, r->a);
+  r->a = rd16(ram, r, HM_TILE_IN_FRONT_Y);
+  wr16(ram, r, HM_ITEM_Y, r->a);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -406,7 +327,7 @@ static void to_tile_ahead(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 static void machine(uint8_t *ram, HmRegs *r, Step *zero, const uint8_t *states, Step *const *steps, int n)
 {
-  uint8_t s = rd8(ram, r, STATE);
+  uint8_t s = rd8(ram, r, HM_ITEM_STATE);
   set_a8(r, s);
   if (s == 0) { zero(ram, r); return; }
   for (int i = 0; i < n; i++) {
@@ -468,7 +389,7 @@ void hm_ItemAnimalSteps(uint8_t *ram, HmRegs *r)
  * the high byte A had for the items below $44) */
 static uint16_t article(uint8_t *ram, HmRegs *r)
 {
-  uint8_t it = rd8(ram, r, ITEM);
+  uint8_t it = rd8(ram, r, HM_ITEM);
   if (it < 0x44) {
     uint8_t v = (uint8_t)(it - 0x1B);                      /* SEC; SBC #$1B */
     uint16_t sum = (uint16_t)(v + 0x13);                   /* CLC; ADC #$13 */
@@ -505,21 +426,21 @@ static void shop_put_back(uint8_t *ram, HmRegs *r)         /* CODE_818AA0 */
   remove_object(ram, r, 0x8AA7, 0);
   hands_free(ram, r);
   jsl(ram, r, 0x8ABE, 0x81, hm_FreeMapObject);
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
   tile_ahead(ram, r, 1, 6, 6, 0x8AD2);
   article(ram, r);
   r->x = add16(r, article_x12(ram, r), SHOP_TILE);
   uint8_t tile = hm_bus_rd8(ram, SHOP_TABLE + r->x);
   r->a = tile;                                             /* XBA; LDA #0; XBA */
-  r->x = rd16(ram, r, FRONT_X);
-  r->y = rd16(ram, r, FRONT_Y);
+  r->x = rd16(ram, r, HM_TILE_IN_FRONT_X);
+  r->y = rd16(ram, r, HM_TILE_IN_FRONT_Y);
   jsl(ram, r, 0x8B13, 0x81, hm_ChangeMapTile);
 }
 
 static void shop_answer(uint8_t *ram, HmRegs *r)           /* CODE_818989 */
 {
   if (text_open(ram, r)) return;
-  uint8_t no = rd8(ram, r, ANSWER);
+  uint8_t no = rd8(ram, r, HM_ANSWER);
   set_a8(r, no);
   if (no) {                                                /* CODE_818A4E */
     wait_for_input(ram, r);
@@ -564,7 +485,7 @@ static void shop_wait(uint8_t *ram, HmRegs *r)             /* CODE_818A94 */
 static void shop_sold(uint8_t *ram, HmRegs *r)             /* CODE_818B19 */
 {
   if (text_open(ram, r)) return;
-  uint8_t it = rd8(ram, r, ITEM);
+  uint8_t it = rd8(ram, r, HM_ITEM);
   set_a8(r, it);
   static const uint8_t kept[] = { 0x49, 0x56, 0x1B, 0x1C, 0x1D };
   bool keep = false;
@@ -576,7 +497,7 @@ static void shop_sold(uint8_t *ram, HmRegs *r)             /* CODE_818B19 */
     remove_object(ram, r, 0x8B43, 0);
     hands_free(ram, r);
     jsl(ram, r, 0x8B5A, 0x81, hm_FreeMapObject);
-    wr8(ram, r, IN_HAND, 0);
+    wr8(ram, r, HM_ITEM_ON_HAND, 0);
   }
   set_state(ram, r, 0xFF);
 }
@@ -618,26 +539,26 @@ void hm_FoodAskToEat(uint8_t *ram, HmRegs *r)
 void hm_FoodEatAnswer(uint8_t *ram, HmRegs *r)
 {
   if (text_open(ram, r)) return;
-  uint8_t no = rd8(ram, r, ANSWER);
+  uint8_t no = rd8(ram, r, HM_ANSWER);
   set_a8(r, no);
   if (no) {                                                /* CODE_818C0C */
-    hm_dp_w16(ram, r, ACTION, 0);
+    hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
     hands_full(ram, r);
     set_state(ram, r, 2);
     return;
   }
-  hm_dp_w16(ram, r, ACTION, 8);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) & 0x7FFF);
-  hm_dp_w16(ram, r, GAME_STATE, r->a);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 8);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) & 0x7FFF);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   remove_object(ram, r, 0x8BD3, 0x8BD7);
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
   r->x = (uint16_t)(food_entry(ram, r) + FOOD_STAMINA);
   uint8_t stamina = hm_bus_rd8(ram, FOOD_TABLE + r->x);
   set_a8(r, stamina);
   r->n = stamina >> 7;                                     /* ChangeStamina reads N */
   jsl(ram, r, 0x8BFA, 0x81, hm_ChangeStamina);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) & ~0x0002);
-  hm_dp_w16(ram, r, GAME_STATE, r->a);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) & ~0x0002);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -658,7 +579,7 @@ void hm_ItemTakeInHand(uint8_t *ram, HmRegs *r)
 void hm_ItemFinished(uint8_t *ram, HmRegs *r)
 {
   remove_object(ram, r, 0x9028, 0x902C);
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
   hands_free(ram, r);
 }
 
@@ -669,13 +590,13 @@ void hm_ItemRemoveMapObject(uint8_t *ram, HmRegs *r)
 
 void hm_ItemWaitMapAnimation(uint8_t *ram, HmRegs *r)
 {
-  r->a = hm_dp_r16(ram, r, MAP_ANIM);
+  r->a = hm_dp_r16(ram, r, HM_MAP_ANIM);
   if (r->a) return;
-  set_a8(r, *hm_dp(ram, r, MAP_ANIM_BANK));
+  set_a8(r, *hm_dp(ram, r, HM_MAP_ANIM_BANK));
   if (r->a & 0xFF) return;
   jsl(ram, r, 0x96A1, 0x81, hm_FreeMapObject);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) | 0x0001);
-  hm_dp_w16(ram, r, GAME_STATE, r->a);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0001);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -689,34 +610,34 @@ void hm_ItemWaitMapAnimation(uint8_t *ram, HmRegs *r)
 static void carried(uint8_t *ram, HmRegs *r, uint16_t at_hand, uint16_t at_jump, uint16_t at_anim)
 {
   follow_player(ram, r);
-  r->a = hm_dp_r16(ram, r, ACTION);
+  r->a = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
   r->c = r->a >= 3;
   if (r->a == 3) {
-    uint8_t f = rd8(ram, r, FLAGS);
+    uint8_t f = rd8(ram, r, HM_ITEM_FLAGS);
     set_a8(r, f & 0x04);
     if (!(f & 0x04)) {
       sprite(ram, r, 0x0B, at_jump);
-      f = (uint8_t)(rd8(ram, r, FLAGS) | 0x04);
+      f = (uint8_t)(rd8(ram, r, HM_ITEM_FLAGS) | 0x04);
       set_a8(r, f);
-      wr8(ram, r, FLAGS, f);
+      wr8(ram, r, HM_ITEM_FLAGS, f);
       return;
     }
     r->a = rd16(ram, r, OBJECT);
-    hm_dp_w16(ram, r, OBJ_NUMBER, r->a);
+    hm_dp_w16(ram, r, HM_OBJ_NUMBER, r->a);
     jsl(ram, r, at_anim, 0x85, hm_ReadGameObject);
-    r->a = hm_dp_r16(ram, r, OBJ_RESULT);
+    r->a = hm_dp_r16(ram, r, HM_OBJ_RESULT);
     r->c = r->a >= 0xFFFF;
     if (r->a != 0xFFFF) return;
   }
   sprite(ram, r, 1, at_hand);
-  uint8_t f = (uint8_t)(rd8(ram, r, FLAGS) & 0xFB);
+  uint8_t f = (uint8_t)(rd8(ram, r, HM_ITEM_FLAGS) & 0xFB);
   set_a8(r, f);
-  wr8(ram, r, FLAGS, f);
+  wr8(ram, r, HM_ITEM_FLAGS, f);
 }
 /* REP #$30; LDA $D4; CMP #$05: is the player throwing it? */
 static bool throwing(uint8_t *ram, HmRegs *r)
 {
-  r->a = hm_dp_r16(ram, r, ACTION);
+  r->a = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
   r->c = r->a >= 5;
   return r->a == 5;
 }
@@ -724,12 +645,12 @@ static bool throwing(uint8_t *ram, HmRegs *r)
  * something is in the way; then CMP #0 (C = 1) */
 static bool in_the_way(uint8_t *ram, HmRegs *r, uint16_t at)
 {
-  hm_dp_w16(ram, r, COLLIDE_X, hm_dp_r16(ram, r, PLAYER_X));
-  hm_dp_w16(ram, r, COLLIDE_Y, hm_dp_r16(ram, r, PLAYER_Y));
-  hm_dp_w16(ram, r, COLLIDE_STEP_X, 0);
-  hm_dp_w16(ram, r, COLLIDE_STEP_Y, 0);
-  hm_dp_w16(ram, r, COLLIDE_AHEAD, 0x0010);
-  r->a = hm_dp_r16(ram, r, FACING);
+  hm_dp_w16(ram, r, HM_COLLIDE_X, hm_dp_r16(ram, r, HM_PLAYER_X));
+  hm_dp_w16(ram, r, HM_COLLIDE_Y, hm_dp_r16(ram, r, HM_PLAYER_Y));
+  hm_dp_w16(ram, r, HM_COLLIDE_STEP_X, 0);
+  hm_dp_w16(ram, r, HM_COLLIDE_STEP_Y, 0);
+  hm_dp_w16(ram, r, HM_COLLIDE_AHEAD, 0x0010);
+  r->a = hm_dp_r16(ram, r, HM_PLAYER_DIRECTION);
   jsl(ram, r, at, 0x83, hm_CollideEventObjects);
   r->c = 1;
   return r->a != 0;
@@ -737,14 +658,14 @@ static bool in_the_way(uint8_t *ram, HmRegs *r, uint16_t at)
 /* LDA #6; CLC; ADC $DA; TAY; JSL GetItemSprite (at a); state 3: it flies */
 static void fly(uint8_t *ram, HmRegs *r, uint16_t at)
 {
-  r->a = add16(r, 6, hm_dp_r16(ram, r, FACING));
+  r->a = add16(r, 6, hm_dp_r16(ram, r, HM_PLAYER_DIRECTION));
   sprite(ram, r, r->a, at);
   set_state(ram, r, 3);
 }
 static void stop_throw(uint8_t *ram, HmRegs *r)
 {
   r->a = 0;
-  hm_dp_w16(ram, r, ACTION, 0);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
 }
 /* CPX #1, #2, #7, #8 (ground: 1 is returned), then A = 0..5 and CPX #$F0,
  * #$F9..#$FD (a bin or a box: 2 + its number); 0 when none */
@@ -785,11 +706,11 @@ static void land_here(uint8_t *ram, HmRegs *r)
   r->c = 0;                                                /* ASL of a byte */
   r->x = r->a;
   set_a8(r, hm_bus_rd8(ram, PRICE_TABLE + r->x));
-  r->x = rd16(ram, r, FRONT_X);
-  r->y = rd16(ram, r, FRONT_Y);
+  r->x = rd16(ram, r, HM_TILE_IN_FRONT_X);
+  r->y = rd16(ram, r, HM_TILE_IN_FRONT_Y);
   jsl(ram, r, 0x8DD2, 0x81, hm_ChangeMapTile);
   remove_object(ram, r, 0x8DDD, 0x8DE1);
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
 }
 /* CODE_818DEC / CODE_819631: into bin or box A: the item goes to its
  * place (DATA8_81A363), sprite $CA, state 4. */
@@ -799,13 +720,13 @@ static void into_spot(uint8_t *ram, HmRegs *r)
   r->c = (r->a >> 15) & 1; r->a = (uint16_t)(r->a << 1);
   r->x = r->a;
   r->a = hm_bus_rd16(ram, SPOT_TABLE + r->x);
-  wr16(ram, r, ITEM_X, r->a);
+  wr16(ram, r, HM_ITEM_X, r->a);
   r->x = (uint16_t)(r->x + SPOT_Y);
   r->a = hm_bus_rd16(ram, SPOT_TABLE + r->x);
-  wr16(ram, r, ITEM_Y, r->a);
+  wr16(ram, r, HM_ITEM_Y, r->a);
   r->a = 0x00CA;
-  wr16(ram, r, ITEM_SPRITE, 0x00CA);
-  wr8(ram, r, IN_HAND, 0);
+  wr16(ram, r, HM_ITEM_SPRITE, 0x00CA);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
   set_state(ram, r, 4);
 }
 
@@ -833,29 +754,29 @@ void hm_PlaceableGone(uint8_t *ram, HmRegs *r)
  * $26, 2 for $25, $31 otherwise) and the item goes. */
 void hm_AnimalSetDown(uint8_t *ram, HmRegs *r)
 {
-  uint8_t h = rd8(ram, r, IN_HAND);
+  uint8_t h = rd8(ram, r, HM_ITEM_ON_HAND);
   set_a8(r, h);
   r->c = h >= 0x29;
   if (h != 0x29) {
-    uint8_t who = rd8(ram, r, CARRIED_SLOT);
+    uint8_t who = rd8(ram, r, HM_CARRIED_SLOT);
     r->c = who >= 0x24;
     r->a = (uint8_t)(who - 0x24);
     jsl(ram, r, 0x8E2F, 0x83, hm_GetChickenPointer);
     r->y = CHICKEN_MAP;
     set_a8(r, *hm_dp(ram, r, HM_MAP_ID));
-    hm_bus_wr8(ram, hm_dp_long(ram, r, ANIMAL_PTR, CHICKEN_MAP), (uint8_t)r->a);
-    r->y = REC_STATUS;
-    set_a8(r, (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, ANIMAL_PTR, REC_STATUS)) & 0xDF));
-    hm_bus_wr8(ram, hm_dp_long(ram, r, ANIMAL_PTR, REC_STATUS), (uint8_t)r->a);
+    hm_bus_wr8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, CHICKEN_MAP), (uint8_t)r->a);
+    r->y = ANIMAL_STATUS;
+    set_a8(r, (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, ANIMAL_STATUS)) & 0xDF));
+    hm_bus_wr8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, ANIMAL_STATUS), (uint8_t)r->a);
     r->y = CHICKEN_X;
-    r->a = rd16(ram, r, FRONT_X);
-    hm_bus_wr16(ram, hm_dp_long(ram, r, ANIMAL_PTR, CHICKEN_X), r->a);
+    r->a = rd16(ram, r, HM_TILE_IN_FRONT_X);
+    hm_bus_wr16(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, CHICKEN_X), r->a);
     r->y = CHICKEN_Y;
-    r->a = rd16(ram, r, FRONT_Y);
-    hm_bus_wr16(ram, hm_dp_long(ram, r, ANIMAL_PTR, CHICKEN_Y), r->a);
+    r->a = rd16(ram, r, HM_TILE_IN_FRONT_Y);
+    hm_bus_wr16(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, CHICKEN_Y), r->a);
   }
   r->y = 1;
-  h = rd8(ram, r, IN_HAND);
+  h = rd8(ram, r, HM_ITEM_ON_HAND);
   set_a8(r, h);
   r->c = h >= 0x26;
   if (h != 0x26) {
@@ -863,11 +784,11 @@ void hm_AnimalSetDown(uint8_t *ram, HmRegs *r)
     r->c = h >= 0x25;
     if (h != 0x25) r->y = 0x31;
   }
-  r->a = rd8(ram, r, CARRIED_SLOT);
+  r->a = rd8(ram, r, HM_CARRIED_SLOT);
   r->x = 0;
   jsl(ram, r, 0x8E7D, 0x84, hm_StartScriptAtTileInFront);
   remove_object(ram, r, 0x8E88, 0x8E8C);
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
 }
 
 /* FodderIntoFeedBox (state 3 of ItemFodderSteps, item $1A): fodder thrown into a
@@ -876,17 +797,17 @@ void hm_AnimalSetDown(uint8_t *ram, HmRegs *r)
  * fodder lands (CODE_818DAB). Anywhere else, as any dropped item. */
 void hm_FodderIntoFeedBox(uint8_t *ram, HmRegs *r)
 {
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
   tile_ahead(ram, r, 1, 6, 6, 0x8EA8);
   tile_property(ram, r, 0, 0x8EB7);
   uint8_t map = *hm_dp(ram, r, HM_MAP_ID);
   set_a8(r, map);
   r->c = map >= 0x27;
-  uint16_t flags = COW_TROUGHS, count = COWS_FED;
+  uint16_t flags = HM_COW_TROUGHS, count = HM_COWS_FED;
   if (map != 0x27) {
     r->c = map >= 0x28;
     if (map != 0x28) { hm_ItemLands(ram, r); return; }
-    flags = CHICKEN_TROUGHS; count = CHICKENS_FED;
+    flags = HM_CHICKEN_TROUGHS; count = HM_CHICKENS_FED;
   }
   if (r->x < 0xE2 || r->x >= 0xEF) {
     r->c = r->x >= 0xE2;
@@ -927,10 +848,10 @@ void hm_ItemAskToSell(uint8_t *ram, HmRegs *r)
 static void give_back(uint8_t *ram, HmRegs *r)             /* CODE_818FEA */
 {
   sprite(ram, r, 1, 0x8FEF);
-  r->a = rd16(ram, r, PLAYER_SCREEN_X);
-  wr16(ram, r, ITEM_X, r->a);
-  r->a = rd16(ram, r, PLAYER_SCREEN_Y);
-  wr16(ram, r, ITEM_Y, r->a);
+  r->a = rd16(ram, r, HM_PLAYER_SCREEN_X);
+  wr16(ram, r, HM_ITEM_X, r->a);
+  r->a = rd16(ram, r, HM_PLAYER_SCREEN_Y);
+  wr16(ram, r, HM_ITEM_Y, r->a);
   set_state(ram, r, 2);
   hands_full(ram, r);
 }
@@ -938,7 +859,7 @@ static void give_back(uint8_t *ram, HmRegs *r)             /* CODE_818FEA */
 void hm_ItemSellAnswer(uint8_t *ram, HmRegs *r)
 {
   if (text_open(ram, r)) return;
-  uint8_t no = rd8(ram, r, ANSWER);
+  uint8_t no = rd8(ram, r, HM_ANSWER);
   set_a8(r, no);
   if (no) {
     wait_for_input(ram, r);
@@ -962,7 +883,7 @@ void hm_ItemSellAnswer(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, MONEY, r->a);
   *hm_dp(ram, r, MONEY_HIGH) = 0;
   jsl(ram, r, 0x8FCC, 0x83, hm_AddMoney);
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
 }
 
 /* the item's price (Items_Price_Table, second byte) to the day's shipping
@@ -975,8 +896,8 @@ static void ship(uint8_t *ram, HmRegs *r, uint8_t price)
   r->c = hi > 0xFF;
   r->a = (uint16_t)((sum & 0xFF00) | (uint8_t)hi);
   hm_bus_wr8(ram, WRAM_LONG(HM_SHIPPING_MONEY + 2), (uint8_t)hi);
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5E)) | 0x0001);
-  hm_bus_wr16(ram, WRAM_LONG(FLAGS_5E), r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E)) | 0x0001);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5E), r->a);
 }
 /* LDA #0; XBA; LDA $0984; REP #$20; ASL; TAX; INX; SEP #$20; LDA.L
  * Items_Price_Table,X: the item's price */
@@ -1010,13 +931,13 @@ void hm_ItemCarried(uint8_t *ram, HmRegs *r)
     tile_ahead(ram, r, 1, 0, 0, 0x91A0);
     to_tile_ahead(ram, r);
     sprite(ram, r, 0, 0x91B5);
-    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5C)) & 0x0010);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) & 0x0010);
     if (r->a) {
       uint8_t p = price_of(ram, r);
       if (p && before_5pm(ram, r)) {
         ship(ram, r, p);
-        r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5C)) | 0x0040);
-        hm_bus_wr16(ram, WRAM_LONG(FLAGS_5C), r->a);
+        r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) | 0x0040);
+        hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5C), r->a);
       }
     }
     set_state(ram, r, 8);
@@ -1031,7 +952,7 @@ void hm_ItemCarried(uint8_t *ram, HmRegs *r)
   set_a8(r, hm_bus_rd8(ram, WRAM_LONG(HM_WEEKDAY)));
   if (r->a & 0xFF) goto flies;
   if (!before_5pm(ram, r)) goto flies;
-  r->a = (uint16_t)(rd16(ram, r, MAP_FLAGS) & 0x0002);
+  r->a = (uint16_t)(rd16(ram, r, HM_WEATHER_FLAGS) & 0x0002);
   if (r->a) goto flies;
   tile_ahead(ram, r, 1, 0, 0, 0x9117);
   tile_property(ram, r, 0, 0x9126);
@@ -1097,7 +1018,7 @@ stop:
  * ───────────────────────────────────────────────────────────────────────── */
 static void falls(uint8_t *ram, HmRegs *r)                  /* CODE_81965B */
 {
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
   sprite(ram, r, 0x0A, 0x9667);
   tile_ahead(ram, r, 2, 0, 0, 0x9676);
   to_tile_ahead(ram, r);
@@ -1106,16 +1027,16 @@ static void falls(uint8_t *ram, HmRegs *r)                  /* CODE_81965B */
 
 static void into_spring(uint8_t *ram, HmRegs *r)            /* CODE_8195F4 */
 {
-  uint8_t h = rd8(ram, r, IN_HAND);
+  uint8_t h = rd8(ram, r, HM_ITEM_ON_HAND);
   set_a8(r, h);
   r->c = h >= 7;
   if (h == 7 && before_5pm(ram, r)) {
-    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_66)) & 0x2000);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) & 0x2000);
     if (!r->a) {
       r->a = 0; r->x = 0x0010; r->y = 0;
       jsl(ram, r, 0x961B, 0x84, hm_StartEventScriptLong);
-      r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_66)) | 0x2000);
-      hm_bus_wr16(ram, WRAM_LONG(FLAGS_66), r->a);
+      r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) | 0x2000);
+      hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_66), r->a);
     }
   }
   r->a = 6;
@@ -1153,7 +1074,7 @@ static void not_hatching(uint8_t *ram, HmRegs *r)           /* .nothatchableegg 
 
 static void special_place(uint8_t *ram, HmRegs *r)          /* Droped_on_special_place */
 {
-  uint8_t h = rd8(ram, r, IN_HAND);
+  uint8_t h = rd8(ram, r, HM_ITEM_ON_HAND);
   set_a8(r, h);
   r->c = h >= 0x14;
   if (h != 0x14) { not_hatching(ram, r); return; }
@@ -1164,21 +1085,21 @@ static void special_place(uint8_t *ram, HmRegs *r)          /* Droped_on_special
   tile_ahead(ram, r, 1, 0, 0, 0x94B9);
   tile_property(ram, r, 0, 0x94C8);
   if (!cpx(r, 0xF7)) { not_hatching(ram, r); return; }
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_6E)) & 0x2000);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_6E)) & 0x2000);
   if (r->a) { not_hatching(ram, r); return; }
   r->a = 0x0014; r->x = 0; r->y = 0;                       /* .alreadyhatchingegg */
   jsl(ram, r, 0x94ED, 0x84, hm_StartScriptAtTileInFront);
   r->y = 0;
   set_a8(r, 3);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, EVENT_SLOT, 0), 3);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, 0), 3);
   r->a = 0;
   jsl(ram, r, 0x9501, 0x83, hm_AddNewChicken);
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_6E)) | 0x2000);
-  hm_bus_wr16(ram, WRAM_LONG(FLAGS_6E), r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_6E)) | 0x2000);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_6E), r->a);
   r->a = 0x00A1; r->x = 0x00E0; r->y = 0x00B0;
   jsl(ram, r, 0x951B, 0x82, hm_EditTileOnMap);
   remove_object(ram, r, 0x9526, 0x952A);
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
   r->a = 5;
   jsl(ram, r, 0x9538, 0x83, hm_AddPlayerHappiness);
 }
@@ -1201,9 +1122,9 @@ static void shipping_bin(uint8_t *ram, HmRegs *r)           /* Dropedonsaleplace
   r->a = anim;
   jsl(ram, r, at, 0x81, hm_StartMapAnimation);
   set_state(ram, r, 7);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) & ~0x0001);
-  hm_dp_w16(ram, r, GAME_STATE, r->a);
-  wr8(ram, r, IN_HAND, 0);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) & ~0x0001);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
 }
 
 void hm_ItemLands(uint8_t *ram, HmRegs *r)
@@ -1283,21 +1204,21 @@ void hm_ItemObject_28_Nothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
 static void crop(uint8_t *ram, HmRegs *r, uint16_t at, uint32_t counter)
 {
   jsr(ram, r, at, hm_ItemCommonSteps);
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5E)) & 0x0001);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E)) & 0x0001);
   if (!r->a) return;
   r->a = (uint16_t)(hm_bus_rd16(ram, counter) + 1);
   hm_bus_wr16(ram, counter, r->a);
 }
-void hm_ItemObject_10_Corn(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x8132, WRAM_LONG(SHIPPED_CORN)); }  /* corn */
-void hm_ItemObject_11_Tomato(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x814A, WRAM_LONG(SHIPPED_TOMATOES)); }  /* tomatoes */
-void hm_ItemObject_12_Potato(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x8162, WRAM_LONG(SHIPPED_POTATOES)); }  /* potatoes */
-void hm_ItemObject_13_Turnip(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x817A, WRAM_LONG(SHIPPED_TURNIPS)); }  /* turnips */
+void hm_ItemObject_10_Corn(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x8132, WRAM_LONG(HM_SHIPPED_CORN)); } /* corn */
+void hm_ItemObject_11_Tomato(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x814A, WRAM_LONG(HM_SHIPPED_TOMATOES)); } /* tomatoes */
+void hm_ItemObject_12_Potato(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x8162, WRAM_LONG(HM_SHIPPED_POTATOES)); } /* potatoes */
+void hm_ItemObject_13_Turnip(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x817A, WRAM_LONG(HM_SHIPPED_TURNIPS)); } /* turnips */
 
 /* LDA $0976; CMP #$FF: bought? */
 static bool bought(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   jsr(ram, r, at, hm_ItemShopGoodsSteps);
-  uint8_t s = rd8(ram, r, STATE);
+  uint8_t s = rd8(ram, r, HM_ITEM_STATE);
   set_a8(r, s);
   r->c = s >= 0xFF;
   return s == 0xFF;
@@ -1306,10 +1227,10 @@ static bool bought(uint8_t *ram, HmRegs *r, uint16_t at)
 static void becomes(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t item)
 {
   if (!bought(ram, r, at)) return;
-  wr8(ram, r, STATE, 0);
+  wr8(ram, r, HM_ITEM_STATE, 0);
   set_a8(r, item);
-  wr8(ram, r, ITEM, item);
-  wr8(ram, r, IN_HAND, item);
+  wr8(ram, r, HM_ITEM, item);
+  wr8(ram, r, HM_ITEM_ON_HAND, item);
 }
 void hm_ItemObject_1B_ShopLilacPerfume(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x81AE, 0x58); }
 void hm_ItemObject_1C_ShopRosePerfume(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x81C8, 0x59); }
@@ -1349,45 +1270,45 @@ static void seed_bag(uint8_t *ram, HmRegs *r, uint16_t at, uint32_t row, uint8_t
   set_a8(r, (uint8_t)(n + 1));
   wr8(ram, r, count, (uint8_t)(n + 1));
 }
-void hm_ItemObject_44_ShopGrassSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8499, SHED_ROWS + 1, 0x08, 0x0C, HM_SEEDS_GRASS_N); }
-void hm_ItemObject_45_ShopCornSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x84D5, SHED_ROWS, 0x10, 0x05, HM_SEEDS_CORN_N); }
-void hm_ItemObject_46_ShopTomatoSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8511, SHED_ROWS, 0x20, 0x06, HM_SEEDS_TOMATO_N); }
-void hm_ItemObject_47_ShopPotatoSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x854D, SHED_ROWS, 0x40, 0x07, HM_SEEDS_POTATO_N); }
-void hm_ItemObject_48_ShopTurnipSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8589, SHED_ROWS, 0x80, 0x08, HM_SEEDS_TURNIP_N); }
+void hm_ItemObject_44_ShopGrassSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8499, WRAM_LONG(HM_SHED_ITEMS) + 1, 0x08, 0x0C, HM_SEEDS_GRASS_N); }
+void hm_ItemObject_45_ShopCornSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x84D5, WRAM_LONG(HM_SHED_ITEMS), 0x10, 0x05, HM_SEEDS_CORN_N); }
+void hm_ItemObject_46_ShopTomatoSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8511, WRAM_LONG(HM_SHED_ITEMS), 0x20, 0x06, HM_SEEDS_TOMATO_N); }
+void hm_ItemObject_47_ShopPotatoSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x854D, WRAM_LONG(HM_SHED_ITEMS), 0x40, 0x07, HM_SEEDS_POTATO_N); }
+void hm_ItemObject_48_ShopTurnipSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8589, WRAM_LONG(HM_SHED_ITEMS), 0x80, 0x08, HM_SEEDS_TURNIP_N); }
 
 /* something for the shed only */
 static void to_shed(uint8_t *ram, HmRegs *r, uint16_t at, uint32_t row, uint8_t bit)
 {
   if (bought(ram, r, at)) shed_add(r, ram, row, bit);
 }
-void hm_ItemObject_4A_ShopPaint(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x85DF, SHED_ROWS + 1, 0x10); }
-void hm_ItemObject_4B_ShopMilker(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x85F6, SHED_ROWS + 1, 0x20); }
-void hm_ItemObject_4C_ShopBrush(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x860D, SHED_ROWS + 1, 0x40); }
-void hm_ItemObject_52_ShopCowMedicine(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x8737, SHED_ROWS + 1, 0x01); }
-void hm_ItemObject_53_ShopMiraclePotion(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x874E, SHED_ROWS + 1, 0x02); }
+void hm_ItemObject_4A_ShopPaint(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x85DF, WRAM_LONG(HM_SHED_ITEMS) + 1, 0x10); }
+void hm_ItemObject_4B_ShopMilker(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x85F6, WRAM_LONG(HM_SHED_ITEMS) + 1, 0x20); }
+void hm_ItemObject_4C_ShopBrush(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x860D, WRAM_LONG(HM_SHED_ITEMS) + 1, 0x40); }
+void hm_ItemObject_52_ShopCowMedicine(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x8737, WRAM_LONG(HM_SHED_ITEMS) + 1, 0x01); }
+void hm_ItemObject_53_ShopMiraclePotion(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x874E, WRAM_LONG(HM_SHED_ITEMS) + 1, 0x02); }
 
 /* a gold tool: to the shed in place of the plain one, out of the slots */
 static void gold_tool(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bit,
                       uint32_t old_row, uint8_t keep, uint8_t tool)
 {
   if (!bought(ram, r, at)) return;
-  shed_add(r, ram, SHED_ROWS + 2, bit);
+  shed_add(r, ram, WRAM_LONG(HM_SHED_ITEMS) + 2, bit);
   uint8_t v = (uint8_t)(hm_bus_rd8(ram, old_row) & keep);
   set_a8(r, v);
   hm_bus_wr8(ram, old_row, v);
   out_of_slots(ram, r, tool);
 }
-void hm_ItemObject_4D_ShopGoldSickle(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8624, 0x01, SHED_ROWS, 0xFE, 0x01); }
-void hm_ItemObject_4E_ShopGoldHoe(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x865B, 0x02, SHED_ROWS, 0xFD, 0x02); }
-void hm_ItemObject_4F_ShopGoldHammer(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8692, 0x04, SHED_ROWS, 0xFB, 0x03); }
-void hm_ItemObject_50_ShopGoldAxe(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x86C9, 0x08, SHED_ROWS, 0xF7, 0x04); }
-void hm_ItemObject_51_ShopSprinkler(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8700, 0x10, SHED_ROWS + 1, 0x7F, 0x10); }
+void hm_ItemObject_4D_ShopGoldSickle(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8624, 0x01, WRAM_LONG(HM_SHED_ITEMS), 0xFE, 0x01); }
+void hm_ItemObject_4E_ShopGoldHoe(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x865B, 0x02, WRAM_LONG(HM_SHED_ITEMS), 0xFD, 0x02); }
+void hm_ItemObject_4F_ShopGoldHammer(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8692, 0x04, WRAM_LONG(HM_SHED_ITEMS), 0xFB, 0x03); }
+void hm_ItemObject_50_ShopGoldAxe(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x86C9, 0x08, WRAM_LONG(HM_SHED_ITEMS), 0xF7, 0x04); }
+void hm_ItemObject_51_ShopSprinkler(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8700, 0x10, WRAM_LONG(HM_SHED_ITEMS) + 1, 0x7F, 0x10); }
 
 /* fodder: its shed bit, and its counter full (12) */
 static void fodder(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bit, uint16_t count)
 {
   if (!bought(ram, r, at)) return;
-  shed_add(r, ram, SHED_ROWS + 3, bit);
+  shed_add(r, ram, WRAM_LONG(HM_SHED_ITEMS) + 3, bit);
   set_a8(r, 0x0C);
   wr8(ram, r, count, 0x0C);
 }
@@ -1398,22 +1319,22 @@ void hm_ItemObject_55_ShopCowFeed(uint8_t *ram, HmRegs *r) { fodder(ram, r, 0x87
 static void vanish(uint8_t *ram, HmRegs *r)                  /* CODE_818337 */
 {
   remove_object(ram, r, 0x833E, 0x8342);
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
   hands_free(ram, r);
 }
 static void placed(uint8_t *ram, HmRegs *r)                  /* CODE_81835E */
 {
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_74)) | 0x0040);
-  hm_bus_wr16(ram, WRAM_LONG(FLAGS_74), r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_74)) | 0x0040);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_74), r->a);
 }
 static void wrong_place(uint8_t *ram, HmRegs *r)             /* CODE_81836C */
 {
   r->a = 0x00FC;
-  r->x = rd16(ram, r, EDIT_X);
-  r->y = rd16(ram, r, EDIT_Y);
+  r->x = rd16(ram, r, HM_EDIT_X);
+  r->y = rd16(ram, r, HM_EDIT_Y);
   jsl(ram, r, 0x8377, 0x81, hm_ChangeMapTile);
   remove_object(ram, r, 0x8382, 0x8386);
-  wr8(ram, r, IN_HAND, 0);
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
   hands_free(ram, r);
   wait_for_input(ram, r);
   r->x = 0x038D;
@@ -1421,9 +1342,9 @@ static void wrong_place(uint8_t *ram, HmRegs *r)             /* CODE_81836C */
 }
 static void piece(uint8_t *ram, HmRegs *r, uint8_t n, uint16_t at_edit, uint16_t at_jsr)
 {
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_74)) & 0x0020);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_74)) & 0x0020);
   if (r->a) { vanish(ram, r); placed(ram, r); return; }
-  uint8_t s = rd8(ram, r, STATE);
+  uint8_t s = rd8(ram, r, HM_ITEM_STATE);
   set_a8(r, s);
   if (s == 0) {
     uint8_t k = rd8(ram, r, EGG_SPOT);
@@ -1431,12 +1352,12 @@ static void piece(uint8_t *ram, HmRegs *r, uint8_t n, uint16_t at_edit, uint16_t
     r->c = k >= n;
     if (k != n) { wrong_place(ram, r); return; }
     r->a = 0x00A1;
-    r->x = rd16(ram, r, EDIT_X);
-    r->y = rd16(ram, r, EDIT_Y);
+    r->x = rd16(ram, r, HM_EDIT_X);
+    r->y = rd16(ram, r, HM_EDIT_Y);
     jsl(ram, r, at_edit, 0x82, hm_EditTileOnMap);
   }
   jsr(ram, r, at_jsr, hm_ItemCommonSteps);
-  s = rd8(ram, r, STATE);
+  s = rd8(ram, r, HM_ITEM_STATE);
   set_a8(r, s);
   r->c = s >= 3;
   if (s == 3) placed(ram, r);
@@ -1486,8 +1407,8 @@ void hm_PutToolOnShelf(uint8_t *ram, HmRegs *r)
   uint8_t row = hm_bus_rd8(ram, SHELVES + x), bit = hm_bus_rd8(ram, SHELVES + x + 1);
   *hm_dp(ram, r, SHED_BIT) = bit;
   r->x = r->y = row;
-  uint8_t v = (uint8_t)(hm_bus_rd8(ram, SHED_ROWS + row) | bit);
-  hm_bus_wr8(ram, SHED_ROWS + row, v);
+  uint8_t v = (uint8_t)(hm_bus_rd8(ram, WRAM_LONG(HM_SHED_ITEMS) + row) | bit);
+  hm_bus_wr8(ram, WRAM_LONG(HM_SHED_ITEMS) + row, v);
   r->a = v;
   r->c = 0;
 }
@@ -1511,7 +1432,7 @@ void hm_TakeToolFromShelf(uint8_t *ram, HmRegs *r)
     set_a8(r, rd8(ram, r, HM_TOOL_SELECTED));
     wr8(ram, r, HM_TOOL_BACKPACK, (uint8_t)r->a);
   }
-  uint8_t item = rd8(ram, r, ITEM);
+  uint8_t item = rd8(ram, r, HM_ITEM);
   uint8_t tool = (uint8_t)(item - 0x29);                     /* SEC; SBC #$29 */
   r->c = item >= 0x29;
   wr8(ram, r, HM_TOOL_SELECTED, tool);
@@ -1523,16 +1444,16 @@ void hm_TakeToolFromShelf(uint8_t *ram, HmRegs *r)
   *hm_dp(ram, r, SHED_BIT) = (uint8_t)~bit;
   hm_pull8(ram, r);
   r->x = row;                                                /* XBA; LDA #0; XBA; TAX */
-  uint8_t v = (uint8_t)(hm_bus_rd8(ram, SHED_ROWS + row) & ~bit);
-  hm_bus_wr8(ram, SHED_ROWS + row, v);
-  hm_dp_w16(ram, r, ACTION, 0);                              /* REP #$30 */
-  r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) & ~0x0002);
-  hm_dp_w16(ram, r, GAME_STATE, r->a);
+  uint8_t v = (uint8_t)(hm_bus_rd8(ram, WRAM_LONG(HM_SHED_ITEMS) + row) & ~bit);
+  hm_bus_wr8(ram, WRAM_LONG(HM_SHED_ITEMS) + row, v);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);                    /* REP #$30 */
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) & ~0x0002);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   r->a = rd16(ram, r, OBJECT);
-  hm_dp_w16(ram, r, OBJ_NUMBER, r->a);
+  hm_dp_w16(ram, r, HM_OBJ_NUMBER, r->a);
   jsl(ram, r, 0x8828, 0x85, hm_DestroyGameObject);
   jsl(ram, r, 0x882C, 0x81, hm_FreeMapObject);
-  wr8(ram, r, IN_HAND, 0);                                   /* SEP #$20; STZ $091D */
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);                           /* SEP #$20; STZ $091D */
   r->p = entry;
   jsl(ram, r, 0x8835, 0x82, hm_ToolUsedSound2);
   r->p = entry;
@@ -1595,13 +1516,13 @@ static Step *const ITEM_ROUTINES[0x5A] = {
 
 void hm_RunItemRoutine(uint8_t *ram, HmRegs *r)
 {
-  uint8_t item = rd8(ram, r, ITEM);
+  uint8_t item = rd8(ram, r, HM_ITEM);
   r->a = (uint8_t)(item << 1);                               /* LDA #0; XBA; LDA; ASL */
   r->c = item >> 7;
   r->x = r->a;
   if (item >= 1 && item <= 0x5A) jsr(ram, r, 0x80A6, ITEM_ROUTINES[item - 1]);
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5E)) & 0xFFFE);   /* REP #$30 */
-  hm_bus_wr16(ram, WRAM_LONG(FLAGS_5E), r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E)) & 0xFFFE); /* REP #$30 */
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5E), r->a);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -1626,11 +1547,11 @@ static uint32_t rec_at(uint8_t *ram, HmRegs *r, uint16_t y) { r->y = y; return h
 
 void hm_RunItemsOnMap(uint8_t *ram, HmRegs *r)
 {
-  static const uint16_t bytes[4] = { FLAGS, ITEM_ROUTINE, STATE, ITEM };
-  static const uint16_t words[6] = { OBJECT, ITEM_SPRITE, ITEM_SPRITE_SHOWN, ITEM_FLIP, ITEM_X, ITEM_Y };
-  hm_dp_w16(ram, r, MAP_OBJ_PTR, (uint16_t)ITEM_RECORDS);
+  static const uint16_t bytes[4] = { HM_ITEM_FLAGS, HM_ITEM_ROUTINE, HM_ITEM_STATE, HM_ITEM };
+  static const uint16_t words[6] = { OBJECT, HM_ITEM_SPRITE, ITEM_SPRITE_SHOWN, HM_ITEM_FLIP, HM_ITEM_X, HM_ITEM_Y };
+  hm_dp_w16(ram, r, MAP_OBJ_PTR, (uint16_t)WRAM_LONG(HM_MAP_OBJECTS));
   r->a = 0xB47E;                                             /* SEP #$20; LDA #$7E */
-  *hm_dp(ram, r, MAP_OBJ_PTR_BANK) = (uint8_t)(ITEM_RECORDS >> 16);
+  *hm_dp(ram, r, MAP_OBJ_PTR_BANK) = (uint8_t)(WRAM_LONG(HM_MAP_OBJECTS) >> 16);
   r->x = 0;
   for (;;) {
     hm_push8(ram, r, (uint8_t)(r->x >> 8));                  /* PHX */
@@ -1645,22 +1566,22 @@ void hm_RunItemsOnMap(uint8_t *ram, HmRegs *r)
       for (int i = 0; i < 6; i++) {
         r->a = hm_bus_rd16(ram, rec_at(ram, r, (uint16_t)(MOBJ_GOBJ + 2 * i)));
         wr16(ram, r, words[i], r->a);
-        if (i == 0) hm_dp_w16(ram, r, OBJ_NUMBER, r->a);
+        if (i == 0) hm_dp_w16(ram, r, HM_OBJ_NUMBER, r->a);
       }
       jsl(ram, r, 0xA3F5, 0x85, hm_ReadGameObject);
-      r->a = hm_dp_r16(ram, r, OBJ_RESULT);
+      r->a = hm_dp_r16(ram, r, HM_OBJ_RESULT);
       bool run = true;
       r->c = r->a >= 0xFFFD;
       if (r->a == 0xFFFD) {                                  /* out of the map */
         r->a = rd16(ram, r, OBJECT);
-        hm_dp_w16(ram, r, OBJ_NUMBER, r->a);
+        hm_dp_w16(ram, r, HM_OBJ_NUMBER, r->a);
         jsl(ram, r, 0xA420, 0x85, hm_DestroyGameObject);
-        set_a8(r, rd8(ram, r, FLAGS) & 0x02);
+        set_a8(r, rd8(ram, r, HM_ITEM_FLAGS) & 0x02);
         if (r->a & 0xFF) jsl(ram, r, 0xA42D, 0x81, hm_FreeMapObject);
       } else {
         r->c = r->a >= 0xFFFF;
         if (r->a != 0xFFFF) {                                /* off screen */
-          set_a8(r, rd8(ram, r, FLAGS) & 0x04);
+          set_a8(r, rd8(ram, r, HM_ITEM_FLAGS) & 0x04);
           run = (r->a & 0xFF) != 0;
         }
       }
@@ -1672,23 +1593,23 @@ void hm_RunItemsOnMap(uint8_t *ram, HmRegs *r)
         r->c = 1;                                            /* CPX #0 */
         if (r->x) {
           if (r->x == 2) jsr(ram, r, 0xA444, hm_RunItemRoutine);
-          static const uint16_t back8[3][2] = { { MOBJ_FLAGS, FLAGS }, { MOBJ_STATE, STATE }, { MOBJ_ITEM, ITEM } };
+          static const uint16_t back8[3][2] = { { MOBJ_FLAGS, HM_ITEM_FLAGS }, { MOBJ_STATE, HM_ITEM_STATE }, { MOBJ_ITEM, HM_ITEM } };
           for (int i = 0; i < 3; i++) {
             set_a8(r, rd8(ram, r, back8[i][1]));
             hm_bus_wr8(ram, rec_at(ram, r, back8[i][0]), (uint8_t)r->a);
           }
-          static const uint8_t to_dp[6] = { OBJ_NUMBER, 0, 0, OBJ_FLIP, OBJ_X, OBJ_Y };
+          static const uint8_t to_dp[6] = { HM_OBJ_NUMBER, 0, 0, HM_OBJ_FLIP, HM_OBJ_X, HM_OBJ_Y };
           for (int i = 0; i < 6; i++) {
             r->a = rd16(ram, r, words[i]);
             hm_bus_wr16(ram, rec_at(ram, r, (uint16_t)(MOBJ_GOBJ + 2 * i)), r->a);
             if (to_dp[i]) hm_dp_w16(ram, r, to_dp[i], r->a);
           }
           jsl(ram, r, 0xA49B, 0x85, hm_MoveGameObject);
-          r->a = rd16(ram, r, ITEM_SPRITE);
+          r->a = rd16(ram, r, HM_ITEM_SPRITE);
           uint16_t last = rd16(ram, r, ITEM_SPRITE_SHOWN);
           r->c = r->a >= last;
           if (r->a != last) {
-            hm_dp_w16(ram, r, OBJ_SPRITE, r->a);
+            hm_dp_w16(ram, r, HM_OBJ_SPRITE, r->a);
             hm_bus_wr16(ram, rec_at(ram, r, MOBJ_SPRITE_SHOWN), r->a);
             jsl(ram, r, 0xA4AE, 0x85, hm_ChangeGameObjectSprite);
           }

@@ -16,6 +16,8 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
+#include "hm_regs.h"
 
 /* ── Names of the memory locations used here ────────────────────────────── */
 /* ROM tables */
@@ -28,7 +30,7 @@
 #define MAP_ANIMATIONS    0x81B963   /* 3 bytes each: a long pointer to a map animation */
 #define MAP_ANIM_BANK_AT  2          /*   8b: the pointer's bank */
 #define JOINS             0x82B02A   /* DATA8_82B02A: 16 entries */
-/* A map animation's steps (7 bytes, at [MAP_ANIM]) */
+/* A map animation's steps (7 bytes, at [HM_MAP_ANIM]) */
 #define STEP_CHANGE       0          /* 16b: the tile change ($FFFF end, $FFFE jump) */
 #define STEP_X            2          /* 16b: where, pixels */
 #define STEP_Y            4          /* 16b */
@@ -39,15 +41,7 @@
 
 /* WRAM */
 #define BG1_TILEMAP       0x2000     /* $7E:2000: the map's whole BG1 tilemap (bank $7E) */
-#define HM_MAP_TILES      0x009B6    /* DB: the current map's tile types, 64 x 64 */
-#define HM_MAP_WIDTH      0x00181    /* DB: 1, 2 or other (= 4) screens */
-#define ITEM_FLAGS        0x0974     /* DB: the copy of a map object's flags (objects.c) */
-#define HM_FARM_TILES     0x7EA4E6   /* the farm's own copy of its tile types */
-#define PRINT_X           0x0907     /* DB: where the player was 8 steps before */
-#define PRINT_Y           0x0909
 #define ANIMATION_WAIT    0x0989     /* DB: frames left before the map animation's next step */
-#define WRAM_LONG(a)      (0x7E0000 + (a))   /* the bus address of a ram[] offset */
-#define SEASON_LONG       WRAM_LONG(HM_SEASON)   /* $7F:1F19 (hm_ram.h's HM_SEASON) */
 #define VRAM_TILEMAP      0x6000     /* VRAM: the 64x64 window of the BG1 tilemap */
 
 /* Direct page. $72-$99 mean different things in different routines: the names
@@ -91,22 +85,16 @@
 #define FIRST_CHANNEL     0x92   /* 8b: the pair's first DMA channel (2, then 0) */
 #define DMA_CHANNEL       0x27   /* 8b: AddProgrammedDMA's channel */
 #define DMA_B_ADDRESS     0x29   /* 8b: its destination register (B-bus, $21xx) */
-#define BBAD_VRAM         0x18   /*   $2118, the VRAM data register (as in dma.c) */
 /* DrawWholeMap's own uses: */
-#define TILE_PROPS        0x0D   /* long $0D-$0F: the map's tile property table (4 bytes
-                                  * a type; byte 0 = its drawing) */
 #define JOIN_MASK         0x86   /* the neighbours of the same kind (left 8, right 2,
                                   * up 4, down 1) */
 #define JOIN_ADD          0x94   /* 8b: JOINS[mask] - 1, added to the drawing */
 /* The map animation (StartMapAnimation, RunMapAnimation): */
-#define MAP_ANIM          0xCF   /* long $CF-$D1: its next step (0 = none) */
-#define MAP_ANIM_BANK     0xD1
 #define ANIM_ENTRY        0x7E   /* StartMapAnimation: the entry asked for */
 #define JUMP_PTR          0x72   /* RunMapAnimation: long $72-$74, a jump's target */
 #define JUMP_PTR_BANK     0x74
 /* Others: */
 #define MAP_OBJ_PTR       0x07   /* long $07-$09: the map object worked on (objects.c) */
-/* HM_MAP_ID ($22, hm_ram.h): the map being shown */
 
 static void push16(uint8_t *ram, HmRegs *r, uint16_t v)
 {
@@ -401,10 +389,10 @@ void hm_StartMapAnimation(uint8_t *ram, HmRegs *r)
   r->c = sum > 0xFFFF;
   uint16_t x = (uint16_t)sum;
   uint16_t word = hm_bus_rd16(ram, (MAP_ANIMATIONS + x) & 0xFFFFFF);
-  hm_dp_w16(ram, r, MAP_ANIM, word);
+  hm_dp_w16(ram, r, HM_MAP_ANIM, word);
   x = (uint16_t)(x + MAP_ANIM_BANK_AT);
   uint8_t bank = hm_bus_rd8(ram, (MAP_ANIMATIONS + x) & 0xFFFFFF);
-  *hm_dp(ram, r, MAP_ANIM_BANK) = bank;
+  *hm_dp(ram, r, HM_MAP_ANIM_BANK) = bank;
   r->a = (uint16_t)((word & 0xFF00) | bank);
   r->x = x;
   hm_bus_wr8(ram, ((uint32_t)r->db << 16) | ANIMATION_WAIT, 0);
@@ -446,7 +434,7 @@ void hm_EditFarmTile(uint8_t *ram, HmRegs *r)
   uint8_t type = (uint8_t)r->a;
   hm_bus_wr8(ram, ((uint32_t)r->db << 16) + HM_MAP_WIDTH, 4);
   uint16_t x = tile_index_keeping(ram, r, type, RET_049_INDEX);
-  hm_bus_wr8(ram, (HM_FARM_TILES + x) & 0xFFFFFF, type);
+  hm_bus_wr8(ram, (WRAM_LONG(HM_FARM_TILES) + x) & 0xFFFFFF, type);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -521,7 +509,7 @@ void hm_DrawWholeMap(uint8_t *ram, HmRegs *r)
             uint16_t yy = (uint16_t)(t << 2);              /* LDA #0; XBA; LDA; ASL; ASL */
             r->c = 0;
             r->y = yy;
-            uint8_t base = hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPS, yy));
+            uint8_t base = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_TILE_PROPS, yy));
             uint16_t s = (uint16_t)(base + join);          /* CLC; ADC $94 (8 bits) */
             r->c = s > 0xFF;
             pic = (uint8_t)s;
@@ -530,7 +518,7 @@ void hm_DrawWholeMap(uint8_t *ram, HmRegs *r)
             uint16_t yy = (uint16_t)(t << 2);
             r->c = 0;
             r->y = yy;
-            pic = hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPS, yy));
+            pic = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_TILE_PROPS, yy));
             r->a = pic;
             draw = pic != 0;
           }
@@ -571,7 +559,7 @@ void hm_DrawWholeMap(uint8_t *ram, HmRegs *r)
 
 void hm_SnowFootprints(uint8_t *ram, HmRegs *r)
 {
-  uint8_t season = hm_bus_rd8(ram, SEASON_LONG);
+  uint8_t season = hm_bus_rd8(ram, WRAM_LONG(HM_SEASON));
   r->a = (uint16_t)((r->a & 0xFF00) | season);
   r->c = season >= 3;
   if (season != 3) return;                                 /* not winter */
@@ -586,8 +574,8 @@ void hm_SnowFootprints(uint8_t *ram, HmRegs *r)
   }
   uint32_t db = (uint32_t)r->db << 16;
   r->a = 0;
-  r->x = hm_bus_rd16(ram, db | PRINT_X);
-  r->y = hm_bus_rd16(ram, db | PRINT_Y);
+  r->x = hm_bus_rd16(ram, db | HM_FOOTPRINT_X);
+  r->y = hm_bus_rd16(ram, db | HM_FOOTPRINT_Y);
   hm_jsl(ram, r, 0xA5B7, 0x82);
   hm_GetTileProperty(ram, r);
   hm_rtl(ram, r);
@@ -600,8 +588,8 @@ void hm_SnowFootprints(uint8_t *ram, HmRegs *r)
   }
   if (!on_snow) return;
   r->a = 0x0011;
-  r->x = hm_bus_rd16(ram, db | PRINT_X);
-  r->y = hm_bus_rd16(ram, db | PRINT_Y);
+  r->x = hm_bus_rd16(ram, db | HM_FOOTPRINT_X);
+  r->y = hm_bus_rd16(ram, db | HM_FOOTPRINT_Y);
   hm_jsl(ram, r, 0xA5DF, 0x81);
   hm_QueueTileGraphicsDMA(ram, r);
   hm_rtl(ram, r);
@@ -620,49 +608,49 @@ void hm_SnowFootprints(uint8_t *ram, HmRegs *r)
 void hm_RunMapAnimation(uint8_t *ram, HmRegs *r)
 {
   uint32_t wait = (uint32_t)r->db << 16 | ANIMATION_WAIT;
-  r->a = hm_dp_r16(ram, r, MAP_ANIM);
+  r->a = hm_dp_r16(ram, r, HM_MAP_ANIM);
   if (!r->a) {
-    r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, MAP_ANIM_BANK));
+    r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, HM_MAP_ANIM_BANK));
     if (!(r->a & 0xFF)) return;                            /* no animation */
   }
   uint8_t w = hm_bus_rd8(ram, wait);
   r->a = (uint16_t)((r->a & 0xFF00) | w);
   if (w) { hm_bus_wr8(ram, wait, (uint8_t)(w - 1)); return; }
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, MAP_ANIM, STEP_CHANGE));
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_MAP_ANIM, STEP_CHANGE));
   r->c = r->a >= 0xFFFF;
   if (r->a == 0xFFFF) {                                    /* the end */
-    hm_dp_w16(ram, r, MAP_ANIM, 0);
-    *hm_dp(ram, r, MAP_ANIM_BANK) = 0;
+    hm_dp_w16(ram, r, HM_MAP_ANIM, 0);
+    *hm_dp(ram, r, HM_MAP_ANIM_BANK) = 0;
     return;
   }
   r->c = r->a >= 0xFFFE;
   if (r->a == 0xFFFE) {                                    /* jump */
     r->y = JUMP_ADDR;
-    hm_dp_w16(ram, r, JUMP_PTR, hm_bus_rd16(ram, hm_dp_long(ram, r, MAP_ANIM, JUMP_ADDR)));
+    hm_dp_w16(ram, r, JUMP_PTR, hm_bus_rd16(ram, hm_dp_long(ram, r, HM_MAP_ANIM, JUMP_ADDR)));
     r->y = JUMP_BANK;
-    uint8_t bank = hm_bus_rd8(ram, hm_dp_long(ram, r, MAP_ANIM, JUMP_BANK));
+    uint8_t bank = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_MAP_ANIM, JUMP_BANK));
     *hm_dp(ram, r, JUMP_PTR_BANK) = bank;
     r->a = hm_dp_r16(ram, r, JUMP_PTR);
-    hm_dp_w16(ram, r, MAP_ANIM, r->a);
+    hm_dp_w16(ram, r, HM_MAP_ANIM, r->a);
     r->a = (uint16_t)((r->a & 0xFF00) | bank);
-    *hm_dp(ram, r, MAP_ANIM_BANK) = bank;
+    *hm_dp(ram, r, HM_MAP_ANIM_BANK) = bank;
   }
-  uint16_t change = hm_bus_rd16(ram, hm_dp_long(ram, r, MAP_ANIM, STEP_CHANGE));
+  uint16_t change = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_MAP_ANIM, STEP_CHANGE));
   push16(ram, r, change);
-  uint16_t x = hm_bus_rd16(ram, hm_dp_long(ram, r, MAP_ANIM, STEP_X));
+  uint16_t x = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_MAP_ANIM, STEP_X));
   push16(ram, r, x);
-  uint16_t y = hm_bus_rd16(ram, hm_dp_long(ram, r, MAP_ANIM, STEP_Y));
+  uint16_t y = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_MAP_ANIM, STEP_Y));
   push16(ram, r, y);
-  uint8_t frames = hm_bus_rd8(ram, hm_dp_long(ram, r, MAP_ANIM, STEP_FRAMES));
+  uint8_t frames = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_MAP_ANIM, STEP_FRAMES));
   hm_bus_wr8(ram, wait, frames);
   r->y = pull16(ram, r); r->x = pull16(ram, r); r->a = pull16(ram, r);
   hm_jsl(ram, r, 0xA64C, 0x81);
   hm_ChangeMapTile(ram, r);
   hm_rtl(ram, r);
-  uint32_t next = (uint32_t)hm_dp_r16(ram, r, MAP_ANIM) + STEP_BYTES;
+  uint32_t next = (uint32_t)hm_dp_r16(ram, r, HM_MAP_ANIM) + STEP_BYTES;
   r->c = next > 0xFFFF;
   r->a = (uint16_t)next;
-  hm_dp_w16(ram, r, MAP_ANIM, r->a);
+  hm_dp_w16(ram, r, HM_MAP_ANIM, r->a);
 }
 
 /* FreeMapObject ($81:A4F1, JSL, RTL): frees the map object at [$07] (its
@@ -672,5 +660,5 @@ void hm_FreeMapObject(uint8_t *ram, HmRegs *r)
   r->y = 0;
   r->a &= 0xFF00;
   hm_bus_wr8(ram, hm_dp_long(ram, r, MAP_OBJ_PTR, 0), 0);
-  hm_bus_wr8(ram, (uint32_t)r->db << 16 | ITEM_FLAGS, 0);
+  hm_bus_wr8(ram, (uint32_t)r->db << 16 | HM_ITEM_FLAGS, 0);
 }

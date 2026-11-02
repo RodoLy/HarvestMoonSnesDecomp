@@ -34,55 +34,14 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
-/* Also used, from hm_ram.h: HM_PLAYER_ACTION ($D4), HM_MAP_ID ($22),
- * HM_SEASON and HM_TOOL_SELECTED ($0921) */
+/* The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 /* Direct page */
-#define HM_PLAYER_X        0xD6     /* direct page, 16b, pixels */
-#define HM_PLAYER_Y        0xD8
-#define TILE_PROPERTIES    0x0D     /* long $0D-$0F: the map's tile property table */
 #define MONEY_CHANGE       0x72     /* 24b $72-$74: AddMoney's input, the amount */
 #define MONEY_CHANGE_BANK  0x74     /* 8b: its third byte */
 /* WRAM */
-#define SOUND_EFFECT       0x00114  /* 8b: the sound effect PlaySoundEffect0A plays */
-#define SOUND_BANK         0x00115  /* 8b: its bank */
-#define WEATHER_FLAGS      0x00196  /* 16b: the weather and day flags */
-#define ITEM_FLAGS         0x00974  /* 8b: the map object to spawn (objects.c): its flags, */
-#define ITEM_ROUTINE       0x00975  /*     its routine, */
-#define ITEM_STATE         0x00976  /*     its state, */
-#define ITEM_SPRITE        0x0097A  /*     its sprite, */
-#define ITEM_FLIP          0x0097E  /*     its flip, */
-#define ITEM_X             0x00980  /*     its position */
-#define ITEM_Y             0x00982
-#define HM_TILE_IN_FRONT_X 0x00985  /* 16b: where the tool lands */
-#define HM_TILE_IN_FRONT_Y 0x00987
-#define HM_SOW_STEP        0x0096B  /* 8b: which tile of a multi-tile use */
-#define HM_HITS            0x0096D  /* 8b: hits on a big stone or a stump */
-#define HM_GRASS_ON_FARM   0x0092E  /* 16b: one less each tuft cut */
-#define HM_SEEDS_GRASS     0x00927  /* 8b bags: grass, corn, tomato, ... */
-#define HM_SEEDS_CORN      0x00928
-#define HM_SEEDS_TOMATO    0x00929
-#define HM_SEEDS_POTATO    0x0092A
-#define HM_SEEDS_TURNIP    0x0092B
-#define HM_COW_FEED        0x0092C  /* 8b: portions in the bag */
-#define HM_CHICKEN_FEED    0x0092D
-#define HM_WATER           0x00926  /* 8b: water left in the can */
-#define HM_COWS_FED        0x00930  /* 8b: troughs filled today */
-#define HM_CHICKENS_FED    0x00931
-#define HM_COW_TROUGHS     0x00932  /* 16b: which troughs have food */
-#define HM_CHICKEN_TROUGHS 0x00934
-#define MOLE_TIMER         0x0093A  /* 8b: the mole's frames (the hoe's mole clears it) */
-#define HM_HOUR            0x11F1C  /* $7F1F1C, 8b */
-#define HM_PLANTED_GRASS   0x11F29  /* $7F1F29, 16b */
-#define FLAGS_5A           0x11F5A  /* $7F1F5A... 16-bit flag words */
-#define FLAGS_5C           0x11F5C
-#define FLAGS_5E           0x11F5E
-#define FLAGS_60           0x11F60
-#define FLAGS_64           0x11F64
-#define FLAGS_66           0x11F66
-#define FLAGS_68           0x11F68
-#define FLAGS_6A           0x11F6A
-#define NO_FINDS           0x0008   /* FLAGS_60 */
+#define NO_FINDS           0x0008   /* HM_FLAGS_60 */
 #define TROUGH_BITS        0x82A571 /* ROM: dw 1 << n, n = 0..12 */
 
 enum { SPRING, SUMMER, FALL, WINTER };
@@ -188,11 +147,11 @@ static void change_tile_in_front(uint8_t *ram, HmRegs *r, uint16_t change, uint1
 static void effect(uint8_t *ram, HmRegs *r, uint16_t x, uint16_t y, uint16_t sprite,
                    uint16_t ret)
 {
-  hm_wr16(ram, ITEM_X, x);
-  hm_wr16(ram, ITEM_Y, y);
-  hm_wr16(ram, ITEM_SPRITE, sprite);
-  hm_wr16(ram, ITEM_FLIP, 0);
-  ram[ITEM_FLAGS] = 3; ram[ITEM_ROUTINE] = 0; ram[ITEM_STATE] = 0;
+  hm_wr16(ram, HM_ITEM_X, x);
+  hm_wr16(ram, HM_ITEM_Y, y);
+  hm_wr16(ram, HM_ITEM_SPRITE, sprite);
+  hm_wr16(ram, HM_ITEM_FLIP, 0);
+  ram[HM_ITEM_FLAGS] = 3; ram[HM_ITEM_ROUTINE] = 0; ram[HM_ITEM_STATE] = 0;
   r->a = 0;
   jsl(ram, r, ret, 0x81, hm_SpawnMapObject);
 }
@@ -268,7 +227,7 @@ void hm_ToolUsedBrush(uint8_t *ram, HmRegs *r) { tool_finished(ram, r, 0xFF, 0x9
 void hm_ToolUsedBlueFeather(uint8_t *ram, HmRegs *r)
 {
   idle(ram, r);
-  set_flag(ram, r, FLAGS_5E, 0x0040);
+  set_flag(ram, r, HM_FLAGS_5E, 0x0040);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -281,7 +240,7 @@ static void give_to_cow(uint8_t *ram, HmRegs *r, uint16_t flag, uint16_t ret)
   idle(ram, r);
   ram[HM_TOOL_SELECTED] = 0;
   lose_stamina(ram, r, 0xFF, ret);
-  set_flag(ram, r, FLAGS_5A, flag);
+  set_flag(ram, r, HM_FLAGS_5A, flag);
 }
 void hm_ToolUsedCowMedicine(uint8_t *ram, HmRegs *r)   { give_to_cow(ram, r, 0x0080, 0x9B22); }
 void hm_ToolUsedMiraclePotion(uint8_t *ram, HmRegs *r) { give_to_cow(ram, r, 0x0100, 0x9B42); }
@@ -308,7 +267,7 @@ static void cut(uint8_t *ram, HmRegs *r, const CutRets *ret)
     change = 0x000E;                                     /* weed */
   } else if (is(r, tile, 0x79)) {                        /* grass: fodder */
     add(ram, r, hm_AddGrass, 1, ret->grass);
-    hm_wr16(ram, HM_GRASS_ON_FARM, r->a = (uint16_t)(hm_rd16(ram, HM_GRASS_ON_FARM) - 1));
+    hm_wr16(ram, HM_GROWN_GRASS_N, r->a = (uint16_t)(hm_rd16(ram, HM_GROWN_GRASS_N) - 1));
     change_tile_in_front(ram, r, 0x0052, ret->grass_tile);
     effect_in_front(ram, r, FX_GRASS_CUT, ret->grass_fx);
     goto frog;
@@ -318,11 +277,11 @@ static void cut(uint8_t *ram, HmRegs *r, const CutRets *ret)
   change_tile_in_front(ram, r, change, ret->tile);
   effect_in_front(ram, r, FX_CUT, ret->fx);
 frog:
-  if (is(r, load8(r, ram[HM_SEASON]), SUMMER) && !test(ram, r, FLAGS_60, NO_FINDS)
-      && !test(ram, r, FLAGS_5A, 0x2000) && one_in(ram, r, 16, ret->roll)) {
+  if (is(r, load8(r, ram[HM_SEASON]), SUMMER) && !test(ram, r, HM_FLAGS_60, NO_FINDS)
+      && !test(ram, r, HM_FLAGS_5A, 0x2000) && one_in(ram, r, 16, ret->roll)) {
     event(ram, r, 0x0012, 0, 0x0032, ret->frog);
     add(ram, r, hm_AddPlayerHappiness, 2, ret->happy);
-    set_flag(ram, r, FLAGS_5A, 0x2000);
+    set_flag(ram, r, HM_FLAGS_5A, 0x2000);
   }
 }
 
@@ -368,37 +327,37 @@ static void dig(uint8_t *ram, HmRegs *r, const DigRets *ret, bool mole_clears_09
 {
   change_tile_in_front(ram, r, 0x0017, ret->tile);
 
-  if (below(r, load8(r, ram[HM_SEASON]), FALL) && !test(ram, r, FLAGS_60, NO_FINDS)
-      && !test(ram, r, FLAGS_5A, 0x1000) && one_in(ram, r, 32, ret->mole_roll)) {
+  if (below(r, load8(r, ram[HM_SEASON]), FALL) && !test(ram, r, HM_FLAGS_60, NO_FINDS)
+      && !test(ram, r, HM_FLAGS_5A, 0x1000) && one_in(ram, r, 32, ret->mole_roll)) {
     event(ram, r, 0x0011, 0, 0x0030, ret->mole);         /* a mole */
-    if (mole_clears_093a) ram[MOLE_TIMER] = 0;
-    set_flag(ram, r, FLAGS_5A, 0x1000);
+    if (mole_clears_093a) ram[HM_MOLE_TIMER] = 0;
+    set_flag(ram, r, HM_FLAGS_5A, 0x1000);
     return;
   }
 
-  if (!test(ram, r, FLAGS_60, NO_FINDS) && !test(ram, r, FLAGS_5C, 0x0200)) {
+  if (!test(ram, r, HM_FLAGS_60, NO_FINDS) && !test(ram, r, HM_FLAGS_5C, 0x0200)) {
     if (one_in(ram, r, 16, ret->coin_roll)) {            /* a coin */
-      set_flag(ram, r, FLAGS_5C, 0x0200);
+      set_flag(ram, r, HM_FLAGS_5C, 0x0200);
       event(ram, r, 0x000F, 0, 0x003A, ret->coin);
       add_money(ram, r, 1, ret->coin_money);
       return;
     }
     if (one_in(ram, r, 16, ret->bag_roll)) {             /* a money bag */
-      set_flag(ram, r, FLAGS_5C, 0x0200);
+      set_flag(ram, r, HM_FLAGS_5C, 0x0200);
       event(ram, r, 0x000F, 0, 0x003B, ret->bag);
       add_money(ram, r, 5, ret->bag_money);
       return;
     }
   }
 
-  if (one_in(ram, r, 64, ret->berry_roll) && !test(ram, r, FLAGS_60, NO_FINDS)
-      && !test(ram, r, FLAGS_5C, 0x0100)) {
-    set_flag(ram, r, FLAGS_5C, 0x0100);
-    if (!test(ram, r, FLAGS_64, 0x0800)) {
-      set_flag(ram, r, FLAGS_64, 0x0800);
+  if (one_in(ram, r, 64, ret->berry_roll) && !test(ram, r, HM_FLAGS_60, NO_FINDS)
+      && !test(ram, r, HM_FLAGS_5C, 0x0100)) {
+    set_flag(ram, r, HM_FLAGS_5C, 0x0100);
+    if (!test(ram, r, HM_FLAGS_64, 0x0800)) {
+      set_flag(ram, r, HM_FLAGS_64, 0x0800);
     } else {
-      if (test(ram, r, FLAGS_64, 0x1000)) return;
-      set_flag(ram, r, FLAGS_64, 0x1000);
+      if (test(ram, r, HM_FLAGS_64, 0x1000)) return;
+      set_flag(ram, r, HM_FLAGS_64, 0x1000);
     }
     event(ram, r, 0x0010, 0, 0x001F, ret->berry);        /* a power berry */
   }
@@ -490,16 +449,16 @@ static void hammer(uint8_t *ram, HmRegs *r, const HammerRets *ret, bool gold)
   if (!tool_works(ram, r, ret->check, hm_PreCheckToolSuccess)) {
     uint8_t map = load8(r, map_id(ram, r));
     if (below(r, map, 0x0C) || !below(r, map, 0x10) || !is(r, r->x, 0x00F8)
-        || test(ram, r, FLAGS_5C, 0x0080))
+        || test(ram, r, HM_FLAGS_5C, 0x0080))
       goto done;
     r->a = 0x0015; r->x = 0; r->y = 0x0016;
     jsl(ram, r, ret->spring, 0x84, hm_StartEventScript);
-    if (!one_in(ram, r, 4, ret->roll) || test(ram, r, FLAGS_64, 0x0200)) goto done;
-    set_flag(ram, r, FLAGS_64, 0x0200);
+    if (!one_in(ram, r, 4, ret->roll) || test(ram, r, HM_FLAGS_64, 0x0200)) goto done;
+    set_flag(ram, r, HM_FLAGS_64, 0x0200);
     hm_wr16(ram, HM_TILE_IN_FRONT_X, add_c(r, hm_dp_r16(ram, r, HM_PLAYER_X), 0x10));
     hm_wr16(ram, HM_TILE_IN_FRONT_Y, sub_c(r, hm_dp_r16(ram, r, HM_PLAYER_Y), 0x10));
     event(ram, r, 0x0010, 0, 0x001F, ret->berry);        /* a power berry */
-    set_flag(ram, r, FLAGS_5C, 0x0080);
+    set_flag(ram, r, HM_FLAGS_5C, 0x0080);
     goto done;
   }
 
@@ -518,11 +477,11 @@ static void hammer(uint8_t *ram, HmRegs *r, const HammerRets *ret, bool gold)
   }
 
   if (!gold) {                                           /* big stone */
-    if (!is(r, load8(r, ++ram[HM_HITS]), 6)) {
+    if (!is(r, load8(r, ++ram[HM_TOOL_HITS]), 6)) {
       effect_in_front(ram, r, FX_HIT, ret->hit_fx);
       goto done;
     }
-    ram[HM_HITS] = 0;
+    ram[HM_TOOL_HITS] = 0;
   }
   find_top_left(ram, r, tile, BIG_STONE);
   break_2x2(ram, r, below(r, load8(r, map_id(ram, r)), FARM_MAPS) ? 0x000D : 0x00DF,
@@ -566,9 +525,9 @@ static void chop(uint8_t *ram, HmRegs *r, const AxeRets *ret, bool check_no_find
   } else if (below(r, load8(r, map_id(ram, r)), FARM_MAPS)) {
     change = 0x000D;
   } else {
-    if ((!check_no_finds || !test(ram, r, FLAGS_60, NO_FINDS))
-        && one_in(ram, r, 16, ret->roll) && !test(ram, r, FLAGS_64, 0x0400)) {
-      set_flag(ram, r, FLAGS_64, 0x0400);
+    if ((!check_no_finds || !test(ram, r, HM_FLAGS_60, NO_FINDS))
+        && one_in(ram, r, 16, ret->roll) && !test(ram, r, HM_FLAGS_64, 0x0400)) {
+      set_flag(ram, r, HM_FLAGS_64, 0x0400);
       hm_wr16(ram, HM_TILE_IN_FRONT_X, add_c(r, tile_x(ram), 8));
       hm_wr16(ram, HM_TILE_IN_FRONT_Y, add_c(r, tile_y(ram), 8));
       event(ram, r, 0x0010, 0, 0x001F, ret->berry);      /* a power berry */
@@ -588,18 +547,18 @@ void hm_ToolUsedAxe(uint8_t *ram, HmRegs *r)
   if (!tool_works(ram, r, 0x97C1, hm_PreCheckToolSuccess)) {
     uint8_t map = load8(r, map_id(ram, r));
     if (below(r, map, 0x10) || !below(r, map, 0x14) || !is(r, r->x, 0x00F4)
-        || test(ram, r, WEATHER_FLAGS, 0x001A) || test(ram, r, FLAGS_6A, 0x0020))
+        || test(ram, r, HM_WEATHER_FLAGS, 0x001A) || test(ram, r, HM_FLAGS_6A, 0x0020))
       goto done;
-    set_flag(ram, r, FLAGS_6A, 0x0020);
+    set_flag(ram, r, HM_FLAGS_6A, 0x0020);
     r->a = 0; r->x = 0x0017; r->y = 0;
     jsl(ram, r, 0x9988, 0x84, hm_StartEventScriptLong);
     goto done;
   }
-  if (!is(r, load8(r, ++ram[HM_HITS]), 6)) {
+  if (!is(r, load8(r, ++ram[HM_TOOL_HITS]), 6)) {
     effect_in_front(ram, r, FX_HIT, 0x9948);
     goto done;
   }
-  ram[HM_HITS] = 0;
+  ram[HM_TOOL_HITS] = 0;
   chop(ram, r, &ret, true);
 done:
   tool_finished(ram, r, 0xFE, 0x9997);
@@ -648,7 +607,7 @@ static bool sow_one_works(uint8_t *ram, HmRegs *r, const Sowing *s)
 static void sow_one_done(uint8_t *ram, HmRegs *r, const Sowing *s, bool sown)
 {
   ram[HM_SOW_STEP] = 0;
-  uint8_t *used = &g_hm_seeds_used[s->bag - HM_SEEDS_GRASS];
+  uint8_t *used = &g_hm_seeds_used[s->bag - HM_SEEDS_GRASS_N];
   if (!sown) { idle(ram, r); return; }               /* nothing sown: no seed spent */
   if (++*used < 9) { idle(ram, r); return; }
   *used = 0;
@@ -674,28 +633,28 @@ static void sow_crop(uint8_t *ram, HmRegs *r, const Sowing *s, uint16_t crop, ui
 
 void hm_ToolUsedCornSeeds(uint8_t *ram, HmRegs *r)
 {
-  static const Sowing s = { HM_SEEDS_CORN, 0x99A5, 0x99C9, 0x99F6 };
+  static const Sowing s = { HM_SEEDS_CORN_N, 0x99A5, 0x99C9, 0x99F6 };
   sow_crop(ram, r, &s, 0x0019, SUMMER);
 }
 void hm_ToolUsedTomatoSeeds(uint8_t *ram, HmRegs *r)
 {
-  static const Sowing s = { HM_SEEDS_TOMATO, 0x9A04, 0x9A28, 0x9A55 };
+  static const Sowing s = { HM_SEEDS_TOMATO_N, 0x9A04, 0x9A28, 0x9A55 };
   sow_crop(ram, r, &s, 0x001A, SUMMER);
 }
 void hm_ToolUsedPotatoSeeds(uint8_t *ram, HmRegs *r)
 {
-  static const Sowing s = { HM_SEEDS_POTATO, 0x9A63, 0x9A85, 0x9AB2 };
+  static const Sowing s = { HM_SEEDS_POTATO_N, 0x9A63, 0x9A85, 0x9AB2 };
   sow_crop(ram, r, &s, 0x001B, SPRING);
 }
 void hm_ToolUsedTurnipSeeds(uint8_t *ram, HmRegs *r)
 {
-  static const Sowing s = { HM_SEEDS_TURNIP, 0x9AC0, 0x9AE2, 0x9B0F };
+  static const Sowing s = { HM_SEEDS_TURNIP_N, 0x9AC0, 0x9AE2, 0x9B0F };
   sow_crop(ram, r, &s, 0x001C, SPRING);
 }
 
 void hm_ToolUsedGrassSeeds(uint8_t *ram, HmRegs *r)
 {
-  static const Sowing s = { HM_SEEDS_GRASS, 0x9B6D, 0x9B9C, 0x9BC9 };
+  static const Sowing s = { HM_SEEDS_GRASS_N, 0x9B6D, 0x9B9C, 0x9BC9 };
   bool one = g_hm_single_seed;
   bool works = one ? sow_one_works(ram, r, &s) : tool_works_at_step(ram, r, s.ret_check, hm_PreCheckToolSuccessSquare);
   if (works) {
@@ -727,10 +686,10 @@ void hm_ToolUsedPaint(uint8_t *ram, HmRegs *r)
   if (tool_works(ram, r, 0x9BCF, hm_PreCheckToolSuccess)) {
     uint16_t tile = r->x;
     int part = is(r, tile, 0x00E2) ? 1 : is(r, tile, 0x00E3) ? 2 : is(r, tile, 0x00E4) ? 3 : 0;
-    if (!test(ram, r, FLAGS_66, PART[part].flag)) {
+    if (!test(ram, r, HM_FLAGS_66, PART[part].flag)) {
       add(ram, r, hm_AddPlayerHappiness, 10, PART[part].ret_happy);
       change_tile(ram, r, PART[part].change, PART[part].x, 0x0130, PART[part].ret_tile);
-      set_flag(ram, r, FLAGS_66, PART[part].flag);
+      set_flag(ram, r, HM_FLAGS_66, PART[part].flag);
     }
   }
   tool_finished(ram, r, 0xFE, 0x9CBE);
@@ -747,7 +706,7 @@ void hm_ToolUsedPaint(uint8_t *ram, HmRegs *r)
 void hm_ToolUsedMagicBeans(uint8_t *ram, HmRegs *r)
 {
   if (below(r, load8(r, ram[HM_HOUR]), 0x11) && is(r, load8(r, map_id(ram, r)), 0x31)) {
-    set_flag(ram, r, FLAGS_68, 0x0200);
+    set_flag(ram, r, HM_FLAGS_68, 0x0200);
     r->a = 0x0042;
     jsl(ram, r, 0xA39C, 0x81, hm_StartMapAnimation);
     ram[HM_TOOL_SELECTED] = 0;
@@ -819,13 +778,13 @@ portion:
 
 void hm_ToolUsedChickenFeed(uint8_t *ram, HmRegs *r)
 {
-  static const Feeding f = { MAP_COOP, HM_CHICKEN_TROUGHS, HM_CHICKENS_FED, HM_CHICKEN_FEED,
+  static const Feeding f = { MAP_COOP, HM_CHICKEN_TROUGHS, HM_CHICKENS_FED, HM_FEED_CHICKS_N,
                              0xA42C, 0xA43B, 0xA470, 0xA4A3, 0xA4B9, true };
   feed(ram, r, &f);
 }
 void hm_ToolUsedCowFeed(uint8_t *ram, HmRegs *r)
 {
-  static const Feeding f = { MAP_BARN, HM_COW_TROUGHS, HM_COWS_FED, HM_COW_FEED,
+  static const Feeding f = { MAP_BARN, HM_COW_TROUGHS, HM_COWS_FED, HM_FEED_COW_N,
                              0xA4DA, 0xA4E9, 0xA51E, 0xA551, 0xA56E, false };
   feed(ram, r, &f);
 }
@@ -840,8 +799,8 @@ void hm_ToolUsedCowFeed(uint8_t *ram, HmRegs *r)
 static void make_sound(uint8_t *ram, HmRegs *r, uint16_t ret)
 {
   load8(r, 0x07);
-  ram[SOUND_EFFECT] = 0x00;
-  ram[SOUND_BANK] = 0x07;
+  ram[HM_SOUND_EFFECT] = 0x00;
+  ram[HM_SOUND_BANK] = 0x07;
   jsl(ram, r, ret, 0x83, hm_PlaySoundEffect0A);
 }
 static void water_tile(uint8_t *ram, HmRegs *r, uint16_t ret_edit, uint16_t ret_change)
@@ -854,7 +813,7 @@ static void water_tile(uint8_t *ram, HmRegs *r, uint16_t ret_edit, uint16_t ret_
   hm_pull8(ram, r); hm_pull8(ram, r);                    /* PLA */
   r->y = (uint16_t)(watered << 2);
   r->c = (watered << 1) & 0x8000 ? 1 : 0;                /* ASL; ASL */
-  uint8_t change = hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPERTIES, r->y));
+  uint8_t change = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_TILE_PROPS, r->y));
   change_tile_in_front(ram, r, change, ret_change);
 }
 
@@ -866,8 +825,8 @@ void hm_ToolUsedWateringCan(uint8_t *ram, HmRegs *r)
 {
   make_sound(ram, r, 0x9CED);
   jsr(ram, r, 0x9CF0, hm_PreCheckToolSuccess);
-  if (!is(r, (uint8_t)r->a, 0x02) && load8(r, ram[HM_WATER]) != 0) {
-    load8(r, --ram[HM_WATER]);
+  if (!is(r, (uint8_t)r->a, 0x02) && load8(r, ram[HM_CAN_WATER]) != 0) {
+    load8(r, --ram[HM_CAN_WATER]);
     if (tool_works(ram, r, 0x9D02, hm_PreCheckToolSuccess))
       water_tile(ram, r, 0x9D18, 0x9D31);
   }
@@ -910,6 +869,6 @@ void hm_UseToolInHand(uint8_t *ram, HmRegs *r)
   r->a = r->x = (uint8_t)(item << 1);
   if (item < sizeof used / sizeof used[0])               /* the game has no more */
     jsr(ram, r, RET_260_TOOL, used[item]);
-  r->a = (uint16_t)(hm_rd16(ram, FLAGS_5A) | 0x0040);
-  hm_wr16(ram, FLAGS_5A, r->a);
+  r->a = (uint16_t)(hm_rd16(ram, HM_FLAGS_5A) | 0x0040);
+  hm_wr16(ram, HM_FLAGS_5A, r->a);
 }

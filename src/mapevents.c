@@ -20,93 +20,22 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_GAME_STATE ($D2),
- * HM_PLAYER_ACTION ($D4), HM_ANIM_REQUEST ($0901), HM_MAX_STAMINA ($0917),
- * HM_CURRENT_STAMINA ($0918), HM_ITEM_ON_HAND ($091D), HM_TOOL_SELECTED
- * ($0921), HM_TOOL_BACKPACK ($0923) and HM_TIME_RUNNING ($0973). */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* Direct page */
 #define SHUFFLE_7E        0x7E   /* 16b: festival_order clears it (not read there) */
 #define SHUFFLE_PLACE     0x84   /* 16b: festival_order: the place being swapped */
 #define SHUFFLE_OTHER     0x86   /* 16b: and the random place it is swapped with */
 #define SHUFFLE_HERE      0x95   /* 8b: and the byte that was at SHUFFLE_PLACE */
-#define BUG_DP_60         0x60   /* 16b: where the town's bug stores FLAGS_60 (STA.B $60,
+#define BUG_DP_60         0x60   /* 16b: where the town's bug stores HM_FLAGS_60 (STA.B $60,
                                     meant to be STA.L $7F1F60) */
-#define COW_POINTER       0x72   /* 24b $72-$74: GetCowPointer's result, the cow's record */
-#define HM_PLAYER_Y       0xD8   /* 16b: the player's position down, pixels */
-#define HM_PLAYER_DIRECTION 0xDA /* 16b: the way the player faces (0 down) */
 
 /* WRAM of the data bank (through db) */
-#define TEXT_NAME         0x0889 /* 4 words $0889-$088F: a name the text prints (the cow's) */
-#define PLAYER_TURN       0x0911 /* 16b: the direction being tried (playerinput.c) */
-#define PLAYER_TIMER      0x0915 /* 16b: the player's object's timer (objects.c) */
-#define IDLE_TIMER        0x0925 /* 8b: frames standing idle */
-#define DEAD_COW          0x0937 /* 8b: the cow of the cow's scene */
-#define INTERACTION       0x096E /* 8b: the action PlayerInteractionSelector runs (with
-                                    game state bit $40): $42, $45, $47-$49 the scenes here */
-#define INTERACTION_STEP  0x096F /* 8b: its step */
-#define INTERACTION_FRAMES 0x0970 /* 8b: its frame counter */
-#define HM_TILE_IN_FRONT_X 0x0985 /* 16b: the tile the player faces (StartScriptAtTileInFront) */
-#define HM_TILE_IN_FRONT_Y 0x0987
-#define TRANSITION_MAP    0x098B /* 8b: the map a transition goes to (here the house's size) */
-#define WEATHER_TOMORROW  0x098C /* 8b: tomorrow's weather (HM_WEATHER_TOMORROW) */
-#define FLAGS_0196        0x0196 /* 16b: weather and day flags (bits 1 / 3 / 9: the special
-                                    days) */
-#define NAME_FOR          0x099F /* 8b: whose name the names screen writes (names.c) */
 #define UNKNOWN_09A2      0x09A2 /* 8b: cleared with the festival's shuffle (not traced) */
-#define VISIT_NIGHTS      0x09A3 /* 8b: nights counted for a visit (day.c) */
-#define SHUFFLE           0x09A4 /* 8 bytes $09A4-$09AB: the festival's order, shuffled */
 #define MOST_HEARTS       0x09B3 /* 16b: the most hearts of the five girls (the ending) */
-#define FESTIVAL_BEST     0x09B5 /* 8b: the festival cow's affection (animals.c) */
-
-/* WRAM $7F:1Fxx: the game's saved state (bus addresses) */
-#define SHED_ITEMS        0x7F1F00 /* 4 bytes: the shed, one bit per tool (HM_SHED_ITEMS) */
-#define MONEY_LOW         0x7F1F04 /* 16b: the money's low word (HM_MONEY) */
-#define MONEY_HIGH        0x7F1F06 /* 8b: its high byte */
-#define COWS              0x7F1F0A /* 8b: cows owned */
-#define CHICKENS          0x7F1F0B /* 8b: chickens owned */
-#define YEAR              0x7F1F18 /* 8b: 0 = the first year */
-#define SEASON            0x7F1F19 /* 8b: 0 spring, 1 summer, 2 fall, 3 winter */
-#define WEEKDAY           0x7F1F1A /* 8b: 0 Sunday ... 6 Saturday */
-#define DAY               0x7F1F1B /* 8b: 1-30 */
-#define HOUR              0x7F1F1C /* 8b: 24h clock (then the minutes and seconds) */
-#define MINUTES           0x7F1F1D /* 8b */
-#define SECONDS           0x7F1F1E /* 8b */
-#define HEARTS            0x7F1F1F /* 5 words: Maria, Ann, Nina, Ellen, Eve */
-#define DOG_X             0x7F1F2C /* 16b: the dog's position */
-#define DOG_Y             0x7F1F2E /* 16b */
-#define DOG_MAP           0x7F1F30 /* 8b: the map the dog is on */
-#define HORSE_MAP         0x7F1F31 /* 8b: the map the horse is on */
-#define HORSE_AGE         0x7F1F32 /* 8b: the horse's days; $15 = grown */
-#define HAPPINESS         0x7F1F33 /* 16b */
-#define BUILD_NIGHTS      0x7F1F35 /* 8b: nights the house has been building */
-#define POWER_BERRIES     0x7F1F36 /* 8b: power berries eaten */
-#define KID1_AGE          0x7F1F37 /* 16b: the first child's days */
-#define KID2_AGE          0x7F1F39 /* 16b: the second child's */
-#define ENDING_STEP       0x7F1F47 /* 8b: the ending's next part */
-#define INTRO_STEP        0x7F1F49 /* 8b: the days of the introduction (0-$1C) */
-#define SHIPPED_CORN      0x7F1F4A /* 16b each: the crops shipped */
-#define SHIPPED_TOMATOES  0x7F1F4C
-#define SHIPPED_TURNIPS   0x7F1F4E
-#define SHIPPED_POTATOES  0x7F1F50
-#define DOG_HUGS          0x7F1F52 /* 16b */
-#define FLAGS_5A          0x7F1F5A /* 16b flags */
-#define FLAGS_5C          0x7F1F5C /* 16b flags */
-#define FLAGS_5E          0x7F1F5E /* 16b flags: bit 15 the ending's slide show */
-#define FLAGS_60          0x7F1F60 /* 16b flags */
-#define FLAGS_64          0x7F1F64 /* 16b story flags (see the comments of each map) */
-#define FLAGS_66          0x7F1F66 /* 16b: bits 0-4 the girl the player married; 6-8 scenes */
-#define FLAGS_68          0x7F1F68 /* 16b: events seen */
-#define FLAGS_6A          0x7F1F6A /* 16b: events seen */
-#define FLAGS_6C          0x7F1F6C /* 16b flags */
-#define FLAGS_6E          0x7F1F6E /* 16b: the wife and the children (see above) */
-#define FLAGS_70          0x7F1F70 /* 16b flags */
-#define FLAGS_74          0x7F1F74 /* 16b: events seen (the Starry Night) */
-
-/* An animal record's fields ([$72],Y; cows: 16 bytes at $7E:C1C6) */
-#define COW_NAME          0x0C   /* 4 bytes: its name */
 
 /* LDA #a; LDX #x; LDY #y; JSL StartEventScriptLong at $83:`at` */
 static void spawn(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t y, uint16_t at)
@@ -158,12 +87,12 @@ static uint8_t byte_of(uint8_t *ram, HmRegs *r, uint32_t addr)
  * and $7F1F6E bit 1 is set, only her script (group $22) */
 static bool married_here(uint8_t *ram, HmRegs *r, uint16_t girl)
 {
-  return flag(ram, r, FLAGS_66, girl) && flag(ram, r, FLAGS_6E, 0x0002);
+  return flag(ram, r, WRAM_LONG(HM_FLAGS_66), girl) && flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0002);
 }
 /* winter 10 before 5 pm (season 3, day 10, hour < 17) */
 static bool winter_10_morning(uint8_t *ram, HmRegs *r)
 {
-  return byte_is(ram, r, SEASON, 3) && byte_is(ram, r, DAY, 0x0A) && byte_below(ram, r, HOUR, 0x11);
+  return byte_is(ram, r, WRAM_LONG(HM_SEASON), 3) && byte_is(ram, r, WRAM_LONG(HM_DAY), 0x0A) && byte_below(ram, r, WRAM_LONG(HM_HOUR), 0x11);
 }
 
 /* ── one script, always ─────────────────────────────────────────────── */
@@ -178,19 +107,19 @@ void hm_MapEvent_Nothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
 /* ── one script, if a flag is set ───────────────────────────────────── */
 void hm_MapEvent_Beanstalk(uint8_t *ram, HmRegs *r)
 {
-  if (flag(ram, r, FLAGS_68, 0x0200)) spawn(ram, r, 0x0000, 0x0014, 0x0001, 0xE59C);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0200)) spawn(ram, r, 0x0000, 0x0014, 0x0001, 0xE59C);
 }
 void hm_MapEvent_Coop(uint8_t *ram, HmRegs *r)
 {
-  if (flag(ram, r, FLAGS_6A, 0x4000)) spawn(ram, r, 0x0015, 0x0000, 0x007F, 0xE5C8);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x4000)) spawn(ram, r, 0x0015, 0x0000, 0x007F, 0xE5C8);
 }
 
 /* ── winter 24 (the Starry Night), if the flag of $7F1F74 is set ───── */
 static void winter_24(uint8_t *ram, HmRegs *r, uint16_t mask, uint16_t y, uint16_t at)
 {
-  if (!byte_is(ram, r, SEASON, 3)) return;
-  if (!byte_is(ram, r, DAY, 0x18)) return;
-  if (flag(ram, r, FLAGS_74, mask)) spawn(ram, r, 0x0000, 0x000F, y, at);
+  if (!byte_is(ram, r, WRAM_LONG(HM_SEASON), 3)) return;
+  if (!byte_is(ram, r, WRAM_LONG(HM_DAY), 0x18)) return;
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_74), mask)) spawn(ram, r, 0x0000, 0x000F, y, at);
 }
 void hm_MapEvent_StarryNightMap0A(uint8_t *ram, HmRegs *r) { winter_24(ram, r, 0x0001, 0x0001, 0xE62D); }
 void hm_MapEvent_StarryNightMap39(uint8_t *ram, HmRegs *r) { winter_24(ram, r, 0x0008, 0x0004, 0xE65C); }
@@ -199,22 +128,22 @@ void hm_MapEvent_StarryNightMap14(uint8_t *ram, HmRegs *r) { winter_24(ram, r, 0
 /* E690: spring 1 (the new year) */
 void hm_MapEvent_NewYear(uint8_t *ram, HmRegs *r)
 {
-  uint8_t season = hm_bus_rd8(ram, SEASON);
+  uint8_t season = hm_bus_rd8(ram, WRAM_LONG(HM_SEASON));
   r->a = (uint16_t)((r->a & 0xFF00) | season);
   if (season) return;
-  if (byte_is(ram, r, DAY, 1)) spawn(ram, r, 0x0000, 0x0028, 0x0001, 0xE6AD);
+  if (byte_is(ram, r, WRAM_LONG(HM_DAY), 1)) spawn(ram, r, 0x0000, 0x0028, 0x0001, 0xE6AD);
 }
 
 /* ── the family at home: the wife (by who she is) and the children ──── */
 void hm_MapEvent_ToolShedFamily(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_6E, 0x0002)) {
-    if (flag(ram, r, FLAGS_66, 0x0002))      spawn(ram, r, 0x0013, 0x0044, 0x0001, 0xE6EE);
-    else if (flag(ram, r, FLAGS_66, 0x0010)) spawn(ram, r, 0x0013, 0x0044, 0x0004, 0xE6FF);
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0002)) {
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0002))      spawn(ram, r, 0x0013, 0x0044, 0x0001, 0xE6EE);
+    else if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0010)) spawn(ram, r, 0x0013, 0x0044, 0x0004, 0xE6FF);
   }
-  if (flag(ram, r, FLAGS_6E, 0x0004) && word_at_least(ram, r, KID1_AGE, 0x003C))
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0004) && word_at_least(ram, r, WRAM_LONG(HM_KID1_AGE), 0x003C))
     spawn(ram, r, 0x0014, 0x0045, 0x0002, 0xE724);
-  if (flag(ram, r, FLAGS_6E, 0x0008) && word_at_least(ram, r, KID2_AGE, 0x003C))
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0008) && word_at_least(ram, r, WRAM_LONG(HM_KID2_AGE), 0x003C))
     spawn(ram, r, 0x0015, 0x0045, 0x0005, 0xE747);
 }
 
@@ -233,14 +162,14 @@ void hm_MapEvent_ToolShedFamily(uint8_t *ram, HmRegs *r)
 static void house_D4FF(uint8_t *ram, HmRegs *r)
 {
   if (winter_10_morning(ram, r)) { spawn(ram, r, 0, 0x27, 3, 0xD526); return; }
-  if (!flag(ram, r, FLAGS_68, 0x0001)) { spawn(ram, r, 0, 0x0B, 1, 0xD541); return; }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0008)) { spawn(ram, r, 0, 7, 0, 0xD5C2); return; }
-  if (!byte_below(ram, r, db(r, WEATHER_TOMORROW), 6)) { spawn(ram, r, 0, 1, 1, 0xD592); return; }
-  if (byte_is(ram, r, db(r, WEATHER_TOMORROW), 3)) { spawn(ram, r, 0, 6, 0, 0xD5D2); return; }
-  if (flag(ram, r, FLAGS_64, 0x0020)) { spawn(ram, r, 0, 6, 0, 0xD5D2); return; }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0200)) { spawn(ram, r, 0, 8, 0, 0xD5E2); return; }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0002)) { spawn(ram, r, 0, 4, 0, 0xD5B2); return; }
-  if (byte_is(ram, r, WEEKDAY, 6)) { spawn(ram, r, 0, 2, 1, 0xD5A2); return; }
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) { spawn(ram, r, 0, 0x0B, 1, 0xD541); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0008)) { spawn(ram, r, 0, 7, 0, 0xD5C2); return; }
+  if (!byte_below(ram, r, db(r, HM_WEATHER_TOMORROW), 6)) { spawn(ram, r, 0, 1, 1, 0xD592); return; }
+  if (byte_is(ram, r, db(r, HM_WEATHER_TOMORROW), 3)) { spawn(ram, r, 0, 6, 0, 0xD5D2); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0020)) { spawn(ram, r, 0, 6, 0, 0xD5D2); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0200)) { spawn(ram, r, 0, 8, 0, 0xD5E2); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0002)) { spawn(ram, r, 0, 4, 0, 0xD5B2); return; }
+  if (byte_is(ram, r, WRAM_LONG(HM_WEEKDAY), 6)) { spawn(ram, r, 0, 2, 1, 0xD5A2); return; }
   spawn(ram, r, 0, 1, 1, 0xD592);
 }
 void hm_MapEvent_MariaHouse1(uint8_t *ram, HmRegs *r)
@@ -260,19 +189,19 @@ void hm_MapEvent_MariaHouse2(uint8_t *ram, HmRegs *r)
 void hm_MapEvent_Church(uint8_t *ram, HmRegs *r)
 {
   if (winter_10_morning(ram, r)) { spawn(ram, r, 0, 0x27, 2, 0xD63A); return; }
-  if (byte_is(ram, r, SEASON, 3) && byte_is(ram, r, DAY, 0x18) && flag(ram, r, FLAGS_74, 0x0002)) {
+  if (byte_is(ram, r, WRAM_LONG(HM_SEASON), 3) && byte_is(ram, r, WRAM_LONG(HM_DAY), 0x18) && flag(ram, r, WRAM_LONG(HM_FLAGS_74), 0x0002)) {
     spawn(ram, r, 0, 0x0F, 2, 0xD669);
     return;
   }
-  if (!flag(ram, r, FLAGS_68, 0x0001)) { spawn(ram, r, 0, 0x0B, 0x0C, 0xD684); return; }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0008)) { spawn(ram, r, 0, 7, 1, 0xD729); return; }
-  if (!byte_below(ram, r, db(r, WEATHER_TOMORROW), 6)) { spawn(ram, r, 0, 1, 2, 0xD6E9); return; }
-  if (byte_is(ram, r, db(r, WEATHER_TOMORROW), 3)) { spawn(ram, r, 0, 6, 1, 0xD739); return; }
-  if (flag(ram, r, FLAGS_64, 0x0020)) { spawn(ram, r, 0, 6, 1, 0xD739); return; }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0200)) { spawn(ram, r, 0, 8, 1, 0xD749); return; }
-  if (!flag(ram, r, FLAGS_68, 0x0001)) return;
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0002)) { spawn(ram, r, 0, 4, 1, 0xD719); return; }
-  uint8_t day = byte_of(ram, r, WEEKDAY);
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) { spawn(ram, r, 0, 0x0B, 0x0C, 0xD684); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0008)) { spawn(ram, r, 0, 7, 1, 0xD729); return; }
+  if (!byte_below(ram, r, db(r, HM_WEATHER_TOMORROW), 6)) { spawn(ram, r, 0, 1, 2, 0xD6E9); return; }
+  if (byte_is(ram, r, db(r, HM_WEATHER_TOMORROW), 3)) { spawn(ram, r, 0, 6, 1, 0xD739); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0020)) { spawn(ram, r, 0, 6, 1, 0xD739); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0200)) { spawn(ram, r, 0, 8, 1, 0xD749); return; }
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) return;
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0002)) { spawn(ram, r, 0, 4, 1, 0xD719); return; }
+  uint8_t day = byte_of(ram, r, WRAM_LONG(HM_WEEKDAY));
   if (day == 0) { spawn(ram, r, 0, 3, 1, 0xD6F9); return; }
   r->c = day >= 6;
   if (day == 6) { spawn(ram, r, 0, 2, 2, 0xD709); return; }
@@ -286,15 +215,15 @@ typedef struct { uint8_t s0B, s07, s01, s06, s08, s04; uint16_t at0B, at07, at01
 
 static void usual_day(uint8_t *ram, HmRegs *r, const Day *d)
 {
-  if (!flag(ram, r, FLAGS_68, 0x0001)) { spawn(ram, r, 0, 0x0B, d->s0B, d->at0B); return; }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0008)) { spawn(ram, r, 0, 7, d->s07, d->at07); return; }
-  if (!byte_below(ram, r, db(r, WEATHER_TOMORROW), 6)) { spawn(ram, r, 0, 1, d->s01, d->at01); return; }
-  if (byte_is(ram, r, db(r, WEATHER_TOMORROW), 3) || flag(ram, r, FLAGS_64, 0x0020)) {
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) { spawn(ram, r, 0, 0x0B, d->s0B, d->at0B); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0008)) { spawn(ram, r, 0, 7, d->s07, d->at07); return; }
+  if (!byte_below(ram, r, db(r, HM_WEATHER_TOMORROW), 6)) { spawn(ram, r, 0, 1, d->s01, d->at01); return; }
+  if (byte_is(ram, r, db(r, HM_WEATHER_TOMORROW), 3) || flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0020)) {
     spawn(ram, r, 0, 6, d->s06, d->at06);
     return;
   }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0200)) { spawn(ram, r, 0, 8, d->s08, d->at08); return; }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0002)) { spawn(ram, r, 0, 4, d->s04, d->at04); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0200)) { spawn(ram, r, 0, 8, d->s08, d->at08); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0002)) { spawn(ram, r, 0, 4, d->s04, d->at04); return; }
   spawn(ram, r, 0, 1, d->s01, d->at01);
 }
 
@@ -319,7 +248,7 @@ void hm_MapEvent_NinaHouse(uint8_t *ram, HmRegs *r)
 static void house_D86C(uint8_t *ram, HmRegs *r)
 {
   static const Day d = { 2, 3, 4, 3, 3, 3, 0xD89D, 0xD904, 0xD8E4, 0xD914, 0xD924, 0xD8F4 };
-  if (flag(ram, r, FLAGS_5E, 0x0010)) { spawn(ram, r, 0, 0x1A, 1, 0xD882); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_5E), 0x0010)) { spawn(ram, r, 0, 0x1A, 1, 0xD882); return; }
   usual_day(ram, r, &d);
 }
 void hm_MapEvent_AnnGeneralStore(uint8_t *ram, HmRegs *r)
@@ -365,19 +294,19 @@ void hm_MapEvent_AnimalShop(uint8_t *ram, HmRegs *r)
 /* LDA.L $7F1F68; ORA #bit; STA.L: an event seen */
 static void seen(uint8_t *ram, HmRegs *r, uint16_t bit)
 {
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_68) | bit);
-  hm_bus_wr16(ram, FLAGS_68, r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_68)) | bit);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_68), r->a);
 }
 
 /* DBB7, the fifth girl's house: winter 24; the first visit (group $0B,
  * then $7F1F68 bit 1); otherwise group 5 */
 static void house_DBB7(uint8_t *ram, HmRegs *r)
 {
-  if (byte_is(ram, r, SEASON, 3) && byte_is(ram, r, DAY, 0x18) && flag(ram, r, FLAGS_74, 0x0004)) {
+  if (byte_is(ram, r, WRAM_LONG(HM_SEASON), 3) && byte_is(ram, r, WRAM_LONG(HM_DAY), 0x18) && flag(ram, r, WRAM_LONG(HM_FLAGS_74), 0x0004)) {
     spawn(ram, r, 0, 0x0F, 3, 0xDBE1);
     return;
   }
-  if (!flag(ram, r, FLAGS_68, 0x0002)) {
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0002)) {
     spawn(ram, r, 0, 0x0B, 7, 0xDBFC);
     seen(ram, r, 0x0002);
     return;
@@ -404,20 +333,20 @@ void hm_MapEvent_EveHouse2(uint8_t *ram, HmRegs *r)
  * group 3, Saturday group 2, else group 1). */
 void hm_MapEvent_Mountain(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_68, 0x0004)) {
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0004)) {
     spawn(ram, r, 0, 0x0B, 9, 0xDC60);
     seen(ram, r, 0x0004);
     return;
   }
-  if (flag(ram, r, FLAGS_5E, 0x0020)) { spawn(ram, r, 0, 0x1D, 3, 0xDC88); return; }
-  if (flag(ram, r, FLAGS_6C, 0x0010)) { spawn(ram, r, 0, 0x1D, 1, 0xDCA3); return; }
-  if (flag(ram, r, FLAGS_6C, 0x0004)) {
-    if (flag(ram, r, FLAGS_5E, 0x0008)) { spawn(ram, r, 9, 0x1C, 2, 0xDCD8); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_5E), 0x0020)) { spawn(ram, r, 0, 0x1D, 3, 0xDC88); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6C), 0x0010)) { spawn(ram, r, 0, 0x1D, 1, 0xDCA3); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6C), 0x0004)) {
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_5E), 0x0008)) { spawn(ram, r, 9, 0x1C, 2, 0xDCD8); return; }
     spawn(ram, r, 9, 0x1C, 1, 0xDCC7);
   } else {
     bool visit = false;
-    if (byte_of(ram, r, YEAR) && !byte_below(ram, r, SEASON, 2)) {
-      uint8_t day = byte_of(ram, r, DAY);
+    if (byte_of(ram, r, WRAM_LONG(HM_YEAR)) && !byte_below(ram, r, WRAM_LONG(HM_SEASON), 2)) {
+      uint8_t day = byte_of(ram, r, WRAM_LONG(HM_DAY));
       r->c = day >= 1;
       if (day != 1) {
         static const uint8_t bounds[] = { 0x08, 0x0D, 0x12, 0x19, 0x1D };
@@ -427,18 +356,18 @@ void hm_MapEvent_Mountain(uint8_t *ram, HmRegs *r)
         }
       }
     }
-    if (visit && !flag(ram, r, db(r, FLAGS_0196), 0x001A) && !flag(ram, r, FLAGS_6A, 0x0200)) {
-      uint8_t wd = byte_of(ram, r, WEEKDAY);
+    if (visit && !flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x001A) && !flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0200)) {
+      uint8_t wd = byte_of(ram, r, WRAM_LONG(HM_WEEKDAY));
       if (wd != 0) {
         r->c = wd >= 6;
         if (wd != 6) spawn(ram, r, 9, 0x21, 0, 0xDD39);
       }
     }
   }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0008)) return;
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0200)) return;
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0002)) return;
-  uint8_t wd = byte_of(ram, r, WEEKDAY);
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0008)) return;
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0200)) return;
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0002)) return;
+  uint8_t wd = byte_of(ram, r, WRAM_LONG(HM_WEEKDAY));
   if (wd == 0) { spawn(ram, r, 0, 3, 2, 0xDD80); return; }
   r->c = wd >= 6;
   if (wd == 6) { spawn(ram, r, 0, 2, 3, 0xDD90); return; }
@@ -450,19 +379,19 @@ void hm_MapEvent_Mountain(uint8_t *ram, HmRegs *r)
  * visit is marked as seen anyway); then the usual day of script 9 / 7 */
 void hm_MapEvent_DD95_Map2BPerson(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_6A, 0x2000) && flag(ram, r, FLAGS_6A, 0x1000)) {
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x2000) && flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x1000)) {
     spawn(ram, r, 0, 0x19, 1, 0xDDB4);
     return;
   }
-  if (!flag(ram, r, FLAGS_68, 0x0008)) {
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0008)) {
     bool first = false;
-    if (!byte_of(ram, r, YEAR)) {
-      uint8_t season = byte_of(ram, r, SEASON);
+    if (!byte_of(ram, r, WRAM_LONG(HM_YEAR))) {
+      uint8_t season = byte_of(ram, r, WRAM_LONG(HM_SEASON));
       r->c = season >= 2;
       if (!r->c) {
         r->c = season >= 0;
         if (season == 0) first = true;
-        else first = byte_below(ram, r, DAY, 0x1A);
+        else first = byte_below(ram, r, WRAM_LONG(HM_DAY), 0x1A);
       }
     }
     if (first) {
@@ -472,29 +401,29 @@ void hm_MapEvent_DD95_Map2BPerson(uint8_t *ram, HmRegs *r)
     }
     seen(ram, r, 0x0008);
   }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0008)) { spawn(ram, r, 0, 7, 7, 0xDE4F); return; }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0200)) { spawn(ram, r, 0, 8, 7, 0xDE5F); return; }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0002)) { spawn(ram, r, 0, 4, 7, 0xDE3F); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0008)) { spawn(ram, r, 0, 7, 7, 0xDE4F); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0200)) { spawn(ram, r, 0, 8, 7, 0xDE5F); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0002)) { spawn(ram, r, 0, 4, 7, 0xDE3F); return; }
   spawn(ram, r, 0, 1, 9, 0xDE2F);
 }
 
 /* DE64: group $15 until $7F1F68 bit 13; then with $7F1F64 bit 1 group 1 */
 void hm_MapEvent_ElfTunnel(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_68, 0x2000)) { spawn(ram, r, 0, 0x15, 0, 0xDE7A); return; }
-  if (flag(ram, r, FLAGS_64, 0x0002)) spawn(ram, r, 0, 1, 0x0A, 0xDE95);
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x2000)) { spawn(ram, r, 0, 0x15, 0, 0xDE7A); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0002)) spawn(ram, r, 0, 1, 0x0A, 0xDE95);
 }
 
 /* DE9B: with $7F1F64 bit 3, a scene (slot $15, script $25 of group 0)
  * that stops the player: $096E = $45, $D2 |= $40, action 0. */
 void hm_MapEvent_Barn(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_64, 0x0008)) return;
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0008)) return;
   spawn(ram, r, 0x15, 0, 0x25, 0xDEB1);
   r->a = (uint16_t)((r->a & 0xFF00) | 0x45);
-  hm_bus_wr8(ram, db(r, INTERACTION), 0x45);
-  hm_bus_wr8(ram, db(r, INTERACTION_STEP), 0);
-  hm_bus_wr8(ram, db(r, INTERACTION_FRAMES), 0);
+  hm_bus_wr8(ram, db(r, HM_INTERACTION), 0x45);
+  hm_bus_wr8(ram, db(r, HM_INTERACTION_STEP), 0);
+  hm_bus_wr8(ram, db(r, HM_INTERACTION_FRAMES), 0);
   r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0040);
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   r->a = 0;
@@ -508,27 +437,27 @@ void hm_MapEvent_Barn(uint8_t *ram, HmRegs *r)
  * script 1, until $7F1F68 bit 8, which also clears $7F1F31). */
 void hm_MapEvent_Crossroads(uint8_t *ram, HmRegs *r)
 {
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5C) & 0xFF7F);
-  hm_bus_wr16(ram, FLAGS_5C, r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) & 0xFF7F);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5C), r->a);
   spawn(ram, r, 0x15, 0, 0x15, 0xE41F);
-  if (!flag(ram, r, FLAGS_68, 0x0001)) {
-    if (flag(ram, r, FLAGS_68, 0x0010)) { spawn(ram, r, 0, 0x0B, 0x0B, 0xE45F); return; }
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) {
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0010)) { spawn(ram, r, 0, 0x0B, 0x0B, 0xE45F); return; }
     spawn(ram, r, 0, 0x0A, 1, 0xE442);
     seen(ram, r, 0x0010);
     return;
   }
-  if (!byte_of(ram, r, YEAR) && !byte_is(ram, r, SEASON, 3)) return;
-  if (!flag(ram, r, FLAGS_68, 0x0040)) {
+  if (!byte_of(ram, r, WRAM_LONG(HM_YEAR)) && !byte_is(ram, r, WRAM_LONG(HM_SEASON), 3)) return;
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0040)) {
     spawn(ram, r, 0, 0x0D, 0, 0xE48E);
     seen(ram, r, 0x0040);
     r->a = (uint16_t)((r->a & 0xFF00) | 0x04);
-    hm_bus_wr8(ram, db(r, NAME_FOR), 0x04);
+    hm_bus_wr8(ram, db(r, HM_NAME_FOR), 0x04);
     return;
   }
-  if (flag(ram, r, FLAGS_68, 0x0100)) return;
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0100)) return;
   spawn(ram, r, 0, 0x0D, 1, 0xE4BD);
   r->a &= 0xFF00;
-  hm_bus_wr8(ram, HORSE_MAP, 0);
+  hm_bus_wr8(ram, WRAM_LONG(HM_HORSE_MAP), 0);
 }
 
 /* E4CB, map $29: until $7F1F6A bit 6, a script at the tile (224, 384)
@@ -539,7 +468,7 @@ void hm_MapEvent_Crossroads(uint8_t *ram, HmRegs *r)
  * 0, or on Saturday group 2. */
 void hm_MapEvent_MountainCave(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_6A, 0x0040)) {
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0040)) {
     hm_bus_wr16(ram, db(r, HM_TILE_IN_FRONT_X), 0x00E0);
     hm_bus_wr16(ram, db(r, HM_TILE_IN_FRONT_Y), 0x0180);
     r->a = 0x0010; r->x = 0; r->y = 0x001F;
@@ -555,19 +484,19 @@ void hm_MapEvent_MountainCave(uint8_t *ram, HmRegs *r)
     if (r->a) {
       r->a = (uint16_t)(state & 0xF7FF);
       hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
-      uint8_t season = byte_of(ram, r, SEASON);
-      hm_bus_wr8(ram, DOG_MAP, season);
-      hm_bus_wr16(ram, DOG_X, 0x0078);
+      uint8_t season = byte_of(ram, r, WRAM_LONG(HM_SEASON));
+      hm_bus_wr8(ram, WRAM_LONG(HM_DOG_MAP), season);
+      hm_bus_wr16(ram, WRAM_LONG(HM_DOG_X), 0x0078);
       r->a = 0x01A8;
-      hm_bus_wr16(ram, DOG_Y, 0x01A8);
+      hm_bus_wr16(ram, WRAM_LONG(HM_DOG_Y), 0x01A8);
       r->a = hm_dp_r16(ram, r, HM_PLAYER_DIRECTION);       /* LDA #0; CLC; ADC */
       r->c = 0;
       hm_bus_wr16(ram, db(r, HM_ANIM_REQUEST), r->a);
     }
   }
-  if (flag(ram, r, FLAGS_6C, 0x0010)) { spawn(ram, r, 0, 0x1D, 2, 0xE54B); return; }
-  if (flag(ram, r, FLAGS_6C, 0x0001)) { spawn(ram, r, 0, 0x1B, 1, 0xE566); return; }
-  if (byte_is(ram, r, WEEKDAY, 6)) spawn(ram, r, 0, 2, 4, 0xE580);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6C), 0x0010)) { spawn(ram, r, 0, 0x1D, 2, 0xE54B); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6C), 0x0001)) { spawn(ram, r, 0, 0x1B, 1, 0xE566); return; }
+  if (byte_is(ram, r, WRAM_LONG(HM_WEEKDAY), 6)) spawn(ram, r, 0, 2, 4, 0xE580);
 }
 
 /* ── D2E0, the town (maps 4-7) ──────────────────────────────────────────
@@ -590,12 +519,12 @@ static void festival_order(uint8_t *ram, HmRegs *r)
 {
   hm_dp_w16(ram, r, SHUFFLE_7E, 0);
   static const uint8_t start[8] = { 0, 1, 2, 3, 4, 5, 0, 0 };
-  for (int i = 0; i < 8; i++) hm_bus_wr8(ram, db(r, (uint16_t)(SHUFFLE + i)), start[i]);
+  for (int i = 0; i < 8; i++) hm_bus_wr8(ram, db(r, (uint16_t)(HM_FENCE_PIECES + i)), start[i]);
   r->a = (uint16_t)((r->a & 0xFF00) | 0);
   for (uint16_t y = 0; y != 7; y++) {
     hm_push8(ram, r, (uint8_t)(y >> 8)); hm_push8(ram, r, (uint8_t)y);   /* PHY */
     hm_dp_w16(ram, r, SHUFFLE_PLACE, y);
-    uint8_t here = hm_bus_rd8(ram, db(r, (uint16_t)(SHUFFLE + y)));
+    uint8_t here = hm_bus_rd8(ram, db(r, (uint16_t)(HM_FENCE_PIECES + y)));
     *hm_dp(ram, r, SHUFFLE_HERE) = here;
     r->x = y;
     r->a = (uint16_t)((r->a & 0xFF00) | 8);
@@ -605,9 +534,9 @@ static void festival_order(uint8_t *ram, HmRegs *r)
     uint16_t other = (uint8_t)r->a;                       /* XBA; LDA #0; XBA */
     r->x = other;
     hm_dp_w16(ram, r, SHUFFLE_OTHER, other);
-    uint8_t there = hm_bus_rd8(ram, db(r, (uint16_t)(SHUFFLE + other)));
-    hm_bus_wr8(ram, db(r, (uint16_t)(SHUFFLE + y)), there);
-    hm_bus_wr8(ram, db(r, (uint16_t)(SHUFFLE + other)), here);
+    uint8_t there = hm_bus_rd8(ram, db(r, (uint16_t)(HM_FENCE_PIECES + other)));
+    hm_bus_wr8(ram, db(r, (uint16_t)(HM_FENCE_PIECES + y)), there);
+    hm_bus_wr8(ram, db(r, (uint16_t)(HM_FENCE_PIECES + other)), here);
     r->a = (uint16_t)((other & 0xFF00) | here);
     uint8_t lo = hm_pull8(ram, r);                       /* PLY */
     r->y = (uint16_t)(lo | hm_pull8(ram, r) << 8);
@@ -621,16 +550,16 @@ static void festival_order(uint8_t *ram, HmRegs *r)
 static bool date_before(uint8_t *ram, HmRegs *r, uint8_t season, uint8_t day, uint8_t hour)
 {
   if (season == 0) {
-    uint8_t s = byte_of(ram, r, SEASON);                 /* LDA; BNE */
+    uint8_t s = byte_of(ram, r, WRAM_LONG(HM_SEASON));   /* LDA; BNE */
     if (s) return false;
-  } else if (!byte_is(ram, r, SEASON, season)) return false;
-  return byte_is(ram, r, DAY, day) && byte_below(ram, r, HOUR, hour);
+  } else if (!byte_is(ram, r, WRAM_LONG(HM_SEASON), season)) return false;
+  return byte_is(ram, r, WRAM_LONG(HM_DAY), day) && byte_below(ram, r, WRAM_LONG(HM_HOUR), hour);
 }
 
 void hm_MapEvent_Town(uint8_t *ram, HmRegs *r)
 {
-  if (flag(ram, r, FLAGS_60, 0x0400)) {
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_60) & 0xFBFF);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_60), 0x0400)) {
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0xFBFF);
     hm_dp_w16(ram, r, BUG_DP_60, r->a);                  /* STA.B $60: the bug */
     spawn(ram, r, 0, 0x14, 3, 0xD2FF);
     return;
@@ -644,14 +573,14 @@ void hm_MapEvent_Town(uint8_t *ram, HmRegs *r)
   if (date_before(ram, r, 0, 0x17, 0x0F)) { spawn(ram, r, 0, 0x0E, 0, 0xD3DD); return; }
   if (date_before(ram, r, 2, 0x0C, 0x0F)) { spawn(ram, r, 0, 0x26, 0, 0xD409); return; }
   if (date_before(ram, r, 3, 0x0A, 0x11)) { spawn(ram, r, 0, 0x27, 0, 0xD435); return; }
-  if (!flag(ram, r, FLAGS_6A, 0x4000)) spawn(ram, r, 0x15, 0, 0x7E, 0xD44E);
-  if (!flag(ram, r, FLAGS_68, 0x0001)) { spawn(ram, r, 0, 0x0B, 0, 0xD468); return; }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0008)) return;
-  if (byte_is(ram, r, db(r, WEATHER_TOMORROW), 3)) return;
-  if (flag(ram, r, FLAGS_64, 0x0020)) return;
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0200)) return;
-  if (flag(ram, r, db(r, FLAGS_0196), 0x0002)) return;
-  uint8_t wd = byte_of(ram, r, WEEKDAY);
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x4000)) spawn(ram, r, 0x15, 0, 0x7E, 0xD44E);
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) { spawn(ram, r, 0, 0x0B, 0, 0xD468); return; }
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0008)) return;
+  if (byte_is(ram, r, db(r, HM_WEATHER_TOMORROW), 3)) return;
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0020)) return;
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0200)) return;
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x0002)) return;
+  uint8_t wd = byte_of(ram, r, WRAM_LONG(HM_WEEKDAY));
   if (wd == 0) { spawn(ram, r, 0, 3, 0, 0xD4C2); return; }
   r->c = wd >= 6;
   if (wd == 6) { spawn(ram, r, 0, 2, 0, 0xD4D2); return; }
@@ -673,17 +602,17 @@ void hm_MapEvent_Town(uint8_t *ram, HmRegs *r)
 static void wake_up(uint8_t *ram, HmRegs *r, uint8_t hour)
 {
   const uint8_t clock[3] = { hour, 0, 0 };
-  for (int i = 0; i < 3; i++) hm_bus_wr8(ram, HOUR + i, clock[i]);
-  hm_bus_wr16(ram, db(r, PLAYER_TIMER), 0);
+  for (int i = 0; i < 3; i++) hm_bus_wr8(ram, WRAM_LONG(HM_HOUR) + i, clock[i]);
+  hm_bus_wr16(ram, db(r, HM_PLAYER_TIMER), 0);
   hm_dp_w16(ram, r, HM_GAME_STATE, 0);
   hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
   uint8_t max = hm_bus_rd8(ram, db(r, HM_MAX_STAMINA));
   hm_bus_wr8(ram, db(r, HM_CURRENT_STAMINA), max);
-  hm_bus_wr8(ram, db(r, IDLE_TIMER), 0);
+  hm_bus_wr8(ram, db(r, HM_IDLE_TIMER), 0);
   hm_dp_w16(ram, r, HM_GAME_STATE, 0x0001);                /* LDA $D2; ORA #1 */
   hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
   hm_dp_w16(ram, r, HM_PLAYER_DIRECTION, 0);
-  hm_bus_wr16(ram, db(r, PLAYER_TURN), 0);
+  hm_bus_wr16(ram, db(r, HM_PLAYER_TURN), 0);
   hm_bus_wr16(ram, db(r, HM_ANIM_REQUEST), 0);
   hm_bus_wr8(ram, db(r, HM_TIME_RUNNING), 0);
   hm_bus_wr8(ram, db(r, HM_ITEM_ON_HAND), 0);
@@ -695,7 +624,7 @@ void hm_MapEvent_IntroDays(uint8_t *ram, HmRegs *r)
 {
   wake_up(ram, r, 7);
 
-  uint8_t step = byte_of(ram, r, INTRO_STEP);
+  uint8_t step = byte_of(ram, r, WRAM_LONG(HM_INTRO_STEP));
   if (step) r->c = 1;                         /* the CMP chain ends on an equal or above */
   if (step >= 0x1D) return;
   /* each step's code: 24 bytes from $E8AD, 56 for steps 7 and $0D */
@@ -705,7 +634,7 @@ void hm_MapEvent_IntroDays(uint8_t *ram, HmRegs *r)
   if (step == 7 || step == 0x0D) {
     static const uint8_t shed[2][4] = { { 0x3D, 0x00, 0x12, 0x00 }, { 0x0D, 0x64, 0x12, 0x00 } };
     const uint8_t *s = shed[step == 0x0D];
-    for (int i = 0; i < 4; i++) hm_bus_wr8(ram, SHED_ITEMS + i, s[i]);
+    for (int i = 0; i < 4; i++) hm_bus_wr8(ram, WRAM_LONG(HM_SHED_ITEMS) + i, s[i]);
     r->a = (uint16_t)((r->a & 0xFF00) | s[3]);
     hm_bus_wr8(ram, db(r, HM_TOOL_SELECTED), 0);
     hm_bus_wr8(ram, db(r, HM_TOOL_BACKPACK), 0);
@@ -713,7 +642,7 @@ void hm_MapEvent_IntroDays(uint8_t *ram, HmRegs *r)
   }
   spawn(ram, r, 0, 0x47, (uint16_t)(step + 1), (uint16_t)(at + 0x0B));
   r->a = (uint16_t)((r->a & 0xFF00) | (uint8_t)(step + 1));
-  hm_bus_wr8(ram, INTRO_STEP, (uint8_t)(step + 1));
+  hm_bus_wr8(ram, WRAM_LONG(HM_INTRO_STEP), (uint8_t)(step + 1));
 }
 
 /* ── EBA6, maps $3D and $4B: the ending ─────────────────────────────────
@@ -746,99 +675,99 @@ static void part(uint8_t *ram, HmRegs *r, uint16_t x, uint16_t y, uint16_t at, u
 {
   spawn(ram, r, 0, x, y, at);
   r->a = (uint16_t)((r->a & 0xFF00) | next);
-  hm_bus_wr8(ram, ENDING_STEP, next);
+  hm_bus_wr8(ram, WRAM_LONG(HM_ENDING_STEP), next);
 }
 static void flags_5e(uint8_t *ram, HmRegs *r, bool on)
 {
-  uint16_t v = hm_bus_rd16(ram, FLAGS_5E);
+  uint16_t v = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E));
   r->a = on ? (uint16_t)(v | 0x8000) : (uint16_t)(v & 0x7FFF);
-  hm_bus_wr16(ram, FLAGS_5E, r->a);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5E), r->a);
 }
-static bool no_wife(uint8_t *ram, HmRegs *r) { return !flag(ram, r, FLAGS_66, 0x001F); }
+static bool no_wife(uint8_t *ram, HmRegs *r) { return !flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x001F); }
 static bool shipped(uint8_t *ram, HmRegs *r, uint32_t addr) { return word_at_least(ram, r, addr, 200); }
 
 void hm_MapEvent_EndingSlideShow(uint8_t *ram, HmRegs *r)
 {
   wake_up(ram, r, 6);
-  uint8_t step = byte_of(ram, r, ENDING_STEP);
+  uint8_t step = byte_of(ram, r, WRAM_LONG(HM_ENDING_STEP));
   if (step) r->c = 1;                         /* the CMP chain ends on an equal or above */
   switch (step) {
   case 0x00:
-    if (no_wife(ram, r) && !word_at_least(ram, r, HAPPINESS, 100) &&
-        !byte_of(ram, r, COWS) && !byte_of(ram, r, CHICKENS)) {
+    if (no_wife(ram, r) && !word_at_least(ram, r, WRAM_LONG(HM_HAPPINESS), 100) &&
+        !byte_of(ram, r, WRAM_LONG(HM_COW_N)) && !byte_of(ram, r, WRAM_LONG(HM_CHICKEN_N))) {
       part(ram, r, 0x2F, 0, 0xED4D, 0x14);
       return;
     }
     /* fall through */
   case 0x01:
     flags_5e(ram, r, true);
-    if (!byte_below(ram, r, COWS, 7)) { part(ram, r, 0x30, 0, 0xED7E, 0x02); return; }
+    if (!byte_below(ram, r, WRAM_LONG(HM_COW_N), 7)) { part(ram, r, 0x30, 0, 0xED7E, 0x02); return; }
     /* fall through */
   case 0x02: {
-    uint8_t cows = byte_of(ram, r, COWS);
-    if (cows && byte_below(ram, r, COWS, 7)) { part(ram, r, 0x31, 0, 0xEDA4, 0x03); return; }
+    uint8_t cows = byte_of(ram, r, WRAM_LONG(HM_COW_N));
+    if (cows && byte_below(ram, r, WRAM_LONG(HM_COW_N), 7)) { part(ram, r, 0x31, 0, 0xEDA4, 0x03); return; }
   } /* fall through */
   case 0x03:
-    if (byte_of(ram, r, CHICKENS)) { part(ram, r, 0x32, 0, 0xEDC6, 0x04); return; }
+    if (byte_of(ram, r, WRAM_LONG(HM_CHICKEN_N))) { part(ram, r, 0x32, 0, 0xEDC6, 0x04); return; }
     /* fall through */
   case 0x04:
-    if (!byte_below(ram, r, db(r, FESTIVAL_BEST), 0xC0)) { part(ram, r, 0x33, 0, 0xEDE9, 0x05); return; }
+    if (!byte_below(ram, r, db(r, HM_FESTIVAL_BEST), 0xC0)) { part(ram, r, 0x33, 0, 0xEDE9, 0x05); return; }
     /* fall through */
   case 0x05:
-    if (shipped(ram, r, SHIPPED_CORN)) { part(ram, r, 0x34, 0, 0xEE0C, 0x06); return; }
+    if (shipped(ram, r, WRAM_LONG(HM_SHIPPED_CORN))) { part(ram, r, 0x34, 0, 0xEE0C, 0x06); return; }
     /* fall through */
   case 0x06:
-    if (shipped(ram, r, SHIPPED_TOMATOES)) { part(ram, r, 0x35, 0, 0xEE2F, 0x07); return; }
+    if (shipped(ram, r, WRAM_LONG(HM_SHIPPED_TOMATOES))) { part(ram, r, 0x35, 0, 0xEE2F, 0x07); return; }
     /* fall through */
   case 0x07:
-    if (shipped(ram, r, SHIPPED_TURNIPS)) { part(ram, r, 0x37, 0, 0xEE52, 0x08); return; }
+    if (shipped(ram, r, WRAM_LONG(HM_SHIPPED_TURNIPS))) { part(ram, r, 0x37, 0, 0xEE52, 0x08); return; }
     /* fall through */
   case 0x08:
-    if (shipped(ram, r, SHIPPED_POTATOES)) { part(ram, r, 0x36, 0, 0xEE75, 0x09); return; }
+    if (shipped(ram, r, WRAM_LONG(HM_SHIPPED_POTATOES))) { part(ram, r, 0x36, 0, 0xEE75, 0x09); return; }
     /* fall through */
   case 0x09:
-    if (no_wife(ram, r) && word_at_least(ram, r, HAPPINESS, 100)) { part(ram, r, 0x38, 0, 0xEEA1, 0x0A); return; }
+    if (no_wife(ram, r) && word_at_least(ram, r, WRAM_LONG(HM_HAPPINESS), 100)) { part(ram, r, 0x38, 0, 0xEEA1, 0x0A); return; }
     /* fall through */
   case 0x0A:
-    if (no_wife(ram, r) && word_at_least(ram, r, HAPPINESS, 800)) { part(ram, r, 0x39, 0, 0xEECD, 0x0B); return; }
+    if (no_wife(ram, r) && word_at_least(ram, r, WRAM_LONG(HM_HAPPINESS), 800)) { part(ram, r, 0x39, 0, 0xEECD, 0x0B); return; }
     /* fall through */
   case 0x0B:
-    if (flag(ram, r, FLAGS_66, 0x0001)) { part(ram, r, 0x3A, 0, 0xEEF0, 0x21); return; }
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0001)) { part(ram, r, 0x3A, 0, 0xEEF0, 0x21); return; }
     goto girl_2;
   case 0x21:
     part(ram, r, 0x3A, 1, 0xEF08, 0x0C);
     return;
   case 0x0C:
   girl_2:
-    if (flag(ram, r, FLAGS_66, 0x0002)) { part(ram, r, 0x3B, 0, 0xEF2B, 0x22); return; }
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0002)) { part(ram, r, 0x3B, 0, 0xEF2B, 0x22); return; }
     goto girl_3;
   case 0x22:
     part(ram, r, 0x3B, 1, 0xEF43, 0x0D);
     return;
   case 0x0D:
   girl_3:
-    if (flag(ram, r, FLAGS_66, 0x0004)) { part(ram, r, 0x3C, 0, 0xEF66, 0x23); return; }
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0004)) { part(ram, r, 0x3C, 0, 0xEF66, 0x23); return; }
     goto girl_4;
   case 0x23:
     part(ram, r, 0x3C, 1, 0xEF7E, 0x0E);
     return;
   case 0x0E:
   girl_4:
-    if (flag(ram, r, FLAGS_66, 0x0008)) { part(ram, r, 0x3D, 0, 0xEFA1, 0x24); return; }
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0008)) { part(ram, r, 0x3D, 0, 0xEFA1, 0x24); return; }
     goto girl_5;
   case 0x24:
     part(ram, r, 0x3D, 1, 0xEFB9, 0x0F);
     return;
   case 0x0F:
   girl_5:
-    if (flag(ram, r, FLAGS_66, 0x0010)) { part(ram, r, 0x3E, 0, 0xEFDC, 0x10); return; }
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0010)) { part(ram, r, 0x3E, 0, 0xEFDC, 0x10); return; }
     /* fall through */
   case 0x10:
-    if (no_wife(ram, r) && word_at_least(ram, r, HAPPINESS, 200)) {
+    if (no_wife(ram, r) && word_at_least(ram, r, WRAM_LONG(HM_HAPPINESS), 200)) {
       uint32_t sum = 0;
       unsigned carry = 0;
       for (int i = 0; i < 5; i++) {                        /* CLC; ADC x 4 */
-        sum = (sum & 0xFFFF) + hm_bus_rd16(ram, HEARTS + 2 * i) + carry;
+        sum = (sum & 0xFFFF) + hm_bus_rd16(ram, WRAM_LONG(HM_HEARTS_BASE) + 2 * i) + carry;
         carry = sum > 0xFFFF;
       }
       r->a = (uint16_t)sum;
@@ -847,20 +776,20 @@ void hm_MapEvent_EndingSlideShow(uint8_t *ram, HmRegs *r)
     }
     /* fall through */
   case 0x11:
-    if (flag(ram, r, FLAGS_6E, 0x000C)) { part(ram, r, 0x40, 0, 0xF045, 0x12); return; }
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x000C)) { part(ram, r, 0x40, 0, 0xF045, 0x12); return; }
     /* fall through */
   case 0x12:
-    if (flag(ram, r, FLAGS_6E, 0x0008)) { part(ram, r, 0x41, 0, 0xF068, 0x13); return; }
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0008)) { part(ram, r, 0x41, 0, 0xF068, 0x13); return; }
     /* fall through */
   case 0x13:
-    if (flag(ram, r, FLAGS_6E, 0x0008) && word_at_least(ram, r, HAPPINESS, 900) &&
-        byte_of(ram, r, COWS) && byte_of(ram, r, CHICKENS) && byte_is(ram, r, POWER_BERRIES, 10)) {
-      uint32_t low = (uint32_t)hm_bus_rd16(ram, MONEY_LOW) + 0xFC18;  /* money - 1000 */
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0008) && word_at_least(ram, r, WRAM_LONG(HM_HAPPINESS), 900) &&
+        byte_of(ram, r, WRAM_LONG(HM_COW_N)) && byte_of(ram, r, WRAM_LONG(HM_CHICKEN_N)) && byte_is(ram, r, WRAM_LONG(HM_POWER_BERRIES), 10)) {
+      uint32_t low = (uint32_t)hm_bus_rd16(ram, WRAM_LONG(HM_MONEY)) + 0xFC18; /* money - 1000 */
       r->c = low > 0xFFFF;
-      uint32_t high = (uint32_t)hm_bus_rd8(ram, MONEY_HIGH) + 0xFF + r->c;
+      uint32_t high = (uint32_t)hm_bus_rd8(ram, WRAM_LONG(HM_MONEY_HIGH)) + 0xFF + r->c;
       r->c = high > 0xFF;
       r->a = (uint16_t)((low & 0xFF00) | (uint8_t)high);
-      if (!(high & 0x80) && word_at_least(ram, r, DOG_HUGS, 100)) {
+      if (!(high & 0x80) && word_at_least(ram, r, WRAM_LONG(HM_DOG_HUGS), 100)) {
         part(ram, r, 0x42, 0, 0xF0C9, 0x14);
         flags_5e(ram, r, false);
         return;
@@ -868,11 +797,11 @@ void hm_MapEvent_EndingSlideShow(uint8_t *ram, HmRegs *r)
     }
     /* fall through */
   case 0x14: {
-    uint16_t best = hm_bus_rd16(ram, HEARTS);
+    uint16_t best = hm_bus_rd16(ram, WRAM_LONG(HM_HEARTS_BASE));
     r->a = best;
     hm_bus_wr16(ram, db(r, MOST_HEARTS), best);
     for (int i = 1; i < 5; i++) {
-      uint16_t h = hm_bus_rd16(ram, HEARTS + 2 * i);
+      uint16_t h = hm_bus_rd16(ram, WRAM_LONG(HM_HEARTS_BASE) + 2 * i);
       r->c = r->a >= h;                                      /* CMP.L; BCS */
       if (!r->c) { r->a = h; hm_bus_wr16(ram, db(r, MOST_HEARTS), h); }
     }
@@ -933,12 +862,12 @@ void hm_MapEvent_EndingSlideShow(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────── */
 static bool six_sharp(uint8_t *ram, HmRegs *r)        /* hour 6, minutes 0, seconds 0 */
 {
-  return byte_is(ram, r, HOUR, 6) && !byte_of(ram, r, MINUTES) && !byte_of(ram, r, SECONDS);
+  return byte_is(ram, r, WRAM_LONG(HM_HOUR), 6) && !byte_of(ram, r, WRAM_LONG(HM_MINUTES)) && !byte_of(ram, r, WRAM_LONG(HM_SECONDS));
 }
 /* CMP #1; BEQ no; CMP #8; BCC yes; CMP #$0D; BCC no; ... CMP #$1D */
 static bool visitor_day(uint8_t *ram, HmRegs *r)
 {
-  uint8_t day = byte_of(ram, r, DAY);
+  uint8_t day = byte_of(ram, r, WRAM_LONG(HM_DAY));
   r->c = day >= 1;
   if (day == 1) return false;
   static const uint8_t bounds[] = { 0x08, 0x0D, 0x12, 0x19, 0x1D };
@@ -957,9 +886,9 @@ static void flag_on(uint8_t *ram, HmRegs *r, uint32_t addr, uint16_t bit)
 static void stop_player(uint8_t *ram, HmRegs *r, uint8_t code)
 {
   r->a = (uint16_t)((r->a & 0xFF00) | code);
-  hm_bus_wr8(ram, db(r, INTERACTION), code);
-  hm_bus_wr8(ram, db(r, INTERACTION_STEP), 0);
-  hm_bus_wr8(ram, db(r, INTERACTION_FRAMES), 0);
+  hm_bus_wr8(ram, db(r, HM_INTERACTION), code);
+  hm_bus_wr8(ram, db(r, HM_INTERACTION_STEP), 0);
+  hm_bus_wr8(ram, db(r, HM_INTERACTION_FRAMES), 0);
   r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0040);
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   r->a = 0;
@@ -968,9 +897,9 @@ static void stop_player(uint8_t *ram, HmRegs *r, uint8_t code)
 /* LDA.L moneyL; CLC; ADC #-n; SEP; LDA.L moneyH; ADC #$FF: true if not negative */
 static bool money_at_least(uint8_t *ram, HmRegs *r, uint16_t minus_n)
 {
-  uint32_t low = (uint32_t)hm_bus_rd16(ram, MONEY_LOW) + minus_n;
+  uint32_t low = (uint32_t)hm_bus_rd16(ram, WRAM_LONG(HM_MONEY)) + minus_n;
   r->c = low > 0xFFFF;
-  uint32_t high = (uint32_t)hm_bus_rd8(ram, MONEY_HIGH) + 0xFF + r->c;
+  uint32_t high = (uint32_t)hm_bus_rd8(ram, WRAM_LONG(HM_MONEY_HIGH)) + 0xFF + r->c;
   r->c = high > 0xFF;
   r->a = (uint16_t)((low & 0xFF00) | (uint8_t)high);
   return !(high & 0x80);
@@ -981,36 +910,36 @@ static void girl_visit(uint8_t *ram, HmRegs *r, uint32_t addr, uint16_t bit, uin
   flag_on(ram, r, addr, bit);
   spawn(ram, r, 0, x, 0, at);
   r->a &= 0xFF00;
-  hm_bus_wr8(ram, db(r, VISIT_NIGHTS), 0);
+  hm_bus_wr8(ram, db(r, HM_VISIT_NIGHTS), 0);
 }
 
 static bool girls_visit(uint8_t *ram, HmRegs *r)
 {
-  if (flag(ram, r, db(r, FLAGS_0196), 0x001A)) return false;
-  for (uint16_t g = 1; g <= 0x10; g <<= 1) if (flag(ram, r, FLAGS_66, g)) return false;
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x001A)) return false;
+  for (uint16_t g = 1; g <= 0x10; g <<= 1) if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), g)) return false;
   if (!six_sharp(ram, r)) return false;
   if (!visitor_day(ram, r)) return false;
-  const uint32_t A6 = FLAGS_6A, C6 = FLAGS_6C, W = FLAGS_66;
+  const uint32_t A6 = WRAM_LONG(HM_FLAGS_6A), C6 = WRAM_LONG(HM_FLAGS_6C), W = WRAM_LONG(HM_FLAGS_66);
   if (!flag(ram, r, W, 0x0001) && !flag(ram, r, W, 0x0080) && !flag(ram, r, A6, 0x2000) &&
-      !flag(ram, r, A6, 0x1000) && word_at_least(ram, r, HEARTS, 200)) {
+      !flag(ram, r, A6, 0x1000) && word_at_least(ram, r, WRAM_LONG(HM_HEARTS_BASE), 200)) {
     girl_visit(ram, r, A6, 0x1000, 0x19, 0xCCDF); return true;
   }
   if (!flag(ram, r, A6, 0x1000) && !flag(ram, r, W, 0x0002) && !flag(ram, r, A6, 0x8000) &&
-      !flag(ram, r, A6, 0x4000) && word_at_least(ram, r, HEARTS + 2, 200)) {
+      !flag(ram, r, A6, 0x4000) && word_at_least(ram, r, WRAM_LONG(HM_HEARTS_BASE) + 2, 200)) {
     girl_visit(ram, r, A6, 0x4000, 0x1A, 0xCD2E); return true;
   }
   if (!flag(ram, r, A6, 0x1000) && !flag(ram, r, A6, 0x4000) && !flag(ram, r, W, 0x0004) &&
-      !flag(ram, r, C6, 0x0002) && !flag(ram, r, C6, 0x0001) && word_at_least(ram, r, HEARTS + 4, 200)) {
+      !flag(ram, r, C6, 0x0002) && !flag(ram, r, C6, 0x0001) && word_at_least(ram, r, WRAM_LONG(HM_HEARTS_BASE) + 4, 200)) {
     girl_visit(ram, r, C6, 0x0001, 0x1B, 0xCD86); return true;
   }
   if (!flag(ram, r, A6, 0x1000) && !flag(ram, r, A6, 0x4000) && !flag(ram, r, C6, 0x0001) &&
       !flag(ram, r, W, 0x0008) && !flag(ram, r, C6, 0x0008) && !flag(ram, r, C6, 0x0004) &&
-      word_at_least(ram, r, HEARTS + 6, 200)) {
+      word_at_least(ram, r, WRAM_LONG(HM_HEARTS_BASE) + 6, 200)) {
     girl_visit(ram, r, C6, 0x0004, 0x1C, 0xCDE7); return true;
   }
   if (!flag(ram, r, A6, 0x1000) && !flag(ram, r, A6, 0x4000) && !flag(ram, r, C6, 0x0001) &&
       !flag(ram, r, C6, 0x0004) && !flag(ram, r, W, 0x0010) && !flag(ram, r, C6, 0x0020) &&
-      !flag(ram, r, C6, 0x0010) && word_at_least(ram, r, HEARTS + 8, 200)) {
+      !flag(ram, r, C6, 0x0010) && word_at_least(ram, r, WRAM_LONG(HM_HEARTS_BASE) + 8, 200)) {
     girl_visit(ram, r, C6, 0x0010, 0x1D, 0xCE51); return true;
   }
   return false;
@@ -1018,102 +947,102 @@ static bool girls_visit(uint8_t *ram, HmRegs *r)
 
 void hm_MapEvent_Farm(uint8_t *ram, HmRegs *r)
 {
-  if (!flag(ram, r, FLAGS_6E, 0x0002)) {
-    if (flag(ram, r, FLAGS_66, 0x0001))      spawn(ram, r, 0x13, 0x44, 0, 0xCB9C);
-    else if (flag(ram, r, FLAGS_66, 0x0004)) spawn(ram, r, 0x13, 0x44, 2, 0xCBAD);
-    else if (flag(ram, r, FLAGS_66, 0x0008)) spawn(ram, r, 0x13, 0x44, 3, 0xCBBE);
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0002)) {
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0001))      spawn(ram, r, 0x13, 0x44, 0, 0xCB9C);
+    else if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0004)) spawn(ram, r, 0x13, 0x44, 2, 0xCBAD);
+    else if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0008)) spawn(ram, r, 0x13, 0x44, 3, 0xCBBE);
   }
-  if (flag(ram, r, FLAGS_6E, 0x0004) && word_at_least(ram, r, KID1_AGE, 0x003C))
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0004) && word_at_least(ram, r, WRAM_LONG(HM_KID1_AGE), 0x003C))
     spawn(ram, r, 0x14, 0x45, 1, 0xCBE3);
-  if (flag(ram, r, FLAGS_6E, 0x0008) && word_at_least(ram, r, KID2_AGE, 0x003C))
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0008) && word_at_least(ram, r, WRAM_LONG(HM_KID2_AGE), 0x003C))
     spawn(ram, r, 0x15, 0x45, 4, 0xCC06);
   if (girls_visit(ram, r)) return;
 
-  if (flag(ram, r, FLAGS_5A, 0x0002)) { spawn(ram, r, 7, 0, 0x20, 0xCE71); stop_player(ram, r, 0x42); return; }
-  if (!flag(ram, r, FLAGS_68, 0x0001)) { spawn(ram, r, 0, 0x0A, 2, 0xCEA9); return; }
-  if (!flag(ram, r, FLAGS_68, 0x0020)) {
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_5A), 0x0002)) { spawn(ram, r, 7, 0, 0x20, 0xCE71); stop_player(ram, r, 0x42); return; }
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) { spawn(ram, r, 0, 0x0A, 2, 0xCEA9); return; }
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0020)) {
     spawn(ram, r, 0, 0x0C, 0, 0xCEC4);
     seen(ram, r, 0x0020);
     r->a = (uint16_t)((r->a & 0xFF00) | 3);
-    hm_bus_wr8(ram, db(r, NAME_FOR), 3);
+    hm_bus_wr8(ram, db(r, HM_NAME_FOR), 3);
     return;
   }
-  if (!flag(ram, r, FLAGS_68, 0x0080)) {
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0080)) {
     spawn(ram, r, 0, 0x0C, 1, 0xCEF3);
-    hm_bus_wr16(ram, DOG_X, 0x0078);
+    hm_bus_wr16(ram, WRAM_LONG(HM_DOG_X), 0x0078);
     r->a = 0x01A8;
-    hm_bus_wr16(ram, DOG_Y, 0x01A8);
+    hm_bus_wr16(ram, WRAM_LONG(HM_DOG_Y), 0x01A8);
     r->a = 0x0100;                                          /* SEP; LDA #0 */
-    hm_bus_wr8(ram, DOG_MAP, 0);
+    hm_bus_wr8(ram, WRAM_LONG(HM_DOG_MAP), 0);
     return;
   }
   bool skip_mornings = false;
-  if (!byte_below(ram, r, db(r, WEATHER_TOMORROW), 6) && byte_is(ram, r, HOUR, 6) &&
-      !byte_of(ram, r, MINUTES)) {
-    if (!byte_of(ram, r, SECONDS)) { spawn(ram, r, 6, 0x24, 0, 0xCF3D); return; }
+  if (!byte_below(ram, r, db(r, HM_WEATHER_TOMORROW), 6) && byte_is(ram, r, WRAM_LONG(HM_HOUR), 6) &&
+      !byte_of(ram, r, WRAM_LONG(HM_MINUTES))) {
+    if (!byte_of(ram, r, WRAM_LONG(HM_SECONDS))) { spawn(ram, r, 6, 0x24, 0, 0xCF3D); return; }
     skip_mornings = true;
   }
   if (!skip_mornings) {
-    if (flag(ram, r, FLAGS_70, 0x0002) && six_sharp(ram, r)) { spawn(ram, r, 6, 0x24, 2, 0xCF6E); return; }
-    if (flag(ram, r, FLAGS_64, 0x0010) && six_sharp(ram, r)) { spawn(ram, r, 6, 0x24, 3, 0xCF9F); return; }
-    if (!flag(ram, r, FLAGS_70, 0x0001) && !byte_of(ram, r, YEAR) && byte_is(ram, r, SEASON, 1) &&
-        byte_below(ram, r, DAY, 0x14) && six_sharp(ram, r)) {
-      flag_on(ram, r, FLAGS_70, 0x0001);
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_70), 0x0002) && six_sharp(ram, r)) { spawn(ram, r, 6, 0x24, 2, 0xCF6E); return; }
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0010) && six_sharp(ram, r)) { spawn(ram, r, 6, 0x24, 3, 0xCF9F); return; }
+    if (!flag(ram, r, WRAM_LONG(HM_FLAGS_70), 0x0001) && !byte_of(ram, r, WRAM_LONG(HM_YEAR)) && byte_is(ram, r, WRAM_LONG(HM_SEASON), 1) &&
+        byte_below(ram, r, WRAM_LONG(HM_DAY), 0x14) && six_sharp(ram, r)) {
+      flag_on(ram, r, WRAM_LONG(HM_FLAGS_70), 0x0001);
       spawn(ram, r, 0x0B, 0x24, 1, 0xCFF3);
       return;
     }
   }
-  if (flag(ram, r, FLAGS_66, 0x0040)) {
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0040)) {
     spawn(ram, r, 9, 0, 0x2C, 0xD00E);
     stop_player(ram, r, 0x47);
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_66) & 0xFFBF);
-    hm_bus_wr16(ram, FLAGS_66, r->a);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) & 0xFFBF);
+    hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_66), r->a);
     return;
   }
-  if (flag(ram, r, FLAGS_66, 0x0080) && byte_of(ram, r, BUILD_NIGHTS)) { spawn(ram, r, 0, 0, 0x2E, 0xD05B); return; }
-  if (flag(ram, r, FLAGS_66, 0x0100)) {
-    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_66) & 0xFEFF);
-    hm_bus_wr16(ram, FLAGS_66, r->a);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0080) && byte_of(ram, r, WRAM_LONG(HM_BUILD_NIGHTS))) { spawn(ram, r, 0, 0, 0x2E, 0xD05B); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), 0x0100)) {
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_66)) & 0xFEFF);
+    hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_66), r->a);
     spawn(ram, r, 9, 0, 0x36, 0xD081);
     spawn(ram, r, 0x0A, 0, 0x37, 0xD090);
     stop_player(ram, r, 0x48);
     return;
   }
-  if (!flag(ram, r, FLAGS_64, 0x0100) && byte_is(ram, r, HORSE_AGE, 0x15)) {
-    flag_on(ram, r, FLAGS_64, 0x0100);
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0100) && byte_is(ram, r, WRAM_LONG(HM_HORSE_AGE), 0x15)) {
+    flag_on(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0100);
     spawn(ram, r, 0x0B, 0, 0x1D, 0xD0DD);
     stop_player(ram, r, 0x49);
     return;
   }
-  if (byte_of(ram, r, YEAR) && six_sharp(ram, r) && !flag(ram, r, db(r, FLAGS_0196), 0x001A) &&
-      money_at_least(ram, r, 0xF448) && !flag(ram, r, FLAGS_68, 0x0400)) {
+  if (byte_of(ram, r, WRAM_LONG(HM_YEAR)) && six_sharp(ram, r) && !flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x001A) &&
+      money_at_least(ram, r, 0xF448) && !flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0400)) {
     spawn(ram, r, 0, 0x13, 0, 0xD151);
     seen(ram, r, 0x0400);
     return;
   }
-  if ((byte_of(ram, r, YEAR) || byte_is(ram, r, SEASON, 3)) && six_sharp(ram, r) &&
-      byte_is(ram, r, WEEKDAY, 6) && !flag(ram, r, db(r, FLAGS_0196), 0x001A) &&
-      flag(ram, r, FLAGS_64, 0x00C0) && !flag(ram, r, FLAGS_68, 0x4000)) {
+  if ((byte_of(ram, r, WRAM_LONG(HM_YEAR)) || byte_is(ram, r, WRAM_LONG(HM_SEASON), 3)) && six_sharp(ram, r) &&
+      byte_is(ram, r, WRAM_LONG(HM_WEEKDAY), 6) && !flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x001A) &&
+      flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x00C0) && !flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x4000)) {
     seen(ram, r, 0x4000);
     spawn(ram, r, 0, 0x16, 0, 0xD1C9);
     return;
   }
-  if (byte_is(ram, r, SEASON, 2) && visitor_day(ram, r) && !flag(ram, r, db(r, FLAGS_0196), 0x001A) &&
-      flag(ram, r, FLAGS_64, 0x00C0) && flag(ram, r, FLAGS_68, 0x2000) && !flag(ram, r, FLAGS_6A, 0x0100)) {
-    flag_on(ram, r, FLAGS_6A, 0x0080);
+  if (byte_is(ram, r, WRAM_LONG(HM_SEASON), 2) && visitor_day(ram, r) && !flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x001A) &&
+      flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x00C0) && flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x2000) && !flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0100)) {
+    flag_on(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0080);
     spawn(ram, r, 0, 0x18, 0, 0xD239);
     return;
   }
-  if (!flag(ram, r, FLAGS_6A, 0x0800)) {
-    if (flag(ram, r, FLAGS_6A, 0x0400)) { spawn(ram, r, 0, 0x29, 0, 0xD299); return; }
-    if (!flag(ram, r, db(r, FLAGS_0196), 0x001E) && flag(ram, r, FLAGS_6E, 0x0400) &&
-        !byte_below(ram, r, CHICKENS, 6) && six_sharp(ram, r)) {
-      flag_on(ram, r, FLAGS_6A, 0x0400);
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0800)) {
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0400)) { spawn(ram, r, 0, 0x29, 0, 0xD299); return; }
+    if (!flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x001E) && flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0400) &&
+        !byte_below(ram, r, WRAM_LONG(HM_CHICKEN_N), 6) && six_sharp(ram, r)) {
+      flag_on(ram, r, WRAM_LONG(HM_FLAGS_6A), 0x0400);
       spawn(ram, r, 0, 0x29, 0, 0xD299);
       return;
     }
   }
-  if (flag(ram, r, db(r, FLAGS_0196), 0x001A) || !six_sharp(ram, r)) return;
+  if (flag(ram, r, db(r, HM_WEATHER_FLAGS), 0x001A) || !six_sharp(ram, r)) return;
   r->a = (uint16_t)((r->a & 0xFF00) | 8);
   hm_jsl(ram, r, 0xD2C3, 0x80);
   hm_RNGReturn0toA(ram, r);
@@ -1204,37 +1133,37 @@ static void house_tiles(uint8_t *ram, HmRegs *r)
 /* cow $0937's name: bytes $0C-$0F of its record to $0889-$088F */
 static void cow_scene(uint8_t *ram, HmRegs *r)
 {
-  r->a = hm_bus_rd8(ram, db(r, DEAD_COW));                   /* LDA #0; XBA; LDA */
+  r->a = hm_bus_rd8(ram, db(r, HM_DEAD_COW));                /* LDA #0; XBA; LDA */
   hm_jsl(ram, r, 0xE100, 0x83);
   hm_GetCowPointer(ram, r);
   hm_rtl(ram, r);
   for (uint16_t i = 0; i < 4; i++) {
     r->y = (uint16_t)(COW_NAME + i);
-    r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, COW_POINTER, r->y));  /* LDA #0; XBA; LDA [$72],Y */
-    if (i < 3) hm_bus_wr16(ram, db(r, (uint16_t)(TEXT_NAME + 2 * i)), r->a);
-    else hm_bus_wr8(ram, db(r, TEXT_NAME + 6), (uint8_t)r->a);
+    r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_ANIMAL_PTR, r->y)); /* LDA #0; XBA; LDA [$72],Y */
+    if (i < 3) hm_bus_wr16(ram, db(r, (uint16_t)(HM_TEXT_NAME + 2 * i)), r->a);
+    else hm_bus_wr8(ram, db(r, HM_TEXT_NAME + 6), (uint8_t)r->a);
   }
   spawn(ram, r, 0, 0x20, 0, 0xE13F);
 }
 /* the wife's scene; returns when it goes on to the children */
 static void wife(uint8_t *ram, HmRegs *r)
 {
-  static const uint32_t hearts[5] = { HEARTS, HEARTS + 2, HEARTS + 4, HEARTS + 6, HEARTS + 8 };
+  static const uint32_t hearts[5] = { WRAM_LONG(HM_HEARTS_BASE), WRAM_LONG(HM_HEARTS_BASE) + 2, WRAM_LONG(HM_HEARTS_BASE) + 4, WRAM_LONG(HM_HEARTS_BASE) + 6, WRAM_LONG(HM_HEARTS_BASE) + 8 };
   int girl = -1;
   for (int i = 0; i < 5 && girl < 0; i++)
-    if (flag(ram, r, FLAGS_66, (uint16_t)(1 << i))) girl = i;
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), (uint16_t)(1 << i))) girl = i;
   if (girl < 0) return;
   if (!word_at_least(ram, r, hearts[girl], 0x00C8) && six_sharp(ram, r) &&
-      !flag(ram, r, FLAGS_6E, 0x000C) && !flag(ram, r, FLAGS_6E, 0x0001)) {
+      !flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x000C) && !flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0001)) {
     spawn(ram, r, 0, 0x22, 0, 0xE1F1);
-    flag_on(ram, r, FLAGS_6E, 0x0003);
-    flag_on(ram, r, FLAGS_5E, 0x1000);
+    flag_on(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0003);
+    flag_on(ram, r, WRAM_LONG(HM_FLAGS_5E), 0x1000);
     return;
   }
-  flag_off(ram, r, FLAGS_5E, 0x1000);
-  if (flag(ram, r, FLAGS_6E, 0x0002)) { flag_on(ram, r, FLAGS_5E, 0x1000); return; }
+  flag_off(ram, r, WRAM_LONG(HM_FLAGS_5E), 0x1000);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0002)) { flag_on(ram, r, WRAM_LONG(HM_FLAGS_5E), 0x1000); return; }
   for (uint16_t i = 0; i < 5; i++)
-    if (flag(ram, r, FLAGS_66, (uint16_t)(1 << i))) {
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_66), (uint16_t)(1 << i))) {
       spawn(ram, r, 0x13, 0x43, i, (uint16_t)(0xE27C + 0x11 * i));
       return;
     }
@@ -1242,24 +1171,24 @@ static void wife(uint8_t *ram, HmRegs *r)
 /* SEP #$20; year, season, day; 6:00:00 */
 static bool morning_of(uint8_t *ram, HmRegs *r, uint8_t year, uint8_t season, uint8_t day)
 {
-  return byte_is(ram, r, YEAR, year) && byte_is(ram, r, SEASON, season) && byte_is(ram, r, DAY, day) &&
+  return byte_is(ram, r, WRAM_LONG(HM_YEAR), year) && byte_is(ram, r, WRAM_LONG(HM_SEASON), season) && byte_is(ram, r, WRAM_LONG(HM_DAY), day) &&
          six_sharp(ram, r);
 }
 
 void hm_MapEvent_PlayerHouse(uint8_t *ram, HmRegs *r)
 {
-  if (byte_is(ram, r, YEAR, 2) && byte_is(ram, r, SEASON, 1) && byte_is(ram, r, DAY, 0x1E) && !g_hm_no_ending) {
+  if (byte_is(ram, r, WRAM_LONG(HM_YEAR), 2) && byte_is(ram, r, WRAM_LONG(HM_SEASON), 1) && byte_is(ram, r, WRAM_LONG(HM_DAY), 0x1E) && !g_hm_no_ending) {
     hm_StartEnding(ram, r);                                  /* JMP */
     return;
   }
-  if (flag(ram, r, FLAGS_64, 0x0080)) {
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0080)) {
     r->a = (uint16_t)((r->a & 0xFF00) | 0x17);
-    hm_bus_wr8(ram, db(r, TRANSITION_MAP), 0x17);
-  } else if (flag(ram, r, FLAGS_64, 0x0040)) {
+    hm_bus_wr8(ram, db(r, HM_TRANSITION_MAP), 0x17);
+  } else if (flag(ram, r, WRAM_LONG(HM_FLAGS_64), 0x0040)) {
     r->a = (uint16_t)((r->a & 0xFF00) | 0x16);
-    hm_bus_wr8(ram, db(r, TRANSITION_MAP), 0x16);
+    hm_bus_wr8(ram, db(r, HM_TRANSITION_MAP), 0x16);
   }
-  if (flag(ram, r, FLAGS_6C, 0x2000) && !flag(ram, r, FLAGS_6C, 0x4000)) {
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6C), 0x2000) && !flag(ram, r, WRAM_LONG(HM_FLAGS_6C), 0x4000)) {
     hm_bus_wr16(ram, db(r, HM_TILE_IN_FRONT_X), 0x009C);
     hm_bus_wr16(ram, db(r, HM_TILE_IN_FRONT_Y), 0x0090);
     r->a = 0x0010; r->x = 0; r->y = 0x001F;
@@ -1267,51 +1196,51 @@ void hm_MapEvent_PlayerHouse(uint8_t *ram, HmRegs *r)
     hm_StartScriptAtTileInFront(ram, r);
     hm_rtl(ram, r);
   }
-  if (flag(ram, r, FLAGS_6E, 0x0080)) {
-    flag_off(ram, r, FLAGS_6E, 0x0080);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0080)) {
+    flag_off(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0080);
     song(ram, r, 0x19, 0xDF64);
     house_tiles(ram, r);
   }
-  if (flag(ram, r, FLAGS_6E, 0x0100)) {
-    flag_off(ram, r, FLAGS_6E, 0x0100);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0100)) {
+    flag_off(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0100);
     song(ram, r, 0x15, 0xE012);
   }
-  if (flag(ram, r, FLAGS_6E, 0x0200)) {
-    flag_off(ram, r, FLAGS_6E, 0x0200);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0200)) {
+    flag_off(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0200);
     noise(ram, r, 0x22, 0x0014, 0xE038);
     noise(ram, r, 0x22, 0x001E, 0xE048);
   }
-  if (flag(ram, r, FLAGS_6E, 0x0020)) {
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0020)) {
     noise(ram, r, 0x20, 0x003C, 0xE063);
-    flag_off(ram, r, FLAGS_6E, 0x0020);
+    flag_off(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0020);
   }
-  if (flag(ram, r, FLAGS_6E, 0x0010)) {
-    if (flag(ram, r, FLAGS_5E, 0x4000)) { spawn(ram, r, 0, 0x1F, 2, 0xE0D6); return; }
-    if (!flag(ram, r, FLAGS_5E, 0x2000)) { spawn(ram, r, 0, 0x1F, 0, 0xE09C); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0010)) {
+    if (flag(ram, r, WRAM_LONG(HM_FLAGS_5E), 0x4000)) { spawn(ram, r, 0, 0x1F, 2, 0xE0D6); return; }
+    if (!flag(ram, r, WRAM_LONG(HM_FLAGS_5E), 0x2000)) { spawn(ram, r, 0, 0x1F, 0, 0xE09C); return; }
     spawn(ram, r, 0, 0x1F, 1, 0xE0AC);
-    r->a = hm_bus_rd16(ram, KID1_AGE);
+    r->a = hm_bus_rd16(ram, WRAM_LONG(HM_KID1_AGE));
     r->c = r->a >= 0x003C;
     uint8_t v = r->a == 0x003C ? 5 : 6;
     r->a = (uint16_t)((r->a & 0xFF00) | v);
-    hm_bus_wr8(ram, db(r, NAME_FOR), v);
+    hm_bus_wr8(ram, db(r, HM_NAME_FOR), v);
     return;
   }
-  if (flag(ram, r, FLAGS_6E, 0x0040)) {
-    flag_off(ram, r, FLAGS_6E, 0x0040);
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0040)) {
+    flag_off(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0040);
     cow_scene(ram, r);
     return;
   }
   wife(ram, r);
-  if (flag(ram, r, FLAGS_6E, 0x0004) && word_at_least(ram, r, KID1_AGE, 0x003C))
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0004) && word_at_least(ram, r, WRAM_LONG(HM_KID1_AGE), 0x003C))
     spawn(ram, r, 0x14, 0x45, 0, 0xE2E5);
-  if (flag(ram, r, FLAGS_6E, 0x0008) && word_at_least(ram, r, KID2_AGE, 0x003C))
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_6E), 0x0008) && word_at_least(ram, r, WRAM_LONG(HM_KID2_AGE), 0x003C))
     spawn(ram, r, 0x15, 0x45, 3, 0xE308);
-  if (flag(ram, r, FLAGS_60, 0x0020)) { spawn(ram, r, 0, 0x0A, 3, 0xE33B); return; }
-  if (!flag(ram, r, FLAGS_68, 0x0001)) { spawn(ram, r, 0, 0x0A, 0, 0xE32B); return; }
+  if (flag(ram, r, WRAM_LONG(HM_FLAGS_60), 0x0020)) { spawn(ram, r, 0, 0x0A, 3, 0xE33B); return; }
+  if (!flag(ram, r, WRAM_LONG(HM_FLAGS_68), 0x0001)) { spawn(ram, r, 0, 0x0A, 0, 0xE32B); return; }
   if (morning_of(ram, r, 1, 1, 0x01)) { spawn(ram, r, 0, 0x0A, 4, 0xE37B); return; }
   if (morning_of(ram, r, 2, 1, 0x1D)) { spawn(ram, r, 0, 0x0A, 5, 0xE3BB); return; }
-  if (!byte_of(ram, r, SEASON) && byte_is(ram, r, DAY, 0x01)) { spawn(ram, r, 0, 0x28, 0, 0xE3DD); return; }
-  if (byte_is(ram, r, SEASON, 3) && byte_is(ram, r, DAY, 0x18)) spawn(ram, r, 0, 0x0F, 0, 0xE401);
+  if (!byte_of(ram, r, WRAM_LONG(HM_SEASON)) && byte_is(ram, r, WRAM_LONG(HM_DAY), 0x01)) { spawn(ram, r, 0, 0x28, 0, 0xE3DD); return; }
+  if (byte_is(ram, r, WRAM_LONG(HM_SEASON), 3) && byte_is(ram, r, WRAM_LONG(HM_DAY), 0x18)) spawn(ram, r, 0, 0x0F, 0, 0xE401);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

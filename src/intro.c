@@ -35,12 +35,10 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_GAME_STATE ($D2),
- * HM_PLAYER_ACTION ($D4), HM_ANIM_REQUEST ($0901), HM_INPUT_STATE ($019A),
- * HM_TITLE_CURSOR ($098D: the menu's choice) and HM_CAM_X / HM_CAM_Y
- * ($013C / $013E, BG1's scroll). */
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* Direct page */
 #define NMI_STATUS        0x00   /* 8b: set by the NMI (UpdateGraphics), cleared each frame */
@@ -51,46 +49,16 @@
 #define CYCLE_TABLE       0x72   /* 24b: cycle(): StartColourAnimation's table (the same
                                     bytes as DMA_SOURCE) */
 #define CYCLE_TABLE_BANK  0x74   /* 8b: its bank */
-#define DEMO              0x90   /* 16b: the menu's frames, to the demo (menus.c:
-                                    MENU_FRAMES) */
-#define FADE_FROM         0x92   /* 8b: the fades' arguments: the starting brightness, */
-#define FADE_FRAMES       0x93   /* 8b: frames per brightness level, */
-#define FADE_TO           0x94   /* 8b: the brightness they end at (the same byte as COUNT) */
 #define COUNT             0x94   /* 8b: the stage's frames; the file screens: their answer
                                     (1 back to the title, 2 start the game) */
-#define STAGE             0x95   /* 8b: the intro's stage */
 #define DRIFT_TIMER       0x96   /* 8b: the background drifts every other frame; the title's
                                     second of pause */
-#define MENU_REDRAW       0x97   /* 8b: 1 = the choice changed, draw the marks again */
 #define OAM_USED          0xAF   /* 16b: PrepareOAMData's bytes of the sprite table filled
                                     (objects.c; $AF has other uses there) */
-#define LOAD_BUDGET       0xC7   /* 16b: bytes the sprite piece loader may still send this
-                                    frame (objects.c) */
-#define HM_PLAYER_X       0xD6   /* 16b: the player's position, pixels */
-#define HM_PLAYER_Y       0xD8   /* 16b */
-#define HM_PLAYER_DIRECTION 0xDA /* 16b: the way the player faces (0 down) */
 
 /* WRAM of the data bank */
-#define WANTED_SONG       0x0110 /* 8b: the song asked for (audio.c sends the change) */
-#define PLAYING_SONG      0x0117 /* 8b: the song playing */
-#define BG2_X             0x0140 /* 16b: BG2's scroll, across */
-#define BG2_Y             0x0142 /* 16b: up-down */
 #define BG3_X             0x0144 /* 16b: BG3's scroll, across */
-#define BG3_Y             0x0146 /* 16b: up-down (the text box's layer) */
-#define TRANSITION_X      0x017D /* 16b: where the player appears after a transition */
-#define TRANSITION_Y      0x017F /* 16b */
-#define WEATHER_FLAGS     0x0196 /* 16b: weather and day flags */
-#define PLAYER_TURN       0x0911 /* 16b: the direction being tried (playerinput.c) */
-#define TRANSITION_MAP    0x098B /* 8b: the map a transition goes to */
 #define SAVE_SLOT         0x098E /* 8b: the diary slot chosen (0 or 1) */
-#define NAME_FOR          0x099F /* 8b: whose name the names screen writes (0 the player;
-                                    names.c) */
-
-/* WRAM $7F:1Fxx (bus addresses) */
-#define DEMO_STEP         0x7F1F48 /* 8b: the next demo of DemoPresentation (0-$0B) */
-#define INTRO_STEP        0x7F1F49 /* 8b: the days of the introduction (mapevents.c) */
-#define FLAGS_5C          0x7F1F5C /* 16b flags: bit 2 = the event script is over */
-#define FLAGS_60          0x7F1F60 /* 16b flags: bit 11 = the saved games failed their check */
 
 /* ROM: colours ($A9:xxxx, 512 bytes each) and colour cycles ($82:xxxx) */
 #define TITLE_COLOURS     0xD800 /* $A9:D800: the title's pictures */
@@ -109,7 +77,6 @@ static void wr16(uint8_t *ram, const HmRegs *r, uint16_t a, uint16_t v) { hm_bus
 static void set_a8(HmRegs *r, uint8_t v) { r->a = (uint16_t)((r->a & 0xFF00) | v); }
 static uint8_t dp8(uint8_t *ram, HmRegs *r, unsigned a) { return *hm_dp(ram, r, a); }
 static void set_dp8(uint8_t *ram, HmRegs *r, unsigned a, uint8_t v) { *hm_dp(ram, r, a) = v; }
-
 
 /* JSL at `at` to a routine of `bank`. Those that wait frames save the
  * flags (PHP): r->p carries the carry, 8-bit A, the index width `x8`, D
@@ -135,9 +102,9 @@ static void jsr(uint8_t *ram, HmRegs *r, uint16_t ret, Fn *fn)
 /* the fades: $92 from, $93 frames a level, $94 to */
 static void fade(uint8_t *ram, HmRegs *r, uint8_t from, uint8_t frames, uint8_t to, uint16_t at, Fn *fn)
 {
-  set_a8(r, from); set_dp8(ram, r, FADE_FROM, from);       /* SEP #$20 */
-  set_a8(r, frames); set_dp8(ram, r, FADE_FRAMES, frames);
-  set_a8(r, to); set_dp8(ram, r, FADE_TO, to);
+  set_a8(r, from); set_dp8(ram, r, HM_FADE_FROM, from);    /* SEP #$20 */
+  set_a8(r, frames); set_dp8(ram, r, HM_FADE_FRAMES, frames);
+  set_a8(r, to); set_dp8(ram, r, HM_FADE_TO, to);
   jsl(ram, r, at, 0x80, fn);
 }
 static void fade_out(uint8_t *ram, HmRegs *r, uint8_t frames, uint16_t at) { fade(ram, r, 0x0F, frames, 0x01, at, hm_ScreenFadeOut); }
@@ -167,9 +134,9 @@ static void new_music(uint8_t *ram, HmRegs *r, uint16_t at)
   jsl(ram, r, at, 0x83, hm_FadeOutSong);
   jsl(ram, r, (uint16_t)(at + 4), 0x83, hm_SetSong);
   jsl(ram, r, (uint16_t)(at + 8), 0x83, hm_StartSong);
-  uint8_t song = rd8(ram, r, WANTED_SONG);                 /* SEP #$20 */
+  uint8_t song = rd8(ram, r, HM_WANTED_SONG);              /* SEP #$20 */
   set_a8(r, song);
-  wr8(ram, r, PLAYING_SONG, song);
+  wr8(ram, r, HM_PLAYING_SONG, song);
 }
 /* the screen lit, one frame */
 static void lit(uint8_t *ram, HmRegs *r, uint16_t at)
@@ -194,16 +161,16 @@ static void zero_words(uint8_t *ram, HmRegs *r, const uint16_t *a, unsigned n)
 {
   for (unsigned i = 0; i < n; i++) wr16(ram, r, a[i], 0);
 }
-static const uint16_t SCROLLS[4] = { HM_CAM_X, HM_CAM_Y, BG2_X, BG2_Y };
-static const uint16_t ALL_SCROLLS[6] = { HM_CAM_X, HM_CAM_Y, BG2_X, BG2_Y, BG3_X, BG3_Y };
+static const uint16_t SCROLLS[4] = { HM_CAM_X, HM_CAM_Y, HM_BG2_X, HM_BG2_Y };
+static const uint16_t ALL_SCROLLS[6] = { HM_CAM_X, HM_CAM_Y, HM_BG2_X, HM_BG2_Y, BG3_X, HM_BG3_Y };
 /* $D6, $D8 (the player), $017D, $017F (where to), $0196 */
 static void no_place(uint8_t *ram, HmRegs *r)
 {
   hm_dp_w16(ram, r, HM_PLAYER_X, 0);
   hm_dp_w16(ram, r, HM_PLAYER_Y, 0);
-  wr16(ram, r, TRANSITION_X, 0);
-  wr16(ram, r, TRANSITION_Y, 0);
-  wr16(ram, r, WEATHER_FLAGS, 0);
+  wr16(ram, r, HM_TRANSITION_X, 0);
+  wr16(ram, r, HM_TRANSITION_Y, 0);
+  wr16(ram, r, HM_WEATHER_FLAGS, 0);
 }
 /* a colour cycle (StartColourAnimation) from $82:`table`: A = which, X / Y
  * the cycle's numbers, with 8-bit indexes */
@@ -253,8 +220,8 @@ static void drift(uint8_t *ram, HmRegs *r)
   r->c = d >= 1;
   if (d == 1) {
     set_dp8(ram, r, DRIFT_TIMER, 0);
-    wr16(ram, r, BG2_X, (uint16_t)(rd16(ram, r, BG2_X) + 1));     /* REP #$20; INC; DEC */
-    wr16(ram, r, BG2_Y, (uint16_t)(rd16(ram, r, BG2_Y) - 1));
+    wr16(ram, r, HM_BG2_X, (uint16_t)(rd16(ram, r, HM_BG2_X) + 1)); /* REP #$20; INC; DEC */
+    wr16(ram, r, HM_BG2_Y, (uint16_t)(rd16(ram, r, HM_BG2_Y) - 1));
   } else {
     set_dp8(ram, r, DRIFT_TIMER, (uint8_t)(d + 1));
   }
@@ -262,8 +229,8 @@ static void drift(uint8_t *ram, HmRegs *r)
 /* LDA $0140; INC; STA (REP #$20) */
 static void bg2_right(uint8_t *ram, HmRegs *r)
 {
-  r->a = (uint16_t)(rd16(ram, r, BG2_X) + 1);
-  wr16(ram, r, BG2_X, r->a);
+  r->a = (uint16_t)(rd16(ram, r, HM_BG2_X) + 1);
+  wr16(ram, r, HM_BG2_X, r->a);
 }
 /* SEP #$20; INC $94 */
 static void count_up(uint8_t *ram, HmRegs *r) { set_dp8(ram, r, COUNT, (uint8_t)(dp8(ram, r, COUNT) + 1)); }
@@ -271,7 +238,7 @@ static void count_up(uint8_t *ram, HmRegs *r) { set_dp8(ram, r, COUNT, (uint8_t)
 static void next_stage(uint8_t *ram, HmRegs *r, uint8_t s)
 {
   set_a8(r, s);
-  set_dp8(ram, r, STAGE, s);
+  set_dp8(ram, r, HM_INTRO_STAGE, s);
   set_dp8(ram, r, COUNT, 0);
 }
 /* the NMI's wait loop (LDA $00 at `at`; the NMI comes back to it) */
@@ -291,7 +258,7 @@ static void wait_nmi(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t entry)
 static void democheck(uint8_t *ram, HmRegs *r)
 {
   set_dp8(ram, r, NMI_STATUS, 0);                          /* SEP #$20; STZ $00 */
-  r->a = hm_dp_r16(ram, r, DEMO);                          /* REP #$20; CMP #600 */
+  r->a = hm_dp_r16(ram, r, HM_MENU_FRAMES);                /* REP #$20; CMP #600 */
   r->c = r->a >= 0x0258;
   g_hm_next = r->a == 0x0258 ? 0x82D3C7 : 0x82D80D;        /* BNE; JMP DemoPresentation / BRA */
 }
@@ -318,9 +285,9 @@ static bool parents_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
 {
   wait_nmi(ram, r, 0xD941, entry);
   r->a = 0x1800;                                           /* REP #$20 */
-  hm_dp_w16(ram, r, LOAD_BUDGET, 0x1800);
+  hm_dp_w16(ram, r, HM_LOAD_BUDGET, 0x1800);
   hm_game_frame(ram, r, 0xD94C);
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5C) & 0x0004);  /* REP #$20 */
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) & 0x0004); /* REP #$20 */
   if (!r->a) { set_dp8(ram, r, NMI_STATUS, 0); g_hm_next = 0x82D93F; return false; }   /* SEP #$20; STZ $00; JMP $D93F */
   return true;
 }
@@ -329,7 +296,7 @@ static bool parents_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
  * BG2 at ($100, $100), its music, faded in: stage 2 */
 static void parents_end(uint8_t *ram, HmRegs *r)
 {
-  uint8_t s = dp8(ram, r, STAGE);                          /* SEP #$20; CMP #9 */
+  uint8_t s = dp8(ram, r, HM_INTRO_STAGE);                 /* SEP #$20; CMP #9 */
   set_a8(r, s);
   r->c = s >= 9;
   if (s == 9) { democheck(ram, r); return; }               /* JMP $D871 */
@@ -344,7 +311,7 @@ static void parents_end(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0xDA07, 0x80, hm_LoadFirstHalfPaletteToWRAM);
   colours(ram, r, TITLE_COLOURS, 0xDA2A);
   r->a = 0x0100;                                           /* REP #$20 */
-  static const uint16_t AT[4] = { HM_CAM_X, BG2_X, HM_CAM_Y, BG2_Y };
+  static const uint16_t AT[4] = { HM_CAM_X, HM_BG2_X, HM_CAM_Y, HM_BG2_Y };
   for (int i = 0; i < 4; i++) wr16(ram, r, AT[i], 0x0100);
   jsl(ram, r, 0xDA4C, 0x80, hm_PickMapMusic);
   new_music(ram, r, 0xDA50);
@@ -365,17 +332,17 @@ static void parents(uint8_t *ram, HmRegs *r, uint8_t entry)
   r->a = 0;
   hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
   hm_dp_w16(ram, r, HM_PLAYER_DIRECTION, 0);
-  wr16(ram, r, PLAYER_TURN, 0);
+  wr16(ram, r, HM_PLAYER_TURN, 0);
   wr16(ram, r, HM_ANIM_REQUEST, 0);
   r->a = 0x0100;                                           /* REP #$20 */
-  wr16(ram, r, BG3_Y, 0x0100);
+  wr16(ram, r, HM_BG3_Y, 0x0100);
   r->a = 0; r->x = 0x0009; r->y = 0;                       /* REP #$30 */
   jsl(ram, r, 0xD90A, 0x84, hm_StartEventScriptLong);
   jsl(ram, r, 0xD90E, 0x84, hm_RunEventSlots);
-  map_is(ram, r, rd8(ram, r, TRANSITION_MAP));             /* SEP #$20 */
+  map_is(ram, r, rd8(ram, r, HM_TRANSITION_MAP));          /* SEP #$20 */
   jsl(ram, r, 0xD919, 0x80, hm_PickMapMusic);
   new_music(ram, r, 0xD91D);
-  set_a8(r, rd8(ram, r, TRANSITION_MAP));                  /* SEP #$20 */
+  set_a8(r, rd8(ram, r, HM_TRANSITION_MAP));               /* SEP #$20 */
   jsl(ram, r, 0xD936, 0x80, hm_LoadAndShowMap);
   r->y = 0;                                                /* REP #$30 */
   if (parents_frame(ram, r, entry)) parents_end(ram, r);
@@ -407,8 +374,8 @@ static void title_in(uint8_t *ram, HmRegs *r)
  * screen's background (map $5C, its music), faded in, and stage 4 */
 static void title_screen(uint8_t *ram, HmRegs *r)
 {
-  static const uint16_t W[4] = { HM_CAM_X, HM_CAM_Y, BG2_X, BG2_Y };
-  hm_dp_w16(ram, r, DEMO, 0);                              /* REP #$20 */
+  static const uint16_t W[4] = { HM_CAM_X, HM_CAM_Y, HM_BG2_X, HM_BG2_Y };
+  hm_dp_w16(ram, r, HM_MENU_FRAMES, 0);                    /* REP #$20 */
   zero_words(ram, r, W, 4);
   no_place(ram, r);
   jsl(ram, r, 0xDBCF, 0x80, hm_BackgroundsManager);
@@ -443,8 +410,8 @@ static void title_up(uint8_t *ram, HmRegs *r)
     if (!r->a) { stage6(ram, r); return; }                 /* JMP $DB8E */
     r->a = (uint16_t)(r->a - 1);
     wr16(ram, r, HM_CAM_Y, r->a);
-    r->a = (uint16_t)(rd16(ram, r, BG2_Y) - 1);
-    wr16(ram, r, BG2_Y, r->a);
+    r->a = (uint16_t)(rd16(ram, r, HM_BG2_Y) - 1);
+    wr16(ram, r, HM_BG2_Y, r->a);
   }
   count_up(ram, r);
   democheck(ram, r);
@@ -491,15 +458,15 @@ static void menu(uint8_t *ram, HmRegs *r)
   set_a8(r, c);
   if (!c) bg2_right(ram, r);                               /* REP #$20 */
   count_up(ram, r);
-  uint8_t changed = dp8(ram, r, MENU_REDRAW);              /* LDA $97 */
+  uint8_t changed = dp8(ram, r, HM_MENU_REDRAW);           /* LDA $97 */
   set_a8(r, changed);
   if (changed) {
-    set_dp8(ram, r, MENU_REDRAW, 0);
+    set_dp8(ram, r, HM_MENU_REDRAW, 0);
     static const uint16_t AT[3] = { 0xDDD5, 0xDE2A, 0xDE7F };
     uint8_t choice = choice_of(ram, r);
     menu_marks(ram, r, choice, AT[choice]);
   }
-  hm_dp_w16(ram, r, DEMO, (uint16_t)(hm_dp_r16(ram, r, DEMO) + 1));   /* REP #$30; INC $90 */
+  hm_dp_w16(ram, r, HM_MENU_FRAMES, (uint16_t)(hm_dp_r16(ram, r, HM_MENU_FRAMES) + 1)); /* REP #$30; INC $90 */
   democheck(ram, r);
 }
 
@@ -524,7 +491,7 @@ static void back_to_title(uint8_t *ram, HmRegs *r)
   lit(ram, r, 0xDF68);
   fade_in(ram, r, 0x01, 1, 0xDF7E);
   next_stage(ram, r, 4);
-  hm_dp_w16(ram, r, DEMO, 0);                              /* REP #$20 */
+  hm_dp_w16(ram, r, HM_MENU_FRAMES, 0);                    /* REP #$20 */
   democheck(ram, r);
 }
 
@@ -562,7 +529,7 @@ static void file_screen_lit(uint8_t *ram, HmRegs *r, uint16_t music)
   fade_in(ram, r, 0x03, 3, (uint16_t)(music + 0x2A));
   set_dp8(ram, r, COUNT, 0);                               /* SEP #$20 */
   set_dp8(ram, r, DRIFT_TIMER, 0);
-  set_dp8(ram, r, MENU_REDRAW, 0);
+  set_dp8(ram, r, HM_MENU_REDRAW, 0);
 }
 /* a file screen's frame's end: the drift; $94 = 1 back to the title, 2
  * the game (the check stops at the JML), else round again (stops) */
@@ -593,13 +560,13 @@ static void new_file_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
 {
   wait_nmi(ram, r, 0xE0ED, entry);
   r->a = 0x1800;                                           /* REP #$20 */
-  hm_dp_w16(ram, r, LOAD_BUDGET, 0x1800);
+  hm_dp_w16(ram, r, HM_LOAD_BUDGET, 0x1800);
   jsl(ram, r, 0xE0F8, 0x80, hm_RunColourAnimations);
   jsl(ram, r, 0xE0FC, 0x84, hm_InputTypeSelector);
-  uint8_t changed = dp8(ram, r, MENU_REDRAW);              /* SEP #$20 */
+  uint8_t changed = dp8(ram, r, HM_MENU_REDRAW);           /* SEP #$20 */
   set_a8(r, changed);
   if (changed) {
-    set_dp8(ram, r, MENU_REDRAW, 0);
+    set_dp8(ram, r, HM_MENU_REDRAW, 0);
     uint8_t slot = rd8(ram, r, SAVE_SLOT);
     set_a8(r, slot);
     if (!slot) { slot_resume(ram, r, 0, 0xE11A); file_marks(ram, r, false, 0xE148, 0xE163); }
@@ -628,7 +595,7 @@ static void intro_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
   wait_nmi(ram, r, 0xD80F, entry);
   jsl(ram, r, 0xD813, 0x80, hm_RunColourAnimations);
   jsl(ram, r, 0xD817, 0x84, hm_InputTypeSelector);
-  uint8_t s = dp8(ram, r, STAGE);                          /* SEP #$20; LDA $95 */
+  uint8_t s = dp8(ram, r, HM_INTRO_STAGE);                 /* SEP #$20; LDA $95 */
   set_a8(r, s);
   if (!s) { logo(ram, r); return; }
   for (uint8_t k = 1; k <= 0x0A; k++) {                    /* CMP #k; BNE */
@@ -665,11 +632,11 @@ void hm_IntroScreen(uint8_t *ram, HmRegs *r)
   set_a8(r, 0x04);                                         /* REP #$30; SEP #$20 */
   wr8(ram, r, HM_INPUT_STATE, 0x04);
   wr8(ram, r, HM_TITLE_CURSOR, 0);
-  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_60) & 0x0800);  /* REP #$20 */
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0x0800); /* REP #$20 */
   if (r->a) { set_a8(r, 0x02); wr8(ram, r, HM_TITLE_CURSOR, 0x02); }
   set_a8(r, 0x00);                                         /* SEP #$20 */
-  hm_bus_wr8(ram, DEMO_STEP, 0);
-  hm_bus_wr8(ram, INTRO_STEP, 0);
+  hm_bus_wr8(ram, WRAM_LONG(HM_DEMO_STEP), 0);
+  hm_bus_wr8(ram, WRAM_LONG(HM_INTRO_STEP), 0);
   jsl(ram, r, 0xD78A, 0x82, hm_LoadDefaultFarmMap);
   set_a8(r, 0x03);                                         /* SEP #$20 */
   jsl(ram, r, 0xD792, 0x80, hm_ManageGraphicPresets);
@@ -683,8 +650,8 @@ void hm_IntroScreen(uint8_t *ram, HmRegs *r)
   zero_words(ram, r, SCROLLS, 4);                          /* REP #$20 */
   lit(ram, r, 0xD7E6);
   fade_in(ram, r, 0x03, 3, 0xD7FC);
-  set_dp8(ram, r, MENU_REDRAW, 0);                         /* SEP #$20 */
-  hm_dp_w16(ram, r, DEMO, 0);                              /* REP #$20 */
+  set_dp8(ram, r, HM_MENU_REDRAW, 0);                      /* SEP #$20 */
+  hm_dp_w16(ram, r, HM_MENU_FRAMES, 0);                    /* REP #$20 */
   r->a = 0x0001;
   hm_dp_w16(ram, r, OAM_USED, 0x0001);
   intro_frame(ram, r, entry);                              /* the check stops after it */
@@ -709,13 +676,13 @@ static void load_file_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
 {
   wait_nmi(ram, r, 0xE339, entry);
   r->a = 0x1800;                                           /* REP #$20 */
-  hm_dp_w16(ram, r, LOAD_BUDGET, 0x1800);
+  hm_dp_w16(ram, r, HM_LOAD_BUDGET, 0x1800);
   jsl(ram, r, 0xE344, 0x80, hm_RunColourAnimations);
   jsl(ram, r, 0xE348, 0x84, hm_InputTypeSelector);
-  uint8_t changed = dp8(ram, r, MENU_REDRAW);              /* SEP #$20 */
+  uint8_t changed = dp8(ram, r, HM_MENU_REDRAW);           /* SEP #$20 */
   set_a8(r, changed);
   if (changed) {
-    set_dp8(ram, r, MENU_REDRAW, 0);
+    set_dp8(ram, r, HM_MENU_REDRAW, 0);
     uint8_t slot = rd8(ram, r, SAVE_SLOT);
     set_a8(r, slot);
     file_marks(ram, r, slot != 0, slot ? 0xE3B2 : 0xE378, slot ? 0xE3CD : 0xE393);
@@ -759,6 +726,6 @@ void hm_StartFromNewGame(uint8_t *ram, HmRegs *r)
 void hm_UnusedRewritePlayerName(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 0x00);                                         /* SEP #$20 */
-  wr8(ram, r, NAME_FOR, 0);
+  wr8(ram, r, HM_NAME_FOR, 0);
   hm_NamesScreen(ram, r);                               /* JML */
 }

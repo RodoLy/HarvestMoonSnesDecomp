@@ -45,8 +45,12 @@ Cada rutina reescrita vive en `src/<sistema>.c`:
 | LoadDateNames | calendar.c | Los textos de la fecha |
 | AddMoney / HaveLunch / TvWeatherForecast | stock.c, stamina.c, weather.c | Dinero, almuerzo y el pronóstico de la tele |
 
-Las direcciones de memoria tienen nombre en `src/hm_ram.h` del proyecto de
-recompilación (es el mapa de memoria que comparten los dos proyectos).
+Las direcciones de memoria tienen nombre: las que ya nombra el proyecto de
+recompilación están en su `hm_ram.h` (el mapa de memoria que comparten los dos
+proyectos); las demás que usan varios archivos, en `src/hm_vars.h`, cada una
+con un solo nombre y una nota de para qué sirve; y los registros de la consola,
+en `src/hm_regs.h`. Lo que usa un solo archivo se nombra al principio de ese
+archivo.
 
 ## Cómo sabemos que una reescritura es correcta
 

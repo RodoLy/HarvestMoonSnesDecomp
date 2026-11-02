@@ -12,25 +12,15 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
-/* Also used, from hm_ram.h: HM_SEASON, HM_MAP_ID ($22) and HM_TOOL_SELECTED ($0921) */
-/* WRAM */
-#define HM_MAP_TILES          0x009B6   /* the current map's tile types (DB:) */
-#define HM_TILE_IN_FRONT_X    0x00985   /* 16b: where the tool lands */
-#define HM_TILE_IN_FRONT_Y    0x00987
-#define TOOL_SOUND_CHOICE     0x0922    /* DB: 8b, the answer that picks the tool's sound */
-#define PROPERTY_FLAGS_5C     0x11F5C   /* $7F1F5C bit 3: no tile checks */
+/* The shared variables (HM_...) are named in hm_vars.h and hm_ram.h. */
 
 /* ROM tables */
 #define DIRECTION_FLAG_TABLE  0x82ACFE  /* ROM: dw 01, 02, 04, 08 */
 #define SEASON_FLAG_TABLE     0x82AD06  /* ROM: dw 10, 20, 40, 80 */
 #define SQUARE_OFFSETS        0x8292FA  /* ROM: dw dx, dy per entry */
 
-/* Direct page */
-#define TILE_PROPERTIES       0x0D      /* long $0D-$0F: the map's tile property table */
-#define HM_PLAYER_X           0xD6      /* 16b, pixels */
-#define HM_PLAYER_Y           0xD8
-#define HM_PLAYER_DIRECTION   0xDA      /* 16b: 0 down, 1 up, 2 right, 3 left */
 /* GetTileProperty's scratch: */
 #define PROPERTY_WHICH        0x82      /* 16b: which property word (its A) */
 #define PROPERTY_FLAG         0x84      /* 16b: the last direction / season flag tested */
@@ -87,7 +77,7 @@ void hm_GetTileProperty(uint8_t *ram, HmRegs *r)
 {
   uint16_t which = r->a;
   hm_dp_w16(ram, r, PROPERTY_WHICH, which);
-  if (hm_rd16(ram, PROPERTY_FLAGS_5C) & 0x0008) {
+  if (hm_rd16(ram, HM_FLAGS_5C) & 0x0008) {
     r->a = 0; r->x = 0;
     return;
   }
@@ -99,7 +89,7 @@ void hm_GetTileProperty(uint8_t *ram, HmRegs *r)
   push16(ram, r, type);                          /* PHX; PHA */
   push16(ram, r, type);
   r->y = (uint16_t)(type * 4 + 3);               /* the side/season byte */
-  uint8_t sides = hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPERTIES, r->y));
+  uint8_t sides = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_TILE_PROPS, r->y));
 
   uint16_t dir = hm_dp_r16(ram, r, HM_PLAYER_DIRECTION);
   r->c = dir >> 15;                              /* ASL */
@@ -114,7 +104,7 @@ void hm_GetTileProperty(uint8_t *ram, HmRegs *r)
   }
   if (!applies) {
     r->y = (uint16_t)(r->y - 1);
-    if (hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPERTIES, r->y)) & 0x80) {
+    if (hm_bus_rd8(ram, hm_dp_long(ram, r, HM_TILE_PROPS, r->y)) & 0x80) {
       pull16(ram, r); pull16(ram, r);            /* PLA; PLX */
       r->a = 0; r->x = 0;
       return;
@@ -125,7 +115,7 @@ void hm_GetTileProperty(uint8_t *ram, HmRegs *r)
   uint32_t sum = 4u * type + which;              /* ASL; ASL; ADC $82 */
   r->c = sum > 0xFFFF;
   r->y = (uint16_t)sum;
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, TILE_PROPERTIES, r->y));
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_TILE_PROPS, r->y));
   if (!applies) r->x = 0;
 }
 
@@ -321,5 +311,5 @@ void hm_PreCheckToolSuccessSquare(uint8_t *ram, HmRegs *r)
 void hm_CheckToolSuccessForSound(uint8_t *ram, HmRegs *r)
 {
   tile_ahead_then_check(ram, r, 1, 0x928B, 0x9297);
-  hm_bus_wr8(ram, ((uint32_t)r->db << 16) | TOOL_SOUND_CHOICE, (uint8_t)r->a);
+  hm_bus_wr8(ram, ((uint32_t)r->db << 16) | HM_TOOL_SOUND_CHOICE, (uint8_t)r->a);
 }

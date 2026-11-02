@@ -13,12 +13,10 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
 
 /* ── Names of the memory locations used here ──────────────────────────────
- * Also used, from hm_ram.h: HM_GAME_STATE ($D2), HM_PLAYER_ACTION ($D4),
- * HM_RNG_LAST ($DE), HM_MAP_ID ($22), HM_ANIM_REQUEST ($0901),
- * HM_INPUT_STATE ($019A), HM_TOOL_BACKPACK ($0923), HM_TIME_RUNNING ($0973),
- * HM_SEASON ($7F1F19) and HM_HOUR ($7F1F1C).
+ * The shared variables (HM_...) are named in hm_vars.h and hm_ram.h.
  *
  * Direct page ($00-$FF; the hm_dp_* helpers take these offsets). The
  * scratch variables $7E-$94 mean different things in different commands:
@@ -48,93 +46,9 @@
                                     brightness; to_shed: the item's bit in the shed */
 #define DP_CMP_HIGH       0x93   /* 8b scratch. JumpIfBetween: the high bound + 1; the
                                     fades: frames per brightness level */
-#define DP_FADE_TO        0x94   /* 8b: the brightness a fade ends at */
-#define DP_DESTROY_OBJECT 0xA5   /* 16b: the game object DestroyGameObject destroys */
-#define DP_SCRIPT_POS     0xC9   /* 24b $C9-$CB: the position in the event script */
-#define DP_SLOT           0xCC   /* 24b $CC-$CE: the current event slot (CC slot) */
-#define DP_SLOT_BANK      0xCE   /* 8b: DP_SLOT's bank */
-#define HM_PLAYER_X       0xD6   /* 16b: the player's position, pixels */
-#define HM_PLAYER_Y       0xD8   /* 16b */
-#define HM_PLAYER_DIRECTION 0xDA /* 16b: the way the player faces: 0 down, 1 up, 2 right,
-                                    3 left */
-#define COLLIDE_X         0xDF   /* 16b: CollideMap's input: the position of who moves */
-#define COLLIDE_Y         0xE1   /* 16b */
-#define COLLIDE_AHEAD     0xE3   /* 16b: CollideMap / CollideEventObjects: how far ahead
-                                    to look */
-#define COLLIDE_STEP_X    0xE5   /* 16b: CollideMap's input: the step */
-#define COLLIDE_STEP_Y    0xE7   /* 16b */
-#define COLLIDE_TILE_1    0xE9   /* 16b: CollideMap's output: the first corner's tile type */
-#define COLLIDE_TILE_2    0xEB   /* 16b: the second corner's tile type */
 
 /* WRAM of the data bank ($0100-$1FFF; ram[] offsets, or through dbw / abs_db) */
-#define WANTED_SONG       0x00110   /* 8b: the song asked for (audio.c sends the change) */
-#define LOADED_TOOL_SOUND 0x00119   /* 8b: whose noises are loaded; 0 = load them again */
-#define HM_JOY_NEW        0x00128   /* 16b: buttons pressed this frame */
 #define JOY_A             0x0080
-#define TRANSITION_X      0x0017D   /* 16b: where the player appears after a transition */
-#define TRANSITION_Y      0x0017F   /* 16b */
-#define ANSWER            0x0018F   /* 8b: the option chosen in the last text box (0 = yes) */
-#define TEXT_BOX_LINES    0x00191   /* 8b: the lines of the next text box */
-#define WEATHER_FLAGS     0x00196   /* 16b: weather and day flags; here bit $20 = the clock
-                                       runs, bit $4000 starts a map transition */
-#define CAMERA_SPEED_X    0x0087C   /* 16b: the camera's own movement per frame */
-#define CAMERA_SPEED_Y    0x0087E   /* 16b */
-#define CAMERA_FRAMES     0x00880   /* 8b: for how many frames */
-#define TEXT_NAME         0x00889   /* 4 words $0889-$088F: a name the text prints (the
-                                       cow's; animals.c: FESTIVAL_COW_NAME) */
-#define HM_WAIT_FLAGS     0x008FD   /* 16b: what the player may do to go on */
-#define HM_WAIT_FRAMES    0x008FF   /* 16b: frames left */
-#define PLAYER_FLIP       0x0090F   /* 16b: the player sprite's flip (a byte x 64) */
-#define PLAYER_TURN       0x00911   /* 16b: the direction being tried (playerinput.c) */
-#define PLAYER_FACING     0x00913   /* 16b: the facing, copied from $0911 at the frame's
-                                       end; the direction CollideMap is given */
-#define HM_ITEM_HELD      0x0091D   /* 8b: what the player carries */
-#define SHOWN_ITEM        0x0091E   /* 8b: the item the player held up (TalkOrTakeShownItem) */
-#define HM_CARRIED_SLOT   0x00920   /* 8b: the CC slot being carried */
-#define HM_TOOL           0x00921   /* 8b: the item in hand */
-#define DOG_TIMER         0x00938   /* 8b: the dog's frames, to $78, between moods */
-#define HORSE_TIMER       0x00939   /* 8b: the horse's frames, to $78, between idle
-                                       animations */
-#define MOLE_TIMER        0x0093A   /* 8b: the mole's frames, to $B4 */
-#define CHICKEN_TIMERS    0x0093B   /* 16b per chicken */
-#define COW_TIMERS        0x00953   /* 16b per cow */
-#define INTERACTION       0x0096E   /* 8b: the action PlayerInteractionSelector runs (with
-                                       game state bit $40): $43 / $44 sell a cow / chicken,
-                                       $56 talk */
-#define INTERACTION_STEP  0x0096F   /* 8b: its step */
-#define INTERACTION_FRAMES 0x00970  /* 8b: its frame counter */
-#define TRANSITION_MAP    0x0098B   /* 8b: the map a transition goes to */
-#define SOLD_COW_SLOT     0x009A0   /* 8b: the slot of the cow being sold */
-#define SOLD_CHICKEN_SLOT 0x009A1   /* 8b: the slot of the chicken being sold */
-#define TEXT_AUTO_CLOSE_TIMER 0x009B1 /* 16b: frames a mode-6 text box has been open */
-
-/* WRAM $7F:1Fxx: the game's saved state (ram[] / hm_rd16 offsets 0x11Fxx;
- * WRAM_LONG gives the bus address $7F:1Fxx for hm_bus_*) */
-#define WRAM_LONG(a)      (0x7E0000 + (a))
-#define SHED_ITEMS        0x7F1F00   /* bus address: the shed, one bit per tool */
-#define HM_MONEY_LOW      0x11F04
-#define HM_MONEY_HIGH     0x11F06
-#define HM_COWS           0x11F0A   /* 8b: cows owned */
-#define PREGNANCY_DAYS    0x11F12   /* 8b: days until the pregnant cow gives birth */
-#define HM_SALE_PRICE     0x11F15   /* 24b: what the sale pays */
-#define DOG_X             0x11F2C   /* 16b: the dog's position */
-#define DOG_Y             0x11F2E   /* 16b */
-#define DOG_MAP           0x11F30   /* 8b: the map the dog is on */
-#define HORSE_AGE         0x11F32   /* 8b: the horse's days; $15 = grown (animals.c:
-                                       COUNTER_32) */
-#define DOG_HUGS          0x11F52
-#define DOG_MOOD          0x11F58   /* 16b: one mood bit: 1, 2, 4, 8 or $10 */
-#define FLAGS_5A          0x11F5A   /* 16b flags: $04 a cow is sold, $08 a chicken is sold,
-                                       $10 the bell, $40 a tool was used, $80 the medicine,
-                                       $0100 the miracle potion, $8000 skippable */
-#define FLAGS_5C          0x11F5C   /* 16b flags: $01 time stopped, $08 no tile checks; the
-                                       horse's requests ($10, $20, $40, $0400, $0800) */
-#define FLAGS_5E          0x11F5E   /* 16b flags: $40 lets a slot face the player */
-#define FLAGS_60          0x11F60   /* 16b flags: $02 / $04 (commands 52 / 53) block the
-                                       player's actions, $10 calls the dog, $20 sent home,
-                                       $8000 no tools */
-#define FLAGS_64          0x11F64   /* 16b story flags: $04 a cow was given the potion */
-#define FLAGS_7A          0x11F7A   /* 16b: the scene flags (SetSceneFlag) */
 
 /* ROM tables */
 #define CHICKEN_PLACES    0x83CA10   /* 4 bytes per chicken: x, y in the coop */
@@ -146,65 +60,13 @@
 #define SHED_PLACES       0x81BE0F   /* per item, 8 bytes: +6 shed byte, +7 its bit */
 #define ANIM_TABLE_BANK   0xB3       /* the bank of the animation tables (+33 points there) */
 
-/* Fields of an event slot (64 bytes at $7E:B586 + 64 n; [$CC],Y) */
-#define SLOT_IN_USE       0x00   /* 8b: in use; bit 1 = passable */
-#define SLOT_FLAGS        0x01   /* 8b: bit 1 create the object, 2 the sprite changed,
-                                    3 wanders, 4 frozen, 5 walks, 6 destroy the object,
-                                    7 may leave its area */
-#define SLOT_ANIM_ENTRY   0x02   /* 8b: the entry in its animation table (the way it faces);
-                                    cows: their colour / kind (0-3); the horse: the way to
-                                    face */
-#define SLOT_STEP_X       0x03   /* 8b signed: the step */
-#define SLOT_STEP_Y       0x04   /* 8b signed */
-#define SLOT_STEP_DELAY   0x05   /* 8b: frames between steps (reloads SLOT_STEP_TIMER) */
-#define SLOT_STEP_TIMER   0x06   /* 8b: frames until the next step */
-#define SLOT_WALK_STEPS   0x07   /* 8b: steps of a walk */
-#define SLOT_STEPS_LEFT   0x08   /* 8b: steps left of this walk */
-#define SLOT_RANGE_X      0x09   /* 8b: how far it may wander from home, across */
-#define SLOT_RANGE_Y      0x0A   /* 8b: down */
-#define SLOT_WALK_DELAY   0x0B   /* 8b: a walk's frames between steps */
-#define SLOT_PRESSED      0x0C   /* 8b: the player pressed A on it / talked to it (set by
-                                    CollideEventObjects): it can be picked up */
-#define SLOT_ROLL         0x0D   /* 8b: the last die roll (GetRNG) */
-#define SLOT_STATE        0x0E   /* 8b: $E0 being sold, $E1 off the farm, $C2 in the barn;
-                                    also the tile type ahead */
-#define SLOT_FORCED_DIR   0x0F   /* 8b: the direction the script forces: 1 down, 2 up,
-                                    4 right, 8 left */
-#define SLOT_FRAMES       0x10   /* 16b: frame counter (the wait) */
-#define SLOT_OBJECT       0x12   /* 16b: its game object */
-#define SLOT_ANIMATION    0x14   /* 16b: the object's animation (a byte x 64) */
-#define SLOT_SPRITE       0x16   /* 16b: the object's sprite */
-#define SLOT_X            0x1A   /* 16b: position */
-#define SLOT_Y            0x1C   /* 16b */
-#define SLOT_HOME_X       0x1E   /* 16b: where its walks start (the middle of its area) */
-#define SLOT_HOME_Y       0x20   /* 16b */
-#define SLOT_SCRIPT       0x30   /* 16b: where its script is */
-#define SLOT_SCRIPT_BANK  0x32   /* 8b */
-#define SLOT_ANIM_TABLE   0x33   /* 16b: its (standing) animation table, $B3:<word> */
-#define SLOT_WALK_TABLE   0x36   /* 16b: its walking animation table */
-#define SLOT_NUMBER       0x3F   /* 8b: its own number */
-
 /* Slot numbers (see PlaceAnimalsOnMap in animals.c) */
 #define MOLE_SLOT         0x0011
 #define DOG_SLOT          0x0016
 #define HORSE_SLOT        0x0017
-#define COW_SLOT0         0x18     /* cows: $18 + n */
-#define CHICKEN_SLOT0     0x24     /* chickens: $24 + n */
 
 /* Fields of an animal record ([$72],Y): cows 16 bytes at $7E:C1C6, chickens
  * 8 bytes at $7E:C286 */
-#define REC_STATUS        0x00   /* 8b status, cows and chickens (see Event_CowFrame) */
-#define CHICKEN_MAP       0x01   /* 8b: the map it is on */
-#define CHICKEN_X         0x04   /* 16b: position */
-#define CHICKEN_Y         0x06   /* 16b */
-#define COW_DAILY         0x01   /* 8b: today's flags */
-#define COW_MAP           0x02   /* 8b: the map it is on */
-#define COW_DAYS          0x03   /* 8b: days pregnant / sick */
-#define COW_HAPPINESS     0x04   /* 8b */
-#define COW_HITS          0x05   /* 8b: times hit, up to 10 */
-#define COW_X             0x08   /* 16b: position */
-#define COW_Y             0x0A   /* 16b */
-#define COW_NAME          0x0C   /* 4 bytes: its name */
 
 #define COW_STATUS_RUNS_AWAY 0x10
 #define MAP_BARN          0x27
@@ -219,22 +81,22 @@ static uint8_t lda8(HmRegs *r, uint8_t v)
 static uint8_t slot8(uint8_t *ram, HmRegs *r, uint16_t y)
 {
   r->y = y;
-  return hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, y));
+  return hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, y));
 }
 static uint16_t slot16(uint8_t *ram, HmRegs *r, uint16_t y)
 {
   r->y = y;
-  return hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, y));
+  return hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, y));
 }
 static void slot_w8(uint8_t *ram, HmRegs *r, uint16_t y, uint8_t v)
 {
   r->y = y;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, y), v);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, y), v);
 }
 static void slot_w16(uint8_t *ram, HmRegs *r, uint16_t y, uint16_t v)
 {
   r->y = y;
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, y), v);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, y), v);
 }
 static uint8_t record8(uint8_t *ram, HmRegs *r, uint16_t y)
 {
@@ -291,8 +153,8 @@ static bool player_free_to_pick_up(uint8_t *ram, HmRegs *r)
   uint16_t state = hm_dp_r16(ram, r, HM_GAME_STATE);
   if ((r->a = state & 0x0004)) return false;
   if ((r->a = state & 0x0040)) return false;
-  if ((r->a = hm_rd16(ram, FLAGS_60) & 0x0006)) return false;
-  r->a = hm_rd16(ram, HM_JOY_NEW);
+  if ((r->a = hm_rd16(ram, HM_FLAGS_60) & 0x0006)) return false;
+  r->a = hm_rd16(ram, HM_PAD1_NEW);
   if (!(r->a & JOY_A)) return false;                                   /* BIT #$80 */
   if ((r->a = state & 0x0800)) return false;
   r->a = action;
@@ -300,17 +162,17 @@ static bool player_free_to_pick_up(uint8_t *ram, HmRegs *r)
   if (action == 0x0017) return false;
   r->c = action >= 0x0004;
   if (action == 0x0004) return false;
-  return lda8(r, ram[HM_ITEM_HELD]) == 0;
+  return lda8(r, ram[HM_ITEM_ON_HAND]) == 0;
 }
 
 /* returns true when it ends the command early (the chicken was taken) */
 static bool pick_up(uint8_t *ram, HmRegs *r)
 {
-  uint8_t status = record8(ram, r, REC_STATUS);
+  uint8_t status = record8(ram, r, ANIMAL_STATUS);
   if (lda8(r, status & 0x40)) return false;
   if (!lda8(r, status & 0x0E)) return false;
   status = lda8(r, status | 0x20);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_POINTER, REC_STATUS), status);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_POINTER, ANIMAL_STATUS), status);
   ram[HM_CARRIED_SLOT] = lda8(r, slot8(ram, r, SLOT_NUMBER));
   lda8(r, 0);
   slot_w8(ram, r, SLOT_IN_USE, 0);
@@ -320,10 +182,10 @@ static bool pick_up(uint8_t *ram, HmRegs *r)
   r->c = slot >= CHICKEN_SLOT0;
   if (slot < CHICKEN_SLOT0) return false;
   uint8_t item;
-  if (lda8(r, record8(ram, r, REC_STATUS) & 0x04)) item = 0x26;        /* a chick */
-  else if (lda8(r, record8(ram, r, REC_STATUS) & 0x08)) item = 0x25;   /* a hen */
+  if (lda8(r, record8(ram, r, ANIMAL_STATUS) & 0x04)) item = 0x26;     /* a chick */
+  else if (lda8(r, record8(ram, r, ANIMAL_STATUS) & 0x08)) item = 0x25; /* a hen */
   else return false;
-  ram[HM_ITEM_HELD] = lda8(r, item);
+  ram[HM_ITEM_ON_HAND] = lda8(r, item);
   r->a = 4;
   hm_dp_w16(ram, r, HM_PLAYER_ACTION, 4);
   return true;
@@ -331,18 +193,18 @@ static bool pick_up(uint8_t *ram, HmRegs *r)
 
 static void hen_timer(uint8_t *ram, HmRegs *r)
 {
-  if (!lda8(r, record8(ram, r, REC_STATUS) & 0x08)) return;
+  if (!lda8(r, record8(ram, r, ANIMAL_STATUS) & 0x08)) return;
   uint16_t n = animal_number(ram, r, CHICKEN_SLOT0);
   r->c = (n >> 15) & 1;                                                /* ASL */
   r->a = r->x = (uint16_t)(n << 1);
-  uint16_t timer = r->a = hm_rd16(ram, CHICKEN_TIMERS + r->x);
+  uint16_t timer = r->a = hm_rd16(ram, HM_CHICKEN_TIMERS + r->x);
   r->c = timer >= 0x0200;
   if (timer != 0x0200) {
     r->a = (uint16_t)(timer + 1);
-    hm_wr16(ram, CHICKEN_TIMERS + r->x, r->a);
+    hm_wr16(ram, HM_CHICKEN_TIMERS + r->x, r->a);
     return;
   }
-  hm_wr16(ram, CHICKEN_TIMERS + r->x, 0);
+  hm_wr16(ram, HM_CHICKEN_TIMERS + r->x, 0);
   uint8_t de = lda8(r, *hm_dp(ram, r, HM_RNG_LAST));
   r->c = de >= 0x55;
   uint16_t script = de >= 0x55 ? 0x005D : 0x005C;
@@ -356,14 +218,14 @@ static void hen_timer(uint8_t *ram, HmRegs *r)
 
 static void sell(uint8_t *ram, HmRegs *r)
 {
-  r->a = hm_rd16(ram, FLAGS_5A) & 0xFFF7;
-  hm_wr16(ram, FLAGS_5A, r->a);
+  r->a = hm_rd16(ram, HM_FLAGS_5A) & 0xFFF7;
+  hm_wr16(ram, HM_FLAGS_5A, r->a);
   r->a = 0x0032;
   hm_wr16(ram, HM_SALE_PRICE, 0x0032);                                 /* the price */
   ram[HM_SALE_PRICE + 2] = lda8(r, 0);
-  ram[SOLD_CHICKEN_SLOT] = lda8(r, slot8(ram, r, SLOT_NUMBER));
-  ram[INTERACTION] = lda8(r, 0x44);
-  ram[INTERACTION_STEP] = 0; ram[INTERACTION_FRAMES] = 0;
+  ram[HM_SOLD_CHICKEN_SLOT] = lda8(r, slot8(ram, r, SLOT_NUMBER));
+  ram[HM_INTERACTION] = lda8(r, 0x44);
+  ram[HM_INTERACTION_STEP] = 0; ram[HM_INTERACTION_FRAMES] = 0;
   r->a = hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0040;
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   r->a = 0;
@@ -374,10 +236,10 @@ static void sell(uint8_t *ram, HmRegs *r)
 
 void hm_Event_ChickenFrame(uint8_t *ram, HmRegs *r)
 {
-  uint16_t pc = hm_dp_r16(ram, r, DP_SCRIPT_POS);
+  uint16_t pc = hm_dp_r16(ram, r, HM_SCRIPT_POS);
   r->c = pc == 0xFFFF;
   r->a = (uint16_t)(pc + 1);
-  hm_dp_w16(ram, r, DP_SCRIPT_POS, r->a);
+  hm_dp_w16(ram, r, HM_SCRIPT_POS, r->a);
 
   r->a = animal_number(ram, r, CHICKEN_SLOT0);
   hm_jsl(ram, r, 0x9878, 0x83);
@@ -390,8 +252,8 @@ void hm_Event_ChickenFrame(uint8_t *ram, HmRegs *r)
 
   uint8_t state = lda8(r, slot8(ram, r, SLOT_STATE));
   r->c = state >= 0xE0;
-  if (state == 0xE0 && lda8(r, record8(ram, r, REC_STATUS) & 0x08)
-      && (r->a = hm_rd16(ram, FLAGS_5A) & 0x0008)) {
+  if (state == 0xE0 && lda8(r, record8(ram, r, ANIMAL_STATUS) & 0x08)
+      && (r->a = hm_rd16(ram, HM_FLAGS_5A) & 0x0008)) {
     sell(ram, r);
   } else if (player_free_to_pick_up(ram, r)) {
     if (pick_up(ram, r)) return;
@@ -439,8 +301,8 @@ static void dog_script(uint8_t *ram, HmRegs *r, uint8_t script, uint16_t ret)
 }
 static void set_mood(uint8_t *ram, HmRegs *r, uint16_t clear, uint16_t set)
 {
-  r->a = (uint16_t)((hm_rd16(ram, DOG_MOOD) & ~clear) | set);
-  hm_wr16(ram, DOG_MOOD, r->a);
+  r->a = (uint16_t)((hm_rd16(ram, HM_DOG_MOOD) & ~clear) | set);
+  hm_wr16(ram, HM_DOG_MOOD, r->a);
 }
 /* the first entry whose `below` the random byte is under (C from each
  * CMP); none: nothing happens */
@@ -475,7 +337,7 @@ static void dog_mood(uint8_t *ram, HmRegs *r)
     { ALWAYS, 0x48, 0x01, 0x10, 0xB0FB } };
 
   uint8_t de = *hm_dp(ram, r, HM_RNG_LAST);
-  uint16_t mood = hm_rd16(ram, DOG_MOOD);
+  uint16_t mood = hm_rd16(ram, HM_DOG_MOOD);
   if ((r->a = mood & 0x0001)) {
     lda8(r, de);
     r->c = de >= 0x40;
@@ -514,10 +376,10 @@ static bool player_free_to_hug(uint8_t *ram, HmRegs *r)
   }
   uint16_t state = hm_dp_r16(ram, r, HM_GAME_STATE);
   if ((r->a = state & 0x0004)) return false;
-  if ((r->a = hm_rd16(ram, FLAGS_60) & 0x0006)) return false;
-  r->a = hm_rd16(ram, HM_JOY_NEW);
+  if ((r->a = hm_rd16(ram, HM_FLAGS_60) & 0x0006)) return false;
+  r->a = hm_rd16(ram, HM_PAD1_NEW);
   if (!(r->a & JOY_A)) return false;
-  if (lda8(r, ram[HM_ITEM_HELD])) return false;
+  if (lda8(r, ram[HM_ITEM_ON_HAND])) return false;
   if ((r->a = state & 0x0800)) return false;
   if ((r->a = state & 0x0010)) return false;
   uint16_t action = r->a = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
@@ -547,7 +409,7 @@ static uint16_t distance(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t b, unsign
 
 static void dog_called(uint8_t *ram, HmRegs *r)
 {
-  ram[DOG_TIMER] = 0;
+  ram[HM_DOG_TIMER] = 0;
   slot_w8(ram, r, SLOT_FLAGS, lda8(r, slot8(ram, r, SLOT_FLAGS) | 0x28));
   r->a = slot8(ram, r, SLOT_NUMBER);                       /* XBA; LDA #0; XBA */
   r->x = 0; r->y = 0x003F;
@@ -571,31 +433,31 @@ static void dog_called(uint8_t *ram, HmRegs *r)
 
 void hm_Event_DogFrame(uint8_t *ram, HmRegs *r)
 {
-  uint16_t pc = hm_dp_r16(ram, r, DP_SCRIPT_POS);
+  uint16_t pc = hm_dp_r16(ram, r, HM_SCRIPT_POS);
   r->c = pc == 0xFFFF;
   r->a = (uint16_t)(pc + 1);
-  hm_dp_w16(ram, r, DP_SCRIPT_POS, r->a);
-  r->a = slot16(ram, r, SLOT_X); hm_wr16(ram, DOG_X, r->a);
-  r->a = slot16(ram, r, SLOT_Y); hm_wr16(ram, DOG_Y, r->a);
+  hm_dp_w16(ram, r, HM_SCRIPT_POS, r->a);
+  r->a = slot16(ram, r, SLOT_X); hm_wr16(ram, HM_DOG_X, r->a);
+  r->a = slot16(ram, r, SLOT_Y); hm_wr16(ram, HM_DOG_Y, r->a);
 
   if (player_free_to_hug(ram, r)) {
     slot_w8(ram, r, SLOT_IN_USE, lda8(r, 0));
     slot_w8(ram, r, SLOT_FLAGS, lda8(r, slot8(ram, r, SLOT_FLAGS) | 0x40));
     r->a = hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0800;
     hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
-    r->a = (uint16_t)(hm_rd16(ram, DOG_HUGS) + 1);
-    hm_wr16(ram, DOG_HUGS, r->a);
+    r->a = (uint16_t)(hm_rd16(ram, HM_DOG_HUGS) + 1);
+    hm_wr16(ram, HM_DOG_HUGS, r->a);
   } else {
-    uint8_t t = lda8(r, ram[DOG_TIMER]);
+    uint8_t t = lda8(r, ram[HM_DOG_TIMER]);
     r->c = t >= 0x78;
     if (t != 0x78) {
-      ram[DOG_TIMER] = lda8(r, (uint8_t)(t + 1));
+      ram[HM_DOG_TIMER] = lda8(r, (uint8_t)(t + 1));
     } else {
-      ram[DOG_TIMER] = 0;
+      ram[HM_DOG_TIMER] = 0;
       dog_mood(ram, r);
     }
   }
-  if ((r->a = hm_rd16(ram, FLAGS_60) & 0x0010)) dog_called(ram, r);
+  if ((r->a = hm_rd16(ram, HM_FLAGS_60) & 0x0010)) dog_called(ram, r);
   count_frame(ram, r);
 }
 
@@ -606,37 +468,37 @@ void hm_Event_DogFrame(uint8_t *ram, HmRegs *r)
  * ═════════════════════════════════════════════════════════════════════════ */
 static void advance(uint8_t *ram, HmRegs *r, uint16_t n)
 {
-  uint16_t pc = hm_dp_r16(ram, r, DP_SCRIPT_POS);
+  uint16_t pc = hm_dp_r16(ram, r, HM_SCRIPT_POS);
   r->c = (uint32_t)pc + n > 0xFFFF;
   r->a = (uint16_t)(pc + n);
-  hm_dp_w16(ram, r, DP_SCRIPT_POS, r->a);
+  hm_dp_w16(ram, r, HM_SCRIPT_POS, r->a);
 }
 static void step_back(uint8_t *ram, HmRegs *r)            /* SEC; SBC #1 */
 {
-  uint16_t pc = hm_dp_r16(ram, r, DP_SCRIPT_POS);
+  uint16_t pc = hm_dp_r16(ram, r, HM_SCRIPT_POS);
   r->c = pc >= 1;
   r->a = (uint16_t)(pc - 1);
-  hm_dp_w16(ram, r, DP_SCRIPT_POS, r->a);
+  hm_dp_w16(ram, r, HM_SCRIPT_POS, r->a);
 }
 /* SEP #$20; LDA [$C9] */
 static uint8_t arg8(uint8_t *ram, HmRegs *r)
 {
-  return lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SCRIPT_POS, 0)));
+  return lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, HM_SCRIPT_POS, 0)));
 }
 /* LDA #0; XBA; LDA [$C9]: the byte in a clean 16-bit A */
 static uint16_t arg8_word(uint8_t *ram, HmRegs *r)
 {
-  return r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SCRIPT_POS, 0));
+  return r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, HM_SCRIPT_POS, 0));
 }
 /* REP #$20; LDA [$C9] */
 static uint16_t arg16(uint8_t *ram, HmRegs *r)
 {
-  return r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SCRIPT_POS, 0));
+  return r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_SCRIPT_POS, 0));
 }
 /* jump: $C9 = the word at [$C9] */
 static void jump(uint8_t *ram, HmRegs *r)
 {
-  hm_dp_w16(ram, r, DP_SCRIPT_POS, arg16(ram, r));
+  hm_dp_w16(ram, r, HM_SCRIPT_POS, arg16(ram, r));
 }
 /* LDA #0; XBA; LDA [$C9]; ASL; TAX; LDA Events_Flags_Table,X */
 static uint16_t flag_bit_arg(uint8_t *ram, HmRegs *r)
@@ -660,7 +522,7 @@ static void address_arg(uint8_t *ram, HmRegs *r)
 void hm_Event_SetWantedSong(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  ram[WANTED_SONG] = arg8(ram, r);
+  ram[HM_WANTED_SONG] = arg8(ram, r);
   advance(ram, r, 1);
   advance(ram, r, 1);
 }
@@ -672,15 +534,15 @@ void hm_Event_TimeRunning(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   ram[HM_TIME_RUNNING] = lda8(r, 1);
-  r->a = hm_rd16(ram, FLAGS_5C) & 0xFFFE; hm_wr16(ram, FLAGS_5C, r->a);
-  r->a = hm_rd16(ram, WEATHER_FLAGS) | 0x0020;  hm_wr16(ram, WEATHER_FLAGS, r->a);
+  r->a = hm_rd16(ram, HM_FLAGS_5C) & 0xFFFE; hm_wr16(ram, HM_FLAGS_5C, r->a);
+  r->a = hm_rd16(ram, HM_WEATHER_FLAGS) | 0x0020;  hm_wr16(ram, HM_WEATHER_FLAGS, r->a);
 }
 void hm_Event_TimeStopped(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   ram[HM_TIME_RUNNING] = lda8(r, 0);
-  r->a = hm_rd16(ram, FLAGS_5C) | 0x0001; hm_wr16(ram, FLAGS_5C, r->a);
-  r->a = hm_rd16(ram, WEATHER_FLAGS) & 0xFFDF;  hm_wr16(ram, WEATHER_FLAGS, r->a);
+  r->a = hm_rd16(ram, HM_FLAGS_5C) | 0x0001; hm_wr16(ram, HM_FLAGS_5C, r->a);
+  r->a = hm_rd16(ram, HM_WEATHER_FLAGS) & 0xFFDF;  hm_wr16(ram, HM_WEATHER_FLAGS, r->a);
 }
 
 /* Event_SetHour ($84:8A39): the hour = the argument. */
@@ -699,9 +561,9 @@ void hm_Event_DoNothing(uint8_t *ram, HmRegs *r) { advance(ram, r, 1); }
 void hm_Event_SetPlayerPosition(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  hm_wr16(ram, TRANSITION_X, arg16(ram, r)); hm_dp_w16(ram, r, HM_PLAYER_X, r->a);
+  hm_wr16(ram, HM_TRANSITION_X, arg16(ram, r)); hm_dp_w16(ram, r, HM_PLAYER_X, r->a);
   advance(ram, r, 2);
-  hm_wr16(ram, TRANSITION_Y, arg16(ram, r)); hm_dp_w16(ram, r, HM_PLAYER_Y, r->a);
+  hm_wr16(ram, HM_TRANSITION_Y, arg16(ram, r)); hm_dp_w16(ram, r, HM_PLAYER_Y, r->a);
   advance(ram, r, 2);
 }
 
@@ -709,7 +571,7 @@ void hm_Event_SetPlayerPosition(uint8_t *ram, HmRegs *r)
 void hm_Event_SetTransitionDest(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  ram[TRANSITION_MAP] = arg8(ram, r);
+  ram[HM_TRANSITION_MAP] = arg8(ram, r);
   advance(ram, r, 1);
   count_frame(ram, r);
 }
@@ -721,7 +583,7 @@ void hm_Event_SetPlayerDirection(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
   uint16_t d = arg8_word(ram, r);
   hm_dp_w16(ram, r, HM_PLAYER_DIRECTION, d);
-  hm_wr16(ram, PLAYER_TURN, d);
+  hm_wr16(ram, HM_PLAYER_TURN, d);
   hm_wr16(ram, HM_ANIM_REQUEST, d);
   advance(ram, r, 1);
 }
@@ -734,7 +596,7 @@ void hm_Event_DisablePlayerControl(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
   r->a = hm_dp_r16(ram, r, HM_GAME_STATE) & 0xBFFF;
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
-  hm_wr16(ram, HM_WAIT_FLAGS, 0);
+  hm_wr16(ram, HM_SCRIPT_BUTTONS, 0);
   hm_wr16(ram, HM_WAIT_FRAMES, 0);
 }
 void hm_Event_EnablePlayerControl(uint8_t *ram, HmRegs *r)
@@ -751,9 +613,9 @@ void hm_Event_EnablePlayerControl(uint8_t *ram, HmRegs *r)
 void hm_Event_StartOtherSlot(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  r->a = hm_dp_r16(ram, r, DP_SLOT);
+  r->a = hm_dp_r16(ram, r, HM_EVENT_SLOT);
   hm_dp_w16(ram, r, DP_POINTER, r->a);
-  *hm_dp(ram, r, DP_POINTER_BANK) = lda8(r, *hm_dp(ram, r, DP_SLOT_BANK));
+  *hm_dp(ram, r, DP_POINTER_BANK) = lda8(r, *hm_dp(ram, r, HM_EVENT_SLOT_BANK));
   hm_push8(ram, r, lda8(r, slot8(ram, r, SLOT_SCRIPT_BANK)));      /* PHA */
   r->a = arg8_word(ram, r);
   hm_jsl(ram, r, 0x8B36, 0x84);
@@ -768,8 +630,8 @@ void hm_Event_StartOtherSlot(uint8_t *ram, HmRegs *r)
   hm_pull8(ram, r); hm_pull8(ram, r);
   slot_w8(ram, r, SLOT_NUMBER, lda8(r, hm_pull8(ram, r)));
   r->a = hm_dp_r16(ram, r, DP_POINTER);
-  hm_dp_w16(ram, r, DP_SLOT, r->a);
-  *hm_dp(ram, r, DP_SLOT_BANK) = lda8(r, *hm_dp(ram, r, DP_POINTER_BANK));
+  hm_dp_w16(ram, r, HM_EVENT_SLOT, r->a);
+  *hm_dp(ram, r, HM_EVENT_SLOT_BANK) = lda8(r, *hm_dp(ram, r, DP_POINTER_BANK));
   advance(ram, r, 2);
 }
 
@@ -779,14 +641,14 @@ void hm_Event_StartOtherSlot(uint8_t *ram, HmRegs *r)
 void hm_Event_SetSceneFlag(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  r->a = flag_bit_arg(ram, r) | hm_rd16(ram, FLAGS_7A);
-  hm_wr16(ram, FLAGS_7A, r->a);
+  r->a = flag_bit_arg(ram, r) | hm_rd16(ram, HM_FLAGS_7A);
+  hm_wr16(ram, HM_FLAGS_7A, r->a);
   advance(ram, r, 1);
 }
 void hm_Event_WaitForSceneFlag(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  r->a = flag_bit_arg(ram, r) & hm_rd16(ram, FLAGS_7A);
+  r->a = flag_bit_arg(ram, r) & hm_rd16(ram, HM_FLAGS_7A);
   if (r->a) { advance(ram, r, 1); return; }
   step_back(ram, r);
   count_frame(ram, r);
@@ -923,7 +785,7 @@ void hm_Event_SetPlayerAnimation(uint8_t *ram, HmRegs *r)
   uint16_t v = arg8_word(ram, r);
   r->c = (v >> 10) & 1;                                  /* the 6th ASL */
   r->a = (uint16_t)(v << 6);
-  hm_wr16(ram, PLAYER_FLIP, r->a);
+  hm_wr16(ram, HM_PLAYER_FLIP, r->a);
   advance(ram, r, 1);
   r->a = hm_dp_r16(ram, r, HM_GAME_STATE) | 0x2000;
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
@@ -1038,7 +900,7 @@ void hm_Event_JumpIfAnswer(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   *hm_dp(ram, r, DP_CMP_LOW) = arg8(ram, r);
-  uint8_t v = lda8(r, ram[ANSWER]);
+  uint8_t v = lda8(r, ram[HM_ANSWER]);
   r->c = v >= *hm_dp(ram, r, DP_CMP_LOW);
   if (v == *hm_dp(ram, r, DP_CMP_LOW)) {
     advance(ram, r, 1);
@@ -1154,7 +1016,7 @@ void hm_Event_ChangeMoney(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
   if (r->a != 0) {                                         /* would be negative */
     r->a = 0;
-    hm_wr16(ram, HM_MONEY_LOW, 0);
+    hm_wr16(ram, HM_MONEY, 0);
     ram[HM_MONEY_HIGH] = lda8(r, 0);
   }
 }
@@ -1245,7 +1107,7 @@ static void wait_frames(uint8_t *ram, HmRegs *r, bool also_entry_4)
       count_frame(ram, r);
       return;
     }
-    hm_wr16(ram, HM_WAIT_FLAGS, 0);
+    hm_wr16(ram, HM_SCRIPT_BUTTONS, 0);
     hm_wr16(ram, HM_WAIT_FRAMES, 0);
     r->a = hm_dp_r16(ram, r, HM_GAME_STATE) & 0xEFFF;
     hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
@@ -1258,19 +1120,19 @@ static void wait_frames(uint8_t *ram, HmRegs *r, bool also_entry_4)
   uint16_t n = arg8_word(ram, r);
   r->c = (n >> 15) & 1;
   r->x = (uint16_t)(n << 1);
-  r->a = hm_bus_rd16(ram, WAIT_BITS + r->x) | hm_rd16(ram, HM_WAIT_FLAGS);
-  hm_wr16(ram, HM_WAIT_FLAGS, r->a);
+  r->a = hm_bus_rd16(ram, WAIT_BITS + r->x) | hm_rd16(ram, HM_SCRIPT_BUTTONS);
+  hm_wr16(ram, HM_SCRIPT_BUTTONS, r->a);
   if (also_entry_4) {
     r->x = 8;
-    r->a = hm_bus_rd16(ram, WAIT_BITS + 8) | hm_rd16(ram, HM_WAIT_FLAGS);
-    hm_wr16(ram, HM_WAIT_FLAGS, r->a);
+    r->a = hm_bus_rd16(ram, WAIT_BITS + 8) | hm_rd16(ram, HM_SCRIPT_BUTTONS);
+    hm_wr16(ram, HM_SCRIPT_BUTTONS, r->a);
   }
   advance(ram, r, 1);
   hm_wr16(ram, HM_WAIT_FRAMES, arg16(ram, r));
-  uint16_t pc = hm_dp_r16(ram, r, DP_SCRIPT_POS);          /* back onto the command */
+  uint16_t pc = hm_dp_r16(ram, r, HM_SCRIPT_POS);          /* back onto the command */
   r->c = pc >= 2;                                          /* SEC; SBC #2 */
   r->a = (uint16_t)(pc - 2);
-  hm_dp_w16(ram, r, DP_SCRIPT_POS, r->a);
+  hm_dp_w16(ram, r, HM_SCRIPT_POS, r->a);
   count_frame(ram, r);
   r->a = hm_dp_r16(ram, r, HM_GAME_STATE) | 0x1000;
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
@@ -1281,7 +1143,7 @@ void hm_Event_RunPlayer(uint8_t *ram, HmRegs *r) { wait_frames(ram, r, true); }
 /* Event_WaitUntilSkippable ($84:B365): wait until $7F1F5A bit $8000. */
 void hm_Event_WaitUntilSkippable(uint8_t *ram, HmRegs *r)
 {
-  if ((r->a = hm_rd16(ram, FLAGS_5A) & 0x8000)) advance(ram, r, 1);
+  if ((r->a = hm_rd16(ram, HM_FLAGS_5A) & 0x8000)) advance(ram, r, 1);
   else count_frame(ram, r);
 }
 
@@ -1311,14 +1173,14 @@ static bool free_hands(uint8_t *ram, HmRegs *r, const Test *t, int n)
       if ((r->a = hm_dp_r16(ram, r, HM_GAME_STATE) & t[i].value)) return false;
       break;
     case T_FLAGS_60:
-      if ((r->a = hm_rd16(ram, FLAGS_60) & 0x0006)) return false;
+      if ((r->a = hm_rd16(ram, HM_FLAGS_60) & 0x0006)) return false;
       break;
     case T_JOY_A:
-      r->a = hm_rd16(ram, HM_JOY_NEW);
+      r->a = hm_rd16(ram, HM_PAD1_NEW);
       if (!(r->a & JOY_A)) return false;
       break;
     case T_ITEM:
-      if (lda8(r, ram[HM_ITEM_HELD])) return false;
+      if (lda8(r, ram[HM_ITEM_ON_HAND])) return false;
       break;
     case T_ACTION: {
       uint16_t action = r->a = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
@@ -1337,7 +1199,7 @@ static void carry(uint8_t *ram, HmRegs *r, uint8_t item, bool remember_slot)
   slot_w8(ram, r, SLOT_IN_USE, lda8(r, 0));
   slot_w8(ram, r, SLOT_FLAGS, lda8(r, slot8(ram, r, SLOT_FLAGS) | 0x40));
   count_frame(ram, r);
-  ram[HM_ITEM_HELD] = lda8(r, item);
+  ram[HM_ITEM_ON_HAND] = lda8(r, item);
   r->a = 4;
   hm_dp_w16(ram, r, HM_PLAYER_ACTION, 4);
 }
@@ -1356,12 +1218,12 @@ void hm_Event_PickUpMole(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   if (free_hands(ram, r, FREE_LONG, 8)) { carry(ram, r, 0x29, true); return; }
-  uint8_t t = lda8(r, ram[MOLE_TIMER]);
+  uint8_t t = lda8(r, ram[HM_MOLE_TIMER]);
   r->c = t >= 0xB4;
   if (t != 0xB4) {
-    ram[MOLE_TIMER] = lda8(r, (uint8_t)(t + 1));
+    ram[HM_MOLE_TIMER] = lda8(r, (uint8_t)(t + 1));
   } else {
-    ram[MOLE_TIMER] = 0;
+    ram[HM_MOLE_TIMER] = 0;
     if (lda8(r, *hm_dp(ram, r, HM_RNG_LAST) & 0x80)) {
       r->a = MOLE_SLOT; r->x = 0; r->y = 0x0081;
       hm_jsl(ram, r, 0xAA4E, 0x84);
@@ -1397,7 +1259,7 @@ void hm_Event_PickUpPowerBerry(uint8_t *ram, HmRegs *r)
 void hm_Event_SetItemOnHand(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  ram[HM_ITEM_HELD] = arg8(ram, r);
+  ram[HM_ITEM_ON_HAND] = arg8(ram, r);
   advance(ram, r, 1);
   r->a = 4;
   hm_dp_w16(ram, r, HM_PLAYER_ACTION, 4);
@@ -1405,7 +1267,7 @@ void hm_Event_SetItemOnHand(uint8_t *ram, HmRegs *r)
 void hm_Event_ChangeItemOnHand(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  ram[HM_ITEM_HELD] = arg8(ram, r);
+  ram[HM_ITEM_ON_HAND] = arg8(ram, r);
   advance(ram, r, 1);
   r->a = hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0002;
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
@@ -1423,19 +1285,19 @@ void hm_Event_DropItemAnimation(uint8_t *ram, HmRegs *r)
 void hm_Event_TransitionToMap(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  ram[TRANSITION_MAP] = arg8(ram, r);
+  ram[HM_TRANSITION_MAP] = arg8(ram, r);
   advance(ram, r, 1);
-  r->a = hm_rd16(ram, WEATHER_FLAGS) | 0x4000;
-  hm_wr16(ram, WEATHER_FLAGS, r->a);
+  r->a = hm_rd16(ram, HM_WEATHER_FLAGS) | 0x4000;
+  hm_wr16(ram, HM_WEATHER_FLAGS, r->a);
 }
 void hm_Event_TransitionToHouse(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  ram[TRANSITION_MAP] = lda8(r, 0x15);
-  r->a = hm_rd16(ram, WEATHER_FLAGS) | 0x4000;
-  hm_wr16(ram, WEATHER_FLAGS, r->a);
-  r->a = hm_rd16(ram, FLAGS_60) | 0x0020;
-  hm_wr16(ram, FLAGS_60, r->a);
+  ram[HM_TRANSITION_MAP] = lda8(r, 0x15);
+  r->a = hm_rd16(ram, HM_WEATHER_FLAGS) | 0x4000;
+  hm_wr16(ram, HM_WEATHER_FLAGS, r->a);
+  r->a = hm_rd16(ram, HM_FLAGS_60) | 0x0020;
+  hm_wr16(ram, HM_FLAGS_60, r->a);
 }
 
 /* Event_MapScrolling ($84:9513): the camera moves by itself: X speed, Y
@@ -1443,11 +1305,11 @@ void hm_Event_TransitionToHouse(uint8_t *ram, HmRegs *r)
 void hm_Event_MapScrolling(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  hm_wr16(ram, CAMERA_SPEED_X, arg16(ram, r));
+  hm_wr16(ram, HM_CAMERA_SPEED_X, arg16(ram, r));
   advance(ram, r, 2);
-  hm_wr16(ram, CAMERA_SPEED_Y, arg16(ram, r));
+  hm_wr16(ram, HM_CAMERA_SPEED_Y, arg16(ram, r));
   advance(ram, r, 2);
-  ram[CAMERA_FRAMES] = arg8(ram, r);
+  ram[HM_CAMERA_FRAMES] = arg8(ram, r);
   advance(ram, r, 1);
 }
 
@@ -1457,17 +1319,17 @@ void hm_Event_MapScrolling(uint8_t *ram, HmRegs *r)
 void hm_Event_IgnoreTileProperties(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  r->a = hm_rd16(ram, FLAGS_5C) | 0x0008; hm_wr16(ram, FLAGS_5C, r->a);
+  r->a = hm_rd16(ram, HM_FLAGS_5C) | 0x0008; hm_wr16(ram, HM_FLAGS_5C, r->a);
 }
 void hm_Event_UseTileProperties(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  r->a = hm_rd16(ram, FLAGS_5C) & 0xFFF7; hm_wr16(ram, FLAGS_5C, r->a);
+  r->a = hm_rd16(ram, HM_FLAGS_5C) & 0xFFF7; hm_wr16(ram, HM_FLAGS_5C, r->a);
 }
 void hm_Event_DisableTools(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  r->a = hm_rd16(ram, FLAGS_60) | 0x8000; hm_wr16(ram, FLAGS_60, r->a);
+  r->a = hm_rd16(ram, HM_FLAGS_60) | 0x8000; hm_wr16(ram, HM_FLAGS_60, r->a);
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
@@ -1535,15 +1397,15 @@ static uint16_t cow_timer_x(uint8_t *ram, HmRegs *r)
 static bool cow_timer_done(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = cow_timer_x(ram, r);
-  uint16_t t = hm_rd16(ram, COW_TIMERS + x);
-  if (t != 0x0100) { hm_wr16(ram, COW_TIMERS + x, (uint16_t)(t + 1)); return false; }
-  hm_wr16(ram, COW_TIMERS + x, 0);
+  uint16_t t = hm_rd16(ram, HM_COW_TIMERS + x);
+  if (t != 0x0100) { hm_wr16(ram, HM_COW_TIMERS + x, (uint16_t)(t + 1)); return false; }
+  hm_wr16(ram, HM_COW_TIMERS + x, 0);
   return true;
 }
 /* adult cows: the script by how it feels */
 static uint16_t adult_script(uint8_t *ram, HmRegs *r, uint16_t sick, uint16_t runs, uint16_t normal)
 {
-  uint8_t st = record8(ram, r, REC_STATUS);
+  uint8_t st = record8(ram, r, ANIMAL_STATUS);
   r->x = (st & 0x20) ? sick : (st & 0x10) ? runs : normal;
   return r->x;
 }
@@ -1551,7 +1413,7 @@ static uint16_t adult_script(uint8_t *ram, HmRegs *r, uint16_t sick, uint16_t ru
 /* the reaction after talking, brushing...: by its age */
 static bool reaction(uint8_t *ram, HmRegs *r)   /* true: on to the wandering */
 {
-  uint8_t st = record8(ram, r, REC_STATUS);
+  uint8_t st = record8(ram, r, ANIMAL_STATUS);
   if (st & 0x30) return true;                         /* sick or runs away: none */
   if (st & 0x02) { cow_script4(ram, r, 0x64, 0x9D42); return false; }
   if (st & 0x04) { cow_script4(ram, r, 0x60, 0x9DBA); return false; }
@@ -1563,11 +1425,11 @@ static bool reaction(uint8_t *ram, HmRegs *r)   /* true: on to the wandering */
 static bool talk(uint8_t *ram, HmRegs *r)
 {
   for (unsigned i = 0; i < 4; i++)                    /* $0889-$088F: what it says */
-    hm_wr16(ram, TEXT_NAME + 2 * i, record8(ram, r, (uint16_t)(COW_NAME + i)));
-  uint8_t st = record8(ram, r, REC_STATUS);
+    hm_wr16(ram, HM_TEXT_NAME + 2 * i, record8(ram, r, (uint16_t)(COW_NAME + i)));
+  uint8_t st = record8(ram, r, ANIMAL_STATUS);
   uint16_t text = (st & 0x40) ? (record8(ram, r, COW_DAYS) ? 0x0032 : 0x0145)
                 : (st & 0x20) ? 0x0031 : (st & 0x10) ? 0x0030 : 0x002F;
-  ram[TEXT_BOX_LINES] = 0;
+  ram[HM_TEXT_BOX_LINES] = 0;
   ram[HM_INPUT_STATE] = lda8(r, 2);
   r->x = text;
   hm_jsl(ram, r, 0x9C75, 0x83);
@@ -1581,12 +1443,12 @@ static bool talk(uint8_t *ram, HmRegs *r)
 
 static bool milk(uint8_t *ram, HmRegs *r)
 {
-  if (!(record8(ram, r, REC_STATUS) & 0x08) || (record8(ram, r, COW_DAILY) & 0x02)
-      || (record8(ram, r, REC_STATUS) & 0x70))
+  if (!(record8(ram, r, ANIMAL_STATUS) & 0x08) || (record8(ram, r, COW_DAILY) & 0x02)
+      || (record8(ram, r, ANIMAL_STATUS) & 0x70))
     return true;
   rec_or(ram, r, COW_DAILY, 0x02);
   uint8_t h = record8(ram, r, COW_HAPPINESS);
-  ram[HM_ITEM_HELD] = h < 0x60 ? 0x15 : h < 0xC0 ? 0x16 : 0x17;   /* milk S / M / L */
+  ram[HM_ITEM_ON_HAND] = h < 0x60 ? 0x15 : h < 0xC0 ? 0x16 : 0x17; /* milk S / M / L */
   hm_dp_w16(ram, r, HM_PLAYER_ACTION, 4);
   cow_script4(ram, r, 0x0C, 0xA0B8);
   return true;
@@ -1602,12 +1464,12 @@ static bool brush(uint8_t *ram, HmRegs *r)
 
 static bool hit(uint8_t *ram, HmRegs *r)            /* a tool hits it */
 {
-  uint8_t st = record8(ram, r, REC_STATUS);
+  uint8_t st = record8(ram, r, ANIMAL_STATUS);
   uint16_t script = (st & 0x08) ? 0x0A : (st & 0x04) ? 0x68 : (st & 0x02) ? 0x6A : 0x0A;
   uint8_t kind = slot8(ram, r, SLOT_ANIM_ENTRY);
   if (kind != 0 && kind != 2) script++;
   hm_dp_w16(ram, r, DP_VALUE, script);
-  if (record8(ram, r, REC_STATUS) & 0x70) return true;
+  if (record8(ram, r, ANIMAL_STATUS) & 0x70) return true;
   cow_script(ram, r, script, 0x9FA7);
   uint8_t hits = record8(ram, r, COW_HITS);
   if (hits != 0x0A) rec_w8(ram, r, COW_HITS, (uint8_t)(hits + 1));
@@ -1616,22 +1478,22 @@ static bool hit(uint8_t *ram, HmRegs *r)            /* a tool hits it */
 
 static bool breed(uint8_t *ram, HmRegs *r)          /* the miracle potion worked */
 {
-  if (hm_rd16(ram, FLAGS_64) & 0x0004) return true;
-  if (ram[HM_COWS] == 0x0C) return true;
-  hm_wr16(ram, FLAGS_64, (uint16_t)(hm_rd16(ram, FLAGS_64) | 0x0004));
-  rec_and(ram, r, REC_STATUS, 0xCF);
+  if (hm_rd16(ram, HM_FLAGS_64) & 0x0004) return true;
+  if (ram[HM_COW_N] == 0x0C) return true;
+  hm_wr16(ram, HM_FLAGS_64, (uint16_t)(hm_rd16(ram, HM_FLAGS_64) | 0x0004));
+  rec_and(ram, r, ANIMAL_STATUS, 0xCF);
   rec_or(ram, r, COW_DAILY, 0x80);
   cow_happier(ram, r, 10, 0x9E92);
   rec_w8(ram, r, COW_DAYS, 0x15);
-  ram[PREGNANCY_DAYS] = 0x15;
-  ram[HM_COWS]++;
+  ram[HM_PREGNANCY_DAYS] = 0x15;
+  ram[HM_COW_N]++;
   cow_script4(ram, r, 0x0C, 0xA0B8);
   return true;
 }
 
 static bool cured(uint8_t *ram, HmRegs *r)          /* the medicine worked */
 {
-  rec_and(ram, r, REC_STATUS, 0xDF);
+  rec_and(ram, r, ANIMAL_STATUS, 0xDF);
   rec_w8(ram, r, COW_DAYS, 0);
   cow_script4(ram, r, 0x0C, 0xA0B8);
   return true;
@@ -1639,7 +1501,7 @@ static bool cured(uint8_t *ram, HmRegs *r)          /* the medicine worked */
 
 static bool use_tool(uint8_t *ram, HmRegs *r)
 {
-  uint8_t t = ram[HM_TOOL];
+  uint8_t t = ram[HM_TOOL_SELECTED];
   if (t == 0) return true;
   if (t < 0x05 || (t >= 0x11 && t < 0x15)) return hit(ram, r);
   if (t == 0x0E) return milk(ram, r);
@@ -1656,13 +1518,13 @@ static bool interact(uint8_t *ram, HmRegs *r)
   uint16_t action = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
   for (unsigned i = 0; i < 4; i++) if (action == BUSY[i]) return true;
   uint16_t state = hm_dp_r16(ram, r, HM_GAME_STATE);
-  if ((state & 0x0004) || (state & 0x0040) || (hm_rd16(ram, FLAGS_60) & 0x0006)) return true;
-  if (hm_rd16(ram, HM_JOY_NEW) & JOY_A) return talk(ram, r);
-  if (record8(ram, r, REC_STATUS) & 0x08) {
-    if (hm_rd16(ram, FLAGS_5A) & 0x0100) return breed(ram, r);
-    if (hm_rd16(ram, FLAGS_5A) & 0x0080) return cured(ram, r);
+  if ((state & 0x0004) || (state & 0x0040) || (hm_rd16(ram, HM_FLAGS_60) & 0x0006)) return true;
+  if (hm_rd16(ram, HM_PAD1_NEW) & JOY_A) return talk(ram, r);
+  if (record8(ram, r, ANIMAL_STATUS) & 0x08) {
+    if (hm_rd16(ram, HM_FLAGS_5A) & 0x0100) return breed(ram, r);
+    if (hm_rd16(ram, HM_FLAGS_5A) & 0x0080) return cured(ram, r);
   }
-  if (hm_rd16(ram, FLAGS_5A) & 0x0040) return use_tool(ram, r);
+  if (hm_rd16(ram, HM_FLAGS_5A) & 0x0040) return use_tool(ram, r);
   return true;
 }
 
@@ -1673,9 +1535,9 @@ static void wander(uint8_t *ram, HmRegs *r)
   static const uint16_t CALF[4] = { 0x78, 0x79, 0x7A, 0x7B }, YOUNG[4] = { 0x74, 0x76, 0x77, 0x75 };
   static const uint16_t RET_CALF[4] = { 0xA144, 0xA16F, 0xA19A, 0xA1C5 };
   static const uint16_t RET_YOUNG[4] = { 0xA231, 0xA25C, 0xA287, 0xA2B2 };
-  uint8_t st = record8(ram, r, REC_STATUS);
+  uint8_t st = record8(ram, r, ANIMAL_STATUS);
   if (st & 0x08) {
-    if (!cow_timer_done(ram, r) || (record8(ram, r, REC_STATUS) & 0x40)) return;
+    if (!cow_timer_done(ram, r) || (record8(ram, r, ANIMAL_STATUS) & 0x40)) return;
     static const struct { uint8_t below; uint16_t sick, runs, normal, ret; } ADULT[5] = {
       { 0x33, 0x6C, 0x70, 0x5E, 0xA34E }, { 0x66, 0x6D, 0x71, 0x51, 0xA395 },
       { 0x99, 0x6E, 0x72, 0x53, 0xA3DC }, { 0xCC, 0x6F, 0x73, 0x54, 0xA423 },
@@ -1705,8 +1567,8 @@ static void start_moving(uint8_t *ram, HmRegs *r, const uint16_t ret[3])
 {
   if (record8(ram, r, COW_DAILY) & 0x08) return;
   rec_or(ram, r, COW_DAILY, 0x08);
-  hm_wr16(ram, COW_TIMERS + cow_timer_x(ram, r), 0);
-  uint8_t st = record8(ram, r, REC_STATUS);
+  hm_wr16(ram, HM_COW_TIMERS + cow_timer_x(ram, r), 0);
+  uint8_t st = record8(ram, r, ANIMAL_STATUS);
   uint16_t script, at;
   if (st & 0x08) {
     if (st & 0x40) return;
@@ -1728,7 +1590,7 @@ static void face_player(uint8_t *ram, HmRegs *r)
   uint16_t dy = distance(ram, r, slot16(ram, r, SLOT_Y), hm_dp_r16(ram, r, HM_PLAYER_Y),
                          DP_VALUE_HI, DP_DY_NEGATIVE);
   slot_w8(ram, r, SLOT_STEPS_LEFT, lda8(r, 0x20));
-  bool away = record8(ram, r, REC_STATUS) & COW_STATUS_RUNS_AWAY;
+  bool away = record8(ram, r, ANIMAL_STATUS) & COW_STATUS_RUNS_AWAY;
   uint8_t direction;
   if (dy >= dx) direction = (hm_dp_r16(ram, r, DP_DY_NEGATIVE) != 0) != away ? 0x01 : 0x02;
   else          direction = (hm_dp_r16(ram, r, DP_DX_NEGATIVE) != 0) != away ? 0x04 : 0x08;
@@ -1753,14 +1615,14 @@ void hm_Event_CowFrame(uint8_t *ram, HmRegs *r)
     rec_w8(ram, r, COW_MAP, ram[HM_SEASON]);
     rec_w16(ram, r, COW_X, 0x0148);
     rec_w16(ram, r, COW_Y, 0x0178);
-  } else if (map < 0x04 && state == 0xE0 && (hm_rd16(ram, FLAGS_5A) & 0x0004)) {
+  } else if (map < 0x04 && state == 0xE0 && (hm_rd16(ram, HM_FLAGS_5A) & 0x0004)) {
     /* 84A498: sold (the price by happiness: 500, 800 or 1000) */
-    hm_wr16(ram, FLAGS_5A, (uint16_t)(hm_rd16(ram, FLAGS_5A) & 0xFFFB));
+    hm_wr16(ram, HM_FLAGS_5A, (uint16_t)(hm_rd16(ram, HM_FLAGS_5A) & 0xFFFB));
     uint8_t h = record8(ram, r, COW_HAPPINESS);
     hm_wr16(ram, HM_SALE_PRICE, h < 0x60 ? 0x01F4 : h < 0xC0 ? 0x0320 : 0x03E8);
     ram[HM_SALE_PRICE + 2] = 0;
-    ram[SOLD_COW_SLOT] = slot8(ram, r, SLOT_NUMBER);
-    ram[INTERACTION] = 0x43; ram[INTERACTION_STEP] = 0; ram[INTERACTION_FRAMES] = 0; /* its dialog */
+    ram[HM_SOLD_COW_SLOT] = slot8(ram, r, SLOT_NUMBER);
+    ram[HM_INTERACTION] = 0x43; ram[HM_INTERACTION_STEP] = 0; ram[HM_INTERACTION_FRAMES] = 0; /* its dialog */
     hm_dp_w16(ram, r, HM_GAME_STATE, (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0040));
     hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
     slot_w8(ram, r, SLOT_STATE, 0);
@@ -1780,7 +1642,7 @@ void hm_Event_CowFrame(uint8_t *ram, HmRegs *r)
   /* 84A46E: moving */
   static const uint16_t RET_MOVE[3] = { 0xA688, 0xA6BA, 0xA70D };
   static const uint16_t RET_CALLED[3] = { 0xA7C1, 0xA7F3, 0xA849 };
-  bool called = hm_rd16(ram, FLAGS_5A) & 0x0010;      /* the bell */
+  bool called = hm_rd16(ram, HM_FLAGS_5A) & 0x0010;   /* the bell */
   if (!called && slot8(ram, r, SLOT_PRESSED) != 0) {
     start_moving(ram, r, RET_MOVE);
     uint16_t dir = hm_dp_r16(ram, r, HM_PLAYER_DIRECTION); /* the way the player looks */
@@ -1833,10 +1695,10 @@ static void chicken_home(uint8_t *ram, HmRegs *r, uint16_t ret)
   r->y = CHICKEN_MAP;
   lda8(r, MAP_COOP);
   hm_bus_wr8(ram, hm_dp_long(ram, r, DP_POINTER, CHICKEN_MAP), MAP_COOP);
-  r->y = REC_STATUS;
-  uint8_t f = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, DP_POINTER, REC_STATUS)) & 0xDF); /* not carried */
+  r->y = ANIMAL_STATUS;
+  uint8_t f = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, DP_POINTER, ANIMAL_STATUS)) & 0xDF); /* not carried */
   lda8(r, f);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_POINTER, REC_STATUS), f);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_POINTER, ANIMAL_STATUS), f);
   n = pull16b(ram, r);
   r->c = (n >> 14) & 1;                                    /* ASL; ASL */
   r->x = (uint16_t)(n << 2);
@@ -1850,7 +1712,7 @@ static void chicken_home(uint8_t *ram, HmRegs *r, uint16_t ret)
   r->a = hm_bus_rd16(ram, CHICKEN_PLACES + r->x);
   hm_bus_wr16(ram, hm_dp_long(ram, r, DP_POINTER, CHICKEN_Y), r->a);
   lda8(r, (uint8_t)r->a);
-  hm_bus_wr8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF), 0);
+  hm_bus_wr8(ram, dbw(r, HM_ITEM_ON_HAND & 0xFFFF), 0);
 }
 /* the carried dog goes back to the farm (the map of this season) */
 static bool dog_home(uint8_t *ram, HmRegs *r)
@@ -1860,9 +1722,9 @@ static bool dog_home(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)(0x0800 ^ 0xFFFF) & hm_dp_r16(ram, r, HM_GAME_STATE);
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   uint8_t season = lda8(r, hm_bus_rd8(ram, WRAM_LONG(HM_SEASON)));
-  hm_bus_wr8(ram, WRAM_LONG(DOG_MAP), season);
-  r->a = 0x0078; hm_bus_wr16(ram, WRAM_LONG(DOG_X), 0x0078);
-  r->a = 0x01A8; hm_bus_wr16(ram, WRAM_LONG(DOG_Y), 0x01A8);
+  hm_bus_wr8(ram, WRAM_LONG(HM_DOG_MAP), season);
+  r->a = 0x0078; hm_bus_wr16(ram, WRAM_LONG(HM_DOG_X), 0x0078);
+  r->a = 0x01A8; hm_bus_wr16(ram, WRAM_LONG(HM_DOG_Y), 0x01A8);
   return true;
 }
 
@@ -1872,12 +1734,12 @@ static bool dog_home(uint8_t *ram, HmRegs *r)
 void hm_Event_PutDownCarried(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  uint8_t item = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF)));
+  uint8_t item = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_ON_HAND & 0xFFFF)));
   if (item) {
     r->c = item >= 0x25;
     if (item != 0x25) r->c = item >= 0x26;
     if (item == 0x25 || item == 0x26) chicken_home(ram, r, 0xBC19);
-    else hm_bus_wr8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF), 0);
+    else hm_bus_wr8(ram, dbw(r, HM_ITEM_ON_HAND & 0xFFFF), 0);
     stand(ram, r);
     return;
   }
@@ -1888,13 +1750,13 @@ void hm_Event_PutDownCarried(uint8_t *ram, HmRegs *r)
 void hm_Event_Cmd51_PutDownCarriedQuietly(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  uint8_t item = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF)));
+  uint8_t item = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_ON_HAND & 0xFFFF)));
   if (item) {
     r->c = item >= 0x25;
     if (item != 0x25) r->c = item >= 0x26;
     if (item == 0x25 || item == 0x26) { chicken_home(ram, r, 0xBCD7); return; }
     r->c = item >= 0x29;
-    if (item == 0x29) hm_bus_wr8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF), 0);
+    if (item == 0x29) hm_bus_wr8(ram, dbw(r, HM_ITEM_ON_HAND & 0xFFFF), 0);
     return;
   }
   dog_home(ram, r);
@@ -1915,10 +1777,10 @@ static void pressed_on(uint8_t *ram, HmRegs *r, uint16_t flag)
     if (r->a == busy[i]) ok = false;
   }
   if (ok) { r->a = hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0004; ok = !r->a; }
-  if (ok) { r->a = hm_bus_rd16(ram, WRAM_LONG(FLAGS_60)) & 0x0006; ok = !r->a; }
-  if (ok) { r->a = hm_bus_rd16(ram, dbw(r, HM_JOY_NEW)); ok = (r->a & 0x0080) != 0; }
+  if (ok) { r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0x0006; ok = !r->a; }
+  if (ok) { r->a = hm_bus_rd16(ram, dbw(r, HM_PAD1_NEW)); ok = (r->a & 0x0080) != 0; }
   if (ok) { r->a = hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0800; ok = !r->a; }
-  if (ok) { ok = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF))) == 0; }
+  if (ok) { ok = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_ON_HAND & 0xFFFF))) == 0; }
   if (!ok) { count_frame(ram, r); return; }
   lda8(r, 0);
   slot_w8(ram, r, SLOT_IN_USE, 0);
@@ -1926,8 +1788,8 @@ static void pressed_on(uint8_t *ram, HmRegs *r, uint16_t flag)
   lda8(r, v);
   slot_w8(ram, r, SLOT_FLAGS, v);
   count_frame(ram, r);
-  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_60)) | flag);
-  hm_bus_wr16(ram, WRAM_LONG(FLAGS_60), r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) | flag);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_60), r->a);
 }
 void hm_Event_Cmd52_PickUpChild1(uint8_t *ram, HmRegs *r) { pressed_on(ram, r, 0x0002); }
 void hm_Event_Cmd53_PickUpChild2(uint8_t *ram, HmRegs *r) { pressed_on(ram, r, 0x0004); }
@@ -1940,8 +1802,8 @@ void hm_Event_Cmd54_AutoCloseTextBox(uint8_t *ram, HmRegs *r)
   r->x = arg16(ram, r);
   advance(ram, r, 2);
   uint8_t lines = arg8(ram, r);
-  hm_bus_wr8(ram, dbw(r, TEXT_BOX_LINES), lines);
-  hm_bus_wr16(ram, dbw(r, TEXT_AUTO_CLOSE_TIMER), 0);
+  hm_bus_wr8(ram, dbw(r, HM_TEXT_BOX_LINES), lines);
+  hm_bus_wr16(ram, dbw(r, HM_TEXT_AUTO_CLOSE_TIMER), 0);
   lda8(r, 6);
   hm_bus_wr8(ram, dbw(r, HM_INPUT_STATE), 6);
   hm_jsl(ram, r, 0xBF07, 0x83);
@@ -1970,7 +1832,7 @@ void hm_Event_Cmd55_JumpIfBitClear(uint8_t *ram, HmRegs *r)
 void hm_Event_Cmd56_UseToolInHand(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  if (!lda8(r, hm_bus_rd8(ram, dbw(r, HM_TOOL & 0xFFFF)))) return;
+  if (!lda8(r, hm_bus_rd8(ram, dbw(r, HM_TOOL_SELECTED & 0xFFFF)))) return;
   r->a = 0x000A;
   hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0x000A);
   hm_jsl(ram, r, 0xBF9E, 0x82);
@@ -2030,31 +1892,31 @@ static void group17(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t ret)
 }
 static void request(uint8_t *ram, HmRegs *r, uint16_t and_mask, uint16_t or_mask)
 {
-  r->a = (uint16_t)((hm_bus_rd16(ram, WRAM_LONG(FLAGS_5C)) & and_mask) | or_mask);
-  hm_bus_wr16(ram, WRAM_LONG(FLAGS_5C), r->a);
+  r->a = (uint16_t)((hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) & and_mask) | or_mask);
+  hm_bus_wr16(ram, WRAM_LONG(HM_FLAGS_5C), r->a);
 }
 static bool asked(uint8_t *ram, HmRegs *r, uint16_t bit)
 {
-  r->a = hm_bus_rd16(ram, WRAM_LONG(FLAGS_5C)) & bit;
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5C)) & bit;
   return r->a != 0;
 }
 /* LDA $0939; CMP #$78; ... : true when the 120 frames are up (reset) */
 static bool idle_time(uint8_t *ram, HmRegs *r)
 {
-  uint8_t t = lda8(r, hm_bus_rd8(ram, dbw(r, HORSE_TIMER)));
+  uint8_t t = lda8(r, hm_bus_rd8(ram, dbw(r, HM_HORSE_TIMER)));
   r->c = t >= 0x78;
   if (t != 0x78) {
     lda8(r, (uint8_t)(t + 1));
-    hm_bus_wr8(ram, dbw(r, HORSE_TIMER), (uint8_t)(t + 1));
+    hm_bus_wr8(ram, dbw(r, HM_HORSE_TIMER), (uint8_t)(t + 1));
     return false;
   }
-  hm_bus_wr8(ram, dbw(r, HORSE_TIMER), 0);
+  hm_bus_wr8(ram, dbw(r, HM_HORSE_TIMER), 0);
   return true;
 }
 /* walk towards the player, along the longer axis (as the dog does) */
 static void towards_player(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t ret)
 {
-  hm_bus_wr8(ram, dbw(r, HORSE_TIMER), 0);
+  hm_bus_wr8(ram, dbw(r, HM_HORSE_TIMER), 0);
   uint8_t f = (uint8_t)(slot8(ram, r, SLOT_FLAGS) | 0x28);
   lda8(r, f);
   slot_w8(ram, r, SLOT_FLAGS, f);
@@ -2097,7 +1959,7 @@ void hm_Event_HorseFrame(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   request(ram, r, 0xFFEF, 0);                              /* not touched (yet) */
-  uint8_t place = lda8(r, hm_bus_rd8(ram, WRAM_LONG(HORSE_AGE)));
+  uint8_t place = lda8(r, hm_bus_rd8(ram, WRAM_LONG(HM_HORSE_AGE)));
   r->c = place >= 0x15;
   if (place != 0x15) {
     if (idle_time(ram, r)) group17(ram, r, 0x0080, 0xAB6F);
@@ -2139,24 +2001,24 @@ void hm_Event_HorseFrame(uint8_t *ram, HmRegs *r)
       if (r->a == busy[i]) ok = false;
     }
     if (ok) { r->a = hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0004; ok = !r->a; }
-    if (ok) { r->a = hm_bus_rd16(ram, WRAM_LONG(FLAGS_60)) & 0x0006; ok = !r->a; }
+    if (ok) { r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0x0006; ok = !r->a; }
     if (ok) {
       request(ram, r, 0xFFFF, 0x0010);                     /* touched */
-      r->a = hm_bus_rd16(ram, dbw(r, HM_JOY_NEW));
+      r->a = hm_bus_rd16(ram, dbw(r, HM_PAD1_NEW));
       ok = (r->a & 0x0080) != 0;
     }
     if (ok) {                                              /* room in front? */
-      hm_dp_w16(ram, r, COLLIDE_AHEAD, r->a = 0x000D);
-      hm_dp_w16(ram, r, COLLIDE_X, hm_dp_r16(ram, r, HM_PLAYER_X));
-      hm_dp_w16(ram, r, COLLIDE_Y, hm_dp_r16(ram, r, HM_PLAYER_Y));
-      hm_dp_w16(ram, r, COLLIDE_STEP_X, 0);
-      hm_dp_w16(ram, r, COLLIDE_STEP_Y, 0);
-      r->a = hm_bus_rd16(ram, dbw(r, PLAYER_FACING));
+      hm_dp_w16(ram, r, HM_COLLIDE_AHEAD, r->a = 0x000D);
+      hm_dp_w16(ram, r, HM_COLLIDE_X, hm_dp_r16(ram, r, HM_PLAYER_X));
+      hm_dp_w16(ram, r, HM_COLLIDE_Y, hm_dp_r16(ram, r, HM_PLAYER_Y));
+      hm_dp_w16(ram, r, HM_COLLIDE_STEP_X, 0);
+      hm_dp_w16(ram, r, HM_COLLIDE_STEP_Y, 0);
+      r->a = hm_bus_rd16(ram, dbw(r, HM_PLAYER_FACING));
       hm_jsl(ram, r, 0xAC84, 0x83);
       hm_CollideMap(ram, r);
       hm_rtl(ram, r);
       ok = r->a == 0;
-      for (unsigned at = COLLIDE_TILE_1; ok && at <= COLLIDE_TILE_2; at += 2) {
+      for (unsigned at = HM_COLLIDE_TILE_1; ok && at <= HM_COLLIDE_TILE_2; at += 2) {
         uint16_t v = hm_dp_r16(ram, r, at);
         r->a = (uint16_t)(v - 0xC0);
         r->c = r->a >= 0x10;
@@ -2164,8 +2026,8 @@ void hm_Event_HorseFrame(uint8_t *ram, HmRegs *r)
       }
     }
     if (ok) {
-      hm_dp_w16(ram, r, COLLIDE_AHEAD, r->a = 0x0020);
-      r->a = hm_bus_rd16(ram, dbw(r, PLAYER_FACING));
+      hm_dp_w16(ram, r, HM_COLLIDE_AHEAD, r->a = 0x0020);
+      r->a = hm_bus_rd16(ram, dbw(r, HM_PLAYER_FACING));
       hm_jsl(ram, r, 0xACB5, 0x83);
       hm_CollideEventObjects(ram, r);
       hm_rtl(ram, r);
@@ -2201,7 +2063,7 @@ void hm_Event_HorseFrame(uint8_t *ram, HmRegs *r)
   }
 end:
   if (asked(ram, r, 0x0400)) {                             /* walk to the player */
-    uint8_t p = lda8(r, hm_bus_rd8(ram, WRAM_LONG(HORSE_AGE)));
+    uint8_t p = lda8(r, hm_bus_rd8(ram, WRAM_LONG(HM_HORSE_AGE)));
     r->c = p >= 0x15;
     if (p == 0x15) towards_player(ram, r, 0x4C, 0xAE32);
     else towards_player(ram, r, 0x4A, 0xAE66);
@@ -2257,7 +2119,7 @@ static void start_text(uint8_t *ram, HmRegs *r, uint16_t ret)
   advance(ram, r, 1);
   r->x = arg16(ram, r);
   advance(ram, r, 2);
-  hm_bus_wr8(ram, dbw(r, TEXT_BOX_LINES), arg8(ram, r));
+  hm_bus_wr8(ram, dbw(r, HM_TEXT_BOX_LINES), arg8(ram, r));
   lda8(r, 2);
   hm_bus_wr8(ram, dbw(r, HM_INPUT_STATE), 2);
   hm_jsl(ram, r, ret, 0x83);
@@ -2288,14 +2150,14 @@ static void to_shed(uint8_t *ram, HmRegs *r, uint16_t at)
   *hm_dp(ram, r, DP_CMP_LOW) = bit;
   hm_pull8(ram, r);                                        /* PLA; XBA; LDA #0; XBA */
   r->a = r->x = place;
-  uint8_t v = (uint8_t)(hm_bus_rd8(ram, SHED_ITEMS + r->x) | bit);
+  uint8_t v = (uint8_t)(hm_bus_rd8(ram, WRAM_LONG(HM_SHED_ITEMS) + r->x) | bit);
   r->a = v;
-  hm_bus_wr8(ram, SHED_ITEMS + r->x, v);
+  hm_bus_wr8(ram, WRAM_LONG(HM_SHED_ITEMS) + r->x, v);
   hm_bus_wr8(ram, dbw(r, at), 0);
 }
 void hm_Event_ReturnToolsToShed(uint8_t *ram, HmRegs *r)
 {
-  to_shed(ram, r, HM_TOOL);
+  to_shed(ram, r, HM_TOOL_SELECTED);
   to_shed(ram, r, HM_TOOL_BACKPACK);
 }
 
@@ -2312,8 +2174,8 @@ void hm_Event_DestroyOwnObject(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->y = SLOT_OBJECT;
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_OBJECT));
-  hm_dp_w16(ram, r, DP_DESTROY_OBJECT, r->a);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_OBJECT));
+  hm_dp_w16(ram, r, HM_OBJ_NUMBER, r->a);
   hm_jsl(ram, r, 0xB363, 0x85);
   hm_DestroyGameObject(ram, r);
   hm_rtl(ram, r);
@@ -2322,8 +2184,8 @@ void hm_Event_DestroyOwnObject(uint8_t *ram, HmRegs *r)
 void hm_Event_FreeOtherSlot(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
-  hm_dp_w16(ram, r, DP_POINTER, hm_dp_r16(ram, r, DP_SLOT)); /* keep our slot */
-  *hm_dp(ram, r, DP_POINTER_BANK) = *hm_dp(ram, r, DP_SLOT_BANK);
+  hm_dp_w16(ram, r, DP_POINTER, hm_dp_r16(ram, r, HM_EVENT_SLOT)); /* keep our slot */
+  *hm_dp(ram, r, DP_POINTER_BANK) = *hm_dp(ram, r, HM_EVENT_SLOT_BANK);
   arg8_word(ram, r);                                       /* the other slot */
   hm_jsl(ram, r, 0x9397, 0x84);
   hm_SetEventSlotPointer(ram, r);
@@ -2331,17 +2193,17 @@ void hm_Event_FreeOtherSlot(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
   r->y = SLOT_IN_USE;
   r->a &= 0xFF00;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_IN_USE), 0);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_IN_USE), 0);
   r->y = SLOT_OBJECT;
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_OBJECT));
-  hm_dp_w16(ram, r, DP_DESTROY_OBJECT, r->a);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_OBJECT));
+  hm_dp_w16(ram, r, HM_OBJ_NUMBER, r->a);
   hm_jsl(ram, r, 0x93BB, 0x85);
   hm_DestroyGameObject(ram, r);
   hm_rtl(ram, r);
   r->a = hm_dp_r16(ram, r, DP_POINTER);                    /* back to ours */
-  hm_dp_w16(ram, r, DP_SLOT, r->a);
+  hm_dp_w16(ram, r, HM_EVENT_SLOT, r->a);
   r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, DP_POINTER_BANK));
-  *hm_dp(ram, r, DP_SLOT_BANK) = (uint8_t)r->a;
+  *hm_dp(ram, r, HM_EVENT_SLOT_BANK) = (uint8_t)r->a;
 }
 
 void hm_Event_SetStandingAnimation(uint8_t *ram, HmRegs *r)
@@ -2349,9 +2211,9 @@ void hm_Event_SetStandingAnimation(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
   uint16_t word = arg16(ram, r);
   r->y = SLOT_ANIM_TABLE;
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_TABLE), word);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_TABLE), word);
   advance(ram, r, 2);
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_TABLE));
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_TABLE));
   hm_dp_w16(ram, r, DP_POINTER, r->a);
   r->a = (uint16_t)((r->a & 0xFF00) | ANIM_TABLE_BANK);
   *hm_dp(ram, r, DP_POINTER_BANK) = ANIM_TABLE_BANK;
@@ -2359,9 +2221,9 @@ void hm_Event_SetStandingAnimation(uint8_t *ram, HmRegs *r)
   hm_SetSlotAnimation(ram, r);
   hm_rtl(ram, r);
   r->y = SLOT_FLAGS;
-  uint8_t flags = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FLAGS)) | 0x04);
+  uint8_t flags = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS)) | 0x04);
   r->a = (uint16_t)((r->a & 0xFF00) | flags);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FLAGS), flags);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS), flags);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -2376,10 +2238,10 @@ void hm_Event_SetStandingAnimation(uint8_t *ram, HmRegs *r)
 static void set_animation(uint8_t *ram, HmRegs *r, uint16_t ret)
 {
   r->y = SLOT_FLAGS;
-  uint8_t flags = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FLAGS)) | 0x03);
+  uint8_t flags = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS)) | 0x03);
   r->a = (uint16_t)((r->a & 0xFF00) | flags);
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FLAGS), flags);
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_TABLE));
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS), flags);
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_TABLE));
   hm_dp_w16(ram, r, DP_POINTER, r->a);
   r->a = (uint16_t)((r->a & 0xFF00) | ANIM_TABLE_BANK);
   *hm_dp(ram, r, DP_POINTER_BANK) = ANIM_TABLE_BANK;
@@ -2387,21 +2249,21 @@ static void set_animation(uint8_t *ram, HmRegs *r, uint16_t ret)
   hm_SetSlotAnimation(ram, r);
   hm_rtl(ram, r);
   r->y = SLOT_FRAMES;
-  uint16_t frames = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FRAMES));
+  uint16_t frames = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FRAMES));
   r->c = frames == 0xFFFF;                                 /* CLC; ADC #1 */
   r->a = (uint16_t)(frames + 1);
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FRAMES), r->a);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FRAMES), r->a);
 }
 
 void hm_Event_SetSlotAnimation(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->y = SLOT_ANIM_TABLE;
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_TABLE), arg16(ram, r));
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_TABLE), arg16(ram, r));
   advance(ram, r, 2);
   uint8_t entry = arg8(ram, r);
   r->y = SLOT_ANIM_ENTRY;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_ENTRY), entry);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_ENTRY), entry);
   advance(ram, r, 1);
   set_animation(ram, r, 0x95D9);
 }
@@ -2410,11 +2272,11 @@ void hm_Event_SetSlotAnimationPlayerDir(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->y = SLOT_ANIM_TABLE;
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_TABLE), arg16(ram, r));
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_TABLE), arg16(ram, r));
   advance(ram, r, 2);
   r->a = hm_dp_r16(ram, r, HM_PLAYER_DIRECTION);           /* the player's direction */
   r->y = SLOT_ANIM_ENTRY;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_ENTRY), (uint8_t)r->a);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_ENTRY), (uint8_t)r->a);
   set_animation(ram, r, 0xB92D);
 }
 
@@ -2426,12 +2288,12 @@ void hm_Event_PlaceSlot(uint8_t *ram, HmRegs *r)
   for (int i = 0; i < 3; i++) {
     advance(ram, r, (uint16_t)(i ? 2 : 1));
     r->y = at[i];
-    hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, at[i]), arg16(ram, r));
+    hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, at[i]), arg16(ram, r));
   }
   advance(ram, r, 2);
   uint8_t entry = arg8(ram, r);
   r->y = SLOT_ANIM_ENTRY;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_ENTRY), entry);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_ENTRY), entry);
   advance(ram, r, 1);
   set_animation(ram, r, 0x8F8C);
 }
@@ -2442,20 +2304,20 @@ void hm_Event_PlaceSlot(uint8_t *ram, HmRegs *r)
 static void turn_to_player(uint8_t *ram, HmRegs *r, uint16_t ret)
 {
   r->y = SLOT_WALK_STEPS;
-  uint8_t b = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_WALK_STEPS)));
+  uint8_t b = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_WALK_STEPS)));
   r->y = SLOT_STEPS_LEFT;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_STEPS_LEFT), b);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_STEPS_LEFT), b);
   static const uint8_t cleared[3] = { SLOT_STEP_X, SLOT_STEP_Y, SLOT_PRESSED };
   for (int i = 0; i < 3; i++) {
     r->y = cleared[i];
     lda8(r, 0);
-    hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, cleared[i]), 0);
+    hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, cleared[i]), 0);
   }
   r->a = (uint16_t)(hm_dp_r16(ram, r, HM_PLAYER_DIRECTION) ^ 0x0001);
   r->y = SLOT_ANIM_ENTRY;
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_ENTRY), (uint8_t)r->a);
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_ENTRY), (uint8_t)r->a);
   r->y = SLOT_ANIM_TABLE;
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_ANIM_TABLE));
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_ANIM_TABLE));
   hm_dp_w16(ram, r, DP_POINTER, r->a);
   lda8(r, ANIM_TABLE_BANK);
   *hm_dp(ram, r, DP_POINTER_BANK) = ANIM_TABLE_BANK;
@@ -2463,8 +2325,8 @@ static void turn_to_player(uint8_t *ram, HmRegs *r, uint16_t ret)
   hm_SetSlotAnimation(ram, r);
   hm_rtl(ram, r);
   r->y = SLOT_FLAGS;
-  uint8_t flags = lda8(r, (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FLAGS)) | 0x14));
-  hm_bus_wr8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FLAGS), flags);
+  uint8_t flags = lda8(r, (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS)) | 0x14));
+  hm_bus_wr8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FLAGS), flags);
 }
 
 /* Event_FacePlayerIfSpokenTo ($84:BA72): <address>: if the player talked to the
@@ -2477,7 +2339,7 @@ void hm_Event_FacePlayerIfSpokenTo(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->y = SLOT_PRESSED;
-  uint8_t talked = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_PRESSED)));
+  uint8_t talked = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_PRESSED)));
   r->c = 1;                                                /* CMP #0 */
   bool turn = talked != 0;
   if (turn) {
@@ -2486,17 +2348,17 @@ void hm_Event_FacePlayerIfSpokenTo(uint8_t *ram, HmRegs *r)
     turn = r->a != 0x0A;
   }
   if (turn) {
-    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5E)) & 0x0040);
+    r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_5E)) & 0x0040);
     turn = r->a != 0;
   }
   if (!turn) { advance(ram, r, 2); return; }
   jump(ram, r);
   turn_to_player(ram, r, 0xBB03);
   r->y = SLOT_FRAMES;
-  uint16_t frames = hm_bus_rd16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FRAMES));
+  uint16_t frames = hm_bus_rd16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FRAMES));
   r->c = frames == 0xFFFF;
   r->a = (uint16_t)(frames + 1);
-  hm_bus_wr16(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_FRAMES), r->a);
+  hm_bus_wr16(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_FRAMES), r->a);
 }
 
 /* Event_ChangeToWantedSong ($84:8CA8): <byte, unused>: the music changes to the
@@ -2539,7 +2401,7 @@ static void talk_to_slot(uint8_t *ram, HmRegs *r, unsigned addresses, uint16_t r
 {
   advance(ram, r, 1);
   r->y = SLOT_PRESSED;
-  uint8_t talked = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SLOT, SLOT_PRESSED)));
+  uint8_t talked = lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, SLOT_PRESSED)));
   r->c = 1;                                                /* CMP #0 */
   bool go = talked != 0;
   static const uint16_t busy[4] = { 0x0A, 0x0C, 0x0D, 0x1B };
@@ -2549,8 +2411,8 @@ static void talk_to_slot(uint8_t *ram, HmRegs *r, unsigned addresses, uint16_t r
     go = r->a != busy[i];
   }
   if (go) { r->a = hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0004; go = !r->a; }
-  if (go) { r->a = hm_bus_rd16(ram, WRAM_LONG(FLAGS_60)) & 0x0006; go = !r->a; }
-  if (go) { r->a = hm_bus_rd16(ram, abs_db(r, HM_JOY_NEW)); go = (r->a & 0x0080) != 0; } /* BIT #$80 */
+  if (go) { r->a = hm_bus_rd16(ram, WRAM_LONG(HM_FLAGS_60)) & 0x0006; go = !r->a; }
+  if (go) { r->a = hm_bus_rd16(ram, abs_db(r, HM_PAD1_NEW)); go = (r->a & 0x0080) != 0; } /* BIT #$80 */
   if (!go) {
     advance(ram, r, (uint16_t)(2 * addresses));
     count_frame(ram, r);
@@ -2560,9 +2422,9 @@ static void talk_to_slot(uint8_t *ram, HmRegs *r, unsigned addresses, uint16_t r
     r->a = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
     r->c = r->a >= 5;
     if (r->a == 5) {
-      uint8_t item = lda8(r, hm_bus_rd8(ram, abs_db(r, HM_ITEM_HELD))); /* in hand */
+      uint8_t item = lda8(r, hm_bus_rd8(ram, abs_db(r, HM_ITEM_ON_HAND))); /* in hand */
       if (item) {
-        hm_bus_wr8(ram, abs_db(r, SHOWN_ITEM), item);
+        hm_bus_wr8(ram, abs_db(r, HM_SHOWN_ITEM), item);
         advance(ram, r, 2);
       }
     }
@@ -2570,9 +2432,9 @@ static void talk_to_slot(uint8_t *ram, HmRegs *r, unsigned addresses, uint16_t r
   jump(ram, r);
   turn_to_player(ram, r, ret);
   lda8(r, 0x56);
-  hm_bus_wr8(ram, abs_db(r, INTERACTION), 0x56);
-  hm_bus_wr8(ram, abs_db(r, INTERACTION_STEP), 0);
-  hm_bus_wr8(ram, abs_db(r, INTERACTION_FRAMES), 0);
+  hm_bus_wr8(ram, abs_db(r, HM_INTERACTION), 0x56);
+  hm_bus_wr8(ram, abs_db(r, HM_INTERACTION_STEP), 0);
+  hm_bus_wr8(ram, abs_db(r, HM_INTERACTION_FRAMES), 0);
   r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0040);
   hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   r->a = 0;
@@ -2597,12 +2459,12 @@ static void event_fade(uint8_t *ram, HmRegs *r, uint8_t from, uint8_t to, uint16
 {
   uint8_t entry = r->p;
   advance(ram, r, 1);
-  uint16_t before = hm_dp_r16(ram, r, DP_SCRIPT_POS);
+  uint16_t before = hm_dp_r16(ram, r, HM_SCRIPT_POS);
   advance(ram, r, 1);
   uint8_t v = before == 0x7FFF ? 0x40 : 0;                 /* the ADC's overflow */
   *hm_dp(ram, r, DP_CMP_LOW) = from;
   *hm_dp(ram, r, DP_CMP_HIGH) = 3;
-  *hm_dp(ram, r, DP_FADE_TO) = to;
+  *hm_dp(ram, r, HM_FADE_TO) = to;
   r->a = (uint16_t)((r->a & 0xFF00) | to);
   r->p = (uint8_t)((entry & 0x0C) | 0x20 | v | r->c | (to ? 0 : 0x02));
   hm_jsl(ram, r, ret, 0x80);
@@ -2632,7 +2494,7 @@ void hm_Event_PlayEffectAndWait(uint8_t *ram, HmRegs *r)
   uint16_t bank = arg16(ram, r);
   hm_push8(ram, r, (uint8_t)(bank >> 8));                  /* PHA (16-bit) */
   hm_push8(ram, r, (uint8_t)bank);
-  uint16_t before = hm_dp_r16(ram, r, DP_SCRIPT_POS);
+  uint16_t before = hm_dp_r16(ram, r, HM_SCRIPT_POS);
   advance(ram, r, 2);
   uint8_t v = (before == 0x7FFE || before == 0x7FFF) ? 0x40 : 0;
   r->y = arg16(ram, r);                                    /* TAY */
@@ -2643,7 +2505,7 @@ void hm_Event_PlayEffectAndWait(uint8_t *ram, HmRegs *r)
   hm_jsl(ram, r, 0x961E, 0x83);
   hm_PlayEffectWithSongInstrument(ram, r);
   hm_rtl(ram, r);
-  hm_bus_wr8(ram, (uint32_t)r->db << 16 | LOADED_TOOL_SOUND, 0); /* STZ $0119 */
+  hm_bus_wr8(ram, (uint32_t)r->db << 16 | HM_LOADED_TOOL_SOUND, 0); /* STZ $0119 */
   r->p = (uint8_t)(entry & 0x0C);
   hm_jsl(ram, r, 0x9627, 0x82);
   hm_ToolUsedSound2(ram, r);

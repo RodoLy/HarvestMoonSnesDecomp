@@ -29,6 +29,8 @@
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
+#include "hm_vars.h"
+#include "hm_regs.h"
 
 /* `.W` addresses go through the data bank (DB): $4212 and $4218 are the
  * console's registers only when DB is a bank that has them. */
@@ -40,23 +42,9 @@ static void wr16(uint8_t *ram, const HmRegs *r, uint16_t a, uint16_t v) { hm_bus
 
 /* ── Names of the memory locations used here ────────────────────────────── */
 
-/* Console registers */
-#define HVBJOY        0x4212   /* bit 0 = the automatic pad reading is running */
-#define JOY1          0x4218   /* 16b: pad 1's buttons */
-#define JOY2          0x421A   /* 16b: pad 2's buttons */
-
 /* WRAM of the data bank: pad 1 */
-#define PAD1          0x0124   /* 16b: the buttons held */
-#define PAD1_LAST     0x0126   /* 16b: last frame's */
-#define PAD1_NEW      0x0128   /* 16b: pressed this frame (HM_JOY_NEW elsewhere) */
-#define PAD1_UP       0x012A   /* 16b: let go this frame */
-#define PAD1_REPEAT   0x012C   /* 16b: the new presses, plus autorepeat */
 #define PAD1_EXTRA    0x012E   /* 16b: ORed into the buttons read, then cleared */
 /* pad 2: the same (nothing reads them) */
-#define PAD2          0x0130
-#define PAD2_LAST     0x0132
-#define PAD2_NEW      0x0134
-#define PAD2_UP       0x0136
 #define PAD2_REPEAT   0x0138
 #define PAD2_EXTRA    0x013A
 
@@ -69,33 +57,33 @@ void hm_ReadJoypad(uint8_t *ram, HmRegs *r)
   hm_push8(ram, r, r->p);                                      /* PHP */
   while (rd8(ram, r, HVBJOY) & 0x01) { }                      /* still reading */
 
-  wr16(ram, r, PAD1_LAST, rd16(ram, r, PAD1));
-  wr16(ram, r, PAD2_LAST, rd16(ram, r, PAD2));
+  wr16(ram, r, HM_PAD1_LAST, rd16(ram, r, HM_PAD1_HELD));
+  wr16(ram, r, HM_PAD2_LAST, rd16(ram, r, HM_PAD2_HELD));
   if (*hm_dp(ram, r, DP_LOW_BYTES_ONLY)) {                     /* never */
-    wr8(ram, r, PAD1_EXTRA, rd8(ram, r, JOY1));
-    wr8(ram, r, PAD2, rd8(ram, r, JOY2));
+    wr8(ram, r, PAD1_EXTRA, rd8(ram, r, JOY1L));
+    wr8(ram, r, HM_PAD2_HELD, rd8(ram, r, JOY2L));
   } else {
-    wr16(ram, r, PAD1, rd16(ram, r, JOY1) | rd16(ram, r, PAD1_EXTRA));
-    wr16(ram, r, PAD2, rd16(ram, r, JOY2) | rd16(ram, r, PAD2_EXTRA));
+    wr16(ram, r, HM_PAD1_HELD, rd16(ram, r, JOY1L) | rd16(ram, r, PAD1_EXTRA));
+    wr16(ram, r, HM_PAD2_HELD, rd16(ram, r, JOY2L) | rd16(ram, r, PAD2_EXTRA));
     wr16(ram, r, PAD1_EXTRA, 0);
     wr16(ram, r, PAD2_EXTRA, 0);
   }
 
-  uint16_t last1 = rd16(ram, r, PAD1_LAST), last2 = rd16(ram, r, PAD2_LAST);
-  uint16_t pressed1 = (rd16(ram, r, JOY1) ^ last1) & rd16(ram, r, PAD1);
-  wr16(ram, r, PAD1_NEW, pressed1);
-  wr16(ram, r, PAD1_REPEAT, pressed1);
-  wr16(ram, r, PAD1_UP, (rd16(ram, r, JOY1) ^ last1) & last1);
-  uint16_t pressed2 = (rd16(ram, r, JOY2) ^ last2) & rd16(ram, r, PAD2);
-  wr16(ram, r, PAD2_NEW, pressed2);
+  uint16_t last1 = rd16(ram, r, HM_PAD1_LAST), last2 = rd16(ram, r, HM_PAD2_LAST);
+  uint16_t pressed1 = (rd16(ram, r, JOY1L) ^ last1) & rd16(ram, r, HM_PAD1_HELD);
+  wr16(ram, r, HM_PAD1_NEW, pressed1);
+  wr16(ram, r, HM_PAD1_REPEAT, pressed1);
+  wr16(ram, r, HM_PAD1_UP, (rd16(ram, r, JOY1L) ^ last1) & last1);
+  uint16_t pressed2 = (rd16(ram, r, JOY2L) ^ last2) & rd16(ram, r, HM_PAD2_HELD);
+  wr16(ram, r, HM_PAD2_NEW, pressed2);
   wr16(ram, r, PAD2_REPEAT, pressed2);
-  wr16(ram, r, PAD2_UP, (rd16(ram, r, JOY1) ^ last2) & last2);   /* pad 1's register */
+  wr16(ram, r, HM_PAD2_UP, (rd16(ram, r, JOY1L) ^ last2) & last2); /* pad 1's register */
 
   /* the hold counter (a word: INC / STZ run with 16-bit A) */
-  uint16_t buttons = rd16(ram, r, PAD1);
+  uint16_t buttons = rd16(ram, r, HM_PAD1_HELD);
   hm_dp_w16(ram, r, HELD, buttons ? (uint16_t)(hm_dp_r16(ram, r, HELD) + 1) : 0);
   if (*hm_dp(ram, r, HELD) == 30) {
-    wr16(ram, r, PAD1_REPEAT, buttons);                        /* held: again */
+    wr16(ram, r, HM_PAD1_REPEAT, buttons);                     /* held: again */
     *hm_dp(ram, r, HELD) = 25;
   }
   r->a = (uint16_t)((buttons & 0xFF00) | *hm_dp(ram, r, HELD));
