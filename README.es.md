@@ -264,8 +264,10 @@ tu ROM. La música sigue sonando.
   las cercas; si no estás en la granja, el trabajo igual se hace, al mismo
   ritmo (en las casas el reloj se para, y ella también). A las 11:00 se va a sus
   quehaceres del mediodía, como en el juego (María, Nina y Ellen en la
-  granja, Ann y Eve en la bodega). Algunos días se viste como cuando era
-  soltera. Se guarda en tu diario.
+  granja, Ann y Eve en la bodega). Se guarda en tu diario.
+- **Su ropa de soltera algunos días** *(apagado por defecto)* — casado, uno
+  de cada dos días tu esposa se viste con la ropa que usaba antes de la
+  boda, esté donde esté (te ayude o no).
 - **Controles con ratón** *(apagado por defecto, en Controles → Teclado)* — clic izquierdo junto a
   ti usa la herramienta ahí, clic izquierdo
   más lejos camina hasta ahí (mantenlo para seguir al puntero), clic

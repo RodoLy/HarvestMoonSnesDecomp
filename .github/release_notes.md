@@ -30,7 +30,8 @@ Prefer not to run a downloaded program? Build it yourself from the source with `
 - **Mods**: a `mods` folder and a **Mods** page in the launcher; drop the community's IPS / BPS patches in and turn them on. Your ROM is never changed.
 - **The launcher by day**: the start screen's farm under a sunny sky.
 - New improvements (all off by default):
-  - **Your wife helps on the farm**: married with her ten hearts, talk to her again after her line of the day and she offers to help for a day, three days or a week; mornings she feeds the animals and waters (half of the work at most, hopping over fences), then goes to her midday chores. Some days she wears her clothes from before the wedding.
+  - **Your wife helps on the farm**: married with her ten hearts, talk to her again after her line of the day and she offers to help for a day, three days or a week; mornings she feeds the animals and waters (half of the work at most, hopping over fences), then goes to her midday chores.
+  - **Her old clothes some days**: one day in two your wife wears the clothes she wore before the wedding (an improvement of its own).
   - **Crop bag**: 9 slots for what you carry, inside the pause menu; hold Q at the shipping box to ship it all.
   - **Walk through crops**: crops no longer block the way, and the plants sway as you pass.
   - **One seed at a time**: each use sows only the tile in front of you.
@@ -46,7 +47,8 @@ Prefer not to run a downloaded program? Build it yourself from the source with `
 - **Mods**: una carpeta `mods` y una página **Mods** en el launcher; pon ahí los parches IPS / BPS de la comunidad y actívalos. Tu ROM nunca se modifica.
 - **El launcher de día**: la granja de la pantalla de inicio bajo un cielo soleado.
 - Mejoras nuevas (todas apagadas de fábrica):
-  - **Tu esposa te ayuda en la granja**: casado y con sus diez corazones, háblale otra vez después de su frase del día y te ofrece ayudarte un día, tres días o una semana; en las mañanas alimenta a los animales y riega (como máximo la mitad del trabajo, brincando las cercas) y luego se va a sus quehaceres del mediodía. Algunos días se viste como cuando era soltera.
+  - **Tu esposa te ayuda en la granja**: casado y con sus diez corazones, háblale otra vez después de su frase del día y te ofrece ayudarte un día, tres días o una semana; en las mañanas alimenta a los animales y riega (como máximo la mitad del trabajo, brincando las cercas) y luego se va a sus quehaceres del mediodía.
+  - **Su ropa de soltera algunos días**: uno de cada dos días tu esposa se viste con la ropa de antes de la boda (una mejora aparte).
   - **Mochila de cosechas**: 9 espacios para lo que cargas, dentro del menú de pausa; mantén Q en la caja de envíos para enviarlo todo.
   - **Caminar entre cultivos**: los cultivos ya no bloquean el paso y las plantas se mecen al pasar.
   - **Una semilla a la vez**: cada uso siembra solo la casilla de enfrente.
@@ -59,7 +61,7 @@ Prefer not to run a downloaded program? Build it yourself from the source with `
 - The whole game in C, with the console's picture and sound. / Todo el juego en C, con la imagen y el sonido de la consola.
 - A launcher in the look of the game (English, Español, Italiano): options, controls (keyboard, gamepads, touch), save states. / Un launcher con el aspecto del juego: opciones, controles (teclado, gamepads, táctil), estados guardados.
 - **Everything starts off**: the game is exactly the console's until you turn on what you like. / **Todo viene apagado**: el juego es el de la consola hasta que activas lo que quieras.
-  - Improvements / Mejoras: widescreen, Harvest Moon 64-style pause menu, crop bag, walk through crops, one seed at a time, mouse controls, your wife helps on the farm, fast text, longer days, endless game, OPTIONS on the title screen.
+  - Improvements / Mejoras: widescreen, Harvest Moon 64-style pause menu, crop bag, walk through crops, one seed at a time, mouse controls, your wife helps on the farm, her old clothes some days, fast text, longer days, endless game, OPTIONS on the title screen.
   - Cheats / Trucos: money, stamina, stop the clock, lumber and fodder, seeds and feed, weather.
 - **Mods**: drop the community's IPS / BPS patches into `mods/` and turn them on in the launcher (see `mods/MODS.md`). / Pon los parches IPS / BPS de la comunidad en `mods/` y actívalos en el launcher (ver `mods/MODS.es.md`).
 - Android: touch controls in the game's style; on two-screen devices (AYN Thor) a live pause menu on the second screen. / Android: controles táctiles con el estilo del juego; en equipos de dos pantallas (AYN Thor), el menú de pausa en vivo en la segunda pantalla.

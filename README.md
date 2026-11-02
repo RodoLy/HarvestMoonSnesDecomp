@@ -251,8 +251,10 @@ music keeps playing.
   lines) and hopping over the fences; away from the farm the work gets done
   all the same, at the same pace (the clock stops indoors, and so does she). At 11:00 she
   goes to her midday chores, as in the game (Maria, Nina and Ellen on the
-  farm, Ann and Eve in the tool shed). Some days she wears the clothes she
-  wore before the wedding. Kept in your diary.
+  farm, Ann and Eve in the tool shed). Kept in your diary.
+- **Her old clothes some days** *(off by default)* — married, one day in
+  two your wife wears the clothes she wore before the wedding, wherever she
+  is (with or without her help).
 - **Mouse controls** *(off by default, in Controls → Keyboard)* — left click next to you uses the tool there, left click farther away walks there
   (hold it to follow the pointer), right click talks, picks up or
   opens. A thin square marks the tile under the pointer (light within

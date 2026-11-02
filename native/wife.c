@@ -22,9 +22,10 @@
  * (group $44's own picture, at (360, 360)); Ann and Eve go into the tool
  * shed.
  *
- * Her clothes. Some days (one in two, by the day) she wears the clothes she
- * wore before the wedding: her own girl's pictures instead of the wife's,
- * on the farm and at home.
+ * Her clothes (an improvement of its own, "Her old clothes some days", on
+ * with or without her help). Some days (one in two, by the day) she wears
+ * the clothes she wore before the wedding: her own girl's pictures instead
+ * of the wife's, on the farm and at home.
  *
  * Everything here happens at the start of a GameLoop frame, where nothing of
  * the game is half done; tiles change through the game's own ChangeMapTile,
@@ -127,7 +128,9 @@ static void slot_picture(uint16_t sprite, bool flip)
   wr16(SLOT + SLOT_ANIMATION, flip ? 0x40 : 0);
   g_ram[SLOT + SLOT_FLAGS] |= 0x04;                    /* the picture changed */
 }
-static const uint16_t *clothes(int w) { return single_day() ? kGirl[w] : kWife; }
+/* her clothes from before the wedding: only with that improvement on, and on its days */
+static bool old_clothes(void) { return g_cfg.wife_clothes && single_day(); }
+static const uint16_t *clothes(int w) { return old_clothes() ? kGirl[w] : kWife; }
 /* her picture for a facing, standing or in mid-step */
 static void pose(int w, int facing, bool step)
 {
@@ -583,7 +586,7 @@ void wife_frame(uint8_t *ram)
 void wife_clean_point(uint8_t *ram, const HmRegs *regs)
 {
   g_hm_wife_on = g_cfg.wife_help;
-  if (!g_cfg.wife_help || !hm_diary_loaded(ram)) return;
+  if ((!g_cfg.wife_help && !g_cfg.wife_clothes) || !hm_diary_loaded(ram)) return;
   int w = wife_of();
   if (w < 0) return;
   W.frame++;
@@ -598,13 +601,13 @@ void wife_clean_point(uint8_t *ram, const HmRegs *regs)
   }
   if (!box && W.talking) W.talking = false;
   /* her clothes, wherever the game has her */
-  if (slot_is_wife() && single_day()) {
+  if (slot_is_wife() && old_clothes()) {
     int s = rd16(SLOT + SLOT_SPRITE);
     for (int k = 0; k < 6; k++) if (s == kWife[k]) slot_picture(kGirl[w][k], g_ram[SLOT + SLOT_ANIMATION] & 0x40);
   }
 
   /* the help (it waits while someone talks) */
-  if (!helping_today() || hour < 6 || box) return;
+  if (!g_cfg.wife_help || !helping_today() || hour < 6 || box) return;
   if (!W.planned) plan_day();
   int map = ram[HM_MAP_ID];
   bool house = map >= 0x15 && map <= 0x17;
