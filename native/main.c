@@ -33,6 +33,7 @@
 #include <SDL3/SDL_main.h>
 
 #include "hm_decomp.h"
+#include "hm_vars.h"
 #include "native.h"
 #include "config.h"
 #include "host.h"
@@ -1068,7 +1069,7 @@ static void end_of_frame(uint8_t *ram)
      * then the launcher once its menu takes keys (or after a minute and a
      * half, whatever the game does) */
     bool ready = mods_title_ready() || s_frame - s_title_warm_from > 5400;
-    native_set_pads(g_ram[0x95] != 5 && s_frame % 20 == 0 ? B_START : 0, 0);
+    native_set_pads(g_ram[HM_INTRO_STAGE] != 5 && s_frame % 20 == 0 ? B_START : 0, 0);
     if (!ready) return;
     s_title_warm = false;
     s_next_tick = 0; s_last_wake = 0;

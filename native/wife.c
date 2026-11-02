@@ -36,6 +36,7 @@
 
 #include "hm_decomp.h"
 #include "hm_ram.h"
+#include "hm_vars.h"
 #include "native.h"
 #include "config.h"
 #include "i18n.h"
@@ -43,19 +44,7 @@
 #include "gamefont.h"
 #include "wife.h"
 
-#define SLOT          0x0BA46u     /* event slot $13: $7E:B586 + $40 x $13 */
-#define WIFE_FLAGS    0x11F66u
-#define FARM_TILES    0x009B6u     /* the current map's tile types */
-#define FARM_KEEP     0x0A4E6u     /* the farm's own copy, while elsewhere */
-#define BOX_OPEN      0x11F5Au     /* bit 14: a text box is open */
-#define SILO          0x11F10u     /* fodder in the silo (16 bits) */
-#define HEN_FEED      0x0092Du     /* chicken feed */
-#define COW_BITS      0x00932u
-#define COW_COUNT     0x00930u
-#define HEN_BITS      0x00934u
-#define HEN_COUNT     0x00931u
-#define PLAYER_X      0x000D6u
-#define PLAYER_Y      0x000D8u
+#define SLOT          0x0BA46u     /* the wife's event slot, $13: $7E:B586 + $40 x $13 (its fields: SLOT_*) */
 #define HELP_UNTIL_HOUR 11
 
 enum { MARIA, ANN, NINA, ELLEN, EVE };
@@ -113,7 +102,7 @@ static int rd16(uint32_t a) { return g_ram[a] | g_ram[a + 1] << 8; }
 static void wr16(uint32_t a, int v) { g_ram[a] = (uint8_t)v; g_ram[a + 1] = (uint8_t)(v >> 8); }
 static int wife_of(void)
 {
-  int f = g_ram[WIFE_FLAGS] & 0x1F;
+  int f = g_ram[HM_FLAGS_66] & 0x1F;
   for (int i = 0; i < 5; i++) if (f & (1 << i)) return i;
   return -1;
 }
@@ -127,15 +116,15 @@ static bool helping_today(void) { return g_hm_wife_until && today() <= g_hm_wife
 static bool slot_is_wife(void)
 {
   if (!g_ram[SLOT]) return false;
-  int bank = g_ram[SLOT + 0x32], at = rd16(SLOT + 0x30);
+  int bank = g_ram[SLOT + SLOT_SCRIPT_BANK], at = rd16(SLOT + SLOT_SCRIPT);
   return bank == 0xB5 && at >= 0x8000 && at < 0xA200;
 }
 static void slot_picture(uint16_t sprite, bool flip)
 {
-  if (rd16(SLOT + 0x16) == sprite && ((g_ram[SLOT + 0x14] & 0x40) != 0) == flip) return;
-  wr16(SLOT + 0x16, sprite);
-  wr16(SLOT + 0x14, flip ? 0x40 : 0);
-  g_ram[SLOT + 0x01] |= 0x04;                    /* the picture changed */
+  if (rd16(SLOT + SLOT_SPRITE) == sprite && ((g_ram[SLOT + SLOT_ANIMATION] & 0x40) != 0) == flip) return;
+  wr16(SLOT + SLOT_SPRITE, sprite);
+  wr16(SLOT + SLOT_ANIMATION, flip ? 0x40 : 0);
+  g_ram[SLOT + SLOT_FLAGS] |= 0x04;                    /* the picture changed */
 }
 static const uint16_t *clothes(int w) { return single_day() ? kGirl[w] : kWife; }
 /* her picture for a facing, standing or in mid-step */
@@ -149,18 +138,18 @@ static void pose(int w, int facing, bool step)
 static void spawn(int w, int x, int y)
 {
   memset(&g_ram[SLOT], 0, 0x40);
-  g_ram[SLOT + 0x00] = 1;
-  g_ram[SLOT + 0x01] = 0x03;                     /* a picture; make its game object */
-  g_ram[SLOT + 0x10] = 1;
-  wr16(SLOT + 0x16, clothes(w)[0]); wr16(SLOT + 0x18, clothes(w)[0]);
-  wr16(SLOT + 0x1A, x); wr16(SLOT + 0x1C, y);
-  wr16(SLOT + 0x1E, x); wr16(SLOT + 0x20, y);
-  wr16(SLOT + 0x30, kLoop[w]); g_ram[SLOT + 0x32] = 0xB5;
-  wr16(SLOT + 0x33, kFarmTable[w]);
-  g_ram[SLOT + 0x3F] = 0x13;
+  g_ram[SLOT + SLOT_IN_USE] = 1;
+  g_ram[SLOT + SLOT_FLAGS] = 0x03;                     /* a picture; make its game object */
+  g_ram[SLOT + SLOT_FRAMES] = 1;
+  wr16(SLOT + SLOT_SPRITE, clothes(w)[0]); wr16(SLOT + SLOT_LAST_SPRITE, clothes(w)[0]);
+  wr16(SLOT + SLOT_X, x); wr16(SLOT + SLOT_Y, y);
+  wr16(SLOT + SLOT_HOME_X, x); wr16(SLOT + SLOT_HOME_Y, y);
+  wr16(SLOT + SLOT_SCRIPT, kLoop[w]); g_ram[SLOT + SLOT_SCRIPT_BANK] = 0xB5;
+  wr16(SLOT + SLOT_ANIM_TABLE, kFarmTable[w]);
+  g_ram[SLOT + SLOT_NUMBER] = 0x13;
   W.spawned = true;
 }
-static void place(int x, int y) { wr16(SLOT + 0x1A, x); wr16(SLOT + 0x1C, y); }
+static void place(int x, int y) { wr16(SLOT + SLOT_X, x); wr16(SLOT + SLOT_Y, y); }
 /* gone through a door: out of sight (the next map's events free the slot) */
 static void unspawn(void)
 {
@@ -169,13 +158,13 @@ static void unspawn(void)
 }
 
 /* ── The farm's tiles ──────────────────────────────────────────────────── */
-static uint8_t *tiles(void) { return &g_ram[on_farm() ? FARM_TILES : FARM_KEEP]; }
+static uint8_t *tiles(void) { return &g_ram[on_farm() ? HM_MAP_TILES : HM_FARM_TILES]; }
 /* the current map: tiles a row ($0181: 1 = 16, 2 = 32, else 64, GetTileIndex) */
-static int map_w(void) { uint8_t c = g_ram[0x181]; return c == 1 ? 16 : c == 2 ? 32 : 64; }
-static uint8_t here(int x, int y) { return g_ram[FARM_TILES + y * map_w() + x]; }
+static int map_w(void) { uint8_t c = g_ram[HM_MAP_WIDTH]; return c == 1 ? 16 : c == 2 ? 32 : 64; }
+static uint8_t here(int x, int y) { return g_ram[HM_MAP_TILES + y * map_w() + x]; }
 /* a seed or a plant not watered yet (bare tilled soil she leaves alone) */
 static bool dry(uint8_t t) { return t == 0x1E || (t >= 0x20 && t <= 0x6E && !(t & 1)); }
-static uint32_t props(void) { return (uint32_t)(g_ram[0x0D] | g_ram[0x0E] << 8 | g_ram[0x0F] << 16); }
+static uint32_t props(void) { return (uint32_t)(g_ram[HM_TILE_PROPS] | g_ram[HM_TILE_PROPS + 1] << 8 | g_ram[HM_TILE_PROPS_BANK] << 16); }
 static bool walkable(int x, int y)
 {
   if (x < 1 || y < 1 || x >= map_w() - 1 || y >= 63) return false;
@@ -194,8 +183,8 @@ static bool fence(int x, int y)
 static int count_dry(void)
 {
   int n = 0;
-  const uint8_t *t = &g_ram[FARM_KEEP];
-  if (on_farm()) t = &g_ram[FARM_TILES];
+  const uint8_t *t = &g_ram[HM_FARM_TILES];
+  if (on_farm()) t = &g_ram[HM_MAP_TILES];
   for (int i = 0; i < 64 * 64; i++) if (dry(t[i])) n++;
   return n;
 }
@@ -258,7 +247,7 @@ static void water_now(uint8_t *ram, const HmRegs *regs, int x, int y)
     r.a = change; r.x = (uint16_t)(x * 16); r.y = (uint16_t)(y * 16);
     hm_ChangeMapTile(ram, &r);
   } else {
-    g_ram[FARM_KEEP + y * 64 + x] = wet;
+    g_ram[HM_FARM_TILES + y * 64 + x] = wet;
   }
   W.water_done++;
 }
@@ -266,8 +255,8 @@ static void water_now(uint8_t *ram, const HmRegs *regs, int x, int y)
  * one eats at trough 12), or -1 */
 static int next_trough(void)
 {
-  if (W.cow_done >= W.cow_quota || rd16(SILO) <= 0) return -1;
-  int bits = rd16(COW_BITS);
+  if (W.cow_done >= W.cow_quota || rd16(HM_STORED_GRASS) <= 0) return -1;
+  int bits = rd16(HM_COW_TROUGHS);
   for (int i = 0; i < 12; i++) {
     const uint8_t *c = &g_ram[HM_COW_DATA + 16 * i];
     if (!(c[0] & 0x08) || c[2] != 0x27) continue;
@@ -278,23 +267,23 @@ static int next_trough(void)
 }
 static int next_box(void)
 {
-  if (W.hen_done >= W.hen_quota || g_ram[HEN_FEED] == 0) return -1;
-  int bits = rd16(HEN_BITS);
+  if (W.hen_done >= W.hen_quota || g_ram[HM_FEED_CHICKS_N] == 0) return -1;
+  int bits = rd16(HM_CHICKEN_TROUGHS);
   for (int k = 0; k < 12; k++) if (!(bits & (1 << k))) return k;
   return -1;
 }
 static void fill_trough(int n)
 {
-  wr16(SILO, rd16(SILO) - 1);
-  wr16(COW_BITS, rd16(COW_BITS) | 1 << n);
-  g_ram[COW_COUNT]++;
+  wr16(HM_STORED_GRASS, rd16(HM_STORED_GRASS) - 1);
+  wr16(HM_COW_TROUGHS, rd16(HM_COW_TROUGHS) | 1 << n);
+  g_ram[HM_COWS_FED]++;
   W.cow_done++;
 }
 static void fill_box(int k)
 {
-  g_ram[HEN_FEED]--;
-  wr16(HEN_BITS, rd16(HEN_BITS) | 1 << k);
-  g_ram[HEN_COUNT]++;
+  g_ram[HM_FEED_CHICKS_N]--;
+  wr16(HM_CHICKEN_TROUGHS, rd16(HM_CHICKEN_TROUGHS) | 1 << k);
+  g_ram[HM_CHICKENS_FED]++;
   W.hen_done++;
 }
 /* where they are (tiles): the barn's troughs ($81:B0ED), the coop's boxes ($81:B19F) */
@@ -325,8 +314,8 @@ static void plan_day(void)
   int cows = 0, hens = 0;
   for (int i = 0; i < 12; i++) { const uint8_t *c = &g_ram[HM_COW_DATA + 16 * i]; if ((c[0] & 0x08) && c[2] == 0x27) cows++; }
   for (int i = 0; i < 13; i++) { const uint8_t *h = &g_ram[HM_CHICKEN_DATA + 8 * i]; if ((h[0] & 0x08) && h[1] == 0x28) hens++; }
-  int fed_c = 0, fed_h = g_ram[HEN_COUNT];
-  for (int b = rd16(COW_BITS); b; b &= b - 1) fed_c++;
+  int fed_c = 0, fed_h = g_ram[HM_CHICKENS_FED];
+  for (int b = rd16(HM_COW_TROUGHS); b; b &= b - 1) fed_c++;
   W.cow_quota = (cows - 0) / 2; W.hen_quota = hens / 2;
   (void)fed_c; (void)fed_h;
   W.water_quota = count_dry() / 2;
@@ -362,7 +351,7 @@ static void work_away(uint8_t *ram, const HmRegs *regs)
   case T_WATER:
     if (W.water_done >= W.water_quota) { next_task(); break; }
     for (int i = 0; i < 64 * 64; i++)
-      if (dry(g_ram[FARM_KEEP + i])) { water_now(ram, regs, i % 64, i / 64); return; }
+      if (dry(g_ram[HM_FARM_TILES + i])) { water_now(ram, regs, i % 64, i / 64); return; }
     W.task = T_REST;
     break;
   default: break;
@@ -469,7 +458,7 @@ static void work_inside(uint8_t *ram, const HmRegs *regs, int w, bool barn)
     spawn(w, W.px, W.py);
     return;
   }
-  if (g_ram[SLOT + 0x01] & 0x02) return;             /* its object comes next frame */
+  if (g_ram[SLOT + SLOT_FLAGS] & 0x02) return;             /* its object comes next frame */
   W.moving = false;
   int hx = W.px / 16, hy = W.py / 16;
   switch (W.phase) {
@@ -509,7 +498,7 @@ static void work_inside(uint8_t *ram, const HmRegs *regs, int w, bool barn)
  * door; later visits find her gone. */
 static void leave_house(int w)
 {
-  if (W.left_house || !slot_is_wife() || (g_ram[SLOT + 0x01] & 0x02)) {
+  if (W.left_house || !slot_is_wife() || (g_ram[SLOT + SLOT_FLAGS] & 0x02)) {
     if (slot_is_wife()) place(0x0F00, 0x0F00);
     W.left_house = W.left_house || slot_is_wife();
     return;
@@ -518,8 +507,8 @@ static void leave_house(int w)
     int dx = -1, dy = -1;
     for (int y = 1; y < 63 && dx < 0; y++)          /* the door: the first door tile from the top */
       for (int x = 0; x < map_w(); x++)
-        if (here(x, y) >= 0xC0 && here(x, y) <= 0xCF && rd16(SLOT + 0x1C) / 16 < y) { dx = x; dy = y - 1; break; }
-    W.px = rd16(SLOT + 0x1A); W.py = rd16(SLOT + 0x1C);
+        if (here(x, y) >= 0xC0 && here(x, y) <= 0xCF && rd16(SLOT + SLOT_Y) / 16 < y) { dx = x; dy = y - 1; break; }
+    W.px = rd16(SLOT + SLOT_X); W.py = rd16(SLOT + SLOT_Y);
     if (dx < 0 || !route(W.px / 16, W.py / 16, dx, dy, true)) { W.left_house = true; place(0x0F00, 0x0F00); return; }
   }
   W.moving = false;
@@ -540,7 +529,7 @@ static void activity(int w)
   uint32_t tab = 0xB30000u | kFarmTable[w];
   uint16_t sprite = hm_bus_rd16(g_ram, tab + 3u * kFarmEntry[w]);
   uint8_t flip = hm_bus_rd8(g_ram, tab + 3u * kFarmEntry[w] + 2);
-  g_ram[SLOT + 0x02] = kFarmEntry[w];
+  g_ram[SLOT + SLOT_ANIM_ENTRY] = kFarmEntry[w];
   slot_picture(sprite, flip & 1);
   W.task = T_DONE;
 }
@@ -558,12 +547,12 @@ uint16_t wife_pad(uint16_t pad)
   if (!pressed || !g_cfg.wife_help || !hm_diary_loaded(g_ram) || W.declined) return pad;
   int w = wife_of();
   if (w < 0 || W.talks < 1 || today() != W.day || hearts_of(w) < 950 || g_ram[HM_HOUR] >= 18 || helping_today()) return pad;
-  if ((rd16(BOX_OPEN) & 0x4000) || !slot_is_wife() || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE) return pad;
+  if ((rd16(HM_FLAGS_5A) & 0x4000) || !slot_is_wife() || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE) return pad;
   if (rd16(0xD2) & 0x0010) return pad;                    /* carrying something: as the game, no talk */
   static const int ahead[4][2] = { { 0, 16 }, { 0, -16 }, { 16, 0 }, { -16, 0 } };
   int f = rd16(0xDA) & 3;
-  int fx = rd16(PLAYER_X) + ahead[f][0], fy = rd16(PLAYER_Y) + ahead[f][1];
-  int dx = rd16(SLOT + 0x1A) - fx, dy = rd16(SLOT + 0x1C) - fy;
+  int fx = rd16(HM_PLAYER_X) + ahead[f][0], fy = rd16(HM_PLAYER_Y) + ahead[f][1];
+  int dx = rd16(SLOT + SLOT_X) - fx, dy = rd16(SLOT + SLOT_Y) - fy;
   if (abs(dx) > 12 || abs(dy) > 12) return pad;          /* not in front of her */
   W.want_dialog = true;
   hold = true;
@@ -583,8 +572,8 @@ void wife_frame(uint8_t *ram)
   if (map < 0x15 || map > 0x17 || !helping_today() || hour < 6 || hour >= HELP_UNTIL_HOUR) return;
   if (!slot_is_wife()) return;
   place(0x0F00, 0x0F00);
-  int obj = rd16(SLOT + 0x12);
-  if (!(g_ram[SLOT + 0x01] & 0x02) && obj < 40) {
+  int obj = rd16(SLOT + SLOT_OBJECT);
+  if (!(g_ram[SLOT + SLOT_FLAGS] & 0x02) && obj < 40) {
     uint32_t o = 0x019Cu + 0x24u * (unsigned)obj;
     if (rd16(o) == 0x7777) { wr16(o + 0x08, 0x0F00); wr16(o + 0x0A, 0x0F00); }
   }
@@ -601,16 +590,16 @@ void wife_clean_point(uint8_t *ram, const HmRegs *regs)
   if (day != W.day) { int keep_until = 0; (void)keep_until; memset(&W, 0, sizeof W); W.day = day; }
 
   /* the offer: the second talk of the day, once her line is over */
-  bool box = rd16(BOX_OPEN) & 0x4000;
+  bool box = rd16(HM_FLAGS_5A) & 0x4000;
   if (box && !W.talking && slot_is_wife()) {
-    int dx = rd16(SLOT + 0x1A) - rd16(PLAYER_X), dy = rd16(SLOT + 0x1C) - rd16(PLAYER_Y);
+    int dx = rd16(SLOT + SLOT_X) - rd16(HM_PLAYER_X), dy = rd16(SLOT + SLOT_Y) - rd16(HM_PLAYER_Y);
     if (dx * dx + dy * dy < 40 * 40) { W.talking = true; W.talks++; }
   }
   if (!box && W.talking) W.talking = false;
   /* her clothes, wherever the game has her */
   if (slot_is_wife() && single_day()) {
-    int s = rd16(SLOT + 0x16);
-    for (int k = 0; k < 6; k++) if (s == kWife[k]) slot_picture(kGirl[w][k], g_ram[SLOT + 0x14] & 0x40);
+    int s = rd16(SLOT + SLOT_SPRITE);
+    for (int k = 0; k < 6; k++) if (s == kWife[k]) slot_picture(kGirl[w][k], g_ram[SLOT + SLOT_ANIMATION] & 0x40);
   }
 
   /* the help (it waits while someone talks) */
@@ -630,7 +619,7 @@ void wife_clean_point(uint8_t *ram, const HmRegs *regs)
     if (!on_farm()) { W.spawned = W.controlled = false; work_away(ram, regs); return; }
     W.left_house = true;
     if (!slot_is_wife()) { spawn(w, W.px, W.py); return; }  /* the next frame, with its object */
-    if (!(g_ram[SLOT + 0x01] & 0x02) && W.task != T_DONE) {
+    if (!(g_ram[SLOT + SLOT_FLAGS] & 0x02) && W.task != T_DONE) {
       W.controlled = true; W.moving = false;
       work_here(ram, regs, w);
       if (!W.inside && !W.moving) pose(w, W.facing, false);   /* after a talk, as she was */

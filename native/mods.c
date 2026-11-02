@@ -14,6 +14,7 @@
 #include "ppu.h"
 #include "hm_decomp.h"
 #include "hm_ram.h"
+#include "hm_vars.h"
 #include "native.h"
 #include "config.h"
 #include "mods.h"
@@ -150,7 +151,7 @@ static bool title_on_screen(void)
 }
 static bool title_menu_active(void)
 {
-  return g_ram[HM_INPUT_STATE] == 4 && g_ram[0x95] == 5 && title_on_screen();
+  return g_ram[HM_INPUT_STATE] == 4 && g_ram[HM_INTRO_STAGE] == 5 && title_on_screen();
 }
 bool mods_title_ready(void) { return g_ppu && title_menu_active(); }
 static void word_image(int r, uint8_t out[16][96])
@@ -312,7 +313,6 @@ static void title_frame(void)
  * tiles, the tile-change table $81:B363 entries 17 / 18, say which browns).
  * Nothing of the game's memory is written; when the sway is over the
  * objects go and the map is as the game drew it. */
-#define FARM_TILE_TYPES 0x009B6
 #define BG1_WRAM_MAP    0x02000u
 #define TILE_CHANGES    0x81B363u
 #define TILE_GRAPHICS   0xA6A096u
@@ -330,7 +330,7 @@ static bool crop_type(uint8_t t) { return t >= 0x1E && t <= 0x6F; }
 static uint8_t farm_type(int tx, int ty)
 {
   if (tx < 0 || ty < 0 || tx >= 64 || ty >= 64) return 0;
-  return g_ram[FARM_TILE_TYPES + ty * 64 + tx];
+  return g_ram[HM_MAP_TILES + ty * 64 + tx];
 }
 /* a 16x16 tile from its four BG1 tilemap entries: colours (0 = see-through) */
 static void tile16(const uint16_t e[4], uint16_t out[256])
@@ -352,7 +352,7 @@ static void tile16(const uint16_t e[4], uint16_t out[256])
 /* the tile's entries in the game's copy of the whole BG1 map ($7E:2000) */
 static void map_entries(int tx, int ty, uint16_t e[4])
 {
-  uint8_t wc = g_ram[0x0181];
+  uint8_t wc = g_ram[HM_MAP_WIDTH];
   unsigned w = wc == 1 ? 32 : wc == 2 ? 64 : 128;          /* entries per row */
   for (int q = 0; q < 4; q++) {
     unsigned r = (unsigned)ty * 2 + (q >> 1), c = (unsigned)tx * 2 + (q & 1);
@@ -480,7 +480,7 @@ static void crops_frame(void)
     crops_hide();
     return;
   }
-  int tx = hm_rd16(g_ram, 0xD6) >> 4, ty = hm_rd16(g_ram, 0xD8) >> 4;
+  int tx = hm_rd16(g_ram, HM_PLAYER_X) >> 4, ty = hm_rd16(g_ram, HM_PLAYER_Y) >> 4;
   int lx = s_crops.last_tx, ly = s_crops.last_ty;
   if (lx >= 0 && (tx != lx || ty != ly)) {
     /* lean the way the player goes (up and down: alternately) */
@@ -548,13 +548,13 @@ static bool mouse_tile(int *tx, int *ty)
   *tx = wx >> 4; *ty = wy >> 4;
   return true;
 }
-static void player_tile(int *x, int *y) { *x = hm_rd16(g_ram, 0xD6) >> 4; *y = hm_rd16(g_ram, 0xD8) >> 4; }
+static void player_tile(int *x, int *y) { *x = hm_rd16(g_ram, HM_PLAYER_X) >> 4; *y = hm_rd16(g_ram, HM_PLAYER_Y) >> 4; }
 static int iabs(int v) { return v < 0 ? -v : v; }
 static bool next_to(int ax, int ay, int bx, int by) { return iabs(ax - bx) + iabs(ay - by) == 1; }
 /* toward the middle of tile (tx, ty): the arrows to hold, 0 there */
 static uint16_t steer(int tx, int ty)
 {
-  int px = hm_rd16(g_ram, 0xD6), py = hm_rd16(g_ram, 0xD8);
+  int px = hm_rd16(g_ram, HM_PLAYER_X), py = hm_rd16(g_ram, HM_PLAYER_Y);
   int dx = tx * 16 + 8 - px, dy = ty * 16 + 8 - py;
   uint16_t m = 0;
   if (dx > 2) m |= B_RIGHT; else if (dx < -2) m |= B_LEFT;
@@ -571,10 +571,10 @@ static bool mouse_tool_fits(int tx, int ty)
   uint8_t tool = g_ram[HM_TOOL_SELECTED];
   bool seeds = (tool >= 5 && tool <= 8) || tool == 0x0C;
   if (!seeds) return true;
-  int ptx = hm_rd16(g_ram, 0xD6) >> 4, pty = hm_rd16(g_ram, 0xD8) >> 4;
+  int ptx = hm_rd16(g_ram, HM_PLAYER_X) >> 4, pty = hm_rd16(g_ram, HM_PLAYER_Y) >> 4;
   if (tx == ptx && ty == pty) {                 /* the own tile: the one faced */
     static const int d[4][2] = { { 0, 1 }, { 0, -1 }, { 1, 0 }, { -1, 0 } };
-    unsigned f = hm_rd16(g_ram, 0xDA) & 3;
+    unsigned f = hm_rd16(g_ram, HM_PLAYER_DIRECTION) & 3;
     tx += d[f][0]; ty += d[f][1];
   }
   uint8_t t = g_ram[HM_MAP_ID] <= 3 ? farm_type(tx, ty) : 0;
@@ -590,7 +590,7 @@ static void mouse_task(int task, int tx, int ty)
 static void beside(int tx, int ty, int *bx, int *by)
 {
   static const int d[4][2] = { { 0, 1 }, { 0, -1 }, { 1, 0 }, { -1, 0 } };
-  int px = hm_rd16(g_ram, 0xD6), py = hm_rd16(g_ram, 0xD8), best = 1 << 30;
+  int px = hm_rd16(g_ram, HM_PLAYER_X), py = hm_rd16(g_ram, HM_PLAYER_Y), best = 1 << 30;
   for (int i = 0; i < 4; i++) {
     int x = tx + d[i][0], y = ty + d[i][1];
     int e = iabs(x * 16 + 8 - px) + iabs(y * 16 + 8 - py);
@@ -636,7 +636,7 @@ uint16_t mods_mouse_pad(uint16_t pad)
       if (s_mouse.task == MT_WALK) { if (!s_mouse.left_held) s_mouse.task = MT_NONE; return pad; }
       return pad;                               /* next frame: turn and act */
     }
-    int px = hm_rd16(g_ram, 0xD6), py = hm_rd16(g_ram, 0xD8);
+    int px = hm_rd16(g_ram, HM_PLAYER_X), py = hm_rd16(g_ram, HM_PLAYER_Y);
     if (px == s_mouse.lastx && py == s_mouse.lasty && action != 0x0A) {
       if (++s_mouse.still == 10) s_mouse.axis_only = s_mouse.axis_only == 1 ? 2 : 1;
       if (s_mouse.still >= 40) { s_mouse.task = MT_NONE; return pad; }   /* blocked: give up */
@@ -649,7 +649,7 @@ uint16_t mods_mouse_pad(uint16_t pad)
   int dx = s_mouse.tx - ptx, dy = s_mouse.ty - pty;
   if (dx || dy) {
     int want = dy > 0 ? 0 : dy < 0 ? 1 : dx > 0 ? 2 : 3;          /* $DA: down, up, right, left */
-    if (hm_rd16(g_ram, 0xDA) != want) {
+    if (hm_rd16(g_ram, HM_PLAYER_DIRECTION) != want) {
       static const uint16_t arrow[4] = { B_DOWN, B_UP, B_RIGHT, B_LEFT };
       if (++s_mouse.stage > 6) { s_mouse.task = MT_NONE; return pad; }
       return pad | arrow[want];
@@ -673,12 +673,12 @@ static void seeds_frame(uint8_t *ram)
   static unsigned tick;
   if (!g_cfg.single_seed || hm_rd16(ram, HM_PLAYER_ACTION) != 0x0A) return;
   uint8_t tool = ram[HM_TOOL_SELECTED];
-  uint16_t anim = hm_rd16(ram, 0x0901);
+  uint16_t anim = hm_rd16(ram, HM_ANIM_REQUEST);
   if (!((tool >= 5 && tool <= 8) || tool == 0x0C) || anim < 0x74 || anim > 0x77) return;
   if (++tick & 1) return;
-  uint16_t obj = hm_rd16(ram, 0x0905);
+  uint16_t obj = hm_rd16(ram, HM_PLAYER_GOBJ);
   if (obj >= 40) return;
-  uint8_t *timer = &ram[0x019C + 0x24 * obj + 0x12];
+  uint8_t *timer = &ram[HM_GAME_OBJECTS + GOBJ_SIZE * obj + GOBJ_TIMER];
   if (*timer >= 2 && *timer < 0xFE) (*timer)--;
 }
 
@@ -705,8 +705,6 @@ static void seeds_frame(uint8_t *ram)
  * The bag goes with the diary (src/save.c). It is part of the pause menu
  * (on only with it): the menu's Bag tab shows it and takes out the one
  * chosen (mods_bag_choose: moved to the end, then out as above). */
-#define MAP_OBJECTS_AT 0x0B4E6          /* 10 x 16 bytes: +0 flags, +2 state, +3 item */
-#define GAME_STATE     0x000D2
 static struct {
   bool prev; int ship, wait, held;     /* held: frames the key has been down (hands free) */
   uint32_t shipped;                     /* the day's shipped money, last frame */
@@ -718,14 +716,14 @@ static bool bag_item(uint8_t it)
   return (it >= 0x01 && it <= 0x0C) || (it >= 0x10 && it <= 0x19) || it == 0x24 || (it >= 0x58 && it <= 0x5A);
 }
 static int bag_count(void) { int n = 0; while (n < 9 && g_hm_bag[n]) n++; return n; }
-static bool holding(void) { return hm_rd16(g_ram, GAME_STATE) & 0x0002; }
+static bool holding(void) { return hm_rd16(g_ram, HM_GAME_STATE) & 0x0002; }
 static uint16_t player_action(void) { return hm_rd16(g_ram, HM_PLAYER_ACTION); }
-static uint32_t shipped_money(void) { return hm_rd24(g_ram, 0x11F07); }
+static uint32_t shipped_money(void) { return hm_rd24(g_ram, HM_SHIPPING_MONEY); }
 static bool at_box(void)
 {
   int x, y; player_tile(&x, &y);
-  return s_bag.spot && x == s_bag.sx && y == s_bag.sy && hm_rd16(g_ram, 0xDA) == s_bag.sdir &&
-         g_ram[0x11F1B] == s_bag.sday && g_ram[HM_MAP_ID] <= 3 && g_ram[0x11F1C] < 0x11;
+  return s_bag.spot && x == s_bag.sx && y == s_bag.sy && hm_rd16(g_ram, HM_PLAYER_DIRECTION) == s_bag.sdir &&
+         g_ram[HM_DAY] == s_bag.sday && g_ram[HM_MAP_ID] <= 3 && g_ram[HM_HOUR] < 0x11;
 }
 /* the box takes it: it has a price ($81:9FDE, 2 bytes per item, +1) */
 static bool sellable(uint8_t it) { return hm_bus_rd8(g_ram, 0x819FDE + 2u * it + 1) != 0; }
@@ -736,7 +734,7 @@ static bool bag_put(void)
   if (!bag_item(it)) { host_toast(T("That does not go in the bag.")); return false; }
   if (n >= 9) { host_toast(T("The bag is full (9).")); return false; }
   for (int i = 0; i < 10; i++) {
-    uint8_t *o = &g_ram[MAP_OBJECTS_AT + 16 * i];
+    uint8_t *o = &g_ram[HM_MAP_OBJECTS + 16 * i];
     if ((o[0] & 1) && o[3] == it && o[2] == 2) {
       o[2] = 8;
       g_hm_bag[n] = it;
@@ -777,7 +775,7 @@ uint16_t mods_bag_pad(uint16_t pad, bool key)
   bool shipped_now = money > s_bag.shipped;
   if (shipped_now) {                          /* a throw into the box: remember where */
     int x, y; player_tile(&x, &y);
-    s_bag.spot = true; s_bag.sx = x; s_bag.sy = y; s_bag.sdir = hm_rd16(g_ram, 0xDA); s_bag.sday = g_ram[0x11F1B];
+    s_bag.spot = true; s_bag.sx = x; s_bag.sy = y; s_bag.sdir = hm_rd16(g_ram, HM_PLAYER_DIRECTION); s_bag.sday = g_ram[HM_DAY];
   }
   if (money < s_bag.shipped) s_bag.spot = false;               /* a new day */
   s_bag.shipped = money;
@@ -1100,7 +1098,6 @@ unsigned mods_ws_clamp(void)
  * simply goes on (the ending is not shown).
  * Past the third year the diary's "1st/2nd/3rd" (a three-entry table,
  * $82:F298) goes on: 4th, 5th... 21st. */
-#define FLAGS_5E 0x11F5E
 #define ENDING_MAP 0x36
 #define SETTLE_FRAMES 900
 static struct { int phase; bool have, skip, restore; int settle; } s_end;
@@ -1119,7 +1116,7 @@ static void endless_frame(uint8_t *r)
   g_hm_year_suffix = g_cfg.endless ? year_suffix : NULL;
   if (!g_cfg.endless) { memset(&s_end, 0, sizeof s_end); g_hm_no_ending = 0; return; }
   if (!in_window(r)) { memset(&s_end, 0, sizeof s_end); g_hm_no_ending = 0; return; }
-  uint16_t f = (uint16_t)(r[FLAGS_5E] | r[FLAGS_5E + 1] << 8);
+  uint16_t f = (uint16_t)(r[HM_FLAGS_5E] | r[HM_FLAGS_5E + 1] << 8);
   if (s_end.phase == 0) {
     if (r[HM_DAY] == 30 && !(f & 0x0002) && !s_end.have) s_end.skip = true;   /* a diary of the last night */
     if ((f & 0x0002) && s_end.have && !s_end.skip) { s_end.phase = 1; s_end.settle = 0; }

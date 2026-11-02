@@ -33,6 +33,7 @@
 
 #include "hm_decomp.h"
 #include "hm_ram.h"
+#include "hm_vars.h"
 #include "native.h"
 #include "ui.h"
 #include "i18n.h"
@@ -108,13 +109,13 @@ static bool shed_slot(uint8_t id, int *row, uint8_t *mask)
 static bool in_shed(uint8_t id)
 {
   int row; uint8_t mask;
-  return shed_slot(id, &row, &mask) && (g_ram[0x11F00 + row] & mask);
+  return shed_slot(id, &row, &mask) && (g_ram[HM_SHED_ITEMS + row] & mask);
 }
 static void set_in_shed(uint8_t id, bool on)
 {
   int row; uint8_t mask;
   if (!shed_slot(id, &row, &mask)) return;
-  if (on) g_ram[0x11F00 + row] |= mask; else g_ram[0x11F00 + row] &= (uint8_t)~mask;
+  if (on) g_ram[HM_SHED_ITEMS + row] |= mask; else g_ram[HM_SHED_ITEMS + row] &= (uint8_t)~mask;
 }
 static bool player_free(void)
 {
