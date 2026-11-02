@@ -43,6 +43,8 @@ unsigned mods_ws_mirror(void);
  * margins of the chosen shape: mods_ws_budget() */
 enum { WS_BUDGET = 71 };
 int mods_ws_budget(void);
+/* the screen's width / height (the widescreen follows it) */
+void mods_screen_aspect(float a);
 
 /* The endless game. The host keeps a copy of the whole machine at the
  * start of each GameLoop frame while mods_endless_keep() says so, and

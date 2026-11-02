@@ -51,7 +51,7 @@ void config_defaults(Config *c)
   c->vsync = true; c->scale = 3; c->volume = 100; c->ff_speed = 3; c->show_launcher = true;
   /* every improvement starts off: the game as the console runs it, and the
    * player turns on what they like (Improvements, Options) */
-  c->widescreen = false; c->ws_shape = 0;
+  c->widescreen = false;
   c->pause_menu = false; c->title_options = false; c->endless = false; c->walk_crops = false; c->single_seed = false; c->mouse = false; c->crop_bag = false;
   c->day_length = 0;
   config_default_keys(c);
@@ -149,7 +149,6 @@ void config_load(void)
         else if (!strcmp(k, "vsync")) c->vsync = yes(v);
         else if (!strcmp(k, "spritelimits")) c->sprite_limits = yes(v);
         else if (!strcmp(k, "widescreen")) c->widescreen = yes(v);
-        else if (!strcmp(k, "widescreenshape")) c->ws_shape = atoi(v) == 1 ? 1 : 0;
         else if (!strcmp(k, "exactpixels")) c->exact_pixels = yes(v);
       } else if (!strcmp(section, "[sound]")) {
         if (!strcmp(k, "volume")) { c->volume = atoi(v); if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; }
@@ -199,8 +198,8 @@ void config_save(void)
     fprintf(f, "[General]\nLanguage = %s\nShowLauncher = %d\nFastForward = %d\n\n", c->language, c->show_launcher, c->ff_speed);
     fprintf(f, "[Games]\nRom = %s\n", c->rom);
     for (int i = 0; i < c->ngames; i++) fprintf(f, "Game%d = %s\n", i + 1, c->games[i]);
-    fprintf(f, "\n[Video]\nFullscreen = %d\nScale = %d\nVSync = %d\nSpriteLimits = %d\nWidescreen = %d\nWidescreenShape = %d\nExactPixels = %d\n\n",
-            c->fullscreen, c->scale, c->vsync, c->sprite_limits, c->widescreen, c->ws_shape, c->exact_pixels);
+    fprintf(f, "\n[Video]\nFullscreen = %d\nScale = %d\nVSync = %d\nSpriteLimits = %d\nWidescreen = %d\nExactPixels = %d\n\n",
+            c->fullscreen, c->scale, c->vsync, c->sprite_limits, c->widescreen, c->exact_pixels);
     fprintf(f, "[Sound]\nVolume = %d\n\n", c->volume);
     fprintf(f, "[Improvements]\nFastText = %d\nDayLength = %d\nPauseMenu = %d\nTitleOptions = %d\nEndless = %d\nWalkThroughCrops = %d\nOneSeedAtATime = %d\nMouseControls = %d\nCropBag = %d\n\n",
             c->fast_text, c->day_length, c->pause_menu, c->title_options, c->endless, c->walk_crops, c->single_seed, c->mouse, c->crop_bag);

@@ -422,6 +422,7 @@ static void poll_events(void)
                  ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN);
       break;
     case SDL_EVENT_WINDOW_MOUSE_LEAVE: if (s_mods) mods_mouse(-1, -1, 0, false); break;
+    case SDL_EVENT_WINDOW_DISPLAY_CHANGED: host_apply_video(); break;   /* another screen, maybe another shape */
     default: break;
     }
   }
@@ -501,10 +502,17 @@ static void set_vsync(bool on)
   else SDL_SetRenderVSync(s_renderer, 0);
   s_next_tick = 0; s_check_n = 0; s_last_wake = 0;
 }
+/* the screen's shape, for the widescreen's width (mods_ws_budget) */
+static void screen_shape(SDL_DisplayID d)
+{
+  const SDL_DisplayMode *m = d ? SDL_GetDesktopDisplayMode(d) : NULL;
+  if (m && m->w > 0 && m->h > 0) mods_screen_aspect((float)m->w / (float)m->h);
+}
 void host_apply_video(void)
 {
   static int a_full = -1, a_scale = -1, a_vsync = -1, a_fw = -1;
   g_native_ppu_flags = g_cfg.sprite_limits ? (g_native_ppu_flags & ~8u) : (g_native_ppu_flags | 8u);
+  if (!s_headless && s_window) screen_shape(SDL_GetDisplayForWindow(s_window));
   int fw = s_mods ? mods_field_width() : W;
   if (s_headless) { s_fw = fw; return; }
   bool fw_changed = fw != s_fw || fw != a_fw;
@@ -1154,6 +1162,8 @@ int main(int argc, char **argv)
       fprintf(stderr, "SDL: %s\n", SDL_GetError());
       return 1;
     }
+    screen_shape(SDL_GetPrimaryDisplay());          /* widescreen: as wide as the screen */
+    s_fw = s_mods ? mods_field_width() : W;
     if (!SDL_CreateWindowAndRenderer("Harvest Moon", s_fw * g_cfg.scale, H * g_cfg.scale, SDL_WINDOW_RESIZABLE,
                                      &s_window, &s_renderer)) {
       fprintf(stderr, "SDL: %s\n", SDL_GetError());

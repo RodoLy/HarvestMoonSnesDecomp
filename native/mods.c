@@ -972,9 +972,17 @@ static bool ws_start_screen(void)
   uint8_t m = g_ram[HM_MAP_ID];
   return m == 0x5C || m == 0x5D || m == 0x5E || m == 0x5F || (m == 0x3C && !hm_diary_loaded(g_ram));
 }
-/* the margins a side: 16:9 = 398 x 224 (71), 16:10 = 358 x 224 (51); the
- * picture's pixels are square */
-int mods_ws_budget(void) { return g_cfg.ws_shape == 1 ? 51 : WS_BUDGET; }
+/* The margins a side: as wide as the screen's shape, up to 16:9 (the
+ * picture's pixels are square, 224 high: 16:9 = 398 wide, 71 a side;
+ * 16:10 = 358, 51; a narrower screen, less). Without a screen (tests): 16:9. */
+static float s_screen_aspect;
+void mods_screen_aspect(float a) { s_screen_aspect = a; }
+int mods_ws_budget(void)
+{
+  if (s_screen_aspect <= 0) return WS_BUDGET;
+  int b = (int)((224.0f * s_screen_aspect - 256.0f) / 2.0f + 0.5f);
+  return b < 0 ? 0 : b > WS_BUDGET ? WS_BUDGET : b;
+}
 int mods_field_width(void) { return g_cfg.widescreen ? 256 + 2 * mods_ws_budget() : 256; }
 static int imin(int a, int b) { return a < b ? a : b; }
 static int iclamp(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
