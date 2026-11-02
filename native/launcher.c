@@ -30,22 +30,24 @@
 #include "config.h"
 #include "i18n.h"
 #include "launcher.h"
+#include "modpack.h"
 #include "native.h"
 #include "second.h"
 #include "touch.h"
 #include "ui.h"
 
-enum { P_MAIN, P_GAMES, P_OPTIONS, P_CONTROLS, P_MODS, P_STATES, NPAGES };
+enum { P_MAIN, P_GAMES, P_OPTIONS, P_CONTROLS, P_MODS, P_PACKS, P_STATES, NPAGES };
 enum { K_ACTION, K_TOGGLE, K_CHOICE, K_SLIDER, K_KEY, K_PAD };
 enum {
   A_PLAY = 1, A_GAMES, A_OPTIONS, A_CONTROLS, A_MODS, A_STATES, A_RESET, A_QUIT, A_BROWSE,
-  A_DEFAULT_OPTIONS, A_DEFAULT_KEYS, A_DEFAULT_PAD, A_HOTKEYS, A_PADHELP,
+  A_DEFAULT_OPTIONS, A_DEFAULT_KEYS, A_DEFAULT_PAD, A_HOTKEYS, A_PADHELP, A_PACKS, A_PACKDIR, A_PACKHELP,
   A_GAME = 100, A_SLOT = 200,
 };
 enum {
   V_FULLSCREEN = 1, V_SCALE, V_PICTURE, V_VSYNC, V_WIDESCREEN, V_SPRITES, V_VOLUME, V_FF, V_LANG,
   V_SHOWLAUNCHER, V_FASTTEXT, V_DAYLEN, V_PAUSE, V_TITLEOPT, V_ENDLESS, V_MONEY, V_STAMINA,
   V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL, V_CROPS, V_SEEDS, V_MOUSE, V_BAG, V_TOUCH, V_SECOND, V_WIFE,
+  V_PACK = 1000,          /* + the mod's place (modpack.c) */
 };
 
 typedef struct {
@@ -76,9 +78,9 @@ static struct {
   int ngames;
   int slot;
   uint32_t frame;
-  Item items[40];
+  Item items[48];
   int nitems;
-  struct Hit { int x, y, w, h, i; } hits[40];
+  struct Hit { int x, y, w, h, i; } hits[48];
   int nhits;
   struct Hit tabhits[4];  /* the header's tabs (a click or a tap there) */
   int ntabhits;
@@ -215,6 +217,7 @@ static int get_value(int id)
   case V_WIFE: return c->wife_help;
   case V_SECOND: return c->second_screen;
   }
+  if (id >= V_PACK) { const ModPack *m = modpack_get(id - V_PACK); return m && m->on; }
   return 0;
 }
 static void set_value(int id, int v)
@@ -250,6 +253,11 @@ static void set_value(int id, int v)
   case V_TOUCH: c->touch = v; break;
   case V_WIFE: c->wife_help = v; break;
   case V_SECOND: c->second_screen = v; second_apply(); break;
+  }
+  if (id >= V_PACK) {
+    modpack_set(id - V_PACK, v);
+    if (L.in_game) host_toast(modpack_changed() ? T("Restart the game to apply the mods.") : T("The mods are as the game started with."));
+    return;
   }
   host_apply_video();
   host_apply_sound();
@@ -311,6 +319,7 @@ static void build(void)
     add(K_ACTION, A_OPTIONS, T("Options"), T("Window, full screen, the picture, widescreen, sound, fast forward and language."));
     add(K_ACTION, A_CONTROLS, T("Controls"), T("The keys and the gamepad's buttons. Connect a gamepad (USB or Bluetooth) at any time: it appears here."));
     add(K_ACTION, A_MODS, T("Improvements"), T("The recompilation's improvements: fast text, longer days, a pause menu, OPTIONS on the title, an endless game, and cheats."));
+    add(K_ACTION, A_PACKS, T("Mods"), T("The community's mods: new pictures, text, maps and more for the game, from the mods folder. Turn on the ones you want."));
     add(K_ACTION, A_QUIT, L.in_game ? T("Quit the game") : T("Quit"), T("Close the program. The game saves only in its diaries (when you sleep)."));
     break;
   case P_GAMES:
@@ -405,6 +414,30 @@ static void build(void)
              4, T("As the game"), T("Always sunny"), T("Always rain (waters your crops; snow in winter)"), T("No hurricanes or storms"));
     }
     break;
+  case P_PACKS: {
+    static char descs[MAX_PACKS][400];
+    for (int i = 0; i < modpack_count() && L.nitems < 44; i++) {
+      const ModPack *m = modpack_get(i);
+      char who[160] = "";
+      if (m->author[0] && m->version[0]) snprintf(who, sizeof who, "%s %s · %s %s", T("By"), m->author, T("version"), m->version);
+      else if (m->author[0]) snprintf(who, sizeof who, "%s %s", T("By"), m->author);
+      else if (m->version[0]) snprintf(who, sizeof who, "%s %s", T("Version"), m->version);
+      snprintf(descs[i], sizeof descs[i], "%s%s%s%s", who, who[0] ? "\n" : "",
+               m->desc[0] ? m->desc : T("(no description)"),
+               m->patches ? "" : T(" — it has no .ips or .bps patch, so it changes nothing."));
+      Item *it = add(K_TOGGLE, V_PACK + i, m->name, descs[i]);
+      it->dim = !m->patches;
+    }
+    static char where[1300];
+    snprintf(where, sizeof where, "%s\n%s", T("Each mod is a folder in here, with its .ips or .bps patches and a mod.ini (its name, author and description)."), modpack_dir());
+#ifdef SDL_PLATFORM_ANDROID
+    add(K_ACTION, A_PACKHELP, T("The mods folder"), where);
+#else
+    add(K_ACTION, A_PACKDIR, T("Open the mods folder"), where);
+#endif
+    add(K_ACTION, A_PACKHELP, T("About mods"), T("A mod changes the game's pictures, text, maps, music or tables (ROM patches, as ROM hackers make them). Your ROM file is never changed: mods are applied in memory when the game starts, in the order you turned them on."));
+    break;
+  }
   case P_STATES:
     for (int i = 1; i <= 10; i++) {
       char when[64];
@@ -495,6 +528,16 @@ static void activate(Item *it, int dir)
   case A_OPTIONS: go(P_OPTIONS); return;
   case A_CONTROLS: go(P_CONTROLS); return;
   case A_MODS: go(P_MODS); return;
+  case A_PACKS: modpack_scan(); go(P_PACKS); return;
+  case A_PACKDIR: {
+    SDL_CreateDirectory(modpack_dir());
+    char url[1300];
+    snprintf(url, sizeof url, "file:///%s", modpack_dir()[0] == '/' ? modpack_dir() + 1 : modpack_dir());
+    for (char *q = url; *q; q++) if (*q == '\\') *q = '/';
+    if (!SDL_OpenURL(url)) host_toast(T("The folder could not be opened."));
+    return;
+  }
+  case A_PACKHELP: return;
   case A_STATES: go(P_STATES); return;
   case A_RESET: confirm(A_RESET, 0); return;
   case A_QUIT: if (L.in_game) confirm(A_QUIT, 0); else act_result = LA_QUIT; return;
@@ -890,6 +933,10 @@ void launcher_draw(uint32_t *dst, int w, int h, const uint32_t *game, uint32_t f
     draw_list(38);
     break;
   }
+  case P_PACKS:
+    draw_header(T("Mods"), 0, NULL);
+    draw_list(28);
+    break;
   case P_STATES: {
     const char *tabs[2] = { T("Save"), T("Load") };
     draw_header(T("Save states"), 2, tabs);

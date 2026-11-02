@@ -38,6 +38,7 @@
 #include "host.h"
 #include "i18n.h"
 #include "launcher.h"
+#include "modpack.h"
 #include "mods.h"
 #include "pause.h"
 #include "second.h"
@@ -1151,6 +1152,11 @@ static bool use_rom(const char *path)
   uint32_t size = 0;
   uint8_t *rom = load_rom(path, &size);
   if (!rom) return false;
+  /* the community's mods (mods/), on this copy in memory */
+  char why[300];
+  int mods = modpack_apply(&rom, &size, why, sizeof why);
+  if (why[0]) { char t[400]; snprintf(t, sizeof t, "%s %s", T("A mod could not be used:"), why); host_toast(t); }
+  if (mods && s_log_path[0]) { FILE *lg = fopen(s_log_path, "a"); if (lg) { fprintf(lg, "mods %s\n", g_cfg.mods_on); fclose(lg); } }
   sram_save();
   free(s_rom);
   s_rom = rom; s_rom_size = size; s_rom_crc = crc32_of(rom, size);
@@ -1379,6 +1385,11 @@ int main(int argc, char **argv)
     if (!use_rom(g_cfg.rom)) host_toast(T("That ROM could not be opened."));
     /* fall through */
   case J_RESET:
+    if (s_jump == J_RESET && modpack_changed()) {             /* the mods turned on or off: the ROM again */
+      char again[sizeof s_rom_path];
+      snprintf(again, sizeof again, "%s", s_rom_path);
+      if (!use_rom(again)) host_toast(T("That ROM could not be opened."));
+    }
     sram_save();
     native_hw_reset(s_rom, s_rom_size);
     mods_reset();

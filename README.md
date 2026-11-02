@@ -242,6 +242,15 @@ music keeps playing.
 
 **Everything starts off**, so the game is exactly the console's: turn on what you like in Improvements and Options.
 
+### Mods from the community
+
+Anyone can make a **mod**: new pictures, text, maps, music or tables for
+the game, as an IPS or BPS patch (the usual ROM-hacking patches) in a
+folder inside `mods/`, next to the program. The launcher's **Mods** page
+lists them, with their author and description, and turns each one on or
+off; your ROM file is never changed (the mods are applied in memory when
+the game starts). How to make one: [docs/MODS.md](docs/MODS.md).
+
 ### Controls
 
 | Key | SNES / action |

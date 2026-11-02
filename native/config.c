@@ -192,6 +192,8 @@ void config_load(void)
       } else if (!strcmp(section, "[touch]")) {
         if (!strcmp(k, "controls")) { c->touch = atoi(v); if (c->touch < 0 || c->touch > 2) c->touch = 0; }
         else if (!strcmp(k, "secondscreen")) c->second_screen = yes(v);
+      } else if (!strcmp(section, "[mods]")) {
+        if (!strcmp(k, "on")) snprintf(c->mods_on, sizeof c->mods_on, "%s", v);
       } else if (!strcmp(section, "[gamepad]")) {
         for (int i = 0; i < NBUTTONS; i++)
           if (!strcmp(k, kButtons[i].ini)) {
@@ -226,6 +228,7 @@ void config_save(void)
             c->money, c->stamina, c->freeze_clock, c->stock, c->bags, c->weather);
     fprintf(f, "[Touch]\n# Controls: 0 shown when the screen is touched, 1 always, 2 never\nControls = %d\nSecondScreen = %d\n\n",
             c->touch, c->second_screen);
+    fprintf(f, "[Mods]\n# the folders in mods/ that are turned on, applied in this order\nOn = %s\n\n", c->mods_on);
     fprintf(f, "[Gamepad]\n# SDL gamepad button names: a (bottom), b (right), x (left), y (top),\n"
                "# back, start, leftshoulder, rightshoulder, dpup, dpdown, dpleft, dpright...\n");
     for (int i = 0; i < NBUTTONS; i++) {

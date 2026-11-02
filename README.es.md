@@ -253,6 +253,16 @@ tu ROM. La música sigue sonando.
 
 **Todo viene apagado**, así que el juego es exactamente el de la consola: activa lo que quieras en Mejoras y Opciones.
 
+### Mods de la comunidad
+
+Cualquiera puede hacer un **mod**: dibujos, textos, mapas, música o tablas
+nuevos para el juego, como un parche IPS o BPS (los de siempre del ROM
+hacking) en una carpeta dentro de `mods/`, junto al programa. La página
+**Mods** del launcher los muestra, con su autor y descripción, y activa o
+desactiva cada uno; tu archivo de ROM nunca se modifica (los mods se
+aplican en memoria al iniciar el juego). Cómo hacer uno:
+[docs/MODS.es.md](docs/MODS.es.md).
+
 ### Controles
 
 | Tecla | SNES / acción |

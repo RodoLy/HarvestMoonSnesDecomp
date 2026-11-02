@@ -38,6 +38,8 @@ typedef struct {
   /* controls */
   int touch;                         /* on-screen controls: TOUCH_AUTO, _ALWAYS, _OFF (touch.h) */
   bool second_screen;                /* a second screen (the AYN Thor's): the pause menu, live */
+  /* the community's mods turned on (mods/<folder>): their folders, ';' between */
+  char mods_on[2048];
   SDL_Scancode keys[NBUTTONS];
   SDL_GamepadButton pad[NBUTTONS];
 } Config;
