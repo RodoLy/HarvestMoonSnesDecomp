@@ -147,10 +147,8 @@ build it yourself, see [How the native build works](#how-the-native-build-works)
 ### A launcher in the look of the game
 
 Wooden frames, parchment and the pointing hand, all drawn at the SNES's
-resolution, so its pixels are the game's size. Once your ROM is chosen it
-opens at the start **over the game's own title screen** (drawn by the game
-from your ROM, its music playing); before that, over a farm at night under
-the harvest moon. Keyboard, gamepad or mouse, in **English (the default), Spanish or Italian**. In the game it opens with **Esc** (or L3 / Guide on a gamepad,
+resolution, so its pixels are the game's size. It is the program's first
+screen, over a farm on a sunny day. Keyboard, gamepad or mouse, in **English (the default), Spanish or Italian**. In the game it opens with **Esc** (or L3 / Guide on a gamepad,
 or OPTIONS on the title screen), with the game paused and the music
 playing on.
 

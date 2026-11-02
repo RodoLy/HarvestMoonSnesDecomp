@@ -17,9 +17,6 @@ enum LauncherAction {
 };
 
 void launcher_open(bool in_game);
-/* the launcher over the game's own title screen (the program's start, once
- * a ROM is chosen): the start's pages, the title seen through */
-void launcher_title_mode(bool on);
 int launcher_update(const UiInput *in);          /* an LA_* */
 int launcher_slot(void);                         /* 1..10, for LA_SAVE_STATE / LA_LOAD_STATE */
 /* the launcher into dst (w x 224); behind it the game's last picture

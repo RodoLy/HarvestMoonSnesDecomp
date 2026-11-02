@@ -223,7 +223,7 @@ int ui_text_wrap(int fi, int x, int y, int w, int lh, int max, const char *t, ui
   return lines;
 }
 
-/* ── The night farm ──────────────────────────────────────────────────── */
+/* ── The farm by day ─────────────────────────────────────────────────── */
 static uint32_t hash(uint32_t x)
 {
   x ^= x >> 16; x *= 0x7FEB352Du; x ^= x >> 15; x *= 0x846CA68Bu; x ^= x >> 16;
@@ -242,9 +242,10 @@ void ui_scene(uint32_t t)
 {
   int W = g_ui_w, H = g_ui_h;
   int horizon = H * 62 / 100;
-  /* the sky: bands of colour, dithered into each other as the console would */
-  static const uint32_t sky[] = { 0x0B0D24, 0x11163A, 0x18204C, 0x232B5C, 0x323668, 0x47416F,
-                                  0x5F4C74, 0x7A5775, 0x956472 };
+  /* the sky: bands of blue, lighter towards the hills, dithered into each
+   * other as the console would */
+  static const uint32_t sky[] = { 0x3A6ED8, 0x4478DC, 0x4E84E0, 0x5A90E6, 0x689EEA,
+                                  0x78ACEE, 0x8ABAF2, 0x9CC8F4, 0xB0D6F6 };
   enum { NSKY = sizeof sky / sizeof sky[0] };
   for (int y = 0; y < horizon; y++) {
     int pos = y * (NSKY - 1) * 16 / horizon;
@@ -255,63 +256,28 @@ void ui_scene(uint32_t t)
       g_ui_px[y * W + x] = UI_RGB(sky[b]);
     }
   }
-  /* stars, a few of them twinkling */
-  for (int i = 0; i < 90; i++) {
-    uint32_t h = hash((uint32_t)i * 2654435761u + 7);
-    int x = (int)(h % (uint32_t)W), y = (int)((h >> 12) % (uint32_t)(horizon * 3 / 4));
-    int phase = (int)((t / 6 + (h >> 24)) & 31);
-    uint32_t c = phase < 3 ? 0xFFFFFFF0 : ((h >> 20) & 1) ? 0xFFB8BCD8 : 0xFF8890B8;
-    ui_px(x, y, c);
-    if (phase == 1 && (h & 3) == 0) {
-      ui_px(x - 1, y, 0xFF8890B8); ui_px(x + 1, y, 0xFF8890B8);
-      ui_px(x, y - 1, 0xFF8890B8); ui_px(x, y + 1, 0xFF8890B8);
-    }
-  }
-  /* the harvest moon, with its glow */
-  int mx = W * 70 / 100, my = H * 24 / 100, mr = H * 12 / 100;
-  for (int y = my - mr * 2; y <= my + mr * 2; y++)
-    for (int x = mx - mr * 2; x <= mx + mr * 2; x++) {
-      if ((unsigned)x >= (unsigned)W || (unsigned)y >= (unsigned)horizon) continue;
-      int dx = x - mx, dy = y - my, d2 = dx * dx + dy * dy;
-      if (d2 <= mr * mr) {
-        int shade = (dy + mr) * 6 / (2 * mr + 1);
-        uint32_t c = mix(0xFFE68E, 0xF2A23A, shade, 6);
-        /* craters */
-        static const int cr[5][3] = { { -9, -8, 5 }, { 7, 2, 4 }, { -3, 9, 3 }, { 10, -9, 3 }, { -12, 4, 2 } };
-        for (int k = 0; k < 5; k++) {
-          int ex = dx - cr[k][0] * mr / 26, ey = dy - cr[k][1] * mr / 26, er = cr[k][2] * mr / 26 + 1;
-          if (ex * ex + ey * ey <= er * er) c = mix(c & 0xFFFFFF, 0xD88A30, 1, 3);
+  /* white clouds drifting slowly past, each a few round puffs */
+  for (int c = 0; c < 4; c++) {
+    uint32_t h = hash((uint32_t)c * 7919 + 11);
+    int len = 40 + (int)(h % 30), cy = 14 + c * 17 + (int)((h >> 8) % 8);
+    int cx = (int)((t / (6 + c * 2) + (h >> 12) % (uint32_t)W) % (uint32_t)(W + 2 * len)) - len;
+    for (int k = 0; k < 4; k++) {
+      int px = cx + k * len / 4 + 6, py = cy - (k == 1 || k == 2 ? 4 : 0), r = (k == 1 || k == 2) ? 9 : 6;
+      for (int y = py - r; y <= py + r + 2; y++)
+        for (int x = px - r - 2; x <= px + r + 2; x++) {
+          if ((unsigned)x >= (unsigned)W || (unsigned)y >= (unsigned)horizon) continue;
+          int dx = x - px, dy = y - py;
+          if (dx * dx + dy * dy * 2 > r * r * 2) continue;
+          g_ui_px[y * W + x] = dy > r / 2 ? UI_RGB(0xD8E6F6) : UI_RGB(0xFFFFFF);
         }
-        if (d2 > (mr - 1) * (mr - 1) && dx + dy > 0) c = mix(c & 0xFFFFFF, 0xC8782A, 1, 2);
-        g_ui_px[y * W + x] = c;
-      } else {
-        int ring = (int)sqrt((double)d2) - mr;
-        int glow = 6 - ring * 6 / mr;
-        if (glow > 0 && glow > kBayer[y & 3][x & 3] * 6 / 16 + 1) {
-          uint32_t *p = &g_ui_px[y * W + x];
-          *p = mix(*p & 0xFFFFFF, 0xC88A60, glow, 14);
-        }
-      }
-    }
-  /* two thin clouds drifting past */
-  for (int c = 0; c < 2; c++) {
-    int cy = my - mr / 2 + c * mr, len = W / 3;
-    int cx = (int)((t / (3 + c) + (uint32_t)c * 150) % (uint32_t)(W + len)) - len;
-    for (int k = 0; k < len; k++) {
-      int th = (int)(2 + 2 * sin(k * 0.09 + c) + sin(k * 0.23));
-      for (int j = 0; j < th; j++) {
-        int x = cx + k, y = cy + j - th / 2;
-        if ((unsigned)x < (unsigned)W && (unsigned)y < (unsigned)horizon)
-          g_ui_px[y * W + x] = mix(g_ui_px[y * W + x] & 0xFFFFFF, 0x2A2448, 2, 3);
-      }
     }
   }
   /* far hills, then near ones */
   for (int x = 0; x < W; x++) {
     int h1 = horizon - 14 - (int)(9 * sin(x * 0.021 + 1.3) + 5 * sin(x * 0.057));
     int h2 = horizon - 4 - (int)(6 * sin(x * 0.033 + 4.1) + 3 * sin(x * 0.11));
-    for (int y = h1; y < H; y++) if (y >= 0) g_ui_px[y * W + x] = UI_RGB(0x24283E);
-    for (int y = h2; y < H; y++) if (y >= 0) g_ui_px[y * W + x] = UI_RGB(0x1C3020);
+    for (int y = h1; y < H; y++) if (y >= 0) g_ui_px[y * W + x] = UI_RGB(0x6C9C8C);
+    for (int y = h2; y < H; y++) if (y >= 0) g_ui_px[y * W + x] = UI_RGB(0x3E8A3A);
   }
   /* the field: furrows running towards the hills */
   for (int y = horizon; y < H; y++) {
@@ -319,50 +285,53 @@ void ui_scene(uint32_t t)
     for (int x = 0; x < W; x++) {
       int u = (x - W / 2) * 16 / (depth + 8);
       bool furrow = ((u % 6) + 6) % 6 == 0;
-      uint32_t c = depth < 6 ? 0x1E3A1E : furrow ? 0x223C1C : 0x2E5426;
-      if (!furrow && ((x * 7 + y * 13) % 23) == 0) c = 0x3A6630;
+      uint32_t c = depth < 6 ? 0x4A9A38 : furrow ? 0x4E9232 : 0x62B040;
+      if (!furrow && ((x * 7 + y * 13) % 23) == 0) c = 0x86CC58;
       g_ui_px[y * W + x] = UI_RGB(c);
     }
   }
   /* a tree on the left, the barn and its silo */
   int base = horizon + 2;
   int tx = W * 8 / 100;
-  ui_rect(tx + 6, base - 18, 3, 18, UI_RGB(0x2A1A10));
+  ui_rect(tx + 6, base - 18, 3, 18, UI_RGB(0x6A4426));
   for (int j = -16; j <= 16; j++)
     for (int i = -14; i <= 14; i++)
       if (i * i * 2 + j * j * 3 < 260 + (int)(hash((uint32_t)(i * 31 + j)) % 60))
-        ui_px(tx + 7 + i, base - 30 + j, UI_RGB(0x1A2A1C));
+        ui_px(tx + 7 + i, base - 30 + j, UI_RGB(i + j < -6 ? 0x4CA444 : 0x2E7A2E));
   int bx = W * 18 / 100, bw = 46, bh = 26;
-  ui_rect(bx, base - bh, bw, bh, UI_RGB(0x7E2620));                 /* walls */
-  for (int y = base - bh; y < base; y += 3) ui_hline(bx, y, bw, UI_RGB(0x6A1E1A));
-  for (int j = 0; j < 14; j++) ui_rect(bx - 3 + j, base - bh - j, bw + 6 - 2 * j, 1, UI_RGB(0x4A1614));   /* roof */
-  ui_rect(bx + 16, base - 16, 14, 16, UI_RGB(0xD8C8B0));             /* the door, white trim */
-  ui_rect(bx + 17, base - 15, 12, 15, UI_RGB(0x6A1E1A));
-  for (int k = 0; k < 12; k++) { ui_px(bx + 17 + k, base - 15 + k * 15 / 12, UI_RGB(0xD8C8B0)); ui_px(bx + 28 - k, base - 15 + k * 15 / 12, UI_RGB(0xD8C8B0)); }
-  bool lit = ((t / 40) % 7) != 3;                                    /* a window lit inside */
-  ui_rect(bx + 20, base - bh - 8, 6, 5, lit ? UI_RGB(0xF2C25A) : UI_RGB(0x3A1410));
-  ui_rect(bx + 22, base - bh - 8, 1, 5, UI_RGB(0x4A1614));
+  ui_rect(bx, base - bh, bw, bh, UI_RGB(0xC83A2A));                 /* walls */
+  for (int y = base - bh; y < base; y += 3) ui_hline(bx, y, bw, UI_RGB(0xA82E22));
+  for (int j = 0; j < 14; j++) ui_rect(bx - 3 + j, base - bh - j, bw + 6 - 2 * j, 1, UI_RGB(0x7A2418));   /* roof */
+  ui_rect(bx + 16, base - 16, 14, 16, UI_RGB(0xF4ECDC));             /* the door, white trim */
+  ui_rect(bx + 17, base - 15, 12, 15, UI_RGB(0xA82E22));
+  for (int k = 0; k < 12; k++) { ui_px(bx + 17 + k, base - 15 + k * 15 / 12, UI_RGB(0xF4ECDC)); ui_px(bx + 28 - k, base - 15 + k * 15 / 12, UI_RGB(0xF4ECDC)); }
+  ui_rect(bx + 20, base - bh - 8, 6, 5, UI_RGB(0x3A2A24));            /* the loft's window */
+  ui_rect(bx + 22, base - bh - 8, 1, 5, UI_RGB(0x7A2418));
   int sx = bx + bw + 4;
-  ui_rect(sx, base - 34, 14, 34, UI_RGB(0x6E7484));                  /* silo */
-  for (int y = base - 34; y < base; y += 4) ui_hline(sx, y, 14, UI_RGB(0x5A606E));
-  ui_vline(sx + 11, base - 34, 34, UI_RGB(0x5A606E));
-  for (int j = 0; j < 7; j++) ui_rect(sx + j / 2, base - 34 - 7 + j, 14 - j, 1, UI_RGB(0x4A5060));
+  ui_rect(sx, base - 34, 14, 34, UI_RGB(0xC4CAD4));                  /* silo */
+  for (int y = base - 34; y < base; y += 4) ui_hline(sx, y, 14, UI_RGB(0xA4ACB8));
+  ui_vline(sx + 11, base - 34, 34, UI_RGB(0xA4ACB8));
+  for (int j = 0; j < 7; j++) ui_rect(sx + j / 2, base - 34 - 7 + j, 14 - j, 1, UI_RGB(0x7C8494));
   /* the fence in front */
   int fy = H - 22;
-  for (int x = -((int)(t / 8) % 1); x < W; x += 12) {
-    ui_rect(x, fy, 3, 16, UI_RGB(0x5A3A20));
-    ui_rect(x, fy, 3, 1, UI_RGB(0x8A6236));
+  for (int x = 0; x < W; x += 12) {
+    ui_rect(x, fy, 3, 16, UI_RGB(0x8A5A30));
+    ui_rect(x, fy, 3, 1, UI_RGB(0xC08A4A));
   }
-  ui_rect(0, fy + 3, W, 2, UI_RGB(0x6B4A2A));
-  ui_rect(0, fy + 10, W, 2, UI_RGB(0x6B4A2A));
-  ui_hline(0, fy + 3, W, UI_RGB(0x8A6236));
-  ui_hline(0, fy + 10, W, UI_RGB(0x8A6236));
-  /* fireflies */
-  for (int i = 0; i < 9; i++) {
+  ui_rect(0, fy + 3, W, 2, UI_RGB(0xA06C3A));
+  ui_rect(0, fy + 10, W, 2, UI_RGB(0xA06C3A));
+  ui_hline(0, fy + 3, W, UI_RGB(0xC89A5A));
+  ui_hline(0, fy + 10, W, UI_RGB(0xC89A5A));
+  /* butterflies over the field */
+  for (int i = 0; i < 5; i++) {
     uint32_t h = hash((uint32_t)i * 977 + 3);
     double a = t * 0.013 + (h & 255) * 0.1;
-    int x = (int)(h % (uint32_t)W) + (int)(10 * sin(a + i));
-    int y = horizon + 6 + (int)((h >> 9) % (uint32_t)(H - horizon - 26)) + (int)(4 * cos(a * 1.7));
-    if (((t / 5 + (h >> 20)) % 12) < 7) { ui_px(x, y, UI_RGB(0xF8F088)); ui_px(x + 1, y, UI_RGB(0x9AA040)); }
+    int x = (int)(h % (uint32_t)W) + (int)(14 * sin(a + i));
+    int y = horizon + 6 + (int)((h >> 9) % (uint32_t)(H - horizon - 26)) + (int)(5 * cos(a * 1.7));
+    uint32_t col = (h >> 20) & 1 ? UI_RGB(0xFFFFFF) : UI_RGB(0xF8E058);
+    bool open = ((t / 6 + (h >> 22)) & 1) != 0;              /* the wings flap */
+    ui_px(x, y, UI_RGB(0x3A3020));
+    if (open) { ui_px(x - 1, y - 1, col); ui_px(x + 1, y - 1, col); ui_px(x - 1, y, col); ui_px(x + 1, y, col); }
+    else { ui_px(x, y - 1, col); ui_px(x, y - 2, col); }
   }
 }

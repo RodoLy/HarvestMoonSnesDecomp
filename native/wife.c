@@ -46,6 +46,7 @@
 
 #define SLOT          0x0BA46u     /* the wife's event slot, $13: $7E:B586 + $40 x $13 (its fields: SLOT_*) */
 #define HELP_UNTIL_HOUR 11
+#define WATER_FRAMES  65           /* one watering: as long as the player's (action $0A with the can) */
 
 enum { MARIA, ANN, NINA, ELLEN, EVE };
 static const char *const kNames[5] = { "Maria", "Ann", "Nina", "Ellen", "Eve" };
@@ -423,7 +424,7 @@ static void work_here(uint8_t *ram, const HmRegs *regs, int w)
     }
     if (walk(w)) {
       if (!dry(tiles()[W.ty * 64 + W.tx])) { W.plen = 0; return; }   /* the player was quicker */
-      face_tile(w); W.wait = 40;
+      face_tile(w); W.wait = WATER_FRAMES;
     }
     return;
   case T_REST:                                       /* done: by the house's door */

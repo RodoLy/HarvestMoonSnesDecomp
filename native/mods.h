@@ -18,7 +18,6 @@ int mods_field_width(void);
 /* the improvements' own marks over the picture (the seeds left; px NULL:
  * only whether there are any); false: none */
 bool mods_hud(uint32_t *px, int w);
-bool mods_title_ready(void);          /* the title screen's menu is up (and takes keys) */
 /* mouse controls: the pointer on the field (-1: outside), a button (0 none,
  * 1 left, 2 right) going down or up; the buttons it presses this frame */
 void mods_mouse(int fx, int fy, int button, bool down);

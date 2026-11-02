@@ -155,9 +155,8 @@ Para compilarlo tú, ver
 
 Marcos de madera, pergamino y la mano que señala, todo dibujado a la
 resolución del SNES, así que sus píxeles son del tamaño de los del juego.
-Una vez elegida tu ROM, al iniciar se abre **sobre la pantalla de título
-del propio juego** (la dibuja el juego con tu ROM, con su música); antes
-de eso, sobre una granja de noche bajo la luna de la cosecha. Se maneja con teclado, mando o
+Es la primera pantalla del programa, sobre una granja en un día soleado.
+Se maneja con teclado, mando o
 ratón, en **inglés (por defecto), español o italiano**. En el juego se abre con **Esc**
 (o L3 / Guía en el mando, o OPTIONS en el título) y el juego queda en pausa
 mientras la música sigue.

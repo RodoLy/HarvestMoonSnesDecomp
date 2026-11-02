@@ -7,7 +7,7 @@
 - **Ready-made downloads** for Windows, Mac (Apple Silicon and Intel), Linux and **Android** — no need to build anything.
 - **Android** (phones, tablets, AYN Thor): touch controls in the look of the game's menus (in the side bars at 4:3, see-through with widescreen); on two-screen devices like the **AYN Thor**, the pause menu stays **live on the second screen**, used by touch.
 - **Mods**: a `mods` folder and a **Mods** page in the launcher; drop the community's IPS / BPS patches in and turn them on. Your ROM is never changed.
-- **The launcher opens over the game's own title screen** once your ROM is chosen.
+- **The launcher by day**: the start screen's farm under a sunny sky.
 - New improvements (all off by default):
   - **Your wife helps on the farm**: married with her ten hearts, talk to her again after her line of the day and she offers to help for a day, three days or a week; mornings she feeds the animals and waters (half of the work at most, hopping over fences), then goes to her midday chores. Some days she wears her clothes from before the wedding.
   - **Crop bag**: 9 slots for what you carry, inside the pause menu; hold Q at the shipping box to ship it all.
@@ -35,7 +35,7 @@ cheats. Built on your own computer with `build.bat`.
 - **Descargas listas para jugar** para Windows, Mac (Apple Silicon e Intel), Linux y **Android**: ya no hay que compilar nada.
 - **Android** (teléfonos, tablets, AYN Thor): controles táctiles con el aspecto de los menús del juego (en las franjas de los lados en 4:3, transparentes con pantalla ancha); en equipos de dos pantallas como la **AYN Thor**, el menú de pausa queda **en vivo en la segunda pantalla** y se usa tocándolo.
 - **Mods**: una carpeta `mods` y una página **Mods** en el launcher; pon ahí los parches IPS / BPS de la comunidad y actívalos. Tu ROM nunca se modifica.
-- **El launcher se abre sobre la pantalla de título del propio juego** una vez elegida tu ROM.
+- **El launcher de día**: la granja de la pantalla de inicio bajo un cielo soleado.
 - Mejoras nuevas (todas apagadas de fábrica):
   - **Tu esposa te ayuda en la granja**: casado y con sus diez corazones, háblale otra vez después de su frase del día y te ofrece ayudarte un día, tres días o una semana; en las mañanas alimenta a los animales y riega (como máximo la mitad del trabajo, brincando las cercas) y luego se va a sus quehaceres del mediodía. Algunos días se viste como cuando era soltera.
   - **Mochila de cosechas**: 9 espacios para lo que cargas, dentro del menú de pausa; mantén Q en la caja de envíos para enviarlo todo.

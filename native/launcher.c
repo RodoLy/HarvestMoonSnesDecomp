@@ -1,8 +1,8 @@
 /*
  * launcher.c — the native build's launcher, in the look of the game.
  *
- * Before the game starts it is the program's first screen, on a farm at
- * night under the harvest moon; in the game it opens over the last picture
+ * Before the game starts it is the program's first screen, on a farm on a
+ * sunny day; in the game it opens over the last picture
  * (Escape, the pad's L3 or Guide button, or OPTIONS on the title screen)
  * with the game standing still. Its pages:
  *   (the first time, when no ROM is found) Choose your ROM: the ROMs
@@ -68,7 +68,6 @@ typedef struct {
 
 static struct {
   bool in_game;
-  bool at_title;          /* in the game, on its title screen: the start's menu over it */
   int page, tab[NPAGES], sel[NPAGES], scroll[NPAGES];
   int wait;               /* 1 a key, 2 a pad button, for button wait_i */
   int wait_i;
@@ -310,7 +309,7 @@ static void build(void)
   Config *c = &g_cfg;
   switch (L.page) {
   case P_MAIN:
-    if (L.in_game && !L.at_title) {
+    if (L.in_game) {
       add(K_ACTION, A_PLAY, T("Back to the game"), T("Close this menu and go on playing."));
       add(K_ACTION, A_STATES, T("Save states"), T("Ten slots that keep the game exactly as it is, apart from the diaries. Also F1-F10 to load and Shift+F1-F10 to save."));
       add(K_ACTION, A_RESET, T("Restart"), T("Start the game again from its first screen (as the console's RESET button). Diaries saved in the game are kept."));
@@ -321,7 +320,7 @@ static void build(void)
     add(K_ACTION, A_CONTROLS, T("Controls"), T("The keys and the gamepad's buttons. Connect a gamepad (USB or Bluetooth) at any time: it appears here."));
     add(K_ACTION, A_MODS, T("Improvements"), T("The recompilation's improvements: fast text, longer days, a pause menu, OPTIONS on the title, an endless game, and cheats."));
     add(K_ACTION, A_PACKS, T("Mods"), T("The community's mods: new pictures, text, maps and more for the game, from the mods folder. Turn on the ones you want."));
-    add(K_ACTION, A_QUIT, L.in_game && !L.at_title ? T("Quit the game") : T("Quit"), T("Close the program. The game saves only in its diaries (when you sleep)."));
+    add(K_ACTION, A_QUIT, L.in_game ? T("Quit the game") : T("Quit"), T("Close the program. The game saves only in its diaries (when you sleep)."));
     break;
   case P_GAMES:
     for (int i = 0; i < L.ngames; i++) {
@@ -541,7 +540,7 @@ static void activate(Item *it, int dir)
   case A_PACKHELP: return;
   case A_STATES: go(P_STATES); return;
   case A_RESET: confirm(A_RESET, 0); return;
-  case A_QUIT: if (L.in_game && !L.at_title) confirm(A_QUIT, 0); else act_result = LA_QUIT; return;
+  case A_QUIT: if (L.in_game) confirm(A_QUIT, 0); else act_result = LA_QUIT; return;
   case A_BROWSE: host_rom_dialog(); return;
   case A_DEFAULT_OPTIONS: {
     Config d; config_defaults(&d);
@@ -566,7 +565,6 @@ static void move_sel(int d)
   *s = (*s + n + d) % n;
 }
 
-void launcher_title_mode(bool on) { L.at_title = on; }
 void launcher_open(bool in_game)
 {
   L.in_game = in_game;
@@ -722,17 +720,14 @@ static void draw_main(void)
   int cx = s_ox + 128;
   const char *title = "Harvest Moon";
   ui_text_sh(UI_SMALL, 3, 9, "v" HM_NATIVE_VERSION, C_CREAM);
-  if (!L.at_title) {                  /* on the title screen its own sign says it */
-    ui_text_big(cx - ui_text_big_w(title) / 2, 34, title, C_CREAM, C_WOOD_EDGE);
-    const char *sub = T("NATIVE EDITION · DECOMPILED C");
-    ui_text_sh(UI_SMALL, cx - ui_text_w(UI_SMALL, sub) / 2, 47, sub, C_AMBER);
-  }
+  ui_text_big(cx - ui_text_big_w(title) / 2, 34, title, C_CREAM, C_WOOD_EDGE);
+  const char *sub = T("NATIVE EDITION · DECOMPILED C");
+  ui_text_sh(UI_SMALL, cx - ui_text_w(UI_SMALL, sub) / 2, 47, sub, C_AMBER);
   int bw = 0;
   for (int i = 0; i < L.nitems; i++) { int w = ui_text_w(UI_BODY, L.items[i].label); if (w > bw) bw = w; }
   bw += 34;
-  if (L.at_title && bw < 156) bw = 156;   /* wide enough to hide the title's own menu */
   int rows = L.nitems, rh = 13;
-  int by = L.at_title ? 120 : 54, bh = 12 + rows * rh;   /* on the title: over its own menu, under the sign */
+  int by = 54, bh = 12 + rows * rh;
   int bx = cx - bw / 2;
   ui_frame(bx, by, bw, bh, C_PAPER);
   int sel = L.sel[P_MAIN];
@@ -750,10 +745,6 @@ static void draw_main(void)
   if (b2 > b) b = b2;
   snprintf(line, sizeof line, "%s %s", T("ROM:"), *rom ? (b ? b + 1 : rom) : T("(none chosen)"));
   const char *desc = L.nitems ? L.items[sel].desc : "";
-  if (L.at_title) {                   /* the ROM in a line under the panel */
-    ui_text_sh(UI_SMALL, cx - ui_text_w(UI_SMALL, line) / 2, by + bh + 9, line, C_CREAM);
-    return;
-  }
   textbox(desc, line);
 }
 
@@ -905,7 +896,7 @@ void launcher_draw(uint32_t *dst, int w, int h, const uint32_t *game, uint32_t f
   s_ox = (w - 256) / 2;
   if (game) {
     memcpy(dst, game, (size_t)w * h * 4);
-    if (!(L.at_title && L.page == P_MAIN)) ui_dim(0, 0, w, h, 1);   /* the title screen, as it is */
+    ui_dim(0, 0, w, h, 1);
   } else {
     ui_scene(frame);
   }

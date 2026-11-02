@@ -57,11 +57,6 @@ static uint8_t s_sram[SRAM_SIZE], s_sram_saved[SRAM_SIZE];
 static char s_sram_path[1100], s_rom_path[1024];
 static uint8_t *s_rom; static uint32_t s_rom_size, s_rom_crc;
 static bool s_headless, s_fast, s_quit, s_booted, s_mods = true;
-/* the start, with a ROM chosen: the intro runs unseen and as fast as it
- * goes (Start skips it, as a player would) to the title screen, and the
- * launcher opens over it */
-static bool s_title_warm;
-static uint64_t s_title_warm_from;
 static bool s_bag_key;        /* the crop bag's key (Q, left trigger, middle button) */
 static int s_script_bag;      /* script: "bag" holds it a few frames */
 static uint64_t s_frame;
@@ -634,7 +629,7 @@ static void run_sound(void)
   if (getenv("HM_APU_DEBUG") && s_frame % 60 == 0) fprintf(stderr, "[apu] frame %llu: target %.0f run %llu\n", (unsigned long long)s_frame, s_apu_target, (unsigned long long)native_apu_cycles());
   int16_t samples[2 * 4096];
   uint32_t n = native_audio_samples(samples, 4096);
-  if (s_audio && n && !s_title_warm) {
+  if (s_audio && n) {
     /* more than 0.2 s waiting (of the game's time): the screen runs slower
      * than the sound (a slow monitor, a busy computer): drop these */
     int speed = s_fast_on ? g_cfg.ff_speed : 1;
@@ -1024,14 +1019,7 @@ static void end_of_frame(uint8_t *ram)
       s_work_ns += w;
       if (w > s_work_max) s_work_max = w;
     }
-    if (s_title_warm) {                                  /* the intro, unseen: a dark window */
-      if (t - s_last_present >= 100000000) {
-        SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
-        SDL_RenderClear(s_renderer);
-        SDL_RenderPresent(s_renderer);
-        s_last_present = t;
-      }
-    } else if (!s_fast_on || t - s_last_present >= 16000000) {   /* fast: about 60 pictures a second */
+    if (!s_fast_on || t - s_last_present >= 16000000) {   /* fast: about 60 pictures a second */
       present_game();
       s_last_present = t;
     }
@@ -1064,29 +1052,6 @@ static void end_of_frame(uint8_t *ram)
       const char *c = strchr(e, ':');
       if (atol(e) == (long)s_frame) { if (c && c[1] == 'p') s_want_pause = true; else s_want_launcher = true; }
     } }
-  if (s_title_warm) {
-    /* Start every 20 frames until the title screen has loaded ($95 = 5),
-     * then the launcher once its menu takes keys (or after a minute and a
-     * half, whatever the game does) */
-    bool ready = mods_title_ready() || s_frame - s_title_warm_from > 5400;
-    native_set_pads(g_ram[HM_INTRO_STAGE] != 5 && s_frame % 20 == 0 ? B_START : 0, 0);
-    if (!ready) return;
-    s_title_warm = false;
-    s_next_tick = 0; s_last_wake = 0;
-    launcher_title_mode(true);
-    int r = run_menu(MENU_LAUNCHER, true);
-    launcher_title_mode(false);
-    native_set_pads(0, 0);
-    switch (r) {
-    case LA_QUIT: quit_now(); break;
-    case LA_SWITCH_ROM: s_title_warm = true; longjmp(s_jmp, J_SWITCH);
-    default:
-      /* mods turned on or off: the game again with them, back to here */
-      if (modpack_changed()) { s_title_warm = true; longjmp(s_jmp, J_RESET); }
-      break;
-    }
-    return;
-  }
   if (s_mods && wife_dialog_wanted()) { run_menu(MENU_WIFE, true); native_set_pads(0, 0); }
   if (s_want_pause) {
     s_want_pause = false;
@@ -1110,7 +1075,7 @@ static void end_of_frame(uint8_t *ram)
       longjmp(s_jmp, J_STATE);
     }
   }
-  if (!s_title_warm) pace(true);
+  pace(true);
 }
 
 /* the start of a GameLoop frame: nothing of the game is half done */
@@ -1402,7 +1367,6 @@ int main(int argc, char **argv)
       break;
     }
     if (ok && (no_launcher || !g_cfg.show_launcher) && use_rom(g_cfg.rom)) break;
-    if (ok && !getenv("HM_LAUNCHER_FIRST") && use_rom(g_cfg.rom)) { s_title_warm = true; break; }   /* the launcher over the title screen (tests: HM_LAUNCHER_FIRST, before it) */
     int r = run_menu(MENU_LAUNCHER, false);
     if (r == LA_QUIT) quit_now();
     if (g_cfg.rom[0] && launcher_rom_ok(g_cfg.rom, NULL, 0) && use_rom(g_cfg.rom)) break;
@@ -1417,7 +1381,7 @@ int main(int argc, char **argv)
   g_native_lag_frame = lag_frame;
   s_booted = true;
   switch ((s_jump = setjmp(s_jmp))) {
-  case J_START: s_title_warm_from = s_frame; boot(); break;
+  case J_START: boot(); break;
   case J_SWITCH:
     if (!use_rom(g_cfg.rom)) host_toast(T("That ROM could not be opened."));
     /* fall through */
@@ -1431,7 +1395,6 @@ int main(int argc, char **argv)
     native_hw_reset(s_rom, s_rom_size);
     mods_reset();
     s_want_launcher = s_want_pause = false; s_save_slot = s_load_slot = 0;
-    s_title_warm_from = s_frame;
     boot();
     break;
   case J_STATE:

@@ -51,7 +51,7 @@ void ui_image(int x, int y, const uint32_t *p, int w, int h);
 void ui_hand(int x, int y);                             /* the pointing-hand cursor */
 void ui_heart(int x, int y, uint32_t fill, bool full);  /* 7x6 */
 void ui_checker(void);                                  /* the pause menu's floor */
-void ui_scene(uint32_t t);                              /* a farm at night (t: frames) */
+void ui_scene(uint32_t t);                              /* a farm by day (t: frames) */
 void ui_switch(int x, int y, bool on);                  /* an on/off toggle, 20x9 */
 void ui_bar(int x, int y, int w, int v, int max);        /* a level, 5 high */
 
