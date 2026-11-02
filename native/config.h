@@ -24,6 +24,7 @@ typedef struct {
   int ngames;
   /* video and sound */
   bool fullscreen, vsync, sprite_limits, widescreen, exact_pixels;
+  int ws_shape;          /* widescreen: 0 = 16:9, 1 = 16:10 */
   int scale;                         /* window: 1..6 times the picture */
   int volume;                        /* 0..100 */
   int ff_speed;                      /* fast forward: 2, 3, 4, 6 */

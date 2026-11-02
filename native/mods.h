@@ -39,7 +39,10 @@ void mods_ws_margins(int *left, int *right);
 unsigned mods_ws_clamp(void);
 /* the background layers whose margins reflect the picture */
 unsigned mods_ws_mirror(void);
-enum { WS_BUDGET = 43 };
+/* the widest margins (16:9 with square pixels: 398 = 256 + 2 x 71); the
+ * margins of the chosen shape: mods_ws_budget() */
+enum { WS_BUDGET = 71 };
+int mods_ws_budget(void);
 
 /* The endless game. The host keeps a copy of the whole machine at the
  * start of each GameLoop frame while mods_endless_keep() says so, and

@@ -106,12 +106,15 @@ mientras la música sigue.
 |---|
 | ![Launcher en el juego](docs/screenshots/launcher_ingame.png) |
 
-### Pantalla ancha 16:9 *(apagada por defecto)*
+### Pantalla ancha, 16:9 o 16:10 *(apagada por defecto)*
 
 Muestra más mapa a los lados en lugar de barras negras, con personajes y
-animales también en los márgenes. Al borde de un mapa, en cuartos pequeños
-y en el título vuelve al 4:3 original, porque ahí el juego no tiene nada que
-dibujar. Se apaga en Opciones o en Mejoras.
+animales también en los márgenes: 16:9 (398 × 224) para teles y la mayoría
+de monitores, 16:10 (358 × 224) para muchas laptops. El inicio del juego
+también es ancho: el logo de Natsume, el camino de la intro, el título, la
+lista de diarios y los nombres. Al borde de un mapa y en cuartos pequeños
+vuelve al 4:3 original, porque ahí el juego no tiene nada que dibujar. Se
+elige en Opciones o en Mejoras.
 
 | Original (4:3) | Pantalla ancha (16:9) |
 |---|---|

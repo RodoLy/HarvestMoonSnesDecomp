@@ -106,12 +106,15 @@ playing on.
 |---|
 | ![Launcher in the game](docs/screenshots/launcher_ingame.png) |
 
-### 16:9 widescreen *(off by default)*
+### Widescreen, 16:9 or 16:10 *(off by default)*
 
 Shows more of the map at the sides instead of black bars, with people and
-animals drawn in the margins too. At a map's edge, in small rooms and on
-the title screen it goes back to the original 4:3, since the game has
-nothing to draw there. It can be turned off in Options or Improvements.
+animals drawn in the margins too: 16:9 (398 × 224) for TVs and most
+monitors, 16:10 (358 × 224) for many laptops. The start of the game is wide
+too: the Natsume logo, the intro's road, the title, the diary list and the
+names. At a map's edge and in small rooms it goes back to the original
+4:3, since the game has nothing to draw there. Chosen in Options or
+Improvements.
 
 | Original (4:3) | Widescreen (16:9) |
 |---|---|

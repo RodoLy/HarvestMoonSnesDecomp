@@ -972,7 +972,10 @@ static bool ws_start_screen(void)
   uint8_t m = g_ram[HM_MAP_ID];
   return m == 0x5C || m == 0x5D || m == 0x5E || m == 0x5F || (m == 0x3C && !hm_diary_loaded(g_ram));
 }
-int mods_field_width(void) { return g_cfg.widescreen ? 256 + 2 * WS_BUDGET : 256; }
+/* the margins a side: 16:9 = 398 x 224 (71), 16:10 = 358 x 224 (51); the
+ * picture's pixels are square */
+int mods_ws_budget(void) { return g_cfg.ws_shape == 1 ? 51 : WS_BUDGET; }
+int mods_field_width(void) { return g_cfg.widescreen ? 256 + 2 * mods_ws_budget() : 256; }
 static int imin(int a, int b) { return a < b ? a : b; }
 static int iclamp(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 static void ws_frame(void)
@@ -988,11 +991,11 @@ static void ws_frame(void)
       int pc = (cam & ~0x3ff) | hs;
       if (pc - cam > 512) pc -= 1024;
       else if (cam - pc > 512) pc += 1024;
-      l = iclamp(imin(cam - cl, pc - cl), 0, WS_BUDGET);
-      r = iclamp(imin(cr - cam, cr - pc), 0, WS_BUDGET);
+      l = iclamp(imin(cam - cl, pc - cl), 0, mods_ws_budget());
+      r = iclamp(imin(cr - cam, cr - pc), 0, mods_ws_budget());
     }
   }
-  if (g_cfg.widescreen && ws_start_screen()) l = r = WS_BUDGET;
+  if (g_cfg.widescreen && ws_start_screen()) l = r = mods_ws_budget();
   s_ws_l = l; s_ws_r = r;
   g_hm_oam_right = (uint16_t)(0x0100 + r);
   g_hm_oam_left = (uint16_t)(0xFFF0 - l);

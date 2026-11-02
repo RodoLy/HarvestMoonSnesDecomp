@@ -185,7 +185,7 @@ static int get_value(int id)
   case V_SCALE: return c->scale - 1;
   case V_PICTURE: return c->exact_pixels;
   case V_VSYNC: return c->vsync;
-  case V_WIDESCREEN: return c->widescreen;
+  case V_WIDESCREEN: return c->widescreen ? 1 + c->ws_shape : 0;
   case V_SPRITES: return c->sprite_limits;
   case V_VOLUME: return c->volume / 10;
   case V_FF: for (int i = 0; i < 4; i++) if (kFF[i] == c->ff_speed) return i; return 1;
@@ -218,7 +218,7 @@ static void set_value(int id, int v)
   case V_SCALE: c->scale = v + 1; break;
   case V_PICTURE: c->exact_pixels = v; break;
   case V_VSYNC: c->vsync = v; break;
-  case V_WIDESCREEN: c->widescreen = v; break;
+  case V_WIDESCREEN: c->widescreen = v != 0; c->ws_shape = v == 2; break;
   case V_SPRITES: c->sprite_limits = v; break;
   case V_VOLUME: c->volume = v * 10; break;
   case V_FF: c->ff_speed = kFF[v]; break;
@@ -322,7 +322,7 @@ static void build(void)
     choice(V_PICTURE, "Picture", "Sharp: as large as the window allows, with no uneven pixels. Exact: whole multiples only, with a border.",
            2, T("Sharp"), T("Exact pixels"));
     toggle(V_VSYNC, "Vertical sync", "Frames follow the screen's refresh (smoothest on 60 Hz screens). Turned off by itself if the screen cannot keep up.");
-    toggle(V_WIDESCREEN, "Widescreen (16:9)", "Shows more of the map at the sides instead of black bars. At a map's edge, in small rooms and on the title screen it looks like the original (4:3).");
+    choice(V_WIDESCREEN, "Widescreen", "Shows more of the map at the sides instead of black bars: 16:9 for TVs and most monitors, 16:10 for many laptops. At a map's edge and in small rooms it looks like the original (4:3).", 3, T("Off"), T("16:9"), T("16:10"));
     choice(V_SPRITES, "Sprites", "Without limit: no flicker when many things share a line. Console: its limit of 32 sprites a line, as on the SNES.",
            2, T("Without limit"), T("As the console"));
     add(K_SLIDER, V_VOLUME, T("Volume"), T("The sound's volume."))->n = 10;
@@ -373,7 +373,7 @@ static void build(void)
       toggle(V_ENDLESS, "Endless game", "The game no longer stops after Year 3: you watch the ending, then wake up on Summer 30 and keep farming through Year 4, 5 and beyond.");
       toggle(V_CROPS, "Walk through crops", "Crops on the farm no longer block your way, so you can reach the middle of a 3x3 patch to water it. They sway as you pass.");
       toggle(V_SEEDS, "One seed at a time", "A seed bag is 9 seeds: each use sows only the tile in front of you, in any order you like. The bag and the stamina go at the 9th seed.");
-      toggle(V_WIDESCREEN, "Widescreen (16:9)", "Shows more of the map at the sides instead of black bars. At a map's edge, in small rooms and on the title screen it looks like the original (4:3).");
+      choice(V_WIDESCREEN, "Widescreen", "Shows more of the map at the sides instead of black bars: 16:9 for TVs and most monitors, 16:10 for many laptops. At a map's edge and in small rooms it looks like the original (4:3).", 3, T("Off"), T("16:9"), T("16:10"));
     } else {
       toggle(V_MONEY, "Infinite money", "Keeps your money at the most the game allows: 9,999,990 G.");
       toggle(V_STAMINA, "Infinite stamina", "Your stamina is always topped up: you never get tired.");
