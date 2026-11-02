@@ -1,84 +1,88 @@
-Harvest Moon (SNES) - native build, v0.1.0 beta
-================================================
+Harvest Moon (SNES) - native build, v1.0.0 beta
+===============================================
 
-The game runs on its code rewritten in C, built on your own computer.
-No ROM, no generated code and no ready-made program are included:
-you need your own legal copy of Harvest Moon (USA).
+The game runs on its code rewritten in C. No ROM and nothing taken from
+it is included: you need your own legal copy of Harvest Moon (USA). The
+first time, the program asks for it (.sfc or .smc), checks it and
+remembers it.
 
-WINDOWS 10/11 (x64 or ARM)
- 1. Double-click build.bat. The first time it downloads a C compiler
-    (llvm-mingw) and SDL3, about 190 MB, checked by their SHA-256.
-    Then it builds the game in about a minute.
- 2. Open HarvestMoonNative.exe.
- 3. The first time, choose your ROM (Harvest Moon USA, .sfc or .smc).
-    It is checked and remembered.
+WINDOWS 10/11
+    Open HarvestMoonNative.exe. If Windows says "Windows protected your
+    PC" (the program is not signed with a paid certificate): More info >
+    Run anyway.
 
 MAC (Apple Silicon or Intel, macOS 11+)
- 1. Double-click build_mac.command (if macOS says it is from an
-    unidentified developer: right-click it > Open > Open). The first
-    time it may ask to install Apple's command line tools, and it
-    downloads CMake (50 MB) and SDL3's source. It builds in a few minutes.
- 2. Double-click "Harvest Moon.command" and choose your ROM.
+    Double-click "Harvest Moon.command". If macOS says it is from an
+    unidentified developer: right-click it > Open > Open (or, in
+    Terminal: xattr -dr com.apple.quarantine on this folder).
 
-ANDROID (phones, tablets, the AYN Thor) - built on a Windows PC
- 1. Double-click compilar_android.bat. The first time it downloads Java,
-    Android's tools and SDK (about 2.5 GB) and asks you to accept
-    Android's license (answer y). It leaves HarvestMoon.apk here.
- 2. Copy HarvestMoon.apk to the device and open it to install it.
- 3. Choose your ROM with Android's file picker. On the AYN Thor the pause
-    menu stays on the lower screen while you play (launch the app on
-    the top screen).
+ANDROID (phones, tablets, the AYN Thor)
+    Open the .apk on the device to install it. Choose your ROM with
+    Android's file picker. On the AYN Thor launch the app on the top
+    screen: the pause menu stays on the lower one while you play.
 
 LINUX
-    cmake -S native -B build/native && cmake --build build/native
-    build/native/HarvestMoonNative /path/to/your/rom.sfc
+    ./HarvestMoonNative  (or ./HarvestMoonNative /path/to/your/rom.sfc)
 
 Everything starts OFF: the game is the console's. Turn on what you like
-in the launcher (Esc): Improvements (fast text, longer days, the
-Harvest Moon 64-style pause menu, OPTIONS on the title screen, the
-endless game, widescreen, cheats) and Options.
+in the launcher (Esc): Improvements (widescreen, the Harvest Moon 64-style
+pause menu, the crop bag, your wife's help, fast text, longer days...),
+Cheats and Options.
+
+MODS: put each mod (a folder with .ips or .bps patches and a mod.ini) in
+the mods folder, then turn it on in the launcher's Mods page. How to make
+one: mods/MODS.md.
 
 Keys: arrows, X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start,
 Right Shift = Select. Esc launcher, M pause menu, Tab fast forward,
 F11 full screen, F1-F10 load a state, Shift+F1-F10 save one.
 A gamepad works too. Everything can be changed in Controls.
 
+The source, and scripts to build it yourself:
+https://github.com/RodoLy/HarvestMoonSnesDecomp
 This is a beta: please report problems in the repository's Issues.
-https://github.com/RodriLoy/HarvestMoonSnesDecomp
 
 ----------------------------------------------------------------------
 
-Harvest Moon (SNES) - version nativa, v0.1.0 beta
+Harvest Moon (SNES) - version nativa, v1.0.0 beta
 
-El juego corre sobre su codigo reescrito en C, compilado en tu propia
-computadora. No incluye la ROM, ni codigo generado, ni un programa ya
-hecho: necesitas tu propia copia legal de Harvest Moon (USA).
+El juego corre sobre su codigo reescrito en C. No incluye la ROM ni nada
+sacado de ella: necesitas tu propia copia legal de Harvest Moon (USA). La
+primera vez el programa te la pide (.sfc o .smc), la revisa y la recuerda.
 
-WINDOWS 10/11 (x64 o ARM)
- 1. Doble clic en build.bat (o compilar_nativo.bat). La primera vez
-    descarga un compilador de C (llvm-mingw) y SDL3, unos 190 MB,
-    revisados por su SHA-256. Luego compila el juego en un minuto.
- 2. Abre HarvestMoonNative.exe.
- 3. La primera vez elige tu ROM (Harvest Moon USA, .sfc o .smc). Se
-    revisa y se recuerda.
+WINDOWS 10/11
+    Abre HarvestMoonNative.exe. Si Windows dice "Windows protegio tu PC"
+    (el programa no esta firmado con un certificado de pago): Mas
+    informacion > Ejecutar de todas formas.
 
 MAC (Apple Silicon o Intel, macOS 11+)
- 1. Doble clic en build_mac.command (si macOS dice que es de un
-    desarrollador no identificado: clic derecho > Abrir > Abrir). La
-    primera vez puede pedir instalar las herramientas de linea de
-    comandos de Apple, y descarga CMake (50 MB) y el codigo de SDL3.
-    Compila en unos minutos.
- 2. Doble clic en "Harvest Moon.command" y elige tu ROM.
+    Doble clic en "Harvest Moon.command". Si macOS dice que es de un
+    desarrollador no identificado: clic derecho > Abrir > Abrir (o, en
+    Terminal: xattr -dr com.apple.quarantine sobre esta carpeta).
 
-ANDROID (telefonos, tablets, la AYN Thor) - se compila en una PC con Windows
- 1. Doble clic en compilar_android.bat. La primera vez descarga Java, las
-    herramientas y el SDK de Android (unos 2.5 GB) y pide aceptar la
-    licencia de Android (contesta y). Deja HarvestMoon.apk aqui.
- 2. Copia HarvestMoon.apk al equipo y abrelo para instalarlo.
- 3. Elige tu ROM con el selector de archivos de Android. En la AYN Thor el
-    menu de pausa se queda en la pantalla de abajo mientras juegas (abre
-    la app en la pantalla de arriba).
+ANDROID (telefonos, tablets, la AYN Thor)
+    Abre el .apk en el equipo para instalarlo. Elige tu ROM con el
+    selector de archivos de Android. En la AYN Thor abre la app en la
+    pantalla de arriba: el menu de pausa se queda en la de abajo.
+
+LINUX
+    ./HarvestMoonNative  (o ./HarvestMoonNative /ruta/a/tu/rom.sfc)
 
 Todo viene APAGADO: el juego es el de la consola. Activa lo que quieras
-en el launcher (Esc): Mejoras y Opciones. El idioma se cambia en
+en el launcher (Esc): Mejoras (pantalla ancha, menu de pausa estilo
+Harvest Moon 64, mochila de cosechas, la ayuda de tu esposa, texto
+rapido, dias mas largos...), Trucos y Opciones. El idioma se cambia en
 Options > Language.
+
+MODS: pon cada mod (una carpeta con parches .ips o .bps y un mod.ini) en
+la carpeta mods y activalo en la pagina Mods del launcher. Como hacer
+uno: mods/MODS.es.md.
+
+Teclas: flechas, X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start,
+Shift derecho = Select. Esc launcher, M menu de pausa, Tab avance rapido,
+F11 pantalla completa, F1-F10 cargar un estado, Shift+F1-F10 guardarlo.
+Tambien funciona un mando. Todo se puede cambiar en Controles.
+
+El codigo, y los scripts para compilarlo tu:
+https://github.com/RodoLy/HarvestMoonSnesDecomp
+Es una beta: reporta los problemas en los Issues del repositorio.

@@ -1,19 +1,26 @@
-# Publish a release of the native build: the source and the build script
-# in one zip (no ROM, no generated code, no executable: the player builds
-# the game on their own computer with build.bat), tagged vVERSION.
+# Publish a release of the native build, ready to play: Windows, Linux,
+# Mac and Android (the AYN Thor's two screens included), built here from
+# the source, tagged vVERSION. Nothing from the ROM is in them: each player
+# chooses their own copy of the game the first time.
 #
 # Started by hand from the Actions page (Release -> Run workflow), never on
 # a push: a release is a decision. VERSION must match HM_NATIVE_VERSION in
-# native/native.h, which the launcher shows.
+# native/native.h (the launcher shows it) and versionName in
+# android/app/build.gradle.
+#
+# The Android app is signed with the key in the repository's secrets
+# HM_KEYSTORE (the .jks in base64) and HM_KEYSTORE_PASSWORD, so that each
+# new version installs over the last one; without them a new key is made
+# for this release (then a later version needs the app uninstalled first).
 name: Release
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version, as in native/native.h (e.g. 0.1.0-beta)'
+        description: 'Version, as in native/native.h (e.g. 1.0.0-beta)'
         type: string
-        default: '0.1.0-beta'
+        default: '1.0.0-beta'
       prerelease:
         description: 'Mark it as a pre-release (beta)'
         type: boolean
@@ -22,49 +29,153 @@ on:
 permissions:
   contents: write
 
+env:
+  V: ${{ inputs.version }}
+  SDL_VERSION: '3.4.10'
+  SDL_SHA256: '12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785'
+
 jobs:
-  release:
+  check:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: The version is the launcher's
-        run: grep -q "HM_NATIVE_VERSION \"${{ inputs.version }}\"" native/native.h
-
+      - name: The version is the launcher's and the app's
+        run: |
+          grep -q "HM_NATIVE_VERSION \"$V\"" native/native.h
+          grep -q "versionName \"$V\"" android/app/build.gradle
       - name: Nothing from the ROM in the tree
         run: |
-          if git ls-files | grep -Ei '\.(sfc|smc|srm|exe|dll)$|^src/gen/|funcs\.h$'; then
+          if git ls-files | grep -Ei '\.(sfc|smc|srm|exe|dll|apk)$|^src/gen/|funcs\.h$'; then
             echo "files that must not be published"; exit 1
           fi
 
-      - name: The package
+  windows:
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
         run: |
-          N=HarvestMoonNative-${{ inputs.version }}
-          git archive --format=tar --prefix=$N/ HEAD native src build.bat compilar_nativo.bat \
-            HOW_TO_PLAY.txt LICENSE README.md README.es.md | tar -x
-          rm "$N/src/hm_decomp.c" "$N/src/hm_io.c"      # the checker, not the game
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mingw-w64 ninja-build > /dev/null
+      - name: Build (cross, x64)
+        run: |
+          cmake -S native -B b -G Ninja -DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake -DCMAKE_BUILD_TYPE=Release
+          cmake --build b
+          x86_64-w64-mingw32-strip b/HarvestMoonNative.exe
+      - name: Package
+        run: |
+          N=HarvestMoon-$V-Windows
+          mkdir -p "$N/mods"
+          cp b/HarvestMoonNative.exe HOW_TO_PLAY.txt LICENSE README.md README.es.md "$N/"
+          cp docs/MODS.md docs/MODS.es.md "$N/mods/"
           zip -q -r "$N.zip" "$N"
-          echo "ZIP=$N.zip" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: 'HarvestMoon-*-Windows.zip' }
 
-      - name: It builds (Linux, from the package)
+  linux:
+    needs: check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ninja-build libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
             libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev libdecor-0-dev \
             libegl1-mesa-dev libgl1-mesa-dev libdrm-dev libgbm-dev libasound2-dev libpulse-dev > /dev/null
-          cd HarvestMoonNative-${{ inputs.version }}
-          ok=1
-          { cmake -S native -B ../b -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build ../b; } > ../build.log 2>&1 || ok=0
-          if [ $ok = 0 ] || [ ! -x ../b/HarvestMoonNative ]; then
-            grep -iE "error|fatal" ../build.log | head -20 | while read -r l; do echo "::error::$l"; done
-            tail -5 ../build.log | while read -r l; do echo "::error::$l"; done
-            exit 1
-          fi
+      - name: Build (x86_64)
+        run: |
+          cmake -S native -B b -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build b
+          strip b/HarvestMoonNative
+      - name: Package
+        run: |
+          N=HarvestMoon-$V-Linux
+          mkdir -p "$N/mods"
+          cp b/HarvestMoonNative HOW_TO_PLAY.txt LICENSE README.md README.es.md "$N/"
+          cp docs/MODS.md docs/MODS.es.md "$N/mods/"
+          tar -czf "$N.tar.gz" "$N"
+      - uses: actions/upload-artifact@v4
+        with: { name: linux, path: 'HarvestMoon-*-Linux.tar.gz' }
 
+  mac:
+    needs: check
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (Apple Silicon and Intel in one)
+        run: |
+          cmake -S native -B b -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build b --parallel 4
+          lipo -info b/HarvestMoonNative
+      - name: Package
+        run: |
+          N=HarvestMoon-$V-Mac
+          mkdir -p "$N/mods"
+          cp b/HarvestMoonNative HOW_TO_PLAY.txt LICENSE README.md README.es.md "$N/"
+          cp docs/MODS.md docs/MODS.es.md "$N/mods/"
+          printf '#!/bin/bash\n# Double-click to play / Doble clic para jugar.\ncd "$(dirname "$0")" && exec ./HarvestMoonNative "$@"\n' > "$N/Harvest Moon.command"
+          chmod +x "$N/Harvest Moon.command" "$N/HarvestMoonNative"
+          ditto -c -k --keepParent "$N" "$N.zip"
+      - uses: actions/upload-artifact@v4
+        with: { name: mac, path: 'HarvestMoon-*-Mac.zip' }
+
+  android:
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.12' }
+      - name: Android SDK pieces
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' \
+            'ndk;28.2.13676358' 'cmake;3.22.1' > /dev/null
+      - name: SDL3's source
+        run: |
+          curl -fsSL -o sdl.tar.gz "https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VERSION/SDL3-$SDL_VERSION.tar.gz"
+          echo "$SDL_SHA256  sdl.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/sdl" && tar -xzf sdl.tar.gz -C "$RUNNER_TEMP/sdl"
+          echo "HM_SDL3_SOURCE_DIR=$RUNNER_TEMP/sdl/SDL3-$SDL_VERSION" >> "$GITHUB_ENV"
+      - name: The signing key
+        env:
+          KS: ${{ secrets.HM_KEYSTORE }}
+          KS_PASS: ${{ secrets.HM_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KS" ] && [ -n "$KS_PASS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/hm.jks"
+            echo "HM_PASS=$KS_PASS" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No HM_KEYSTORE secret: this APK is signed with a key made just for it"
+            P=$(openssl rand -hex 16)
+            keytool -genkeypair -keystore "$RUNNER_TEMP/hm.jks" -alias harvestmoon -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass "$P" -keypass "$P" -dname 'CN=Harvest Moon native build' > /dev/null
+            echo "::add-mask::$P"
+            echo "HM_PASS=$P" >> "$GITHUB_ENV"
+          fi
+      - name: Build the app (phones, tablets, the AYN Thor; emulators on a PC)
+        run: |
+          gradle -p android --no-daemon assembleRelease "-PhmKeystore=$RUNNER_TEMP/hm.jks" "-PhmPassword=$HM_PASS"
+          cp android/app/build/outputs/apk/release/app-release.apk "HarvestMoon-$V-Android.apk"
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: 'HarvestMoon-*-Android.apk' }
+
+  release:
+    needs: [windows, linux, mac, android]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ inputs.version }}" "$ZIP" --target "$GITHUB_SHA" \
-            --title "v${{ inputs.version }}" --notes-file .github/release_notes.md \
+          ls -l out
+          sed "s/{VERSION}/$V/g" .github/release_notes.md > notes.md
+          gh release create "v$V" out/* --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md \
             ${{ inputs.prerelease && '--prerelease' || '' }}

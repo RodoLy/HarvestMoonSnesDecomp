@@ -46,63 +46,63 @@ are in their formats), snesrecomp's runner unmodified, included in
 a new launcher.
 
 > [!IMPORTANT]
-> **You need your own, legally obtained copy of the game.** This
-> repository contains neither the ROM nor anything generated from it, nor
-> executables: the game is built on your computer. Please don't ask for ROMs.
+> **You need your own, legally obtained copy of the game.** Neither this
+> repository nor its downloads contain the ROM or anything taken from it:
+> the first time, the program asks for your copy, checks it and remembers
+> it. Please don't ask for ROMs.
+
+**[⬇ Download the latest version](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/latest)**:
+ready to play, for Windows, Mac, Linux and Android.
 
 ### How to play it on Windows
 
-**[⬇ Download the latest version (beta)](https://github.com/RodriLoy/HarvestMoonSnesDecomp/releases/latest)**
+1. Download **`HarvestMoon-…-Windows.zip`** and unzip it anywhere.
+2. Open **`HarvestMoonNative.exe`**. Windows may say *"Windows protected
+   your PC"* the first time, because the program is not signed with a paid
+   certificate: click **More info → Run anyway**.
+3. The first time it asks for **your own ROM** of *Harvest Moon (USA)*; it
+   checks it and remembers it.
 
-1. Download `HarvestMoonNative-…-beta.zip` from the release and unzip it
-   anywhere.
-2. Double-click **`build.bat`**. The first time it downloads a C compiler
-   (llvm-mingw) and SDL3 (about 190 MB, checked by their SHA-256); then it
-   builds the game in about a minute and leaves `HarvestMoonNative.exe`
-   and `SDL3.dll` in the folder. Works on Windows 10/11, x64 and ARM.
-3. Open `HarvestMoonNative.exe`. The first time it asks for **your own ROM**
-   of *Harvest Moon (USA)*; it checks it and remembers it.
-
-Why it works this way: the download is the source code plus a build
-script, not a ready-made program, and the game is put together on your
-computer from it and your copy of the game. Since you build it yourself,
-Windows does not treat it as a program downloaded from the internet.
 **Everything starts off**: the game is the console's until you turn on
-what you like in Improvements and Options. On Linux: see
-[How the native build works](#how-the-native-build-works).
+what you like in Improvements and Options.
+
+Or build it yourself: download the source, double-click **`build.bat`**.
+The first time it downloads a C compiler (llvm-mingw) and SDL3 (about 190
+MB, checked by their SHA-256), then builds the game in about a minute.
+Windows 10/11, x64 and ARM.
 
 ### How to play it on a Mac
 
-1. Unzip the download anywhere.
-2. Double-click **`build_mac.command`** (the first time macOS may say it is
-   from an unidentified developer: right-click it → Open → Open). If
-   Apple's command line tools (the C compiler) are missing it asks to
-   install them; then open it again. The first time it downloads CMake
-   (50 MB, checked by its SHA-256) unless you have one, and SDL3's source;
-   the build takes a few minutes. Apple Silicon and Intel, macOS 11 or
-   newer.
-3. Double-click **`Harvest Moon.command`** (or `HarvestMoonNative`) and
-   choose **your own ROM** the first time.
+1. Download **`HarvestMoon-…-Mac.zip`** and unzip it (Apple Silicon and
+   Intel, macOS 11 or newer).
+2. Double-click **`Harvest Moon.command`**. The first time macOS may say
+   it is from an unidentified developer: right-click it → **Open** →
+   **Open** (or, in Terminal, `xattr -dr com.apple.quarantine` on the
+   folder).
+3. Choose **your own ROM** the first time.
+
+Or build it yourself: double-click **`build_mac.command`** in the source.
+It asks to install Apple's command line tools if they are missing, and
+the first time downloads CMake (50 MB, checked by its SHA-256) unless you
+have one, and SDL3's source; the build takes a few minutes.
 
 ### How to play it on Android (phones, tablets, the AYN Thor)
 
-The APK is built on your Windows PC, like the Windows version:
-
-1. Double-click **`compilar_android.bat`**. The first time it downloads a
-   Java JDK, Android's command-line tools and, through them, the Android
-   SDK pieces the build needs (about 2.5 GB in all, checked by their
-   checksums), SDL3's source and Gradle; it shows Android's license (answer
-   `y`). Then it builds **`HarvestMoon.apk`** in the project folder (10-20
-   minutes the first time, a couple of minutes after that). Its messages
-   are also in `build\android.log`.
-2. Copy `HarvestMoon.apk` to the device and open it to install it (or,
-   with the device connected over USB with debugging on, the script offers
-   to install it).
-3. The first time, choose **your own ROM** with Android's file picker
+1. Download **`HarvestMoon-…-Android.apk`** on the device (or copy it
+   there) and open it to install it; Android asks to allow installing apps
+   from that file manager or browser. Android 8 or newer.
+2. The first time, choose **your own ROM** with Android's file picker
    (Look for another file...): a copy goes into the app's folder,
-   `Android/data/io.github.rodriloy.harvestmoon/files`, with `config.ini`
-   and the diaries (`rom.srm`, which you can copy from the PC to keep
-   playing yours).
+   `Android/data/io.github.rodriloy.harvestmoon/files`, with `config.ini`,
+   the `mods` folder and the diaries (`rom.srm`, which you can copy from the
+   PC to keep playing yours).
+
+Or build the APK yourself on a Windows PC: double-click
+**`compilar_android.bat`**. The first time it downloads a Java JDK,
+Android's command-line tools and the SDK pieces the build needs (about 2.5
+GB in all, checked by their checksums), SDL3's source and Gradle; it shows
+Android's license (answer `y`). Then it builds **`HarvestMoon.apk`** (10-20
+minutes the first time). Its messages are also in `build\android.log`.
 
 On a touch screen the controls are drawn in the look of the game's menus
 (a wooden cross, A B X Y as parchment coins, L and R, Select and Start, the
@@ -122,6 +122,12 @@ animals), while the game goes on above with the device's buttons. Turn it
 off in Controls → Touch → Second screen (the option only shows when the
 device has another screen). On the Thor, launch the app on
 the **top screen** (long-press it → Screen Launch → Top).
+
+### How to play it on Linux
+
+Download **`HarvestMoon-…-Linux.tar.gz`** (x86_64), unpack it and run
+`./HarvestMoonNative` (or `./HarvestMoonNative /path/to/your/rom.sfc`). To
+build it yourself, see [How the native build works](#how-the-native-build-works).
 
 ### A launcher in the look of the game
 
@@ -280,9 +286,11 @@ AI's help, that's fine: just don't use it.
 
 ## Legal notice
 
-This repository **contains no ROM and nothing generated from one** (no
-generated code, no executables). To build it you need your own legal copy
-of *Harvest Moon (USA)*:
+This repository and its releases **contain no ROM and nothing generated
+from one** (no generated code, no graphics, text or music of the game): the
+programs in the releases are built from this source and read your copy of
+the game when they start. To play you need your own legal copy of
+*Harvest Moon (USA)*:
 SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 
 ## What is rewritten
