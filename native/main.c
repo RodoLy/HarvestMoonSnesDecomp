@@ -97,7 +97,7 @@ static void sram_save(void)
  *   wait N, press <button[+button]> N, dump <tag>, poke <addr> <hex>,
  *   until <addr> ==|!= <value> [timeout], turbo on|off, quit,
  *   mouse <x> <y> [left|right|up]: the pointer on the field (mouse controls),
- *   bag: the crop bag's key ─────────── */
+ *   bag [frames]: the crop bag's key ─────────── */
 typedef struct {
   enum { S_PRESS, S_DUMP, S_POKE, S_UNTIL, S_QUIT, S_NOP, S_MOUSE, S_BAG } kind;
   uint16_t mask; int hold, wait;
@@ -135,7 +135,7 @@ static void script_load(const char *path)
     if (!strcmp(cmd, "press")) { e->kind = S_PRESS; e->mask = button(a1); e->hold = n >= 3 ? atoi(a2) : 1; }
     else if (!strcmp(cmd, "dump")) { e->kind = S_DUMP; snprintf(e->tag, sizeof e->tag, "%s", a1); }
     else if (!strcmp(cmd, "quit")) e->kind = S_QUIT;
-    else if (!strcmp(cmd, "bag")) e->kind = S_BAG;
+    else if (!strcmp(cmd, "bag")) { e->kind = S_BAG; e->value = (uint16_t)(n >= 2 ? atoi(a1) : 3); }
     else if (!strcmp(cmd, "mouse")) {
       e->kind = S_MOUSE; e->addr = (uint32_t)atoi(a1); e->value = (uint16_t)atoi(a2);
       e->width = !strcmp(a3, "left") ? 1 : !strcmp(a3, "right") ? 2 : !strcmp(a3, "up") ? -1 : 0;
@@ -193,7 +193,7 @@ static uint16_t script_tick(void)
         }
       }
       if (e->kind == S_DUMP) dump(e->tag);
-      if (e->kind == S_BAG) s_script_bag = 3;
+      if (e->kind == S_BAG) s_script_bag = e->value;
       if (e->kind == S_MOUSE) {
         if (e->width < 0) mods_mouse((int)e->addr, e->value, 1, false);
         else mods_mouse((int)e->addr, e->value, e->width, e->width != 0);

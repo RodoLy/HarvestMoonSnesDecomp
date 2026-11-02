@@ -149,15 +149,15 @@ keeps playing.
 - **One seed at a time** *(off by default)* — a seed bag is 9 seeds and
   each use sows only the tile in front of you, so you can plant in any
   shape you like. The bag and the stamina go at the 9th seed, as before;
-  a small box shows the seeds left, and they are kept in your diary.
+  the pause menu shows the seeds left, and they are kept in your diary.
 - **Crop bag** *(off by default; part of the pause menu, so it needs it on)* — Q (the pad's left trigger, the
   mouse's middle button) puts what you carry over your head into a bag of
   9 (crops, eggs, milk, food); with free hands it takes the last one out.
-  Throw one into the shipping box yourself, then press Q from the same
-  spot and the rest go in one after another — the game ships each one
-  itself, so money and counts are exactly its own. The bag shows at the
-  top left, the pause menu's Harvest tab lets you pick which one to take
-  out, and it is kept in your diary.
+  Throw one into the shipping box yourself, then hold Q for a second from
+  the same spot and the rest go in one after another — the game ships
+  each one itself, so money and counts are exactly its own. The pause
+  menu's Harvest tab shows the bag and lets you pick which one to take
+  out; it is kept in your diary.
 - **Mouse controls** *(off by default, in Controls → Keyboard)* — like Stardew Valley: left click
   next to you uses the tool there, left click farther away walks there
   (hold it to follow the pointer), right click talks, picks up or

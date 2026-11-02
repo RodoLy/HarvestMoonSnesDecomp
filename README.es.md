@@ -149,17 +149,17 @@ el clima de mañana). La música sigue sonando.
 - **Semillas de una en una** *(apagado por defecto)* — una bolsa son 9
   semillas y cada uso siembra solo la casilla de enfrente, así que puedes
   plantar con la forma que quieras. La bolsa y la energía se gastan con la
-  9.ª semilla, como antes; un recuadro muestra las semillas que quedan y se
-  guardan en tu diario.
+  9.ª semilla, como antes; el menú de pausa muestra las semillas que quedan
+  y se guardan en tu diario.
 - **Mochila de cosechas** *(apagado por defecto; es parte del menú de pausa, así que necesita que esté activado)* — Q (el gatillo
   izquierdo del mando, el botón central del ratón) guarda lo que cargas
   sobre la cabeza en una mochila de 9 (cosechas, huevos, leche, comida);
   con las manos libres saca lo último. Tira uno a la caja de envíos tú
-  mismo y luego pulsa Q desde el mismo sitio: el resto entra uno tras
-  otro, y el juego envía cada uno él mismo, así que el dinero y los
-  contadores son exactamente los suyos. La mochila se ve arriba a la
-  izquierda, en la pestaña Cosechas del menú de pausa eliges cuál sacar,
-  y se guarda en tu diario.
+  mismo y luego mantén Q un segundo desde el mismo sitio: el resto entra
+  uno tras otro, y el juego envía cada uno él mismo, así que el dinero y
+  los contadores son exactamente los suyos. La pestaña Cosechas del menú
+  de pausa muestra la mochila y te deja elegir cuál sacar; se guarda en tu
+  diario.
 - **Controles con ratón** *(apagado por defecto, en Controles → Teclado)* — como en Stardew
   Valley: clic izquierdo junto a ti usa la herramienta ahí, clic izquierdo
   más lejos camina hasta ahí (mantenlo para seguir al puntero), clic

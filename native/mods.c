@@ -644,29 +644,11 @@ uint16_t mods_mouse_pad(uint16_t pad)
 
 /* ── One seed at a time (src/toolused.c, g_hm_single_seed) ──────────────
  * The sowing itself is the game's (one tile per use, 9 per bag, the bag's
- * seeds kept in the saved game). Here: while a seed bag is in hand on a
- * map, a small box in the top-left corner says how many seeds are left. */
-static bool seeds_hud(uint32_t *px, int w)
-{
-  if (!g_cfg.single_seed || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE) return false;
-  uint8_t item = g_ram[HM_TOOL_SELECTED];
-  int k = item >= 5 && item <= 8 ? item - 4 : item == 12 ? 0 : -1;   /* grass, corn .. turnip */
-  if (k < 0) return false;
-  int bags = g_ram[HM_SEEDS_GRASS_N + k];
-  if (!bags) return false;
-  int left = bags * 9 - g_hm_seeds_used[k];
-  if (!px) return true;                                /* only asked */
-  char t[16]; snprintf(t, sizeof t, "x%d", left);
-  ui_target(px, w, 224);
-  int x = (w - 256) / 2 + 6, y = 6, bw = 16 + 6 + ui_text_w(UI_SMALL, t) + 8;
-  ui_frame(x, y, bw, 24, C_PAPER);
-  ui_icon(x + 4, y + 4, item);
-  ui_text(UI_SMALL, x + 4 + 16 + 3, y + 15, t, C_INK);
-  return true;
-}
+ * seeds kept in the saved game); the pause menu shows the seeds left. */
 
 /* ── The crop bag (src/items.c, g_hm_bag) ───────────────────────────────
- * Nine places for what the player carries over his head (crops, eggs,
+ * (Nothing is drawn over the game: the pause menu's Harvest tab shows the
+ * bag.) Nine places for what the player carries over his head (crops, eggs,
  * milk, food, goods; not tools, animals, lumber or the things that go to a
  * place). The bag key (Q, the pad's left trigger, the mouse's middle
  * button):
@@ -676,7 +658,8 @@ static bool seeds_hud(uint32_t *px, int w)
  *   - hands free: the last item comes out, as when picking something up
  *     (action 4: the animation, then holding it), but nothing is left on
  *     the map (g_hm_bag_take);
- *   - hands free where the last item was shipped (the player threw one
+ *   - the key held a second, hands free, where the last item was shipped
+ *     (the player threw one
  *     into the shipping box from this very tile, facing this way, today:
  *     the day's shipped money, $7F1F07-$7F1F09, went up), before 5 pm:
  *     every item with a price, one after the other: out, then A to throw
@@ -689,10 +672,10 @@ static bool seeds_hud(uint32_t *px, int w)
 #define MAP_OBJECTS_AT 0x0B4E6          /* 10 x 16 bytes: +0 flags, +2 state, +3 item */
 #define GAME_STATE     0x000D2
 static struct {
-  bool prev; int ship, wait;
+  bool prev; int ship, wait, held;     /* held: frames the key has been down (hands free) */
   uint32_t shipped;                     /* the day's shipped money, last frame */
   bool spot; int sx, sy, sdir, sday;    /* where the last shipping throw was */
-} s_bag;
+} s_bag = { .held = -1 };
 
 static bool bag_item(uint8_t it)
 {
@@ -795,13 +778,21 @@ uint16_t mods_bag_pad(uint16_t pad, bool key)
     }
     return pad;
   }
-  if (!press) return pad;
-  if (holding()) {
-    if (act <= 2) bag_put();
-  } else if ((act == 0 || act == 9) && bag_count()) {
-    if (at_box()) { s_bag.ship = 1; s_bag.wait = 0; }
-    else bag_take();
+  /* holding something: in at once. Hands free: a tap takes the last one
+   * out (on letting go); held a second at the shipping spot, every one
+   * goes into the box */
+  if (press && holding()) { s_bag.held = -1; if (act <= 2) bag_put(); return pad; }
+  if (press) s_bag.held = 0;
+  if (s_bag.held < 0) return pad;
+  if (key) {
+    if (++s_bag.held == 60 && !holding() && (act == 0 || act == 9) && bag_count() && at_box()) {
+      s_bag.held = -1; s_bag.ship = 1; s_bag.wait = 0;
+    }
+    return pad;
   }
+  /* let go after a tap */
+  s_bag.held = -1;
+  if (!holding() && (act == 0 || act == 9) && bag_count()) bag_take();
   return pad;
 }
 /* The item's own sprite, the one the game draws over the player's head
@@ -904,22 +895,6 @@ void mods_bag_icon(int x, int y, uint8_t it)
       ui_rect(x + i, y + j, 1, 1, c);
     }
 }
-/* the bag's contents, under the seeds' box */
-static bool bag_hud(uint32_t *px, int w)
-{
-  int n = bag_count();
-  if (!bag_on() || !n || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE || !hm_diary_loaded(g_ram)) return false;
-  if (!px) return true;
-  ui_target(px, w, 224);
-  int x = (w - 256) / 2 + 6, y = seeds_hud(NULL, w) ? 34 : 6;
-  ui_frame(x, y, 8 + 9 * 18, 26, C_PAPER);
-  for (int i = 0; i < 9; i++) {
-    int ix = x + 4 + i * 18;
-    if (i < n) mods_bag_icon(ix + 1, y + 5, g_hm_bag[i]);
-    else ui_rect(ix + 7, y + 12, 4, 2, C_PAPER_LINE);
-  }
-  return true;
-}
 
 /* the square on the tile under the pointer */
 static bool mouse_hud(uint32_t *px, int w)
@@ -939,8 +914,7 @@ static bool mouse_hud(uint32_t *px, int w)
 }
 bool mods_hud(uint32_t *px, int w)
 {
-  bool a = mouse_hud(px, w), b = seeds_hud(px, w), c = bag_hud(px, w);
-  return a || b || c;
+  return mouse_hud(px, w);    /* the seeds and the bag show in the pause menu, not over the game */
 }
 
 /* ── Widescreen (hm_widescreen.c) ───────────────────────────────────────

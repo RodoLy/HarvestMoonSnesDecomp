@@ -71,11 +71,14 @@ static const char *tool_name(uint8_t id)
   for (int i = 0; i < NTOOLS; i++) if (kTools[i].id == id) return T(kTools[i].name);
   return "?";
 }
+/* a seed bag's count: bags; with "one seed at a time", the seeds left */
 static unsigned item_count(uint8_t id)
 {
-  if (id >= 0x05 && id <= 0x08) return g_ram[HM_SEEDS_CORN_N + (id - 0x05)];
-  if (id == 0x0C) return g_ram[HM_SEEDS_GRASS_N];
-  return 0;
+  int k = id >= 0x05 && id <= 0x08 ? id - 0x04 : id == 0x0C ? 0 : -1;   /* grass, corn .. turnip */
+  if (k < 0) return 0;
+  unsigned bags = g_ram[HM_SEEDS_GRASS_N + k];
+  if (g_cfg.single_seed && bags) return bags * 9u - g_hm_seeds_used[k];
+  return bags;
 }
 /* The shed slot of an item: DATA16_81BE0F, bytes 6 (row) and 7 (mask) of
  * each 8-byte entry. Read from the ROM so it can never disagree with it. */
@@ -323,7 +326,7 @@ static void draw_tools(int x, int y)
     if (have) {
       ui_icon(sx + 2, sy + 2, kTools[i].id);
       unsigned n = item_count(kTools[i].id);
-      if (n) { char c[8]; snprintf(c, sizeof c, "%u", n); ui_text_r(UI_SMALL, sx + 20, sy + 19, c, C_INK); }
+      if (n) { char c[12]; snprintf(c, sizeof c, "%u", n); ui_text_r(UI_SMALL, sx + 20, sy + 19, c, C_INK); }
     }
   }
   /* the cursor: a little hand pointing at the slot */
