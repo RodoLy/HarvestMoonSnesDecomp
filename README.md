@@ -219,8 +219,8 @@ music keeps playing.
 - **Your wife helps** *(off by default)* — married, with her ten hearts
   (950+): talk to her twice in a day and she offers to help on the farm
   for a day, three days or a week. Those mornings (6:00-11:00) she fills
-  troughs in the barn and the coop and waters dry crops, at most half of
-  the work, walking the farm in her own pictures (talk to her: her usual
+  troughs in the barn and the coop and waters the seeds and plants not
+  watered yet, at most half of the work, walking the farm in her own pictures (talk to her: her usual
   lines); away from the farm the work gets done all the same. At 11:00 she
   goes to her midday chores, as in the game (Maria, Nina and Ellen on the
   farm, Ann and Eve in the tool shed). Some days she wears the clothes she
