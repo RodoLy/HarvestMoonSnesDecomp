@@ -4,7 +4,7 @@
  * ShippingScene ($82:8131, JSL, RTL; called every in-game hour by
  * UpdateTime): at 17:00, on the farm (maps 0-3), the shipping scene starts:
  * the input is switched off ($019A = 0), $7F1F5A bit 10 marks the scene as
- * running and script $26 is started in event slot 6 (UNK_LoadCCDataLong).
+ * running and script $26 is started in event slot 6 (StartEventScriptLong).
  * It then falls into ShippingSceneDialogue.
  *
  * ShippingSceneDialogue ($82:8165, JSL, RTL; also called by UpdateTime
@@ -57,7 +57,7 @@ void hm_ShippingSceneDialogue(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, db_(r, TEXT_BOX_LINES), 0);
   jsl(ram, r, 0x81A2, 0x83, hm_StartTextBox);
   r->a = 0x0006; r->x = 0x0000; r->y = 0x0027;
-  jsl(ram, r, 0x81B1, 0x84, hm_UNK_LoadCCDataShort);
+  jsl(ram, r, 0x81B1, 0x84, hm_StartEventScript);
   r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5A) & ~SCENE_RUNNING);
   hm_bus_wr16(ram, FLAGS_5A, r->a);
 }
@@ -77,6 +77,6 @@ void hm_ShippingScene(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5A) | SCENE_RUNNING);
   hm_bus_wr16(ram, FLAGS_5A, r->a);
   r->a = 0x0006; r->x = 0x0000; r->y = 0x0026;
-  jsl(ram, r, 0x8164, 0x84, hm_UNK_LoadCCDataLong);
+  jsl(ram, r, 0x8164, 0x84, hm_StartEventScriptLong);
   hm_ShippingSceneDialogue(ram, r);                        /* falls into it */
 }

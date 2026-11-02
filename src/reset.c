@@ -9,7 +9,7 @@
  * the NMI on and goes to the title (IntroScreen, JML).
  *
  * It never returns and throws the stack away. Its check (HM_TOLOOP, at
- * frame 1 like UNK_Audio1, whose upload needs the chip's boot ROM:
+ * frame 1 like UploadSoundProgram, whose upload needs the chip's boot ROM:
  * HM_LIVE) stops at the JML and puts the checker's own frame back on the
  * stack (the bytes RESET cleared, and S), so the call can end; the
  * rewrite does the same at its end.
@@ -93,11 +93,11 @@ void hm_RESET(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, 0x0A, 0x8000);
   r->a = 0x00AD;
   hm_dp_w16(ram, r, 0x0C, 0x00AD);
-  jsl(ram, r, 0x85FC, 0x83, hm_UNK_Audio1);
+  jsl(ram, r, 0x85FC, 0x83, hm_UploadSoundProgram);
   set_a8(r, 0x00);                                         /* SEP #$20 */
-  jsl(ram, r, 0x8604, 0x83, hm_UNK_Audio2);
-  jsl(ram, r, 0x8608, 0x83, hm_UNK_Audio3);
-  jsl(ram, r, 0x860C, 0x83, hm_UNK_Audio4);
+  jsl(ram, r, 0x8604, 0x83, hm_SoundCommand0B);
+  jsl(ram, r, 0x8608, 0x83, hm_LoadDefaultInstruments);
+  jsl(ram, r, 0x860C, 0x83, hm_SendSoundData);
   jsl(ram, r, 0x8610, 0x80, hm_InitialzieScreenStatusVar);
   jsl(ram, r, 0x8614, 0x80, hm_ZeroesVRAM);
   jsl(ram, r, 0x8618, 0x80, hm_ZeroesOAM);

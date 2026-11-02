@@ -1,5 +1,5 @@
 /*
- * names.c — after a name was written in the names screen (Unk_NamesInput):
+ * names.c — after a name was written in the names screen (NamesScreen):
  * the name goes where it belongs, and the game goes on.
  *
  * The four letters typed are at $0885-$0888. Each routine fades the
@@ -155,36 +155,36 @@ void hm_SetKid2Name(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Unk_NamesInput ($82:E80C; GameLoop jumps here, JML, with $0196 bit 13):
+ * NamesScreen ($82:E80C; GameLoop jumps here, JML, with $0196 bit 13):
  * the names screen.
- *  - The setup: the music of map $5F (UNK_Audio5, UNK_Audio25), the
+ *  - The setup: the music of map $5F (PickMapMusic, FadeOutSongSlowly), the
  *    screen faded out (from 15, 3 frames a level, to 1) and blanked, VRAM
  *    cleared, the colour cycles, sprites and objects stopped
  *    (Zeroes42Pointers, ClearSpriteDataTables, InitializeOBJs); $0196 kept
  *    in $0198 and cleared, no player object ($0905 = 0), the controls to
  *    the names screen ($019A = 5); its graphics (preset 4,
  *    BackgroundsManager), its colours (palette $6F), two blocks of $100
- *    bytes from $A9:8C00 and $A9:DE00 to CGRAM; UNK_PresetsMemory3; the
+ *    bytes from $A9:8C00 and $A9:DE00 to CGRAM; ClearItemRecords; the
  *    cursor's sprite (CreateGameObject at (40, 68), animation $219, kept
- *    in $0995-$099D); the frames of the name (SUB_82EAB4, SUB_82EA80); the
- *    scrolls at 0; the music changes (UNK_Audio21, 20, 22); the screen lit
+ *    in $0995-$099D); the frames of the name (DrawScreenBar, DrawNameEntryBlanks); the
+ *    scrolls at 0; the music changes (FadeOutSong, 20, 22); the screen lit
  *    and faded in (from 3, 3 frames a level, to 15); page 0, cell 0, no
  *    letters ($0885-$0888 = $B1, blank).
  *  - Then a frame at a time (from $82:E95F): wait for the NMI; the cursor
  *    of the name blinks (every $14 frames, local $82:EA15); the joypad
  *    (InputTypeSelector); unless the name is done ($0993 = 3), the cursor
- *    moves (SUB_82EB57), the background drifts one pixel every other frame
- *    (BG2 x + 1, y - 1), the cursor's sprite is drawn (CODE_8580B9,
- *    CODE_8582C7, CODE_858CB2, PrepareOAMData); and round again.
+ *    moves (NameCursorPosition), the background drifts one pixel every other frame
+ *    (BG2 x + 1, y - 1), the cursor's sprite is drawn (MoveGameObject,
+ *    AnimateGameObjects, LoadQueuedSpritePieces, PrepareOAMData); and round again.
  *  - Done: $0196 back, and on to where the name goes ($099F: 0 the player,
  *    1 a cow bought, 2 a calf, 3 the dog, 4 the horse, 5 / 6 the
  *    children: SetPlayerName... SetKid2Name, JML; any other value would go
  *    round for ever).
- * Bug: SUB_82EAB4 ends with RTS but is called with JSL, so a byte (the
+ * Bug: DrawScreenBar ends with RTS but is called with JSL, so a byte (the
  * bank, $82) stays on the stack from there on. Nothing returns from here,
  * so it does no harm; the check's stop takes it off before its RTL.
  * The check stops after the first frame (the JML back to $82:E95F), or at
- * the JML to the name's routine (HM_TOLOOP); Unk_NamesInput_E95F checks a
+ * the JML to the name's routine (HM_TOLOOP); NamesScreenFrame checks a
  * frame on its own.
  * ───────────────────────────────────────────────────────────────────────── */
 static void zero16_all(uint8_t *ram, HmRegs *r, uint16_t from, uint16_t to)
@@ -213,7 +213,7 @@ static const struct { uint8_t dp; uint16_t keep; } CURSOR[4] = {
 
 /* $82:EA15 (JSR): the name's cursor blinks: unless the name is full, every
  * $14 counts ($018B, bit 7 the phase) the phase turns; the cursor is drawn
- * ($A8) or blanked ($B1) at the name's place (Unk_OutOfMenu) */
+ * ($A8) or blanked ($B1) at the name's place (DrawNameLetter) */
 static void name_cursor(uint8_t *ram, HmRegs *r)
 {
   uint8_t n = rd8(ram, r, 0x0994);                         /* SEP #$20; REP #$10 */
@@ -229,8 +229,8 @@ static void name_cursor(uint8_t *ram, HmRegs *r)
   }
   uint8_t phase = (uint8_t)(rd8(ram, r, 0x018B) & 0x80);
   set_a8(r, phase);
-  if (!phase) { r->a = 0x00A8; jsl(ram, r, 0xEA47, 0x82, hm_Unk_OutOfMenu); }
-  else        { r->a = 0x00B1; jsl(ram, r, 0xEA52, 0x82, hm_Unk_OutOfMenu); }
+  if (!phase) { r->a = 0x00A8; jsl(ram, r, 0xEA47, 0x82, hm_DrawNameLetter); }
+  else        { r->a = 0x00B1; jsl(ram, r, 0xEA52, 0x82, hm_DrawNameLetter); }
   uint8_t c = (uint8_t)(rd8(ram, r, 0x018B) + 1);          /* SEP #$20 */
   set_a8(r, c);
   wr8(ram, r, 0x018B, c);
@@ -271,7 +271,7 @@ static bool name_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
   set_a8(r, page);
   r->c = page >= 3;
   if (page == 3) { name_done(ram, r); return false; }
-  jsl(ram, r, 0xE97F, 0x82, hm_SUB_82EB57);
+  jsl(ram, r, 0xE97F, 0x82, hm_NameCursorPosition);
   uint8_t drift = *hm_dp(ram, r, 0x96);                    /* SEP #$20 */
   set_a8(r, drift);
   r->c = drift >= 1;
@@ -288,22 +288,22 @@ static bool name_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
   }
   r->a = rd16(ram, r, 0x0995);
   hm_dp_w16(ram, r, 0xA5, r->a);
-  jsl(ram, r, 0xE9B6, 0x85, hm_CODE_8580B9);
-  jsl(ram, r, 0xE9BA, 0x85, hm_CODE_8582C7);
-  jsl(ram, r, 0xE9BE, 0x85, hm_CODE_858CB2);
+  jsl(ram, r, 0xE9B6, 0x85, hm_MoveGameObject);
+  jsl(ram, r, 0xE9BA, 0x85, hm_AnimateGameObjects);
+  jsl(ram, r, 0xE9BE, 0x85, hm_LoadQueuedSpritePieces);
   jsl(ram, r, 0xE9C2, 0x85, hm_PrepareOAMData);
   *hm_dp(ram, r, 0x00) = 0;                                /* SEP #$20; STZ $00 */
   g_hm_next = 0x82E95F;
   return true;                                             /* JML $82:E95F */
 }
 
-void hm_Unk_NamesInput(uint8_t *ram, HmRegs *r)
+void hm_NamesScreen(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
   set_a8(r, 0x5F);                                         /* SEP #$20 */
   *hm_dp(ram, r, 0x22) = 0x5F;
-  jsl(ram, r, 0xE812, 0x80, hm_UNK_Audio5);
-  jsl(ram, r, 0xE816, 0x83, hm_UNK_Audio25);
+  jsl(ram, r, 0xE812, 0x80, hm_PickMapMusic);
+  jsl(ram, r, 0xE816, 0x83, hm_FadeOutSongSlowly);
   set_a8(r, 0x0F); *hm_dp(ram, r, 0x92) = 0x0F;            /* SEP #$20 */
   set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
   set_a8(r, 0x01); *hm_dp(ram, r, 0x94) = 0x01;
@@ -327,7 +327,7 @@ void hm_Unk_NamesInput(uint8_t *ram, HmRegs *r)
   colours(ram, r, 0, 0x0000, 0x8C00, 0xE889);
   colours(ram, r, 1, 0x0080, 0xDE00, 0xE8AC);
   jsl(ram, r, 0xE8B0, 0x80, hm_StartProgramedDMA);
-  jsl(ram, r, 0xE8B4, 0x81, hm_UNK_PresetsMemory3);
+  jsl(ram, r, 0xE8B4, 0x81, hm_ClearItemRecords);
   static const uint16_t start[4] = { 0x0219, 0x0000, 0x0028, 0x0044 };
   for (int i = 0; i < 4; i++) {                            /* REP #$20 */
     r->a = start[i];
@@ -339,13 +339,13 @@ void hm_Unk_NamesInput(uint8_t *ram, HmRegs *r)
   r->a = hm_dp_r16(ram, r, 0xA5);                          /* REP #$20 */
   wr16(ram, r, 0x0995, r->a);
   hm_jsl(ram, r, 0xE8EA, 0x82);                            /* JSL ... */
-  hm_SUB_82EAB4(ram, r);
+  hm_DrawScreenBar(ram, r);
   hm_pull8(ram, r); hm_pull8(ram, r);                      /* ... RTS: the bank stays */
-  jsl(ram, r, 0xE8EB, 0x82, hm_SUB_82EA80);
+  jsl(ram, r, 0xE8EB, 0x82, hm_DrawNameEntryBlanks);
   zero16_all(ram, r, 0x013C, 0x0146);                      /* REP #$20: the scrolls */
-  jsl(ram, r, 0xE903, 0x83, hm_UNK_Audio21);
-  jsl(ram, r, 0xE907, 0x83, hm_UNK_Audio20);
-  jsl(ram, r, 0xE90B, 0x83, hm_UNK_Audio22);
+  jsl(ram, r, 0xE903, 0x83, hm_FadeOutSong);
+  jsl(ram, r, 0xE907, 0x83, hm_SetSong);
+  jsl(ram, r, 0xE90B, 0x83, hm_StartSong);
   uint8_t song = rd8(ram, r, 0x0110);                      /* SEP #$20 */
   set_a8(r, song);
   wr8(ram, r, 0x0117, song);
@@ -371,7 +371,7 @@ void hm_Unk_NamesInput(uint8_t *ram, HmRegs *r)
 
 /* $82:E95F: one frame of the names screen on its own (entered as the
  * JML back to it does) */
-void hm_Unk_NamesInput_E95F(uint8_t *ram, HmRegs *r)
+void hm_NamesScreenFrame(uint8_t *ram, HmRegs *r)
 {
   name_frame(ram, r, r->p);
 }

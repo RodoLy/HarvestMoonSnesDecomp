@@ -16,7 +16,7 @@
  * Pages (L / R):
  *   Tools   the hand and backpack at the top, the tool shed as a grid.
  *           Equip, swap and put away follow the game's own shed routine
- *           CODE_8187C3 and the tool table at $81:BE0F (hm_ram.h).
+ *           TakeToolFromShelf and the tool table at $81:BE0F (hm_ram.h).
  *   Hearts  the five girls' affection ($7F1F1F.., 0..999).
  *   Farm    money, shipping, stock, cows, happiness, tomorrow's weather.
  * With mouse controls on, the mouse works here too (pause_mouse).
@@ -156,7 +156,7 @@ static uint8_t cursor_item(void)
   return i < NTOOLS && in_shed(kTools[i].id) ? kTools[i].id : 0;
 }
 
-/* Equip a shed item -- CODE_8187C3: the hand tool drops into an empty
+/* Equip a shed item -- TakeToolFromShelf: the hand tool drops into an empty
  * backpack; otherwise it goes back to the shed (the game never lets an item
  * be in two places). Then the new item leaves the shed. */
 static void equip_from_shed(uint8_t id)

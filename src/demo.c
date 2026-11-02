@@ -104,17 +104,17 @@ static void fresh_screen(uint8_t *ram, HmRegs *r, uint16_t at)
   jsl(ram, r, (uint16_t)(at + 8), 0x80, hm_Zeroes42Pointers);
   jsl(ram, r, (uint16_t)(at + 12), 0x85, hm_ClearSpriteDataTables);
   jsl(ram, r, (uint16_t)(at + 16), 0x85, hm_InitializeOBJs);
-  jsl(ram, r, (uint16_t)(at + 20), 0x81, hm_UNK_PresetsMemory3);
+  jsl(ram, r, (uint16_t)(at + 20), 0x81, hm_ClearItemRecords);
   jsl(ram, r, (uint16_t)(at + 24), 0x84, hm_ClearsofAllCCStructs);
   jsl(ram, r, (uint16_t)(at + 28), 0x82, hm_LoadDefaultFarmMap);
   r->a = 0x0100;                                           /* REP #$20 */
   wr16(ram, r, 0x0146, 0x0100);
 }
-/* LDA #0; LDX #$47; LDY #script; JSL UNK_LoadCCDataLong */
+/* LDA #0; LDX #$47; LDY #script; JSL StartEventScriptLong */
 static void demo_script(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t at)
 {
   r->a = 0; r->x = 0x0047; r->y = script;                  /* REP #$30 */
-  jsl(ram, r, at, 0x84, hm_UNK_LoadCCDataLong);
+  jsl(ram, r, at, 0x84, hm_StartEventScriptLong);
 }
 /* the scripts run once, and map $098B is entered (its music, its load) */
 static void demo_map(uint8_t *ram, HmRegs *r, uint16_t at)
@@ -123,9 +123,9 @@ static void demo_map(uint8_t *ram, HmRegs *r, uint16_t at)
   uint8_t map = rd8(ram, r, 0x098B);                       /* SEP #$20 */
   set_a8(r, map);
   *hm_dp(ram, r, 0x22) = map;
-  jsl(ram, r, (uint16_t)(at + 0x0B), 0x80, hm_UNK_Audio5);
+  jsl(ram, r, (uint16_t)(at + 0x0B), 0x80, hm_PickMapMusic);
   set_a8(r, rd8(ram, r, 0x098B));                          /* SEP #$20 */
-  jsl(ram, r, (uint16_t)(at + 0x14), 0x80, hm_SUB_80972C);
+  jsl(ram, r, (uint16_t)(at + 0x14), 0x80, hm_LoadAndShowMap);
   r->y = 0;                                                /* REP #$30 */
 }
 /* one frame: the wait ($90 = 0; the NMI comes back to the LDA $00 at
@@ -162,11 +162,11 @@ static void demo_leave(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_82D1C0 ($82:D1C0, JML from the title screen): the first demo:
+ * FirstDemo ($82:D1C0, JML from the title screen): the first demo:
  * script 0 of group $47; $7F1F60 = $0108, $7F1F49 = 0, the shed's second
  * row $88, a bag of grass, turnip, corn and tomato seeds.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_82D1C0(uint8_t *ram, HmRegs *r)
+void hm_FirstDemo(uint8_t *ram, HmRegs *r)
 {
   static const Demo d = { 0xD1C0, 0x0108, 0x88, false };
   uint8_t entry = r->p;
@@ -174,11 +174,11 @@ void hm_SUB_82D1C0(uint8_t *ram, HmRegs *r)
   fresh_screen(ram, r, 0xD2F3);
   demo_script(ram, r, 0, 0xD326);
   demo_map(ram, r, 0xD32A);
-  hm_SUB_82D1C0_D347(ram, r);
+  hm_DemoFrame(ram, r);
   (void)entry;
 }
 /* its frames ($82:D347) */
-void hm_SUB_82D1C0_D347(uint8_t *ram, HmRegs *r)
+void hm_DemoFrame(uint8_t *ram, HmRegs *r)
 {
   demo_frame(ram, r, 0xD34D, 0xD358, r->p);
   r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5C) & 0x0004);  /* REP #$20 */

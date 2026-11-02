@@ -590,7 +590,7 @@ void hm_AddNewCow(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * PlaceAnimalsOnMap ($83:C296, JSL, RTL; CODE_83C296 in HM-Decomp). On
  * entering a map: every chicken, cow, the dog and the horse that is on
- * this map gets its event script started (SUB_8480F8) at its place
+ * this map gets its event script started (StartScriptAtTileInFront) at its place
  * ($0985/$0987 = where).
  *
  * "On this map" groups the maps: an animal on map m shows on map t when
@@ -691,7 +691,7 @@ static void place_from_record(uint8_t *ram, HmRegs *r, uint16_t at)
   r->y = at;     r->a = record16(ram, r, at);     hm_wr16(ram, TILE_AT_X, r->a);
   r->y = at + 2; r->a = record16(ram, r, at + 2); hm_wr16(ram, TILE_AT_Y, r->a);
 }
-/* TXA; CLC; ADC #base; LDX #0; (LDY script); JSL SUB_8480F8 */
+/* TXA; CLC; ADC #base; LDX #0; (LDY script); JSL StartScriptAtTileInFront */
 static void start_script(uint8_t *ram, HmRegs *r, uint16_t n, uint16_t base, uint16_t script,
                          uint16_t ret)
 {
@@ -699,7 +699,7 @@ static void start_script(uint8_t *ram, HmRegs *r, uint16_t n, uint16_t base, uin
   r->a = (uint16_t)(n + base);
   r->x = 0; r->y = script;
   hm_jsl(ram, r, ret, 0x84);
-  hm_SUB_8480F8(ram, r);
+  hm_StartScriptAtTileInFront(ram, r);
   hm_rtl(ram, r);
 }
 /* PLA; PHA; ASL; TAX; STZ base,X (16-bit) */
@@ -831,7 +831,7 @@ void hm_PlaceAnimalsOnMap(uint8_t *ram, HmRegs *r)
     r->a = hm_rd16(ram, 0x11F2E); hm_wr16(ram, TILE_AT_Y, r->a);
     r->a = 0x0016; r->x = 0; r->y = 0x0011;
     hm_jsl(ram, r, 0xC725, 0x84);
-    hm_SUB_8480F8(ram, r);
+    hm_StartScriptAtTileInFront(ram, r);
     hm_rtl(ram, r);
     r->a = 1;
     hm_wr16(ram, 0x11F58, 1);
@@ -850,7 +850,7 @@ void hm_PlaceAnimalsOnMap(uint8_t *ram, HmRegs *r)
     if (age == 0x15) r->y = 0x0010;                      /* grown */
     r->a = 0x0017; r->x = 0;
     hm_jsl(ram, r, 0xC800, 0x84);
-    hm_SUB_8480F8(ram, r);
+    hm_StartScriptAtTileInFront(ram, r);
     hm_rtl(ram, r);
     ram[0x0939] = 0;
   }
@@ -887,9 +887,9 @@ void hm_UnusedBarnCoopCheck(uint8_t *ram, HmRegs *r) { count_animals(ram, r, 13,
 void hm_UnusedBarnCheck(uint8_t *ram, HmRegs *r)     { count_animals(ram, r, 12, 0xC9F3, hm_GetsCowPointer); }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_83F4D8 ($83:F4D8, JSR, RTS; reached with a JMP on summer 30 of year
+ * StartEnding ($83:F4D8, JSR, RTS; reached with a JMP on summer 30 of year
  * 3, the last day): the start of the ending. Starts event script $2E in
- * slot 0 (UNK_LoadCCDataLong), clears $0196 and $7F1F47 and sets
+ * slot 0 (StartEventScriptLong), clears $0196 and $7F1F47 and sets
  * $7F1F5E bit 1. The cow the ending shows is the one with the highest
  * byte +04 (affection), the last one on a tie; its name (+0C-+0F) goes to
  * $0889-$088F, one letter per word (all $B1, blank, if there is no cow),
@@ -903,10 +903,10 @@ void hm_UnusedBarnCheck(uint8_t *ram, HmRegs *r)     { count_animals(ram, r, 12,
 #define FESTIVAL_BEST     0x09B5   /* DB: the best +04 so far */
 #define DEVELOPMENT       0x7F1F56
 
-void hm_CODE_83F4D8(uint8_t *ram, HmRegs *r)
+void hm_StartEnding(uint8_t *ram, HmRegs *r)
 {
   r->a = 0; r->x = 0x002E; r->y = 0;
-  call(ram, r, 0xF4E6, 0x84, hm_UNK_LoadCCDataLong);
+  call(ram, r, 0xF4E6, 0x84, hm_StartEventScriptLong);
   hm_bus_wr16(ram, (uint32_t)r->db << 16 | 0x0196, 0);
   r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5E) | 0x0002);
   hm_bus_wr16(ram, 0x7F1F5E, r->a);
@@ -942,12 +942,12 @@ void hm_CODE_83F4D8(uint8_t *ram, HmRegs *r)
   call(ram, r, 0xF57F, 0x82, hm_CalculateFarmDevelopment);
   hm_dp_w16(ram, r, 0x7E, hm_bus_rd16(ram, DEVELOPMENT));
   r->a = 0x000A;
-  /* the flags Unk_Audio23 saves (PHP): 16-bit, N = Z = V = 0 (the last
+  /* the flags Multiply16 saves (PHP): 16-bit, N = Z = V = 0 (the last
    * ADC of CalculateFarmDevelopment cannot overflow), C = 1 (its last
    * CPY), D and I as on entry */
   uint8_t keep_p = r->p;
   r->p = (uint8_t)((r->p & 0x0C) | 0x01);
-  call(ram, r, 0xF58E, 0x83, hm_Unk_Audio23);
+  call(ram, r, 0xF58E, 0x83, hm_Multiply16);
   r->p = keep_p;
   hm_dp_w16(ram, r, 0x7E, r->a);
   r->a = 0x0127;

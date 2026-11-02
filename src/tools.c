@@ -6,7 +6,7 @@
  * $09B6). For tile type t:
  *   +1..+2  what the tile does (16 bits; the low byte's bits say which tools
  *           work: 01 sickle, 02 hoe, 04 hammer, 08 axe, 10 water, 20 seeds)
- *   +2 bit 7  "no default": see UNK_CheckTileProperty
+ *   +2 bit 7  "no default": see GetTileProperty
  *   +3      which sides (01..08, by the player's direction) and seasons
  *           (10..80) the first property applies to
  */
@@ -48,7 +48,7 @@ void hm_GetTileContent(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_CheckTileProperty ($82:AC61, JSL, RTL). X, Y = position, A = which
+ * GetTileProperty ($82:AC61, JSL, RTL). X, Y = position, A = which
  * property word (always 1: bytes +1..+2). Returns A = the tile's property,
  * X = the tile type:
  *  - if the tile's side/season byte (+3) matches the player's direction and
@@ -60,7 +60,7 @@ void hm_GetTileContent(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_PROPERTY_CONTENT 0xAC76   /* JSL GetTileContent at $82:AC73 */
 
-void hm_UNK_CheckTileProperty(uint8_t *ram, HmRegs *r)
+void hm_GetTileProperty(uint8_t *ram, HmRegs *r)
 {
   uint16_t which = r->a;
   hm_dp_w16(ram, r, 0x82, which);
@@ -121,7 +121,7 @@ static bool property(uint8_t *ram, HmRegs *r, uint16_t ret)
 {
   r->a = 1;
   hm_jsl(ram, r, ret, 0x82);
-  hm_UNK_CheckTileProperty(ram, r);
+  hm_GetTileProperty(ram, r);
   hm_rtl(ram, r);
   return true;
 }
@@ -299,10 +299,10 @@ void hm_PreCheckToolSuccessSquare(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_82927D ($82:927D, JSR, RTS): PreCheckToolSuccess that also keeps the
+ * CheckToolSuccessForSound ($82:927D, JSR, RTS): PreCheckToolSuccess that also keeps the
  * answer (0 / 1 / 2) in $0922, which picks the sound of the tool.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_82927D(uint8_t *ram, HmRegs *r)
+void hm_CheckToolSuccessForSound(uint8_t *ram, HmRegs *r)
 {
   tile_ahead_then_check(ram, r, 1, 0x928B, 0x9297);
   hm_bus_wr8(ram, ((uint32_t)r->db << 16) | 0x0922, (uint8_t)r->a);

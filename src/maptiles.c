@@ -4,21 +4,21 @@
  * tools on the shed wall, the goods on the shop shelves, the fodder in the
  * troughs, the eggs in the coop...
  *
- * UNK_ExecuteFromPointers ($81:A9E5, JSL, RTL) calls, through the table
+ * RunMapExtras ($81:A9E5, JSL, RTL) calls, through the table
  * $81:A9F6 (one word per map, $22 = the map being loaded), that map's
  * routine (JSR). Maps with nothing to add point at a lone RTS.
  *
  * Every change is a "tile change" of the table $81:B363 (see mapedit.c)
  * stamped at a position in pixels:
- *   SUB_81A7CE   the picture (BG1 tilemap in WRAM) and, if the change has
+ *   ChangeMapTileNoVram   the picture (BG1 tilemap in WRAM) and, if the change has
  *                one, its tile type in the map ($09B6); unlike ChangeMapTile
  *                no VRAM transfer is queued: the whole tilemap is uploaded
  *                after loading.
- *   SUB_82B0A7   the tile types of the block one by one, from a second
+ *   SetTileTypesFromChange   the tile types of the block one by one, from a second
  *                sheet at $A7:F500 that matches the graphics sheet (16
  *                types per row): for changes made of different tiles (a
  *                house extension with its door).
- *   SUB_81B2BB   an item of a shop or of the shed (8-byte records: x, y,
+ *   DrawShelfItem   an item of a shop or of the shed (8-byte records: x, y,
  *                tile change, a byte of $7F1F00-... and its bit), shown
  *                always, only if that bit is set, or only if it is not.
  *
@@ -57,41 +57,41 @@ static void jsr(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmR
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_81A7CE ($81:A7CE, JSL, RTL). A = tile change, X / Y = position.
+ * ChangeMapTileNoVram ($81:A7CE, JSL, RTL). A = tile change, X / Y = position.
  * ChangeMapTile without the VRAM part. It starts by reading the change's
- * entry (SUB_81A801) for nothing: SUB_81A83A reads it again, and so does
+ * entry (ReadTileChange) for nothing: DrawTileChange reads it again, and so does
  * the next call.
- * Leftovers: $86 / $88 = columns / rows; registers from SUB_82B060 when the
+ * Leftovers: $86 / $88 = columns / rows; registers from SetTileTypeBlock when the
  * change has a tile type, otherwise A = 0, X / Y = the position and C from
- * SUB_81A801.
+ * ReadTileChange.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_7CE_FIRST   0xA7D6
 #define RET_7CE_PICTURE 0xA7E2
 #define RET_7CE_ENTRY   0xA7E9
 #define RET_7CE_TYPES   0xA7FF
 
-void hm_SUB_81A7CE(uint8_t *ram, HmRegs *r)
+void hm_ChangeMapTileNoVram(uint8_t *ram, HmRegs *r)
 {
   uint16_t change = r->a, x = r->x, y = r->y;
   push16(ram, r, y); push16(ram, r, x); push16(ram, r, change);
-  jsl(ram, r, RET_7CE_FIRST, 0x81, hm_SUB_81A801);
+  jsl(ram, r, RET_7CE_FIRST, 0x81, hm_ReadTileChange);
   pull16(ram, r); pull16(ram, r); pull16(ram, r);
   push16(ram, r, y); push16(ram, r, x); push16(ram, r, change);
   r->a = change; r->x = x; r->y = y;
-  jsl(ram, r, RET_7CE_PICTURE, 0x81, hm_SUB_81A83A);
+  jsl(ram, r, RET_7CE_PICTURE, 0x81, hm_DrawTileChange);
   r->a = pull16(ram, r);                                  /* PLA */
-  jsl(ram, r, RET_7CE_ENTRY, 0x81, hm_SUB_81A801);
+  jsl(ram, r, RET_7CE_ENTRY, 0x81, hm_ReadTileChange);
   r->x = pull16(ram, r);                                  /* PLX; PLY */
   r->y = pull16(ram, r);
   hm_dp_w16(ram, r, 0x86, hm_dp_r16(ram, r, 0x80));
   hm_dp_w16(ram, r, 0x88, hm_dp_r16(ram, r, 0x82));
   r->a = hm_dp_r16(ram, r, 0x84);
   if (r->a == 0) return;
-  jsl(ram, r, RET_7CE_TYPES, 0x82, hm_SUB_82B060);
+  jsl(ram, r, RET_7CE_TYPES, 0x82, hm_SetTileTypeBlock);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_82B0A7 ($82:B0A7, JSL, RTL). A = tile change, X / Y = position. For
+ * SetTileTypesFromChange ($82:B0A7, JSL, RTL). A = tile change, X / Y = position. For
  * every tile of the block, its type from the sheet at $A7:F500 into the map
  * (EditTileonMap). The graphics offset of the change ($7E, 4 bytes per
  * tile, $80 per row of the graphics sheet) gives where it starts in the
@@ -104,11 +104,11 @@ void hm_SUB_81A7CE(uint8_t *ram, HmRegs *r)
 #define RET_0A7_ENTRY   0xB0B0
 #define RET_0A7_EDIT    0xB113
 
-void hm_SUB_82B0A7(uint8_t *ram, HmRegs *r)
+void hm_SetTileTypesFromChange(uint8_t *ram, HmRegs *r)
 {
   hm_dp_w16(ram, r, 0x8E, r->x);
   hm_dp_w16(ram, r, 0x90, r->y);
-  jsl(ram, r, RET_0A7_ENTRY, 0x81, hm_SUB_81A801);
+  jsl(ram, r, RET_0A7_ENTRY, 0x81, hm_ReadTileChange);
   hm_dp_w16(ram, r, 0x72, (uint16_t)TILE_TYPE_SHEET);
   *hm_dp(ram, r, 0x74) = (uint8_t)(TILE_TYPE_SHEET >> 16);
   uint16_t graphics = hm_dp_r16(ram, r, 0x7E);
@@ -144,7 +144,7 @@ void hm_SUB_82B0A7(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_81B2BB ($81:B2BB, JSR, RTS). A = item, X = list, Y = how:
+ * DrawShelfItem ($81:B2BB, JSR, RTS). A = item, X = list, Y = how:
  *   lists ($81, 8 bytes per item): 0 the shed $BE0F, 1 the flower shop
  *   $BEEF, 2 the general store $BF27, 3 the animal shop $BF6F (any other X
  *   is the shed too);
@@ -154,12 +154,12 @@ void hm_SUB_82B0A7(uint8_t *ram, HmRegs *r)
  * The record: +0 x, +2 y, +4 tile change, +6 which byte, +7 its bit.
  * Leftovers when nothing is shown: A = Y's high byte : (byte AND bit), X =
  * the byte number, Y = 8 A, C from comparing Y with 2 and 1; otherwise
- * SUB_81A7CE's.
+ * ChangeMapTileNoVram's.
  * ───────────────────────────────────────────────────────────────────────── */
 #define SHED_ITEMS      0x7F1F00
 #define RET_2BB_STAMP   0xB361
 
-void hm_SUB_81B2BB(uint8_t *ram, HmRegs *r)
+void hm_DrawShelfItem(uint8_t *ram, HmRegs *r)
 {
   uint16_t item = r->a, list = r->x, how = r->y;
   push16(ram, r, how); push16(ram, r, item);              /* PHY; PHA */
@@ -192,7 +192,7 @@ void hm_SUB_81B2BB(uint8_t *ram, HmRegs *r)
   r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, (uint16_t)(y + 4)));
   r->y = pull16(ram, r);
   r->x = pull16(ram, r);
-  jsl(ram, r, RET_2BB_STAMP, 0x81, hm_SUB_81A7CE);
+  jsl(ram, r, RET_2BB_STAMP, 0x81, hm_ChangeMapTileNoVram);
 }
 
 /* ── The pieces the map routines are made of ──────────────────────────── */
@@ -206,7 +206,7 @@ static bool flag(uint8_t *ram, HmRegs *r, uint32_t addr, uint16_t mask)
 static void stamp(uint8_t *ram, HmRegs *r, uint16_t change, uint16_t x, uint16_t y, uint16_t ret)
 {
   r->a = change; r->x = x; r->y = y;
-  jsl(ram, r, ret, 0x81, hm_SUB_81A7CE);
+  jsl(ram, r, ret, 0x81, hm_ChangeMapTileNoVram);
 }
 /* the same, keeping A / X / Y on the stack around it (PHA; PHX; PHY) */
 static void stamp_kept(uint8_t *ram, HmRegs *r, uint16_t change, uint16_t x, uint16_t y, uint16_t ret)
@@ -220,13 +220,13 @@ static void stamp_typed(uint8_t *ram, HmRegs *r, uint16_t change, uint16_t x, ui
                         uint16_t ret_picture, uint16_t ret_types)
 {
   stamp_kept(ram, r, change, x, y, ret_picture);
-  jsl(ram, r, ret_types, 0x82, hm_SUB_82B0A7);
+  jsl(ram, r, ret_types, 0x82, hm_SetTileTypesFromChange);
 }
 /* an item of a shop or of the shed */
 static void item(uint8_t *ram, HmRegs *r, uint16_t n, uint16_t list, uint16_t how, uint16_t ret)
 {
   r->a = n; r->x = list; r->y = how;
-  jsr(ram, r, ret, hm_SUB_81B2BB);
+  jsr(ram, r, ret, hm_DrawShelfItem);
 }
 /* LDA !tool_selected; CMP #t; BEQ ...; LDA !tool_backpack; CMP #t; BEQ ...
  * (8-bit A): true when you have it in your hand or in the bag */
@@ -477,7 +477,7 @@ static void by_bits(uint8_t *ram, HmRegs *r, uint16_t n, uint32_t bits, uint32_t
       push16(ram, r, py);
       r->a = change;
       r->y = pull16(ram, r); r->x = pull16(ram, r);
-      jsl(ram, r, ret, 0x81, hm_SUB_81A7CE);
+      jsl(ram, r, ret, 0x81, hm_ChangeMapTileNoVram);
     }
     pull16(ram, r);                                       /* PLY; INY */
   }
@@ -527,13 +527,13 @@ void hm_ReplaceTilesMap37(uint8_t *ram, HmRegs *r)
 void hm_ReplaceTilesNothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_ExecuteFromPointers ($81:A9E5, JSL, RTL): the routine of map $22
+ * RunMapExtras ($81:A9E5, JSL, RTL): the routine of map $22
  * (maps $00-$5F), called with JSR (A9F6,X).
  * ───────────────────────────────────────────────────────────────────────── */
 #define MAP_ROUTINES  0x81A9F6
 #define RET_9E5_CALL  0xA9F4
 
-void hm_UNK_ExecuteFromPointers(uint8_t *ram, HmRegs *r)
+void hm_RunMapExtras(uint8_t *ram, HmRegs *r)
 {
   r->a = *hm_dp(ram, r, 0x22);
   r->c = (r->a >> 15) & 1;                                /* ASL */

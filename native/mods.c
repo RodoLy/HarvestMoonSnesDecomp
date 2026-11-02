@@ -667,7 +667,7 @@ uint16_t mods_mouse_pad(uint16_t pad)
  * Here: the toss (the feed's animation, $74 + facing, about a second) runs
  * one and a half times as fast: every other frame, the player's game object
  * ($0905: record $019C + $24 x it) has one frame less to wait on its
- * picture (+12), as if the game had counted twice (CODE_8582C7). */
+ * picture (+12), as if the game had counted twice (AnimateGameObjects). */
 static void seeds_frame(uint8_t *ram)
 {
   static unsigned tick;
@@ -833,11 +833,11 @@ uint16_t mods_bag_pad(uint16_t pad, bool key)
   return pad;
 }
 /* The item's own sprite, the one the game draws over the player's head
- * (SUB_8180B7, case 1; the tools on the shed's shelves: case 3, or 0):
+ * (GetItemSprite, case 1; the tools on the shed's shelves: case 3, or 0):
  * DATA8_8196AF gives the item's list, the case the sprite; the sprite's entry ($86/$87:8080 + 2 x the number) its first
  * frame's piece list: a count, then 5 bytes a piece (the piece number,
  * X and Y offsets, attributes: palette bits 0-2, flips bits 4-5). A
- * piece's graphics are where the loader (CODE_858CB2) takes them from:
+ * piece's graphics are where the loader (LoadQueuedSpritePieces) takes them from:
  * bank $88 + (piece >> 8), $8000 + $2000 x (bits 6-7) + 32 x the byte at
  * $86:8000 + 2 x (bits 0-5); a 16x16 is the 8x8 tiles at +0, +$20, +$200,
  * +$220. The colours: the OBJ palettes of the game's CGRAM copy. */

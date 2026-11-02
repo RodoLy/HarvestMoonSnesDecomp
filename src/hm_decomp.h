@@ -211,10 +211,10 @@ enum { HM_OUT_A = 1, HM_OUT_X = 2, HM_OUT_Y = 4, HM_OUT_C = 8,
        HM_APU = 64,
        /* Fuzzed only when named in HM_DECOMP_FUZZ_ONLY, once, without
         * waiting for "ready", at frame 1 (before the game's own upload is
-        * done): UNK_Audio1, which talks to the chip's boot ROM; after the
+        * done): UploadSoundProgram, which talks to the chip's boot ROM; after the
         * upload the chip runs the game's sound program and never answers
         * that way again. E.g. HM_DECOMP_FUZZ=100000:1
-        * HM_DECOMP_FUZZ_ONLY=UNK_Audio1. */
+        * HM_DECOMP_FUZZ_ONLY=UploadSoundProgram. */
        HM_LIVE = 128,
        /* Writes the console's chips (PPU, DMA, WRAM port, $42xx): checked
         * by running the rewrite on the real machine from the state before
@@ -240,10 +240,10 @@ enum { HM_OUT_A = 1, HM_OUT_X = 2, HM_OUT_Y = 4, HM_OUT_C = 8,
         * it back as if it returned), and the rewrite returns there. For
         * GameLoop itself the stop is its JMP back ($80:80DB, one frame
         * done) or its JML into the names screen ($80:80E9); for the names
-        * screen (Unk_NamesInput) its JML back to the frame's start or to
+        * screen (NamesScreen) its JML back to the frame's start or to
         * the name's routine; for RESET, which throws the stack away, its
         * JML to the title, where the checker's frame is put back; for the
-        * loop of one BRA (SUB_82878E), its second turn. */
+        * loop of one BRA (UnusedEndlessLoop), its second turn. */
        HM_TOLOOP = 4096 };
 
 /* video.c: the NMI arriving at `pc` (the wait loop) with the flags `p`:
@@ -276,12 +276,12 @@ extern void (*g_hm_frame_hook)(uint8_t *ram);
  *     ("4th", "5th"... $82:F298);
  *   g_hm_crops_passable: the player walks through the crops of the farm
  *     (CFFFF, the map's collision: a crop tile no longer blocks; and
- *     SUB_818000 changes the tile A looked at, 7 pixels ahead);
+ *     PutItemDown changes the tile A looked at, 7 pixels ahead);
  *   g_hm_single_seed: a seed bag sows one tile at a time, 9 per bag
  *     (the seeds' ToolUsed; g_hm_seeds_used, grass, corn, tomato, potato,
  *     turnip: the seeds gone from each open bag, kept in the saved game's
  *     unused bytes +20 to +25 by SaveGameSlot / LoadGameSlot);
- *   g_hm_bag_take: the crop bag gives back an item (SUB_818000 leaves
+ *   g_hm_bag_take: the crop bag gives back an item (PutItemDown leaves
  *     nothing on the map for it). */
 extern uint16_t g_hm_oam_right, g_hm_oam_left;
 extern int g_hm_no_ending;
@@ -289,7 +289,7 @@ extern int g_hm_crops_passable;
 extern int g_hm_single_seed;
 /* g_hm_bag_on: the crop bag (native/mods.c) is on: its items (g_hm_bag,
  * item ids, 0 = empty) are kept in the saved game's unused bytes +52 to
- * +5B by SaveGameSlot / LoadGameSlot; g_hm_bag_take: the next SUB_818000
+ * +5B by SaveGameSlot / LoadGameSlot; g_hm_bag_take: the next PutItemDown
  * (picking up) takes the item out of the bag: nothing is left on the map
  * and no sound (it clears it). */
 extern int g_hm_bag_on, g_hm_bag_take;
@@ -303,7 +303,7 @@ extern uint16_t g_hm_wife_until;
 extern uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 /* the loops' own entries the host needs (not checked on their own) */
 void hm_IntroScreen_D871(uint8_t *ram, HmRegs *r);    /* intro.c: the demo check */
-void hm_SUB_82D1C0_D347(uint8_t *ram, HmRegs *r);     /* demo.c: a frame of each demo */
+void hm_DemoFrame(uint8_t *ram, HmRegs *r);     /* demo.c: a frame of each demo */
 void hm_DemoPresentation_D6C9(uint8_t *ram, HmRegs *r);
 
 /* hm_io.c: the chips' state for HM_IO checks. */
@@ -376,7 +376,7 @@ void hm_ClimateFarmDamagePrep(uint8_t *ram, HmRegs *r);
 void hm_MonthlyFarmTilesCheck(uint8_t *ram, HmRegs *r);
 void hm_NightlyFarmTilesCheck(uint8_t *ram, HmRegs *r);
 void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r);
-void hm_CODE_83F4D8(uint8_t *ram, HmRegs *r);
+void hm_StartEnding(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_CB69(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_EBA6(uint8_t *ram, HmRegs *r);
 void hm_MapEvent_DED3(uint8_t *ram, HmRegs *r);
@@ -426,32 +426,32 @@ void hm_FindMostLovedName(uint8_t *ram, HmRegs *r);   /* people.c */
 void hm_WifePregnanacyandChilds(uint8_t *ram, HmRegs *r);
 void hm_LoadsDateNames(uint8_t *ram, HmRegs *r);      /* calendar.c */
 void hm_AddMoney(uint8_t *ram, HmRegs *r);            /* stock.c */
-void hm_SUB_8281C0(uint8_t *ram, HmRegs *r);          /* weather.c */
+void hm_TvWeatherForecast(uint8_t *ram, HmRegs *r);          /* weather.c */
 void hm_HaveLunch(uint8_t *ram, HmRegs *r);           /* stamina.c */
 void hm_GetTileContent(uint8_t *ram, HmRegs *r);      /* tools.c */
-void hm_UNK_CheckTileProperty(uint8_t *ram, HmRegs *r);
+void hm_GetTileProperty(uint8_t *ram, HmRegs *r);
 void hm_CheckToolSuccess(uint8_t *ram, HmRegs *r);
 void hm_CalculateTileinFront(uint8_t *ram, HmRegs *r);
 void hm_TileAtOffsetFromPlayer(uint8_t *ram, HmRegs *r);
 void hm_PreCheckToolSuccess(uint8_t *ram, HmRegs *r);
 void hm_PreCheckToolSuccessLine(uint8_t *ram, HmRegs *r);
 void hm_PreCheckToolSuccessSquare(uint8_t *ram, HmRegs *r);
-void hm_SUB_81A801(uint8_t *ram, HmRegs *r);          /* mapedit.c */
-void hm_SUB_81A83A(uint8_t *ram, HmRegs *r);
-void hm_SUB_82B060(uint8_t *ram, HmRegs *r);
+void hm_ReadTileChange(uint8_t *ram, HmRegs *r);          /* mapedit.c */
+void hm_DrawTileChange(uint8_t *ram, HmRegs *r);
+void hm_SetTileTypeBlock(uint8_t *ram, HmRegs *r);
 void hm_QueueTileGraphicsDMA(uint8_t *ram, HmRegs *r);
 void hm_ChangeMapTile(uint8_t *ram, HmRegs *r);
 void hm_StartMapAnimation(uint8_t *ram, HmRegs *r);
 void hm_RanchMasteryCalculator(uint8_t *ram, HmRegs *r); /* ending.c */
 void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r);    /* dma.c */
 void hm_RemoveProgrammedDMA(uint8_t *ram, HmRegs *r);
-void hm_UNK_SetDMA2(uint8_t *ram, HmRegs *r);
-void hm_UNK_SetDMA1(uint8_t *ram, HmRegs *r);
+void hm_DrawTilemapBlock2x2(uint8_t *ram, HmRegs *r);
+void hm_CopyLetterToVram(uint8_t *ram, HmRegs *r);
 void hm_LoadSpriteComponent(uint8_t *ram, HmRegs *r); /* objects.c */
 void hm_LoadGameObjectComponents(uint8_t *ram, HmRegs *r);
 void hm_CreateGameObject(uint8_t *ram, HmRegs *r);
 void hm_SpawnMapObject(uint8_t *ram, HmRegs *r);
-void hm_SUB_8180B7(uint8_t *ram, HmRegs *r);   /* items.c */
+void hm_GetItemSprite(uint8_t *ram, HmRegs *r);   /* items.c */
 void hm_PlayerState_00(uint8_t *ram, HmRegs *r);   /* playerstate.c */
 void hm_ResetIdleAnimatioTimer(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_1A(uint8_t *ram, HmRegs *r);
@@ -470,20 +470,20 @@ void hm_PlayerState_0D(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_0C(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_0B(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_0A(uint8_t *ram, HmRegs *r);
-void hm_CODE_81C556(uint8_t *ram, HmRegs *r);
-void hm_CODE_81C66E(uint8_t *ram, HmRegs *r);
-void hm_CODE_81C736(uint8_t *ram, HmRegs *r);
-void hm_CODE_81C83B(uint8_t *ram, HmRegs *r);
+void hm_PlayerStandStill(uint8_t *ram, HmRegs *r);
+void hm_PlayerWalk(uint8_t *ram, HmRegs *r);
+void hm_PlayerRun(uint8_t *ram, HmRegs *r);
+void hm_PlayerPushed(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_03(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_04(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_05(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_08(uint8_t *ram, HmRegs *r);
-void hm_CODE_81CB14(uint8_t *ram, HmRegs *r);
-void hm_CODE_81CB5E(uint8_t *ram, HmRegs *r);
-void hm_SUB_809D0B(uint8_t *ram, HmRegs *r);
-void hm_SUB_809A64(uint8_t *ram, HmRegs *r);
-void hm_CODE_858CB2(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio1(uint8_t *ram, HmRegs *r);
+void hm_PlayerEatAnimation(uint8_t *ram, HmRegs *r);
+void hm_PlayerIdleAnimation(uint8_t *ram, HmRegs *r);
+void hm_CheckMountainFinds(uint8_t *ram, HmRegs *r);
+void hm_CheckDoors(uint8_t *ram, HmRegs *r);
+void hm_LoadQueuedSpritePieces(uint8_t *ram, HmRegs *r);
+void hm_UploadSoundProgram(uint8_t *ram, HmRegs *r);
 void hm_UNUSED2(uint8_t *ram, HmRegs *r);
 void hm_StartProgramedDMA(uint8_t *ram, HmRegs *r);
 void hm_InitialzieScreenStatusVar(uint8_t *ram, HmRegs *r);
@@ -505,25 +505,25 @@ void hm_WaitForNMI(uint8_t *ram, HmRegs *r);
 void hm_WaitForNMIATimes(uint8_t *ram, HmRegs *r);
 void hm_ScreenFadein(uint8_t *ram, HmRegs *r);
 void hm_ScreenFadeout(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio18(uint8_t *ram, HmRegs *r);   /* audio.c */
-void hm_UNK_Audio20(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio24(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio26(uint8_t *ram, HmRegs *r);
+void hm_PrepareSoundEffect(uint8_t *ram, HmRegs *r);   /* audio.c */
+void hm_SetSong(uint8_t *ram, HmRegs *r);
+void hm_PlayEffectWithSongInstrument(uint8_t *ram, HmRegs *r);
+void hm_ChangeMusic(uint8_t *ram, HmRegs *r);
 void hm_ToolUsedSound2(uint8_t *ram, HmRegs *r);   /* toolsound.c */
 void hm_Event_ScreenFadein(uint8_t *ram, HmRegs *r);   /* eventcmds.c */
 void hm_Event_ScreenFadeout(uint8_t *ram, HmRegs *r);
 void hm_Event_AudioRelated3(uint8_t *ram, HmRegs *r);
-void hm_CODE_81D670(uint8_t *ram, HmRegs *r);   /* interact.c */
-void hm_CODE_8187C3(uint8_t *ram, HmRegs *r);   /* items.c */
-void hm_SUB_81809A(uint8_t *ram, HmRegs *r);
+void hm_PlayerAction_04_Jingle(uint8_t *ram, HmRegs *r);   /* interact.c */
+void hm_TakeToolFromShelf(uint8_t *ram, HmRegs *r);   /* items.c */
+void hm_RunItemRoutine(uint8_t *ram, HmRegs *r);
 void hm_BAAAA(uint8_t *ram, HmRegs *r);
 void hm_EventInstructionInterpreter(uint8_t *ram, HmRegs *r);   /* events.c */
 void hm_IterateCCStructures(uint8_t *ram, HmRegs *r);
 void hm_PlayerState_1C(uint8_t *ram, HmRegs *r);   /* playerstate.c */
 void hm_PlayerAction_35(uint8_t *ram, HmRegs *r);   /* actions.c */
-void hm_SUB_81BFB7(uint8_t *ram, HmRegs *r);   /* playerstate.c */
-void hm_SUB_80972C(uint8_t *ram, HmRegs *r);
-void hm_UNK_ScreenTransition(uint8_t *ram, HmRegs *r);
+void hm_PlayerFrame(uint8_t *ram, HmRegs *r);   /* playerstate.c */
+void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r);
+void hm_EnterMap(uint8_t *ram, HmRegs *r);
 void hm_SetScreenTransition(uint8_t *ram, HmRegs *r);
 void hm_NightReset(uint8_t *ram, HmRegs *r);      /* day.c */
 void hm_UpdateTime(uint8_t *ram, HmRegs *r);
@@ -533,25 +533,25 @@ void hm_SetCowNameBought(uint8_t *ram, HmRegs *r);
 void hm_SetCowNameBorn(uint8_t *ram, HmRegs *r);
 void hm_SetDogName(uint8_t *ram, HmRegs *r);
 void hm_SetHorseName(uint8_t *ram, HmRegs *r);
-void hm_Unk_NamesInput(uint8_t *ram, HmRegs *r);
-void hm_Unk_NamesInput_E95F(uint8_t *ram, HmRegs *r);
+void hm_NamesScreen(uint8_t *ram, HmRegs *r);
+void hm_NamesScreenFrame(uint8_t *ram, HmRegs *r);
 void hm_SetKid1Name(uint8_t *ram, HmRegs *r);
 void hm_SetKid2Name(uint8_t *ram, HmRegs *r);
 void hm_SpawnAfterLoad(uint8_t *ram, HmRegs *r);  /* game.c */
 void hm_GameLoop(uint8_t *ram, HmRegs *r);
-void hm_SUB_82D1C0(uint8_t *ram, HmRegs *r);    /* demo.c */
+void hm_FirstDemo(uint8_t *ram, HmRegs *r);    /* demo.c */
 void hm_DemoPresentation(uint8_t *ram, HmRegs *r);
 void hm_IntroScreen(uint8_t *ram, HmRegs *r);     /* intro.c */
 void hm_IntroScreen_D80D(uint8_t *ram, HmRegs *r);
 void hm_IntroScreen_D93F(uint8_t *ram, HmRegs *r);
 void hm_IntroScreen_E0EB(uint8_t *ram, HmRegs *r);
-void hm_SUB_82E1F1(uint8_t *ram, HmRegs *r);
-void hm_SUB_82E1F1_E337(uint8_t *ram, HmRegs *r);
+void hm_ContinueFileScreen(uint8_t *ram, HmRegs *r);
+void hm_ContinueFileScreenFrame(uint8_t *ram, HmRegs *r);
 void hm_StartFromLoad(uint8_t *ram, HmRegs *r);
 void hm_StartFromNewGame(uint8_t *ram, HmRegs *r);
-void hm_SUB_UNUSED_1(uint8_t *ram, HmRegs *r);
+void hm_UnusedRewritePlayerName(uint8_t *ram, HmRegs *r);
 void hm_RESET(uint8_t *ram, HmRegs *r);          /* reset.c */
-void hm_SUB_82878E(uint8_t *ram, HmRegs *r);     /* day.c */   /* transition.c */
+void hm_UnusedEndlessLoop(uint8_t *ram, HmRegs *r);     /* day.c */   /* transition.c */
 void hm_PlayerInteractionSelector(uint8_t *ram, HmRegs *r);
 void hm_ItemObject_2A(uint8_t *ram, HmRegs *r);
 void hm_ItemObject_2B(uint8_t *ram, HmRegs *r);
@@ -583,15 +583,15 @@ void hm_CopiesWRAMtoOBJVGRAM(uint8_t *ram, HmRegs *r);
 void hm_UpdateGraphics(uint8_t *ram, HmRegs *r);
 void hm_AutoMapScrolling(uint8_t *ram, HmRegs *r);
 void hm_LoadDialogueBox(uint8_t *ram, HmRegs *r);
-void hm_SUB_82E5E7(uint8_t *ram, HmRegs *r);
-void hm_SUB_82EA80(uint8_t *ram, HmRegs *r);
-void hm_CODE_81A94A(uint8_t *ram, HmRegs *r);
-void hm_SUB_82EAB4(uint8_t *ram, HmRegs *r);
-void hm_SUB_82E742(uint8_t *ram, HmRegs *r);
-void hm_CODE_82E405(uint8_t *ram, HmRegs *r);
+void hm_DrawTileBlock3x2(uint8_t *ram, HmRegs *r);
+void hm_DrawNameEntryBlanks(uint8_t *ram, HmRegs *r);
+void hm_PutToolOnShelf(uint8_t *ram, HmRegs *r);
+void hm_DrawScreenBar(uint8_t *ram, HmRegs *r);
+void hm_DrawScreenBars(uint8_t *ram, HmRegs *r);
+void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r);
 void hm_PrepareOAMData(uint8_t *ram, HmRegs *r);
-void hm_CODE_81CB77(uint8_t *ram, HmRegs *r);
-void hm_CODE_81D716(uint8_t *ram, HmRegs *r);   /* actions.c */
+void hm_MovePlayer(uint8_t *ram, HmRegs *r);
+void hm_PlayerAction_0F_Tv(uint8_t *ram, HmRegs *r);   /* actions.c */
 void hm_PlayerAction_2E(uint8_t *ram, HmRegs *r);
 void hm_PlayerAction_40(uint8_t *ram, HmRegs *r);
 void hm_PlayerAction_41(uint8_t *ram, HmRegs *r);
@@ -649,29 +649,29 @@ void hm_PlayerAction_4D(uint8_t *ram, HmRegs *r);
 void hm_PlayerAction_4E(uint8_t *ram, HmRegs *r);
 void hm_PlayerAction_4F(uint8_t *ram, HmRegs *r);
 void hm_PlayerAction_50(uint8_t *ram, HmRegs *r);
-void hm_SUB_818000(uint8_t *ram, HmRegs *r);
-void hm_CODE_81883A(uint8_t *ram, HmRegs *r);
-void hm_CODE_818855(uint8_t *ram, HmRegs *r);
-void hm_CODE_81889A(uint8_t *ram, HmRegs *r);
-void hm_CODE_8188BC(uint8_t *ram, HmRegs *r);
-void hm_CODE_8188E5(uint8_t *ram, HmRegs *r);
-void hm_CODE_818923(uint8_t *ram, HmRegs *r);
-void hm_CODE_818B6B(uint8_t *ram, HmRegs *r);
-void hm_CODE_818BA5(uint8_t *ram, HmRegs *r);
-void hm_CODE_818C24(uint8_t *ram, HmRegs *r);
-void hm_CODE_818D38(uint8_t *ram, HmRegs *r);
-void hm_CODE_818E16(uint8_t *ram, HmRegs *r);
-void hm_CODE_818E1B(uint8_t *ram, HmRegs *r);
-void hm_CODE_818E98(uint8_t *ram, HmRegs *r);
-void hm_CODE_818F2A(uint8_t *ram, HmRegs *r);
-void hm_CODE_818F5A(uint8_t *ram, HmRegs *r);
-void hm_CODE_819010(uint8_t *ram, HmRegs *r);
-void hm_CODE_819021(uint8_t *ram, HmRegs *r);
-void hm_CODE_819049(uint8_t *ram, HmRegs *r);
-void hm_CODE_819228(uint8_t *ram, HmRegs *r);
-void hm_CODE_819379(uint8_t *ram, HmRegs *r);
-void hm_CODE_81968F(uint8_t *ram, HmRegs *r);
-void hm_CODE_819695(uint8_t *ram, HmRegs *r);
+void hm_PutItemDown(uint8_t *ram, HmRegs *r);
+void hm_ItemAnimalSteps(uint8_t *ram, HmRegs *r);
+void hm_ItemFoodSteps(uint8_t *ram, HmRegs *r);
+void hm_ItemPlaceableSteps(uint8_t *ram, HmRegs *r);
+void hm_ItemFodderSteps(uint8_t *ram, HmRegs *r);
+void hm_ItemCommonSteps(uint8_t *ram, HmRegs *r);
+void hm_ItemShopGoodsSteps(uint8_t *ram, HmRegs *r);
+void hm_FoodAskToEat(uint8_t *ram, HmRegs *r);
+void hm_FoodEatAnswer(uint8_t *ram, HmRegs *r);
+void hm_PlaceableCarried(uint8_t *ram, HmRegs *r);
+void hm_PlaceableLands(uint8_t *ram, HmRegs *r);
+void hm_PlaceableGone(uint8_t *ram, HmRegs *r);
+void hm_AnimalSetDown(uint8_t *ram, HmRegs *r);
+void hm_FodderIntoFeedBox(uint8_t *ram, HmRegs *r);
+void hm_ItemAskToSell(uint8_t *ram, HmRegs *r);
+void hm_ItemSellAnswer(uint8_t *ram, HmRegs *r);
+void hm_ItemTakeInHand(uint8_t *ram, HmRegs *r);
+void hm_ItemFinished(uint8_t *ram, HmRegs *r);
+void hm_ItemCarried(uint8_t *ram, HmRegs *r);
+void hm_AnimalCarried(uint8_t *ram, HmRegs *r);
+void hm_ItemLands(uint8_t *ram, HmRegs *r);
+void hm_ItemRemoveMapObject(uint8_t *ram, HmRegs *r);
+void hm_ItemWaitMapAnimation(uint8_t *ram, HmRegs *r);
 void hm_ItemObject_01(uint8_t *ram, HmRegs *r);
 void hm_ItemObject_02(uint8_t *ram, HmRegs *r);
 void hm_ItemObject_03(uint8_t *ram, HmRegs *r);
@@ -761,10 +761,10 @@ void hm_ToolUsedCowFeed(uint8_t *ram, HmRegs *r);
 void hm_ToolUsedUNK(uint8_t *ram, HmRegs *r);
 void hm_SetCCPoiner(uint8_t *ram, HmRegs *r);         /* events.c */
 void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r);
-void hm_SUB_8480F8(uint8_t *ram, HmRegs *r);
+void hm_StartScriptAtTileInFront(uint8_t *ram, HmRegs *r);
 void hm_ResetsCurrentCCStructureShort(uint8_t *ram, HmRegs *r);
-void hm_UNK_LoadCCDataLong(uint8_t *ram, HmRegs *r);
-void hm_UNK_LoadCCDataShort(uint8_t *ram, HmRegs *r);
+void hm_StartEventScriptLong(uint8_t *ram, HmRegs *r);
+void hm_StartEventScript(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKChickenRelated(uint8_t *ram, HmRegs *r);  /* eventcmds.c */
 void hm_Event_UNKDogRelated(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCowRelated(uint8_t *ram, HmRegs *r);
@@ -823,7 +823,7 @@ void hm_Event_UNKReset5C(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKSet60(uint8_t *ram, HmRegs *r);
 void hm_Event_DropItemAnimation(uint8_t *ram, HmRegs *r);
 void hm_StartTextBox(uint8_t *ram, HmRegs *r);       /* text.c */
-void hm_SUB_83932D(uint8_t *ram, HmRegs *r);
+void hm_ClearTextBox(uint8_t *ram, HmRegs *r);
 void hm_CloseTextBox(uint8_t *ram, HmRegs *r);
 void hm_DrawTextBoxArrow(uint8_t *ram, HmRegs *r);
 void hm_BlinkTextBoxArrow(uint8_t *ram, HmRegs *r);
@@ -833,17 +833,17 @@ void hm_DrawLetter(uint8_t *ram, HmRegs *r);
 void hm_AdvanceLetterCursor(uint8_t *ram, HmRegs *r);
 void hm_BlinkTextCursor(uint8_t *ram, HmRegs *r);
 void hm_PrintDigit(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio17(uint8_t *ram, HmRegs *r);       /* audio.c */
-void hm_UNK_Audio7(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio8(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio15(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio19(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio16(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio2(uint8_t *ram, HmRegs *r);
+void hm_SoundChipBusy(uint8_t *ram, HmRegs *r);       /* audio.c */
+void hm_SoundChipBusyOrPlaying(uint8_t *ram, HmRegs *r);
+void hm_SoundStartCommand(uint8_t *ram, HmRegs *r);
+void hm_PlaySoundEffect(uint8_t *ram, HmRegs *r);
+void hm_PlaySoundEffect0A(uint8_t *ram, HmRegs *r);
+void hm_SoundCommand0C(uint8_t *ram, HmRegs *r);
+void hm_SoundCommand0B(uint8_t *ram, HmRegs *r);
 void hm_ToolUsedWateringCan(uint8_t *ram, HmRegs *r); /* toolused.c */
 void hm_ToolUsedSprinkler(uint8_t *ram, HmRegs *r);
-void hm_SUB_829260(uint8_t *ram, HmRegs *r);
-void hm_SUB_82927D(uint8_t *ram, HmRegs *r);         /* tools.c */
+void hm_UseToolInHand(uint8_t *ram, HmRegs *r);
+void hm_CheckToolSuccessForSound(uint8_t *ram, HmRegs *r);         /* tools.c */
 void hm_PrintTextFrame(uint8_t *ram, HmRegs *r);    /* text.c */
 void hm_SaveGameSlot(uint8_t *ram, HmRegs *r);       /* save.c */
 void hm_LoadGameSlot(uint8_t *ram, HmRegs *r);
@@ -856,26 +856,26 @@ void hm_StartMenuInputs(uint8_t *ram, HmRegs *r);
 void hm_TitleMenuInputs(uint8_t *ram, HmRegs *r);
 void hm_ListInputs(uint8_t *ram, HmRegs *r);
 void hm_ImmobileInputs(uint8_t *ram, HmRegs *r);
-void hm_SUB_80A18D(uint8_t *ram, HmRegs *r);         /* scroll.c */
-void hm_SUB_80A308(uint8_t *ram, HmRegs *r);
-void hm_SUB_80A481(uint8_t *ram, HmRegs *r);
-void hm_SUB_80A617(uint8_t *ram, HmRegs *r);
+void hm_LoadMapRowBelow(uint8_t *ram, HmRegs *r);         /* scroll.c */
+void hm_LoadMapRowAbove(uint8_t *ram, HmRegs *r);
+void hm_LoadMapColumnRight(uint8_t *ram, HmRegs *r);
+void hm_LoadMapColumnLeft(uint8_t *ram, HmRegs *r);
 void hm_UpdateBGOffset(uint8_t *ram, HmRegs *r);
-void hm_SUB_80A0E1(uint8_t *ram, HmRegs *r);
-void hm_UNK_StaticMapScroling(uint8_t *ram, HmRegs *r);
-void hm_SUB_80A152(uint8_t *ram, HmRegs *r);
-void hm_SUB_809EBC(uint8_t *ram, HmRegs *r);
-void hm_SUB_809F61(uint8_t *ram, HmRegs *r);
+void hm_ScrollCameraUp(uint8_t *ram, HmRegs *r);
+void hm_ScrollCameraRight(uint8_t *ram, HmRegs *r);
+void hm_ScrollCameraLeft(uint8_t *ram, HmRegs *r);
+void hm_PlaceCameraOnMapEntry(uint8_t *ram, HmRegs *r);
+void hm_MoveSecondBackground(uint8_t *ram, HmRegs *r);
 void hm_SetTimeofDayPalette(uint8_t *ram, HmRegs *r);   /* palette.c */
 void hm_TransitionTimeofDayPalettes(uint8_t *ram, HmRegs *r);
 void hm_ClearsTimeofDayPaletteIndexandSetsNext(uint8_t *ram, HmRegs *r);
 void hm_ClearsTimeofDayPalette(uint8_t *ram, HmRegs *r);
-void hm_SUB_80916F(uint8_t *ram, HmRegs *r);
-void hm_SUB_80919D(uint8_t *ram, HmRegs *r);
+void hm_SetPaletteColour(uint8_t *ram, HmRegs *r);
+void hm_SetPaletteColourNoFade(uint8_t *ram, HmRegs *r);
 void hm_LoadFirstHalfPaletteToWRAM(uint8_t *ram, HmRegs *r);
 void hm_LoadSecondHalfPaletteToWRAM(uint8_t *ram, HmRegs *r);
 void hm_CustomiseSpritePalette(uint8_t *ram, HmRegs *r);
-void hm_UNK_CustomisePalette(uint8_t *ram, HmRegs *r);
+void hm_PrepareNightPalette(uint8_t *ram, HmRegs *r);
 void hm_ChangePalettebyTime(uint8_t *ram, HmRegs *r);
 void hm_PrepareSpritePalette(uint8_t *ram, HmRegs *r);
 void hm_SetPaletteToLoad(uint8_t *ram, HmRegs *r);
@@ -884,7 +884,7 @@ void hm_CFFFF(uint8_t *ram, HmRegs *r);          /* collision.c */
 void hm_CEEEE(uint8_t *ram, HmRegs *r);
 void hm_CBBBB(uint8_t *ram, HmRegs *r);
 void hm_CDDDD(uint8_t *ram, HmRegs *r);
-void hm_UNK_ToolUsed(uint8_t *ram, HmRegs *r);     /* toolanim.c */
+void hm_StartToolAnimation(uint8_t *ram, HmRegs *r);     /* toolanim.c */
 void hm_ToolAnimationNoAction(uint8_t *ram, HmRegs *r);
 void hm_ToolAnimationSickle(uint8_t *ram, HmRegs *r);
 void hm_ToolAnimationHoe(uint8_t *ram, HmRegs *r);
@@ -913,12 +913,12 @@ void hm_ToolAnimationBlueFeather(uint8_t *ram, HmRegs *r);
 void hm_ToolAnimationChickenFeed(uint8_t *ram, HmRegs *r);
 void hm_ToolAnimationCowFeed(uint8_t *ram, HmRegs *r);
 void hm_ToolAnimationUNK(uint8_t *ram, HmRegs *r);
-void hm_SUB_82AD0E(uint8_t *ram, HmRegs *r);       /* interact.c */
+void hm_PressAOnTile(uint8_t *ram, HmRegs *r);       /* interact.c */
 void hm_PlayerMovementInputs(uint8_t *ram, HmRegs *r); /* playerinput.c */
-void hm_CODE_84C7D6(uint8_t *ram, HmRegs *r);
+void hm_ReadEventPad(uint8_t *ram, HmRegs *r);
 void hm_NameCursorPharse(uint8_t *ram, HmRegs *r); /* menus.c */
-void hm_SUB_82EB57(uint8_t *ram, HmRegs *r);
-void hm_Unk_OutOfMenu(uint8_t *ram, HmRegs *r);
+void hm_NameCursorPosition(uint8_t *ram, HmRegs *r);
+void hm_DrawNameLetter(uint8_t *ram, HmRegs *r);
 void hm_NameMenuKeyDown(uint8_t *ram, HmRegs *r);
 void hm_NameMenuKeyUp(uint8_t *ram, HmRegs *r);
 void hm_NameMenuKeyLeft(uint8_t *ram, HmRegs *r);
@@ -926,12 +926,12 @@ void hm_NameMenuKeyRight(uint8_t *ram, HmRegs *r);
 void hm_NameMenuKeyB(uint8_t *ram, HmRegs *r);
 void hm_NameMenuKeyA(uint8_t *ram, HmRegs *r);
 void hm_NameMenuInputs(uint8_t *ram, HmRegs *r);
-void hm_CODE_84C2D8(uint8_t *ram, HmRegs *r);
-void hm_CODE_84C2B4(uint8_t *ram, HmRegs *r);
+void hm_SkipEventScene(uint8_t *ram, HmRegs *r);
+void hm_MenuEventPad(uint8_t *ram, HmRegs *r);
 void hm_MenuInputs(uint8_t *ram, HmRegs *r);
-void hm_CODE_84CED2(uint8_t *ram, HmRegs *r);
+void hm_TextBoxAutoClose(uint8_t *ram, HmRegs *r);
 void hm_InputTypeSelector(uint8_t *ram, HmRegs *r);
-void hm_UNK_PartialMap(uint8_t *ram, HmRegs *r);   /* mapedit.c */
+void hm_DrawWholeMap(uint8_t *ram, HmRegs *r);   /* mapedit.c */
 void hm_Event_UNKChickenRelated2(uint8_t *ram, HmRegs *r); /* eventcmds.c */
 void hm_Event_Cmd51(uint8_t *ram, HmRegs *r);
 void hm_Event_Cmd52(uint8_t *ram, HmRegs *r);
@@ -959,10 +959,10 @@ void hm_LoadDefaultFarmMap(uint8_t *ram, HmRegs *r);
 void hm_LoadMap(uint8_t *ram, HmRegs *r);
 void hm_ClearsofAllCCStructs(uint8_t *ram, HmRegs *r);     /* events.c */
 void hm_MultiplicationUnsigned(uint8_t *ram, HmRegs *r);   /* math.c */
-void hm_SUB_81A7CE(uint8_t *ram, HmRegs *r); /* maptiles.c */
-void hm_SUB_82B0A7(uint8_t *ram, HmRegs *r);
-void hm_SUB_81B2BB(uint8_t *ram, HmRegs *r);
-void hm_UNK_ExecuteFromPointers(uint8_t *ram, HmRegs *r);
+void hm_ChangeMapTileNoVram(uint8_t *ram, HmRegs *r); /* maptiles.c */
+void hm_SetTileTypesFromChange(uint8_t *ram, HmRegs *r);
+void hm_DrawShelfItem(uint8_t *ram, HmRegs *r);
+void hm_RunMapExtras(uint8_t *ram, HmRegs *r);
 void hm_ReplaceTilesFarm(uint8_t *ram, HmRegs *r);
 void hm_ReplaceTilesMoutain(uint8_t *ram, HmRegs *r);
 void hm_ReplaceTilesHouse1(uint8_t *ram, HmRegs *r);
@@ -978,44 +978,44 @@ void hm_ReplaceTilesMountainCave(uint8_t *ram, HmRegs *r);
 void hm_ReplaceTilesElfTunnel(uint8_t *ram, HmRegs *r);
 void hm_ReplaceTilesMap37(uint8_t *ram, HmRegs *r);
 void hm_ReplaceTilesNothing(uint8_t *ram, HmRegs *r);
-void hm_Unk_Audio23(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio6(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio13(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio14(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio10(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio21(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio22(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio25(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio5(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio5_95F5(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio12(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio11(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio9(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio3(uint8_t *ram, HmRegs *r);
-void hm_UNK_Audio4(uint8_t *ram, HmRegs *r);
+void hm_Multiply16(uint8_t *ram, HmRegs *r);
+void hm_SoundCommand09IfBusy(uint8_t *ram, HmRegs *r);
+void hm_SoundCommand07(uint8_t *ram, HmRegs *r);
+void hm_SoundCommand08(uint8_t *ram, HmRegs *r);
+void hm_DropInstrumentsFrom(uint8_t *ram, HmRegs *r);
+void hm_FadeOutSong(uint8_t *ram, HmRegs *r);
+void hm_StartSong(uint8_t *ram, HmRegs *r);
+void hm_FadeOutSongSlowly(uint8_t *ram, HmRegs *r);
+void hm_PickMapMusic(uint8_t *ram, HmRegs *r);
+void hm_PickMapMusicAnyHour(uint8_t *ram, HmRegs *r);
+void hm_LoadEffectInstrument(uint8_t *ram, HmRegs *r);
+void hm_SendSongData(uint8_t *ram, HmRegs *r);
+void hm_LoadSongInstruments(uint8_t *ram, HmRegs *r);
+void hm_LoadDefaultInstruments(uint8_t *ram, HmRegs *r);
+void hm_SendSoundData(uint8_t *ram, HmRegs *r);
 void hm_GetFenceFromStack(uint8_t *ram, HmRegs *r);
-void hm_CODE_81D6E2(uint8_t *ram, HmRegs *r);
-void hm_CODE_81D6F8(uint8_t *ram, HmRegs *r);
-void hm_CODE_81D1C5(uint8_t *ram, HmRegs *r);
+void hm_PlayerAction_06_MapAnimation11(uint8_t *ram, HmRegs *r);
+void hm_PlayerAction_07_MapAnimation12(uint8_t *ram, HmRegs *r);
+void hm_AffectionToHearts(uint8_t *ram, HmRegs *r);
 void hm_GetBackgroundData(uint8_t *ram, HmRegs *r);
-void hm_UNK_PresetsMemory3(uint8_t *ram, HmRegs *r);
+void hm_ClearItemRecords(uint8_t *ram, HmRegs *r);
 void hm_ActionNothing(uint8_t *ram, HmRegs *r);
 void hm_ShippingScene(uint8_t *ram, HmRegs *r);       /* shipping.c */
 void hm_ShippingSceneDialogue(uint8_t *ram, HmRegs *r);
-void hm_CODE_858C9F(uint8_t *ram, HmRegs *r);
-void hm_CODE_858B7B(uint8_t *ram, HmRegs *r);
-void hm_CODE_858B41(uint8_t *ram, HmRegs *r);
-void hm_CODE_8582C7(uint8_t *ram, HmRegs *r);
+void hm_ReleaseSpriteSlot(uint8_t *ram, HmRegs *r);
+void hm_CheckSpritePiecesLoaded(uint8_t *ram, HmRegs *r);
+void hm_FreeSpritePieces(uint8_t *ram, HmRegs *r);
+void hm_AnimateGameObjects(uint8_t *ram, HmRegs *r);
 void hm_GetOBJOrderToDraw(uint8_t *ram, HmRegs *r);
 void hm_PresetsWRAMCopyofOAM(uint8_t *ram, HmRegs *r);
 void hm_PresetsWRAMCopyOAMCopy(uint8_t *ram, HmRegs *r);
 void hm_InitializeOBJs(uint8_t *ram, HmRegs *r);
-void hm_CODE_81CFA0(uint8_t *ram, HmRegs *r);
-void hm_CODE_81CFE6(uint8_t *ram, HmRegs *r);
-void hm_CODE_81D03D(uint8_t *ram, HmRegs *r);
-void hm_CODE_8581A2(uint8_t *ram, HmRegs *r);
-void hm_SUB_848895(uint8_t *ram, HmRegs *r);
-void hm_SUB_848020(uint8_t *ram, HmRegs *r);
+void hm_CreatePlayerObject(uint8_t *ram, HmRegs *r);
+void hm_UpdatePlayerObject(uint8_t *ram, HmRegs *r);
+void hm_ReadPlayerObjectTimer(uint8_t *ram, HmRegs *r);
+void hm_DestroyGameObject(uint8_t *ram, HmRegs *r);
+void hm_SetSlotAnimation(uint8_t *ram, HmRegs *r);
+void hm_FreeEventSlot(uint8_t *ram, HmRegs *r);
 void hm_Event_UNK1(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCCchanges7(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCCchanges11(uint8_t *ram, HmRegs *r);
@@ -1023,76 +1023,76 @@ void hm_Event_UNKCCchanges8(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCCchanges15(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCCchanges3(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCCchanges17(uint8_t *ram, HmRegs *r);
-void hm_CODE_8580B9(uint8_t *ram, HmRegs *r);
-void hm_CODE_858100(uint8_t *ram, HmRegs *r);
-void hm_SUB_848331(uint8_t *ram, HmRegs *r);
-void hm_SUB_8483CC(uint8_t *ram, HmRegs *r);
-void hm_SUB_848286(uint8_t *ram, HmRegs *r);
+void hm_MoveGameObject(uint8_t *ram, HmRegs *r);
+void hm_ChangeGameObjectSprite(uint8_t *ram, HmRegs *r);
+void hm_StepSlot(uint8_t *ram, HmRegs *r);
+void hm_WanderSlot(uint8_t *ram, HmRegs *r);
+void hm_UpdateSlotSprite(uint8_t *ram, HmRegs *r);
 void hm_Event_AudioRelated2(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCFD1(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCCchanges5(uint8_t *ram, HmRegs *r);
 void hm_Event_UNKCCchanges9(uint8_t *ram, HmRegs *r);
-void hm_CODE_8581CB(uint8_t *ram, HmRegs *r);
+void hm_ReadGameObject(uint8_t *ram, HmRegs *r);
 void hm_InvertIfFlipedX(uint8_t *ram, HmRegs *r);
 void hm_InvertIfFlipedY(uint8_t *ram, HmRegs *r);
 void hm_ClearSpriteDataTables(uint8_t *ram, HmRegs *r);
-void hm_CODE_81A58F(uint8_t *ram, HmRegs *r);
-void hm_CODE_81A600(uint8_t *ram, HmRegs *r);
-void hm_CODE_81A4F1(uint8_t *ram, HmRegs *r);
-void hm_UNK_SetPointer42(uint8_t *ram, HmRegs *r); /* coloranim.c */
-void hm_UNK_BigLoop(uint8_t *ram, HmRegs *r);
+void hm_SnowFootprints(uint8_t *ram, HmRegs *r);
+void hm_RunMapAnimation(uint8_t *ram, HmRegs *r);
+void hm_FreeMapObject(uint8_t *ram, HmRegs *r);
+void hm_StartColourAnimation(uint8_t *ram, HmRegs *r); /* coloranim.c */
+void hm_RunColourAnimations(uint8_t *ram, HmRegs *r);
 void hm_Zeroes42Pointers(uint8_t *ram, HmRegs *r);
 void hm_ZeroesPartial42Pointers(uint8_t *ram, HmRegs *r);
 void hm_ZeroesOne42Pointer(uint8_t *ram, HmRegs *r);
 void hm_CallIndexedSubrutines(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C36C(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C3D9(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C446(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C4B3(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C520(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C58D(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C5FA(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C667(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C6D4(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C792(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C7FF(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C86C(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C945(uint8_t *ram, HmRegs *r);
-void hm_SUB_80C9B2(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CA1F(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CA8C(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CADE(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CB30(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CB82(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CBD4(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CC92(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CCE4(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CD36(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CD88(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CE46(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CE98(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CEEA(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CF3C(uint8_t *ram, HmRegs *r);
-void hm_SUB_80CFFA(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D067(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D125(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D1E3(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D2A1(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D344(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D402(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D4C0(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D563(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D606(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D6FA(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D7EE(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D891(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D934(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D96B(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D9A2(uint8_t *ram, HmRegs *r);
-void hm_SUB_80D9D9(uint8_t *ram, HmRegs *r);
-void hm_SUB_80DA10(uint8_t *ram, HmRegs *r);
-void hm_SUB_80DA47(uint8_t *ram, HmRegs *r);
-void hm_SUB_80DAB4(uint8_t *ram, HmRegs *r);
-void hm_SUB_80DB06(uint8_t *ram, HmRegs *r);
-void hm_SUB_80DC30(uint8_t *ram, HmRegs *r);
-void hm_SUB_80DD09(uint8_t *ram, HmRegs *r);
+void hm_Colours_FarmSpringSummer_Day(uint8_t *ram, HmRegs *r);
+void hm_Colours_FarmSpringSummer_Afternoon(uint8_t *ram, HmRegs *r);
+void hm_Colours_FarmSpringSummer_Evening(uint8_t *ram, HmRegs *r);
+void hm_Colours_FarmSpringSummer_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_FarmAutumn_Day(uint8_t *ram, HmRegs *r);
+void hm_Colours_FarmAutumn_Afternoon(uint8_t *ram, HmRegs *r);
+void hm_Colours_FarmAutumn_Evening(uint8_t *ram, HmRegs *r);
+void hm_Colours_FarmAutumn_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_Map2A(uint8_t *ram, HmRegs *r);
+void hm_Colours_House(uint8_t *ram, HmRegs *r);
+void hm_Colours_Map18(uint8_t *ram, HmRegs *r);
+void hm_Colours_Church(uint8_t *ram, HmRegs *r);
+void hm_Colours_Map1D(uint8_t *ram, HmRegs *r);
+void hm_Colours_Map1F(uint8_t *ram, HmRegs *r);
+void hm_Colours_Map23(uint8_t *ram, HmRegs *r);
+void hm_Colours_Map24(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownSpring_Day(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownSpring_Afternoon(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownSpring_Evening(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownSpring_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownSummer_Day(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownSummer_Afternoon(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownSummer_Evening(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownSummer_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownAutumn_Day(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownAutumn_Afternoon(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownAutumn_Evening(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownAutumn_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_TownWinter_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainSpring_Day(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainSpring_Afternoon(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainSpring_Evening(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainSpring_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainSummer_Day(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainSummer_Afternoon(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainSummer_Evening(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainSummer_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainAutumn_Day(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainAutumn_Afternoon(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainAutumn_Evening(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainAutumn_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainWinter_Day(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainWinter_Afternoon(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainWinter_Evening(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainWinter_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_MountainTop_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_Map2C(uint8_t *ram, HmRegs *r);
+void hm_Colours_Festival0A_Night(uint8_t *ram, HmRegs *r);
+void hm_Colours_Map25(uint8_t *ram, HmRegs *r);
+void hm_Colours_Festival09_Day(uint8_t *ram, HmRegs *r);
+void hm_Colours_Map21(uint8_t *ram, HmRegs *r);

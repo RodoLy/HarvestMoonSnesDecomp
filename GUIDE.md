@@ -262,14 +262,14 @@ Some tricks that were needed:
   its frame's start (one frame), or where it goes on to another of these
   routines: a hook on that instruction sends it to an RTL (`$80:972B`) that
   pops the checker's frame, and the rewrite returns at the same place.
-  Two of them needed more: `Unk_NamesInput` leaves a stray byte on the
+  Two of them needed more: `NamesScreen` leaves a stray byte on the
   stack (bug 30, below), which the stop takes off first; and RESET clears
   all of the WRAM, the stack too, so the checker keeps its own frame and
   stack pointer at RESET's first instruction and puts them back at the
   stop (the rewrite does the same at its end). RESET also uploads the
-  sound program through the chip's boot ROM, so, like `UNK_Audio1`, it is
+  sound program through the chip's boot ROM, so, like `UploadSoundProgram`, it is
   tested once at frame 1 (`HM_LIVE`). The one-instruction loop
-  `SUB_82878E` (`BRA` to itself) is stopped on its second turn.
+  `UnusedEndlessLoop` (`BRA` to itself) is stopped on its second turn.
 - **Long routines made of others (flag `HM_LOOSE`).** The waits these
   routines call save the flags (PHP), and the NMI pushes them: those
   bytes depend on N, Z and V left by everything before, which a rewrite
@@ -288,14 +288,14 @@ Some tricks that were needed:
 - **Inputs a long routine must not get.** A routine made of many others
   meets what each of them meets, so its preparation has to keep the
   inputs real for all of them. The ones found: a map entered through
-  `SUB_80972C` must be one with a sprite palette (maps $4B-$56 have none:
+  `LoadAndShowMap` must be one with a sprite palette (maps $4B-$56 have none:
   their entry in `UNK_Table11` points past the palettes' table, at open
   bus); bit 15 of `$0196` (a picture stored as it is) only comes with the
   farm, the town and the mountain, and with it the title's packed
   pictures would be copied raw, $8000 bytes, into the I/O area; the saved
   games' year must be 0-2; HDMA must be off (an HDMA copying into WRAM
   while the original runs has no counterpart in the rewrite's run, which
-  does not move the beam); a farm drawn by `UNK_PartialMap` must have real
+  does not move the beam); a farm drawn by `DrawWholeMap` must have real
   tile codes; and `ChangeStamina` reads the caller's N flag (bug 11),
   which a rewrite calling it must set as the original's `LDA` would.
   `HM_DECOMP_WATCH=<WRAM index>` prints every instruction of the original
@@ -305,7 +305,7 @@ Some tricks that were needed:
   nothing there (the "open bus": you get whatever was last on the wires).
   That never happens in the game, so the preparations keep the inputs
   inside the ROM. Beware of what a preparation does *not* set: the full
-  regression of October 23 found a difference in `UNK_CheckTileProperty`
+  regression of October 23 found a difference in `GetTileProperty`
   because half of the time it kept the property table pointer ($0D-$0F)
   the game had at that moment, and at that frame it pointed below $8000 of
   a ROM bank. Now it is only kept if the whole table (4 bytes for 256
@@ -471,7 +471,7 @@ stored in `$098C`:
   (1/32).
 - **The "ranch development"** (`CalculateFarmDevelopment`) is counting
   the tiles with fences, crops or grass. As a percentage, for the ending
-  (`CODE_83F4D8`, on summer 30 of year 3, the last day): count x 10 /
+  (`StartEnding`, on summer 30 of year 3, the last day): count x 10 /
   295, at most 100. That same routine starts the ending's script ($2E)
   and picks the cow the ending shows: the one with the highest affection
   (+04; the last one on a tie), whose name goes to $0889-$088F (blank if
@@ -494,7 +494,7 @@ refilled.
 **Quirk:** any item that is not on the list "works".
 
 **First the animation** (`src/toolanim.c`). Pressing Y runs
-`UNK_ToolUsed`: with no stamina left ($D2 bit 3) the player only shows the
+`StartToolAnimation`: with no stamina left ($D2 bit 3) the player only shows the
 "tired" animation ($4D). Otherwise it checks the tile in front, which also
 chooses the tool's sound, and calls the tool's animation routine
 (`Tool_Animation_Table`, again one per item). Each only puts the player's
@@ -503,9 +503,9 @@ that look different when facing each way. The watering can has three:
 pouring, empty, and filling up (in front of water it also fills the can,
 20 uses). The bell also raises $7F1F5A bit $10, which calls the cows. What
 the tool does to the tile comes later, when the animation reaches that
-moment (`SUB_829260`).
+moment (`UseToolInHand`).
 
-**Who calls them:** `SUB_829260` takes the item in hand ($0921), looks up
+**Who calls them:** `UseToolInHand` takes the item in hand ($0921), looks up
 its routine in `Tool_Used_Table` (one per item, in item order: 28 in
 all) and runs it; then it raises the flag "a tool was used" ($7F1F5A bit
 $0040).
@@ -563,7 +563,7 @@ Out of season the tile ends up as a dead sprout.
 ($82:9054) has 3 bytes per item in hand: a sound bank and two effects, one
 for when the tool lands on something and one for when it does not ($0922 =
 0 or 1; 2 means silent). `ToolUsedSound1` ($82:8FB1) picks the effect and
-plays it on the sound chip (`UNK_Audio19`); an effect of 0 is no sound.
+plays it on the sound chip (`PlaySoundEffect0A`); an effect of 0 is no sound.
 
 ### 5.6 Stamina
 
@@ -672,7 +672,7 @@ pregnant, **happiness**, times hit and position.
 - **Hearts** of the five girls: `$7F:1F1F + 2·n` (0-999), in the order
   Maria, Ann, Nina, Ellen, Eve. Talking to them adds +8.
 - **The favourite** (`FindMostLovedName`): on a tie the last one wins.
-- **Points into hearts** (`CODE_81D1C5`): the points (0-999) become a
+- **Points into hearts** (`AffectionToHearts`): the points (0-999) become a
   heart level, 0-9, by these ranges (table $81:D1E8): 0-49, 50-119, 120-199, 200-249,
   250-299, 300-399, 400-499, 500-599, 600-799, 800-999. The steps are not
   even: the first hearts come slowly, and the last one takes 200 points.
@@ -735,7 +735,7 @@ at where it is. Some commands:
 | `UNKCCchanges17` | if the player talked to the slot, it turns to face the player, stops, and the script jumps |
 | `UNKCCchanges5` (1E, 1F), `UNKCCchanges9` (2D) | **talking to someone**: if the player talked to the slot (+0C), is not using or showing a tool nor whistling, carries nothing, `$7F1F60` bits 1-2 are clear and A was just pressed: the slot faces the player, the player stops (action 0, `$D2` bit `$40`, `$096E` = `$56`) and the script jumps. 2D has a second address, for when the player holds something up (action 5 with an item: that item also goes to `$091E`) |
 | `UNKCFD1` (2A) | starts a map animation (`StartMapAnimation`, the number in the argument) |
-| `AudioRelated2` (0E) | changes the music to the one asked for in `$0110` (`UNK_Audio25`) |
+| `AudioRelated2` (0E) | changes the music to the one asked for in `$0110` (`FadeOutSongSlowly`) |
 
 All 90 commands are rewritten. The last three were the two screen fades
 (0A, 0F) and `AudioRelated3` (2C, a sound effect), which wait whole frames
@@ -798,7 +798,7 @@ down, script $17/$14 starts). Its requests are bits of $7F1F5C:
   the command byte picks one of 90 routines, `$84:9419`); otherwise the
   wait goes down by one. `$DE` moves on by $33 for each slot, so slots
   that roll the same frame get different numbers; slots with a sprite get
-  it updated (`SUB_848286`). At the end the bits that last one frame are
+  it updated (`UpdateSlotSprite`). At the end the bits that last one frame are
   cleared.
 
 ### 5.11 Maps
@@ -833,7 +833,7 @@ down, script $17/$14 starts). Its requests are bits of $7F1F5C:
   new picture into that map in memory, queues the DMA copy to video
   memory and, if needed, changes the tile's type. What to put comes from
   the table `$81:B363`.
-- **Drawing the whole map** (`UNK_PartialMap`): for each of the 64 × 64
+- **Drawing the whole map** (`DrawWholeMap`): for each of the 64 × 64
   tiles it takes the drawing in byte +0 of the tile type's property entry
   (0: nothing). The types $73-$79 join their neighbours of the same kind
   (fences and the like, "autotiling"): the four neighbours make a mask
@@ -849,13 +849,13 @@ down, script $17/$14 starts). Its requests are bits of $7F1F5C:
   Repeated runs (a row of the same tile, the same pattern again) take two
   bytes instead of many.
 
-**Footprints in the snow** (`CODE_81A58F`). Every 8 steps the game
+**Footprints in the snow** (`SnowFootprints`). Every 8 steps the game
 remembers where the player is ($0907 / $0909); in winter, on the farm or
 the mountain, the place remembered 8 steps before gets a footprint if its
 tile is snow (types 1, 2, $A8, $F6). Only the picture in video memory
 changes, not the map: the prints vanish when the map is loaded again.
 
-**Map animations** (`CODE_81A600`, every frame, after `StartMapAnimation`).
+**Map animations** (`RunMapAnimation`, every frame, after `StartMapAnimation`).
 A script of 7-byte steps: a tile change, its X and Y, and how many frames
 to wait; `$FFFF` ends it and `$FFFE` jumps to another script. The magic
 beans growing are one.
@@ -868,7 +868,7 @@ beans growing are one.
   0-$261 are described in bank $86 and $262-$44F in bank $87.
 - **Piece graphics:** if a piece's picture is already in video memory it
   is reused; otherwise it goes to a queue the NMI empties.
-- **The loader** (`CODE_858CB2`, run at the NMI): while the queue has
+- **The loader** (`LoadQueuedSpritePieces`, run at the NMI): while the queue has
   pieces and the frame's budget (`$C7`) still has $100 bytes for one more,
   it takes the next piece and gives it a graphics slot: a new one while
   fewer than 64 were handed out (`$0846`), then the first free one
@@ -880,22 +880,22 @@ beans growing are one.
   `$0742` = how many pieces are still waiting.
 - **Map objects** (`$7E:B4E6`, 10): the effects tools leave, like cut grass
   or the hit on a rock.
-- **Destroying one** (`CODE_8581A2`, `src/objects.c`): each graphics slot
+- **Destroying one** (`DestroyGameObject`, `src/objects.c`): each graphics slot
   counts how many pieces use it ($7E:A320); destroying an object gives its
   pieces' slots back and frees the record. But if one of its pieces is
   still waiting in the queue, nothing is freed: $0740 counts one more
   refusal and the object simply stays. Scripts destroy objects with
   commands `Event_UNK1` (their own) and `Event_UNKCCchanges7` (another
   slot's).
-- **Moving and changing one:** `CODE_8580B9` moves an object (flip, X, Y);
-  `CODE_858100` gives it another sprite: the old pieces are freed (with
-  the same refusal as above) and the new ones loaded. `CODE_8581CB` reads
+- **Moving and changing one:** `MoveGameObject` moves an object (flip, X, Y);
+  `ChangeGameObjectSprite` gives it another sprite: the old pieces are freed (with
+  the same refusal as above) and the new ones loaded. `ReadGameObject` reads
   an object back into those variables.
 - **Flipped sprites:** a piece's offset becomes -offset - 16 when the
   object is flipped that way (`InvertIfFlipedX` / `Y`): the mirrored
   place of a 16-pixel piece. `ClearSpriteDataTables` empties the queue
   and frees every graphics slot (when a map loads).
-- **Animating the objects** (`CODE_8582C7`, every frame): a sprite's
+- **Animating the objects** (`AnimateGameObjects`, every frame): a sprite's
   entry (+0C) is a list of frames of 3 bytes: the frame's piece list and
   how many frames it lasts; a piece list of 0 goes back to the first frame
   (a loop). Each object counts down its timer (+12); at 0 it moves to the
@@ -918,14 +918,14 @@ beans growing are one.
   0) and empties the table; the graphics slots are left as they are.
 - **The player's own object** ($0905): its animation ($0901) picks a
   sprite and a flip from `DATA8_81D210` (3 bytes each; the flip byte x 64
-  is kept in $090F). `CODE_81CFA0` creates it at the player's position;
-  every frame `CODE_81CFE6` moves it to the player and, when the animation
+  is kept in $090F). `CreatePlayerObject` creates it at the player's position;
+  every frame `UpdatePlayerObject` moves it to the player and, when the animation
   changed ($0903 = the one shown), gives it the new sprite; then
-  `CODE_81D03D` reads it back and, when its frame lasts for ever ($FF: the
+  `ReadPlayerObjectTimer` reads it back and, when its frame lasts for ever ($FF: the
   animation is over), clears the state bit $2000 ($D2).
-- **A slot walking** (`SUB_848331`): with +01 bit 5 set, every +05 frames
+- **A slot walking** (`StepSlot`): with +01 bit 5 set, every +05 frames
   the slot moves by (+03, +04), signed bytes, added to its position.
-- **A slot wandering on its own** (`SUB_8483CC`, 531 instructions; the
+- **A slot wandering on its own** (`WanderSlot`, 531 instructions; the
   town's people, the animals in the barn): with +01 bit 3 set, right
   after each step (+05 = +06):
   - with no steps left (+08 = 0) it picks a new walk of +07 steps: the
@@ -950,7 +950,7 @@ beans growing are one.
     ($EB), which is whatever the last check of anyone left there.
   - The "random" $DE: the slot loop adds $33 to it before each active
     slot, so each one gets a different value in the same frame.
-- **A slot's sprite, each frame** (`SUB_848286`): unless frozen (+01
+- **A slot's sprite, each frame** (`UpdateSlotSprite`): unless frozen (+01
   bit 4), the slot wanders and takes its step (the two above). Then its
   game object (+12) gets the position (+1A, +1C), the animation (+14) and
   the sprite (+16), and by +01: bit 6 destroys it, bit 1 creates it (the
@@ -1011,7 +1011,7 @@ Dialogues are shown on **BG3**, the background layer used for text.
   run again, unless it was already stopped before ($0196 bit 5).
 - **The "more text" arrow** (`BlinkTextBoxArrow`): while the box waits for
   a button, every 20 frames the arrow switches between its two drawings.
-  It is a 2×2 block of tiles that `UNK_SetDMA2` copies to VRAM in two
+  It is a 2×2 block of tiles that `DrawTilemapBlock2x2` copies to VRAM in two
   small DMAs (top row and bottom row). There are 12 possible places for it.
 
 **How a letter gets on the screen.** The box does not have a slot per
@@ -1022,7 +1022,7 @@ in order, and the printer *draws* each letter into the next tile:
   letter is two 8×8 tiles, one above the other. `FindLetterGraphics`
   turns a letter code into the address of its graphics.
 - `DrawLetter` copies those two tiles to VRAM at the cursor ($0185) with
-  `UNK_SetDMA1` (two small DMAs: top half and bottom half).
+  `CopyLetterToVram` (two small DMAs: top half and bottom half).
 - `AdvanceLetterCursor` moves the cursor one tile forward; at the end of a
   line it jumps over the bottom halves.
 - **Numbers** (money, days...) are printed digit by digit by `PrintDigit`:
@@ -1035,7 +1035,7 @@ in order, and the printer *draws* each letter into the next tile:
 **The printer** (`PrintTextFrame`, `ADDDDFFFF` in HM-Decomp) runs once
 per frame. A text is a list of 16-bit codes. A normal code is a letter:
 one is printed **every 5 frames**, each with a little sound effect
-(`UNK_Audio19`, see 5.15). Some codes are orders:
+(`PlaySoundEffect0A`, see 5.15). Some codes are orders:
 
 | Code | Meaning |
 |---|---|
@@ -1080,16 +1080,16 @@ the commands:
 
 | Command | Routine | What it is |
 |---|---|---|
-| $01 | `UNK_Audio4` | the sound program's data ($3F2 bytes from $B2:D120), at power-on |
-| $02 | `UNK_Audio3` | the 10 instruments that are always there |
-| $03 | `UNK_Audio9`, `UNK_Audio12` | the instruments of a song (up to 11), or of a sound effect |
-| $04 | `UNK_Audio10` | stop a channel (and forget the instruments noted from it on) |
-| $05 | `UNK_Audio11` | a song's notes |
-| $07 | `UNK_Audio13` | (no argument; the one it is given is kept and never sent) |
-| $08, $09 | `UNK_Audio14`, `UNK_Audio6` | two-argument commands used when the song changes (1 and $10 or $40: maybe a fade) |
+| $01 | `SendSoundData` | the sound program's data ($3F2 bytes from $B2:D120), at power-on |
+| $02 | `LoadDefaultInstruments` | the 10 instruments that are always there |
+| $03 | `LoadSongInstruments`, `LoadEffectInstrument` | the instruments of a song (up to 11), or of a sound effect |
+| $04 | `DropInstrumentsFrom` | stop a channel (and forget the instruments noted from it on) |
+| $05 | `SendSongData` | a song's notes |
+| $07 | `SoundCommand07` | (no argument; the one it is given is kept and never sent) |
+| $08, $09 | `SoundCommand08`, `SoundCommand09IfBusy` | two-argument commands used when the song changes (1 and $10 or $40: maybe a fade) |
 | $0A-$0C | see above | sound effects and two small ones |
 
-**Before all that, the sound program itself** (`UNK_Audio1`, once, at
+**Before all that, the sound program itself** (`UploadSoundProgram`, once, at
 power-on): the chip starts in a tiny boot ROM with its own protocol. The
 game waits until ports 0-1 read $BBAA, writes the address ($0500) in
 ports 2-3, 1 in port 1 ("data follows") and $CC in port 0, and waits for
@@ -1111,20 +1111,20 @@ at `$83:8EFF`), and which instrument each of the 50 sound effects needs
 (`$83:927F`).
 
 $0110 is the song wanted and $0117 the one playing; when they differ,
-`UNK_Audio21`, `UNK_Audio22` and `UNK_Audio25` send the change.
-**Which song a map asks for** (`UNK_Audio5`, on entering it): from 6 pm on
+`FadeOutSong`, `StartSong` and `FadeOutSongSlowly` send the change.
+**Which song a map asks for** (`PickMapMusic`, on entering it): from 6 pm on
 none ($FF), except on map $1E; with `$0196` bit 4 song $16; with `$0196`
 bit 1 the maps below $57 get song $13 or $14 (by range) and $57-$5A none;
 otherwise each map has a list of four songs, one per season, in the table
 `$80:B8E7` ($FFFF: none).
-`Unk_Audio23` is not about sound at all: it multiplies two 16-bit numbers
+`Multiply16` is not about sound at all: it multiplies two 16-bit numbers
 with the console's 8 x 8 multiplier.
 
-*Quirks:* `UNK_Audio6` only sends its command when the chip says it is
-busy (the opposite of the others). After a song's instruments, `UNK_Audio9`
+*Quirks:* `SoundCommand09IfBusy` only sends its command when the chip says it is
+busy (the opposite of the others). After a song's instruments, `LoadSongInstruments`
 always sends instrument 6 as well: it does so when the list ends in empty
 places, and every one of the 26 songs' lists does. And again an
-address of HM-Decomp is one byte early: `UNK_Audio14` starts at $83:8D39,
+address of HM-Decomp is one byte early: `SoundCommand08` starts at $83:8D39,
 not 8D38. `UNUSED2` ($83:8376), which nothing calls, only adds one to the
 instrument count ($0103).
 
@@ -1205,7 +1205,7 @@ moves are "precooked". A adds the letter (up to 4, at $0885) or obeys the
 code; "done" needs at least one letter. B erases the last letter (an empty
 letter is $B1). Switching page scrolls BG1: the three pages are in the
 same picture, page 1 to the right of page 0 and page 2 below it.
-The cursor sprite is placed at the cell's x and y (`SUB_82EB57`, into
+The cursor sprite is placed at the cell's x and y (`NameCursorPosition`, into
 $099B / $099D).
 
 **While a text box is open** (mode 2, `ImmobileInputs`):
@@ -1227,7 +1227,7 @@ moves, the game brings in the row or column that is about to come into
 view, a little before you see it.
 
 **Every frame, for each direction** (down `UpdateBGOffset`, up
-`SUB_80A0E1`, right `UNK_StaticMapScroling`, left `SUB_80A152`):
+`ScrollCameraUp`, right `ScrollCameraRight`, left `ScrollCameraLeft`):
 
 1. The camera position ($F5 across, $F7 down) is copied to the BG1
    offset ($013C / $013E): that is what makes the picture move.
@@ -1239,8 +1239,8 @@ view, a little before you see it.
    0 to 7). When it reaches 8 (or goes below 0) it wraps, and a new line of
    tiles is needed.
 
-**The new line** (`SUB_80A18D` the row below, `SUB_80A308` the row above,
-`SUB_80A481` the column at the right, `SUB_80A617` the column at the left):
+**The new line** (`LoadMapRowBelow` the row below, `LoadMapRowAbove` the row above,
+`LoadMapColumnRight` the column at the right, `LoadMapColumnLeft` the column at the left):
 
 - The map in WRAM is stored in blocks of 32 × 32 tiles (one "screen"). A
   row or a column of the window usually crosses from one screen to the
@@ -1262,12 +1262,12 @@ view, a little before you see it.
 | $1E | the camera speed (pixels per frame) |
 | $20 / $21 | pixels inside the tile (0-7), across / down |
 
-**Entering a map** (`SUB_809EBC`): the camera is placed so the player is
+**Entering a map** (`PlaceCameraOnMapEntry`): the camera is placed so the player is
 in the middle of the screen (128 pixels), unless that would show past a
 limit; then it stays at the limit and the player is off centre. $090B /
 $090D say where the player is on the screen.
 
-**The second background, BG2** (`SUB_809F61`, every frame):
+**The second background, BG2** (`MoveSecondBackground`, every frame):
 
 - in the tool shed (map $26), nothing;
 - on the maps from $31 (the mountain top and others) a parallax: across,
@@ -1314,7 +1314,7 @@ half too. Colours 1-11 (1-15 when bit 2 of $0196 is clear; HM-Decomp calls
 that bit "sunny") are never touched: they are probably the ones of the text
 box and the window, which must not darken.
 
-**The night palette** is prepared by `UNK_CustomisePalette` when entering a
+**The night palette** is prepared by `PrepareNightPalette` when entering a
 map: the backgrounds from the map's "18:00" palette and the sprites from its
 night sprite palette (table `UNK_Table11`, $80:BE44, two per map: day and
 night).
@@ -1367,7 +1367,7 @@ Right and $0200 Left, so its `PlayerActionLeft` is really "right".
 
 ### 5.21 Pressing A
 
-When the player presses A facing something, `SUB_82AD0E` looks at the type
+When the player presses A facing something, `PressAOnTile` looks at the type
 of the tile in front (0 if the tile does not face the player's side) and at
 its 4 bytes in the map's property table:
 
@@ -1409,7 +1409,7 @@ and its own script (a person, an animal) reacts to it.
 place; `PlayerInteractionSelector` runs it from the table $81:D593. Of its
 14 entries only four do something: 2 takes lumber from the wood stack
 (`GetFenceFromStack`: 2 pieces of wood, and you carry item $57), 4 is
-`CODE_81D670`, and 6 / 7 start map animations $11 / $12. The rest are a
+`PlayerAction_04_Jingle`, and 6 / 7 start map animations $11 / $12. The rest are a
 lone RTS (`Unused01`-`Unused11`). Each clears $D2 bit 6 when done.
 
 ### 5.22 The buttons while walking
@@ -1431,13 +1431,13 @@ order:
 
 | Button | What it does |
 |---|---|
-| A | talk, read, open, pick up (`SUB_82AD0E`, 5.21); with the dog in the arms, let it go in front (action $16; the dog's place and map are saved); with something in the arms, put it down on a free side (action $18); holding an item, drop it (action 5) |
+| A | talk, read, open, pick up (`PressAOnTile`, 5.21); with the dog in the arms, let it go in front (action $16; the dog's place and map are saved); with something in the arms, put it down on a free side (action $18); holding an item, drop it (action 5) |
 | B (held) | run (action 2); in front of a tile with property bit $20 or $40, jump over it (action 3, 28 or 33 pixels) if there is room to land |
 | Select | show the item in hand (action $0C) |
 | X | action $1C |
 | R | whistle for the horse, if you have one ($7F1F68 bit $100; action $0D) |
 | L | whistle for the dog, if you have one (bit $80; action $1B) |
-| Y | use the tool (action $0A, `UNK_ToolUsed`); with the rod: cast ($0F → $10), reel in empty ($11 → $0F), or with a bite ($12 → $13) one of four catch animations at random |
+| Y | use the tool (action $0A, `StartToolAnimation`); with the rod: cast ($0F → $10), reel in empty ($11 → $0F), or with a bite ($12 → $13) one of four catch animations at random |
 
 R, L, Select, X and Y do nothing while holding something ($D2 bits 1, 4,
 11).
@@ -1464,7 +1464,7 @@ the palette, step by step (palette cycling, `src/coloranim.c`).
 - A list is made of steps of 3 bytes: the new colour (a word) and how many
   frames it stays (a byte). $FFFE followed by a pointer jumps (so the list
   loops); $FFFF ends it.
-- `UNK_BigLoop` runs every frame: it advances every channel and, if one
+- `RunColourAnimations` runs every frame: it advances every channel and, if one
   ran, sends the palette to the console by DMA. Channels 0-3 only run
   while it rains or snows. From channel 4 on, the first empty channel ends
   the loop, so they are always used in order.
@@ -1472,7 +1472,7 @@ the palette, step by step (palette cycling, `src/coloranim.c`).
   the day, from `Subrutines_Table` ($80:BEEC): 6 words per map (5 parts of
   the day, then a word that, when it is not $FFFF, means "only in autumn
   and winter"). Each word is one of 51 small routines, each starting a few
-  channels (`UNK_SetPointer42`: list, colour, row, channel).
+  channels (`StartColourAnimation`: list, colour, row, channel).
 
 *Quirk:* after the end mark $FFFF the channel's pointer is cleared, but the
 same frame goes on and still writes colour $FFFF and moves the cleared
@@ -1508,7 +1508,7 @@ buttons on both pads for each call and puts the real ones back after.
 
 Each map's layout is stored once in the cartridge. What changes during the
 game (your house extensions, the tools you bought, the fodder you put
-out...) is added on top every time the map loads: `UNK_ExecuteFromPointers`
+out...) is added on top every time the map loads: `RunMapExtras`
 ($81:A9E5, `src/maptiles.c`) calls that map's routine from a table (one
 word per map, $00-$5F). Most maps have nothing to add and point at a lone
 RTS.
@@ -1530,13 +1530,13 @@ tunnel: something you do that shows in three places.
 
 Three pieces do the work:
 
-- `SUB_81A7CE` stamps a tile change (picture and tile type) at a position.
+- `ChangeMapTileNoVram` stamps a tile change (picture and tile type) at a position.
   It is `ChangeMapTile` without sending anything to the VRAM: while a map
   loads, the whole picture is sent afterwards.
-- `SUB_82B0A7` then writes the tile type of every tile of the change, from
+- `SetTileTypesFromChange` then writes the tile type of every tile of the change, from
   a second sheet at $A7:F500 laid out like the graphics (for changes made
   of different tiles, like an extension with its door).
-- `SUB_81B2BB` shows an item of a list (the shed, the flower shop, the
+- `DrawShelfItem` shows an item of a list (the shed, the flower shop, the
   general store, the animal shop; 8 bytes each: position, change, and a
   bit of $7F1F00-) always, only if its bit is set (you own it), or only if
   it is not (still for sale).
@@ -1554,7 +1554,7 @@ RTS of `ReplaceTilesForkWinter`), and `MapPointerTable` is at $82:B174.
 When a map is entered, `RunsFunctionbyIndex` ($83:CA98) calls its routine
 from `UNK_TableFunctionSelect` ($83:CAA9, one word per map). Each one
 starts the event scripts of the people and things there, by date, time and
-story flags, with `UNK_LoadCCDataLong` (slot, script group, script).
+story flags, with `StartEventScriptLong` (slot, script group, script).
 HM-Decomp has them all as one block; here each is `MapEvent_xxxx` (its
 address). All are done except `DED3` (the player's house, maps $15-$17),
 which calls sound routines that wait for the next frame; so
@@ -1592,14 +1592,14 @@ $15-$17 `DED3`, $18-$19 `D4D7`, $1A `D5E7`, $1B `D613`, $1C `D74E`, $1D
 ### 5.27 Things put down
 
 When the player puts down or throws what he carries, it becomes a **map
-object** (see 5.12). `SUB_818000` creates it in front of him in state 0,
-with the item's sprite for his facing (`SUB_8180B7`: `DATA8_8196AF` has,
+object** (see 5.12). `PutItemDown` creates it in front of him in state 0,
+with the item's sprite for his facing (`GetItemSprite`: `DATA8_8196AF` has,
 per item, a list of 3 bytes per case: the sprite and a byte that x 64 is
 the flip), two pixels below him. If the item leaves something on the
 ground (`DATA8_81A2AD`, per item) that tile type, taken from the map's
 property table, is drawn in front; and if it makes a sound
 (`DATA8_81A308`) sound effect 8 of bank 6 plays. Then every frame
-`SUB_81809A` runs the item's own routine (table `DATA8_8197C0`, 91
+`RunItemRoutine` runs the item's own routine (table `DATA8_8197C0`, 91
 items) by its state (`$0976`).
 
 **The items' routines** (`items.c`). Most items only run one of six
@@ -1607,14 +1607,14 @@ state machines (JSR), which picks a step by the state (JMP):
 
 | Machine | Items | States |
 |---|---|---|
-| `CODE_8188E5` | most | 0 in hand, 2 carried, 3 dropped, 4 gone, 5-6 offered for sale, 7 shipped, 8 put on an object |
-| `CODE_818855` | food (1-8) | as above, but 0 asks "eat it?" and 1 eats (`ChangeStamina` with the food's value, `DATA8_819FC6`) |
-| `CODE_8188BC` | fodder ($1A) | 3: into a feed box of the barn or coop (tile types $E2-$EE: its bit in $0932 / $0934, one more in $0930 / $0931) |
-| `CODE_81889A` | $0D-$0F, $57 | 2 thrown only at ground or a bin, 3 lands (the tile becomes the item's, first byte of `Items_Price_Table`) |
-| `CODE_81883A` | animals ($25, $26, $29) | 2 thrown only where it can stand (three tiles ahead free), 3 set down: the chicken's record keeps the map and tile, and its walk starts |
-| `CODE_818923` | shop goods ($1B-$1D, $44-$56) | 0 "buy it?", 1 pays (`AddMoney` with the negative price) or "not enough money", 2 back on the counter, 3 bought |
+| `ItemCommonSteps` | most | 0 in hand, 2 carried, 3 dropped, 4 gone, 5-6 offered for sale, 7 shipped, 8 put on an object |
+| `ItemFoodSteps` | food (1-8) | as above, but 0 asks "eat it?" and 1 eats (`ChangeStamina` with the food's value, `DATA8_819FC6`) |
+| `ItemFodderSteps` | fodder ($1A) | 3: into a feed box of the barn or coop (tile types $E2-$EE: its bit in $0932 / $0934, one more in $0930 / $0931) |
+| `ItemPlaceableSteps` | $0D-$0F, $57 | 2 thrown only at ground or a bin, 3 lands (the tile becomes the item's, first byte of `Items_Price_Table`) |
+| `ItemAnimalSteps` | animals ($25, $26, $29) | 2 thrown only where it can stand (three tiles ahead free), 3 set down: the chicken's record keeps the map and tile, and its walk starts |
+| `ItemShopGoodsSteps` | shop goods ($1B-$1D, $44-$56) | 0 "buy it?", 1 pays (`AddMoney` with the negative price) or "not enough money", 2 back on the counter, 3 bought |
 
-Where a dropped item lands (`CODE_819379`): on the farm, in the barn or
+Where a dropped item lands (`ItemLands`): on the farm, in the barn or
 the coop at a shipping bin (tile $F2) an item with a price is shipped
 (added to $7F1F07 before 5 pm; after 5 pm it is simply lost) and the bin's
 animation plays; an egg in the coop's incubator ($F7) starts a chick if
@@ -1631,7 +1631,7 @@ goes to the shed ($7F1F00-$7F1F03): a seed bag counts one more (up to
 255), a gold tool replaces the plain one in the shed and in the player's
 two slots, fodder fills its counter (12). The crops ($10-$13) count one
 more shipped in the frame they are shipped. The 26 tools ($2A-$43) stay
-in the original: they use the frame routines (`CODE_81A94A`).
+in the original: they use the frame routines (`PutToolOnShelf`).
 
 **The usual day.** Each person has one script in each of several groups,
 one per kind of day: $0B before the first event of the story
@@ -1649,7 +1649,7 @@ Pressing A on a door-like tile whose property has byte +1 bit 0 sets
 `$096E` to the tile's byte +0 and `$D2` bit 6; every frame
 `PlayerInteractionSelector` then runs action `$096E` (table at `$81:D593`,
 88 entries) until it clears that bit. `$096F` counts its steps and `$0970`
-its frames. HM-Decomp puts actions $10-$57 inside `CODE_81D716` (the TV)
+its frames. HM-Decomp puts actions $10-$57 inside `PlayerAction_0F_Tv` (the TV)
 and reads part of them as data; `actions.c` names them `PlayerAction_XX`:
 
 | Actions | What they are |
@@ -1670,41 +1670,41 @@ and reads part of them as data; `actions.c` names them `PlayerAction_XX`:
 | $51, $52 | a drink at the bar (200 / 300 G, +1 / +3 happiness) |
 | $53 | an egg from a nest of the coop (`$7F1F45`) |
 
-Action $35 plays effect $24 of bank 7 and waits 120 frames (`UNK_Audio24`), then reloads the item's noises (`ToolUsedSound2`).
+Action $35 plays effect $24 of bank 7 and waits 120 frames (`PlayEffectWithSongInstrument`), then reloads the item's noises (`ToolUsedSound2`).
 
 
 ### 5.29 The player each frame
 
-`SUB_81BFB7` runs once a frame. Without `$D2` bit 0 it only ends the
+`PlayerFrame` runs once a frame. Without `$D2` bit 0 it only ends the
 frame; with bit 6 an action runs (5.28); otherwise it jumps by the
 player's action (`$D4`, table `DATA16_81C027`) to its step, in
 `playerstate.c`. Most steps set the player's animation (`$0901`, often +
-his facing) and play it (`CODE_81CFE6`); when it ends (`$0915 = $FFFF`)
+his facing) and play it (`UpdatePlayerObject`); when it ends (`$0915 = $FFFF`)
 the action changes. All of them end through `ResetIdleAnimatioTimer`:
 
 | Action | Step |
 |---|---|
-| 0 | standing (`CODE_81C556`): the standing animation for the state (carrying $14, in snow $B0, $C0, $4F, $D0, $EA); with `$D2` bit 14 an idle timer (`$0925`) starts an idle animation (action 9) at $F0 |
+| 0 | standing (`PlayerStandStill`): the standing animation for the state (carrying $14, in snow $B0, $C0, $4F, $D0, $EA); with `$D2` bit 14 an idle timer (`$0925`) starts an idle animation (action 9) at $F0 |
 | 1, 2, $0E | walking, running (only with `$D2` bit 12, or bit 14 without 13) and being pushed: 1, 2 or 3 pixels (deep snow) with a step sound every 16 frames |
 | 3 | a jump: sound effect 6, 1 or 2 pixels |
-| 4, 5 | picking up (`SUB_818000` puts the item down / in hand) and throwing (sound effect 7) |
+| 4, 5 | picking up (`PutItemDown` puts the item down / in hand) and throwing (sound effect 7) |
 | 8 | eating; item 8 also gives +10 happiness and 10 more maximum stamina |
 | 9 | an idle animation |
-| $0A | using a tool: `SUB_829260` at the animation's end, its sound at frame $18 |
+| $0A | using a tool: `UseToolInHand` at the animation's end, its sound at frame $18 |
 | $0C | the watch: a text by the hour ($046A-$0478) |
 | $0B, $0D, $0F-$1B | other animations and what follows them (events, flags) |
 | $1C | swapping the tools: animation $90 + the bag's tool; then they change places and the new one's noises are loaded (ToolUsedSound2) |
 
-`CODE_81CB77` moves the player `$1E` pixels in his facing: the event
+`MovePlayer` moves the player `$1E` pixels in his facing: the event
 objects (`CBBBB`) or a solid tile (`CEEEE`) stop him; when only one of
 the front corners is blocked he slides sideways round it (always on tile
 types 0 and $A0-$AF, otherwise by which half of the tile he is in); a
 door ($C0-$CF) stops him at once; then the camera follows and every 8
-moves a footprint is left (`CODE_81A58F`).
+moves a footprint is left (`SnowFootprints`).
 
 ### 5.30 Doors and the mountain
 
-`SUB_809A64` runs every frame with the two tiles under the player
+`CheckDoors` runs every frame with the two tiles under the player
 (`$0878` / `$087A`). When both are exits ($C0-$CF) it walks him out:
 
 - Not while `$D2` bit 4 or `$7F1F60` bits 1-2; with `$7F1F6C` bit 0, not
@@ -1726,7 +1726,7 @@ moves a footprint is left (`CODE_81A58F`).
   (not past 18:00, with `HaveLunch`); then `$0196` bit 14 starts the
   transition.
 
-A tile type from $D0 goes on to `SUB_809D0B`, the mountain (maps $10-$13,
+A tile type from $D0 goes on to `CheckMountainFinds`, the mountain (maps $10-$13,
 not on days with `$0196` bits 1, 3, 4):
 
 - Tile $F9 in spring, $FA in autumn and $FB in winter: one chance in 17,
@@ -1783,19 +1783,19 @@ not on days with `$0196` bits 1, 3, 4):
   the map moves by `$087C` / `$087E` each frame.
 - **Fixed loads.** `LoadDialogueBox`: the text box's tilemap ($A5:CB05,
   decompressed to `$7E:2000`) to VRAM $7800 and the letters' graphics
-  ($9C:BBA3) to VRAM $5000. `SUB_82E5E7` (title and name screens) draws a
+  ($9C:BBA3) to VRAM $5000. `DrawTileBlock3x2` (title and name screens) draws a
   3 x 2 block of tiles from $82:E666 at the address of a table ($82:E73E);
-  `SUB_82EA80` draws four letters $A8 on the name screen.
-- **Bars of tiles** (the title and file screens' frames): `SUB_82EAB4`
-  draws one, `SUB_82E742` eight, a column at a time. The column's four
+  `DrawNameEntryBlanks` draws four letters $A8 on the name screen.
+- **Bars of tiles** (the title and file screens' frames): `DrawScreenBar`
+  draws one, `DrawScreenBars` eight, a column at a time. The column's four
   tiles (tile, + 1, + $10, + $11) are kept in the direct page ($7E-$84)
   and copied from there by DMA ($80:007E and $80:0082) to the VRAM address
   ($86) and the row below; then everything moves on by 2.
-- **A saved game's line** (`CODE_82E405`, file screen): the slot's
-  summary (`LoadGameSlotResume`); empty, a blank block (`SUB_82E5E7`);
+- **A saved game's line** (`DrawSaveFileLine`, file screen): the slot's
+  summary (`LoadGameSlotResume`); empty, a blank block (`DrawTileBlock3x2`);
   otherwise the player's name, the year (+ 1) and its suffix, the day and
   the season's name, each letter sent to VRAM at once.
-- **Tools back on the shelf** (`CODE_81A94A`): with something in the bag,
+- **Tools back on the shelf** (`PutToolOnShelf`): with something in the bag,
   if the tool belongs to the shop shown (tools 1-$18 map $26, tool $19
   map $28, from $1A map $27), its place on the shelf is redrawn
   (`ChangeMapTile`) and sent; then its bit is set in the shed's rows
@@ -1819,7 +1819,7 @@ not on days with `$0196` bits 1, 3, 4):
   `$7E:2000` and copied whole to VRAM; each layer picture is unpacked
   there too (or, with bit 15 of `$0196`, copied as it is: the big
   outdoor maps keep theirs unpacked, a whole ROM bank), gets the fields drawn on it on the farms
-  (`UNK_PartialMap`) and the map's extras (`UNK_ExecuteFromPointers`), and
+  (`DrawWholeMap`) and the map's extras (`RunMapExtras`), and
   goes to VRAM in rows of $40 bytes. Last, the player is walked 8 pixels at
   a time from 0 to the start position (`$017D`, `$017F`), each step
   drawing and sending the new column or row: the screen is built the way
@@ -1843,29 +1843,29 @@ not on days with `$0196` bits 1, 3, 4):
   to `$94`; then bit 15 of `$7F1F5A` says whether the screen is lit. The
   script commands `Event_ScreenFadein` / `Event_ScreenFadeout` fade from 3
   to 15 and from 15 to 0, 3 frames a level.
-- **Sounds that wait** (5.15): `UNK_Audio18` makes room for a sound
-  effect's instrument (drops the ones after it with `UNK_Audio10` and
-  waits a frame) and sends it; `UNK_Audio24` plays effect A of bank X and
-  waits Y frames; `UNK_Audio20` changes the song (dropping all the
+- **Sounds that wait** (5.15): `PrepareSoundEffect` makes room for a sound
+  effect's instrument (drops the ones after it with `DropInstrumentsFrom` and
+  waits a frame) and sends it; `PlayEffectWithSongInstrument` plays effect A of bank X and
+  waits Y frames; `SetSong` changes the song (dropping all the
   instruments, which first waits until the chip is not busy, and sending
-  the song's own); `UNK_Audio26` fades the old song out, sets the new one,
+  the song's own); `ChangeMusic` fades the old song out, sets the new one,
   waits 180 frames and picks the map's music; `ToolUsedSound2` loads the
   noises of the item in hand when it changes. The script command
   `Event_AudioRelated3` plays an effect and waits, then reloads the
-  item's noises; action 4 (`CODE_81D670`) plays effect $19 and starts
+  item's noises; action 4 (`PlayerAction_04_Jingle`) plays effect $19 and starts
   map animation $44, and 32 frames later ends.
 - **Items on the map** (5.27): every frame `BAAAA` goes through the ten
-  records at `$7E:B4E6`: places each item's object (`CODE_8581CB`),
+  records at `$7E:B4E6`: places each item's object (`ReadGameObject`),
   destroys it if it fell out of the map, and runs its routine
-  (`SUB_81809A`: the item's own, table `$81:97C0`); the 26 tools picked off
-  the shed's wall swap with the one in hand (`CODE_81A94A` puts it back on
-  its shelf, `CODE_8187C3` takes the new one and loads its noises).
+  (`RunItemRoutine`: the item's own, table `$81:97C0`); the 26 tools picked off
+  the shed's wall swap with the one in hand (`PutToolOnShelf` puts it back on
+  its shelf, `TakeToolFromShelf` takes the new one and loads its noises).
 
 ### 5.33 From the power-on to the farm
 
 - **RESET** (`$80:8428`): native mode, the stack at `$1F00`, every CPU and
   picture chip register to its start value, all the WRAM cleared, the
-  sound program uploaded and started (`UNK_Audio1`-`4`), VRAM, OAM and
+  sound program uploaded and started (`UploadSoundProgram`-`4`), VRAM, OAM and
   CGRAM cleared, the saved games checked (`CheckSRAMIntegrity`), the NMI
   on, and the title (`IntroScreen`, JML).
 - **The title screen** (`IntroScreen`, `$82:D75E`): the Natsume logo,
@@ -1875,28 +1875,28 @@ not on days with `$0196` bits 1, 3, 4):
   its own frames until the script ends; 2 the title slides in; 3 it goes
   up; 6 and 9 the title screen's background, faded in; 4 the menu's marks;
   5 the menu (after 600 frames, 10 s, the demos); 7 the new game's file
-  screen; 8 the saved game's (`SUB_82E1F1`); 10 the first demo. A failed
+  screen; 8 the saved game's (`ContinueFileScreen`); 10 the first demo. A failed
   check of the saved games starts the menu on "continue" (`$098D` = 2).
 - **The file screens**: the two files' frames and lines (name, year,
   season, day), the chosen one lit, the background drifting a pixel every
   other frame; back to the title (`$94` = 1) or into the game (`$94` =
   2): `StartFromNewGame` (`NewGameSetup`) or `StartFromLoad`
   (`LoadGameSlot`), then `SpawnAfterLoad`.
-- **The demos** (`SUB_82D1C0`, `DemoPresentation`): a fresh game on the
+- **The demos** (`FirstDemo`, `DemoPresentation`): a fresh game on the
   farm played by the event script of group $47 (the demo's step in
   `$7F1F48` picks the next one, 12 in turn) on the game's own frames,
   until the script ends.
 - **The first morning** (`SpawnAfterLoad`, `$80:8000`): the house's music,
   the screen cleared, the day's state from zero (`FirstNightReset`), the
-  player in his chair (136, 120) in the house (`UNK_ScreenTransition`);
+  player in his chair (136, 120) in the house (`EnterMap`);
   after the first day, the breakfast. Then the game loop.
 - **The game loop** (`GameLoop`, `$80:8083`), one frame each time round:
   wait for the NMI; `$C7` = `$1800`; unless a name is to be written
-  (`$0196` bit 13: the names screen); `SetScreenTransition`, `SUB_809A64`,
+  (`$0196` bit 13: the names screen); `SetScreenTransition`, `CheckDoors`,
   `UpdateTime`, `PrintTextFrame`, `TransitionTimeofDayPalettes`,
-  `UNK_BigLoop`, `InputTypeSelector`, `BAAAA`, `SUB_81BFB7`,
-  `AutoMapScrolling`, `IterateCCStructures`, `CODE_81A600`,
-  `CODE_8582C7`, `CODE_858CB2`, `PrepareOAMData`; `$00` cleared.
+  `RunColourAnimations`, `InputTypeSelector`, `BAAAA`, `PlayerFrame`,
+  `AutoMapScrolling`, `IterateCCStructures`, `RunMapAnimation`,
+  `AnimateGameObjects`, `LoadQueuedSpritePieces`, `PrepareOAMData`; `$00` cleared.
 - **The clock** (`UpdateTime`): a second a frame, 60 seconds a minute
   and 15 minutes an hour, so an hour of the game is 900 frames (15 s);
   it stops at 18:00 (the music stops too). Each hour the lunch and the
@@ -1911,8 +1911,8 @@ not on days with `$0196` bits 1, 3, 4):
   the third year, the last day (bug 33).
 - **Going to another map** (`SetScreenTransition`, every frame): with
   `$0196` bit 14, the new map's music, the fade out, the screen blanked;
-  `UNK_ScreenTransition` clears the old map's things, starts the new map's
-  people (`RunsFunctionbyIndex`, 5.26) and loads it (`SUB_80972C`: the
+  `EnterMap` clears the old map's things, starts the new map's
+  people (`RunsFunctionbyIndex`, 5.26) and loads it (`LoadAndShowMap`: the
   picture, the colours, the player and what he holds, the animals, the
   music, the fade in).
 - **The house** (`MapEvent_DED3`, maps $15-$17): the ending on summer 30
@@ -1921,7 +1921,7 @@ not on days with `$0196` bits 1, 3, 4):
   first scene that fits: one of group $1F, a cow's (its name in the
   text), the wife's at 6:00 or her own group, the children's, group $0A
   on its days, group $28 on spring 1, group $0F on winter 24.
-- **The names screen** (`Unk_NamesInput`, `$82:E80C`): the letters' grid,
+- **The names screen** (`NamesScreen`, `$82:E80C`): the letters' grid,
   the cursor's sprite, the name's frame; a frame at a time the cursor
   blinks and moves, until "done"; then the name goes where `$099F` says:
   `SetPlayerName`, `SetCowNameBought` (a new cow), `SetCowNameBorn` (a
@@ -1970,7 +1970,7 @@ With every routine rewritten, the game runs without the recompiled code
   the recompilation's improvements; they touch the WRAM between frames,
   only with values the game itself writes, plus three hooks in the C
   (`g_hm_oam_right/left` in PrepareOAMData for widescreen, `g_hm_no_ending`
-  in MapEvent_DED3 for the endless game, `g_hm_year_suffix` in CODE_82E405
+  in MapEvent_DED3 for the endless game, `g_hm_year_suffix` in DrawSaveFileLine
   for "4th", "5th"...) whose defaults are the ROM's, so the checker sees no
   difference.
 - **The clean point.** At the start of every GameLoop frame (`main` is
@@ -2056,7 +2056,7 @@ Things the game does wrong or oddly, found while decompiling:
     Y + 1. Maybe the shelves were meant to start at item 5 at first.
 23. **A loop that never ends.** When a piece gives its graphics slot back,
     the game waits while the slot's counter is 0 before lowering it (`LDA;
-    BEQ` to itself, `CODE_858C9F`). At 0 it would hang forever; it never
+    BEQ` to itself, `ReleaseSpriteSlot`). At 0 it would hang forever; it never
     happens because a slot being given back is always in use.
 24. **A flag that is never cleared.** On entering the town with
     `$7F1F60` bit 10 set, `MapEvent_D2E0` starts a script and means to
@@ -2076,7 +2076,7 @@ Things the game does wrong or oddly, found while decompiling:
 27. **A search with no end.** Picking an egg from the coop (action $53)
     looks for the nest in the column of the tile in front among 13; if
     none is there it jumps to itself for ever (`$81:F856`).
-28. **Three places to spin for ever.** The piece loader (`CODE_858CB2`)
+28. **Three places to spin for ever.** The piece loader (`LoadQueuedSpritePieces`)
     jumps to itself when no graphics slot is free, when a slot number is
     $2000 or more, and on the 32nd piece of a frame (its copy list has room
     for 31). Like 23, they are dead ends the game's own limits keep away
@@ -2086,10 +2086,10 @@ Things the game does wrong or oddly, found while decompiling:
     clears `$9A` and `$420B` with 16-bit stores: they also clear `$9B` and
     `$420C`, HDMAEN, so every frame with work to do ends with HDMA off.
 30. **A JSL to a routine that ends with RTS.** The names screen
-    (`Unk_NamesInput`, `$82:E8E7`) calls `SUB_82EAB4` with JSL, but it
+    (`NamesScreen`, `$82:E8E7`) calls `DrawScreenBar` with JSL, but it
     returns with RTS: the bank byte the JSL pushed stays on the stack. The
     names screen never returns, so it does no harm.
-31. **A loop of one instruction.** `SUB_82878E` is a BRA to itself. Nothing
+31. **A loop of one instruction.** `UnusedEndlessLoop` is a BRA to itself. Nothing
     calls it.
 32. **Unreachable code in the title screen.** After the parents' scene's
     loop (`$82:D99A`-`$82:D9B2`), a count of `$168` frames and a fade out
@@ -2234,6 +2234,6 @@ Things the game does wrong or oddly, found while decompiling:
 | 28-Oct-2026 | 88.12 % | the title and file screens (bars of tiles, a saved game's line), tools back on the shelf, the sprite table |
 | 28-Oct-2026 | 88.80 % | a map's picture (BackgroundsManager: tilemaps, layer pictures and the camera walk); two fuzz preparations made realistic (a saved game's year, a wandering slot's steps and direction) |
 | 28-Oct-2026 | 88.94 % | the interrupts (NMI, line IRQ) and the waits for the next frame, with the NMI brought forward by the random test (HM_WAIT) |
-| 28-Oct-2026 | 90.73 % | what waits for frames: the fades, the sounds that wait (UNK_Audio18/20/24/26, ToolUsedSound2), two script commands, action 4, the items on the map (BAAAA, SUB_81809A) and the 26 tools of the shed, the script interpreter and its loop, swapping the tools (player state $1C), the player's frame (SUB_81BFB7, PlayerInteractionSelector) and action $35; the random test now puts the whole machine back before each call of a sound routine |
+| 28-Oct-2026 | 90.73 % | what waits for frames: the fades, the sounds that wait (PrepareSoundEffect/20/24/26, ToolUsedSound2), two script commands, action 4, the items on the map (BAAAA, RunItemRoutine) and the 26 tools of the shed, the script interpreter and its loop, swapping the tools (player state $1C), the player's frame (PlayerFrame, PlayerInteractionSelector) and action $35; the random test now puts the whole machine back before each call of a sound routine |
 | 29-Oct-2026 | 100.00 % | the rest: from the power-on to the farm (RESET, the title screen and its menu, the file screens, the demos, the first morning, the game loop), the clock and the night, going to another map and loading it, the house (who appears there), the names screen and where each name goes; the random test stops the routines that never return where they go into their loop (HM_TOLOOP) |
 | 29-Oct-2026 | 100.00 % | the native build: the game plays on the rewritten C alone (`native/`), with the console's picture and sound chips around it |

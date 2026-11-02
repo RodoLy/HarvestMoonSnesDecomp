@@ -322,7 +322,7 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 |---|---|---|
 | Random numbers | GetRNG, RNGReturn0toA ("roll an n-sided die") | `src/rng.c` |
 | Arithmetic | DivisionUnsigned | `src/math.c` |
-| Weather | SetWeatherFlags, WeatherTomorrow, SUB_8281C0 (the TV forecast) | `src/weather.c` |
+| Weather | SetWeatherFlags, WeatherTomorrow, TvWeatherForecast (the TV forecast) | `src/weather.c` |
 | Farm | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment, Sub_82A9A0 (grazing) | `src/farm.c` |
 | Stock and money | AddWood, AddGrass, AddPlayerHappiness, AddMoney | `src/stock.c` |
 | Player | ChangeStamina, HaveLunch | `src/stamina.c` |
@@ -331,16 +331,16 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: chickens, cows, dog and horse on the map you enter) | `src/animals.c` |
 | Ending | RanchMasteryCalculator (the final ranch score) | `src/ending.c` |
 | Event script commands | 57 of the 90: the cow's, the chicken's and the dog's every frame (Event_UNKCowRelated, Event_UNKChickenRelated, Event_UNKDogRelated), jumps and tests (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), clock (TimeRunning / Stopped, SetHour), player (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) and flags | `src/eventcmds.c` |
-| Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, SUB_8480F8, UNK_LoadCCDataLong / Short (start an event script) | `src/events.c` |
-| Map edits | EditTileonMap / EditTileonMapandsets0181, ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), SUB_81A801, SUB_81A83A, SUB_82B060, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
-| Video DMA | AddProgrammedDMA (queue a copy to VRAM / CGRAM for the next NMI), RemoveProgrammedDMA, UNK_SetDMA2 (a 2x2 block of BG3 tiles), UNK_SetDMA1 (one letter) | `src/dma.c` |
+| Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, StartScriptAtTileInFront, StartEventScriptLong / Short (start an event script) | `src/events.c` |
+| Map edits | EditTileonMap / EditTileonMapandsets0181, ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), ReadTileChange, DrawTileChange, SetTileTypeBlock, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
+| Video DMA | AddProgrammedDMA (queue a copy to VRAM / CGRAM for the next NMI), RemoveProgrammedDMA, DrawTilemapBlock2x2 (a 2x2 block of BG3 tiles), CopyLetterToVram (one letter) | `src/dma.c` |
 | Menus | SaveSlotMenuInputs, LoadSlotMenuInputs, StartMenuInputs, TitleMenuInputs, ListInputs (the buttons in each menu), ImmobileInputs (with a text box open: speed up, go on, close, choose) | `src/menus.c` |
 | Saved games | SaveGameSlot (the whole save layout), LoadGameSlotResume, CheckSRAMIntegrity (the checker also compares the battery RAM) | `src/save.c` |
-| Sound | UNK_Audio17 / 7 (wait for "ready"), UNK_Audio8, UNK_Audio15 / 19 (sound effects), UNK_Audio16, UNK_Audio2 (commands to the sound chip, checked by recording its answers) | `src/audio.c` |
-| Text box | PrintTextFrame (ADDDDFFFF: the printer, code by code), StartTextBox, CloseTextBox (CODE_8393F9), SUB_83932D (wipe the box), BlinkTextBoxArrow / TextBoxArrow / DrawTextBoxArrow (the "more text" arrow), FindLetterGraphics / DrawLetter / AdvanceLetterCursor / BlinkTextCursor (letters), PrintDigit (numbers) | `src/text.c` |
+| Sound | SoundChipBusy / 7 (wait for "ready"), SoundStartCommand, PlaySoundEffect / 19 (sound effects), SoundCommand0C, SoundCommand0B (commands to the sound chip, checked by recording its answers) | `src/audio.c` |
+| Text box | PrintTextFrame (ADDDDFFFF: the printer, code by code), StartTextBox, CloseTextBox (CODE_8393F9), ClearTextBox (wipe the box), BlinkTextBoxArrow / TextBoxArrow / DrawTextBoxArrow (the "more text" arrow), FindLetterGraphics / DrawLetter / AdvanceLetterCursor / BlinkTextCursor (letters), PrintDigit (numbers) | `src/text.c` |
 | Objects | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites and the objects the tools leave on the map) | `src/objects.c` |
-| Tools | GetTileContent, UNK_CheckTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square, SUB_82927D | `src/tools.c` |
-| Using the tools | All 28 ToolUsed* routines: sickle, hoe, hammer, axe, their gold versions, the five seeds, paint, feed, medicine, potion, bell, milker, brush, beans, gem seed, blue feather, watering can, sprinkler; SUB_829260 (uses the item in hand: one routine per item, through Tool_Used_Table) | `src/toolused.c` |
+| Tools | GetTileContent, GetTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square, CheckToolSuccessForSound | `src/tools.c` |
+| Using the tools | All 28 ToolUsed* routines: sickle, hoe, hammer, axe, their gold versions, the five seeds, paint, feed, medicine, potion, bell, milker, brush, beans, gem seed, blue feather, watering can, sprinkler; UseToolInHand (uses the item in hand: one routine per item, through Tool_Used_Table) | `src/toolused.c` |
 
 A few things found along the way (details in each file's comments):
 

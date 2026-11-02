@@ -132,7 +132,7 @@ void hm_MultiplicationUnsigned(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Unk_Audio23 ($83:8000, JSL, RTL; a multiplication, despite its name):
+ * Multiply16 ($83:8000, JSL, RTL; a multiplication, despite its name):
  * A = A x $7E (16-bit, the high part lost), with three 8 x 8 products of
  * MultiplicationUnsigned: low x low, plus (high x low) << 8 and
  * (low x high) << 8 (only the low byte of each counts). Each is skipped
@@ -158,7 +158,7 @@ static uint16_t times(uint8_t *ram, HmRegs *r, uint16_t ret)
   return r->a;
 }
 
-void hm_Unk_Audio23(uint8_t *ram, HmRegs *r)
+void hm_Multiply16(uint8_t *ram, HmRegs *r)
 {
   hm_push8(ram, r, r->p);                                     /* PHP */
   uint16_t a = r->a, b = hm_dp_r16(ram, r, 0x7E);

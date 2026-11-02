@@ -37,13 +37,13 @@ Cada rutina reescrita vive en `src/<sistema>.c`:
 | NightlyFarmTilesCheck / MonthlyFarmTilesCheck | farm.c | Riego, crecimiento y la llegada del invierno |
 | CalculateFarmDevelopment | farm.c | El "desarrollo del rancho" de la evaluación final |
 | AddCowHappiness / CowFeedingandStatus | animals.c | La noche de vacas y gallinas |
-| SetCCPoiner / ResetsCurrentCCStructure* / SUB_8480F8 / UNK_LoadCCData* | events.c | El sistema de eventos |
-| GetTileContent / UNK_CheckTileProperty / CheckToolSuccess / PreCheckToolSuccess* | tools.c | ¿Funciona la herramienta en esta casilla? |
+| SetCCPoiner / ResetsCurrentCCStructure* / StartScriptAtTileInFront / UNK_LoadCCData* | events.c | El sistema de eventos |
+| GetTileContent / GetTileProperty / CheckToolSuccess / PreCheckToolSuccess* | tools.c | ¿Funciona la herramienta en esta casilla? |
 | CalculateTileinFront / TileAtOffsetFromPlayer | tools.c | La casilla frente al jugador |
-| SUB_81A801 / SUB_81A83A / SUB_82B060 | mapedit.c | Cambiar casillas del mapa (en memoria) |
+| ReadTileChange / DrawTileChange / SetTileTypeBlock | mapedit.c | Cambiar casillas del mapa (en memoria) |
 | FindMostLovedName / WifePregnanacyandChilds | people.c | La chica favorita, la esposa y los hijos |
 | LoadsDateNames | calendar.c | Los textos de la fecha |
-| AddMoney / HaveLunch / SUB_8281C0 | stock.c, stamina.c, weather.c | Dinero, almuerzo y el pronóstico de la tele |
+| AddMoney / HaveLunch / TvWeatherForecast | stock.c, stamina.c, weather.c | Dinero, almuerzo y el pronóstico de la tele |
 
 Las direcciones de memoria tienen nombre en `src/hm_ram.h` del proyecto de
 recompilación (es el mapa de memoria que comparten los dos proyectos).

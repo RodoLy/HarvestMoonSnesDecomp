@@ -27,7 +27,7 @@
  * The cow and chicken counts are multiplied in 8 bits (above 85 animals
  * they would wrap; the game never has that many).
  *
- * Then it starts the ending's next script (UNK_LoadCCDataLong, group 0,
+ * Then it starts the ending's next script (StartEventScriptLong, group 0,
  * script $46, slot $0C), sets $7F1F47 = $25 and $7F1F5E bit $8000.
  */
 #include "hm_decomp.h"
@@ -47,7 +47,7 @@
 #define MAX_STAMINA        0x00917
 
 #define RET_COW_POINTER    0xF46D    /* JSL GetsCowPointer at $83:F46A */
-#define RET_NEXT_SCRIPT    0xF4C0    /* JSL UNK_LoadCCDataLong at $83:F4BD */
+#define RET_NEXT_SCRIPT    0xF4C0    /* JSL StartEventScriptLong at $83:F4BD */
 
 static uint16_t score(uint8_t *ram) { return hm_rd16(ram, RANCH_MASTERY); }
 /* CLC; ADC ranch_mastery; STA (with the carry it is given) */
@@ -137,7 +137,7 @@ void hm_RanchMasteryCalculator(uint8_t *ram, HmRegs *r)
 
   r->a = 0; r->x = 0x0046; r->y = 0x000C;
   hm_jsl(ram, r, RET_NEXT_SCRIPT, 0x84);
-  hm_UNK_LoadCCDataLong(ram, r);
+  hm_StartEventScriptLong(ram, r);
   hm_rtl(ram, r);
   ram[0x11F47] = 0x25;
   r->a = hm_rd16(ram, 0x11F5E) | 0x8000;

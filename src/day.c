@@ -78,12 +78,12 @@ static bool count8(uint8_t *ram, HmRegs *r, uint32_t addr, uint8_t n)
  *  - The calendar: the weekday (0-6), the day (1-30), the season (0-3)
  *    and the year; on a new year, the damage odds of 4 (winter's, with
  *    LoadsDamageProbabilities) and ClimateFarmDamageCheck.
- *  - The music stops (UNK_Audio25 with $0117 = $FF), the screen fades out
+ *  - The music stops (FadeOutSongSlowly with $0117 = $FF), the screen fades out
  *    (from 15, 3 frames a level, to 1) and is blanked; map $0F for the
  *    music of the day.
  *  - Today's special days: $7F1F64 bits 4-5 and $7F1F70 bit 1 from
  *    $0196 bits 4, 9 and 8, around SetWeatherFlags (which makes the new
- *    $0196); the new day's music (UNK_Audio5 past its 6 pm test).
+ *    $0196); the new day's music (PickMapMusic past its 6 pm test).
  *  - 6:00:00, and the night's work: LoadsDateNames,
  *    NightlyFarmTilesCheck, ClimateFarmDamagePrep, CowFeedingandStatus,
  *    WeatherTomorrow, FindMostLovedName, WifePregnanacyandChilds.
@@ -108,7 +108,7 @@ static bool count8(uint8_t *ram, HmRegs *r, uint32_t addr, uint8_t n)
  *  - A trick: holding L, R and Select ($0124 = $2030) makes it summer 30
  *    of the third year, the last day.
  *  - The clock stops, the hands are emptied ($091D), $D2 bit 1 off; the
- *    player wakes in the house ($15) at (136, 120) (UNK_ScreenTransition),
+ *    player wakes in the house ($15) at (136, 120) (EnterMap),
  *    with 20 of stamina more (ChangeStamina); unless $7F1F5E bit 2, the
  *    breakfast ($0924 = 0-3, RNGReturn0toA) and $D2 bit 2.
  * Leftovers: those of RNGReturn0toA (or of ChangeStamina, with A = 4).
@@ -215,7 +215,7 @@ void hm_NightReset(uint8_t *ram, HmRegs *r)
   new_date(ram, r);
   set_a8(r, 0xFF);
   wr8(ram, r, 0x0117, 0xFF);
-  jsl(ram, r, 0x8301, 0x83, hm_UNK_Audio25);
+  jsl(ram, r, 0x8301, 0x83, hm_FadeOutSongSlowly);
   set_a8(r, 0x0F); *hm_dp(ram, r, 0x92) = 0x0F;
   set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
   set_a8(r, 0x01); *hm_dp(ram, r, 0x94) = 0x01;
@@ -233,7 +233,7 @@ void hm_NightReset(uint8_t *ram, HmRegs *r)
   if (r->a) flag_on(ram, r, 0x7F1F64, 0x0010);
   r->a = (uint16_t)(rd16(ram, r, 0x0196) & 0x0100);
   if (r->a) flag_on(ram, r, 0x7F1F70, 0x0002);
-  jsl(ram, r, 0x837C, 0x80, hm_UNK_Audio5_95F5);
+  jsl(ram, r, 0x837C, 0x80, hm_PickMapMusicAnyHour);
 
   set_a8(r, 0x06);                                         /* SEP #$20 */
   hm_bus_wr8(ram, HOUR, 6);
@@ -302,7 +302,7 @@ void hm_NightReset(uint8_t *ram, HmRegs *r)
   wr16(ram, r, 0x017F, 0x0078);
   set_a8(r, 0x15);                                         /* SEP #$20 */
   wr8(ram, r, 0x098B, 0x15);
-  jsl(ram, r, 0x875E, 0x80, hm_UNK_ScreenTransition);
+  jsl(ram, r, 0x875E, 0x80, hm_EnterMap);
   set_a8(r, 0x14);                                         /* SEP #$20; REP #$10; LDA #$14 */
   r->n = 0;                                                /* (ChangeStamina reads its N) */
   jsl(ram, r, 0x8768, 0x81, hm_ChangeStamina);
@@ -324,7 +324,7 @@ void hm_NightReset(uint8_t *ram, HmRegs *r)
  *  - A second a frame; 60 seconds a minute and 15 minutes an hour (so an
  *    hour is 900 frames, 15 s); the clock does not go past 18:00. On each
  *    new hour, the lunch (HaveLunch) and the shipping (ShippingScene); at
- *    18:00, unless $7F1F5E bit 15, the music stops (UNK_Audio25 with
+ *    18:00, unless $7F1F5E bit 15, the music stops (FadeOutSongSlowly with
  *    $0117 = $FF, then $0110 = $FF).
  *  - Then the palette of the hour (SetPaletteToLoad); if it changed, the
  *    colour cycles go (ZeroesPartial42Pointers from 4) and the new ones
@@ -362,7 +362,7 @@ void hm_UpdateTime(uint8_t *ram, HmRegs *r)
           if (!r->a) {
             set_a8(r, 0xFF);
             wr8(ram, r, 0x0117, 0xFF);
-            jsl(ram, r, 0x8081, 0x83, hm_UNK_Audio25);
+            jsl(ram, r, 0x8081, 0x83, hm_FadeOutSongSlowly);
             set_a8(r, 0xFF);
             wr8(ram, r, 0x0110, 0xFF);
           }
@@ -472,9 +472,9 @@ void hm_FirstNightReset(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_82878E ($82:878E): BRA to itself, for ever. Nothing calls it (a
+ * UnusedEndlessLoop ($82:878E): BRA to itself, for ever. Nothing calls it (a
  * leftover between NightReset and WifePregnanacyandChilds). Its check
  * stops after one turn, when it comes back to its start (HM_TOLOOP): it
  * changes nothing.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_82878E(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
+void hm_UnusedEndlessLoop(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }

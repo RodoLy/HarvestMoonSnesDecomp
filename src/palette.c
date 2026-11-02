@@ -225,9 +225,9 @@ void hm_ClearsTimeofDayPalette(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_80916F / SUB_80919D ($80:916F / $80:919D): put colour A as colour X
+ * SetPaletteColour / SetPaletteColourNoFade ($80:916F / $80:919D): put colour A as colour X
  * of palette row Y (16 rows of 16). With $92 = 0 it goes to $7F:0900
- * (SUB_80919D: and to $7F:0D00, so it is not faded away); otherwise only to
+ * (SetPaletteColourNoFade: and to $7F:0D00, so it is not faded away); otherwise only to
  * the prepared palette $7F:0B00.
  * ───────────────────────────────────────────────────────────────────────── */
 static uint16_t colour_index(uint8_t *ram, HmRegs *r)
@@ -241,14 +241,14 @@ static uint16_t colour_index(uint8_t *ram, HmRegs *r)
   lda8(r, *hm_dp(ram, r, 0x92));
   return r->x;
 }
-void hm_SUB_80916F(uint8_t *ram, HmRegs *r)
+void hm_SetPaletteColour(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = colour_index(ram, r);
   bool prepared = (uint8_t)r->a != 0;
   r->a = dp16(ram, r, 0x82);
   hm_bus_wr16(ram, ((prepared ? PREPARED : SENT) + x) & 0xFFFFFF, r->a);
 }
-void hm_SUB_80919D(uint8_t *ram, HmRegs *r)
+void hm_SetPaletteColourNoFade(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = colour_index(ram, r);
   bool prepared = (uint8_t)r->a != 0;
@@ -324,7 +324,7 @@ static void three_colours(uint8_t *ram, HmRegs *r, uint32_t table, uint16_t x, u
     r->x = (uint16_t)(first + i);
     r->y = row;
     hm_jsl(ram, r, ret[i], 0x80);
-    hm_SUB_80919D(ram, r);
+    hm_SetPaletteColourNoFade(ram, r);
     hm_rtl(ram, r);
   }
 }
@@ -377,12 +377,12 @@ void hm_CustomiseSpritePalette(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_CustomisePalette ($80:9241): prepares the night palette of the map
+ * PrepareNightPalette ($80:9241): prepares the night palette of the map
  * in $7F:0B00: the backgrounds from the map's "18:00 and later" palette and
  * the sprites from its night sprite palette (UNK_Table11), then the
  * customised sprite colours (with $92 = 1, into $7F:0B00 too).
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_CustomisePalette(uint8_t *ram, HmRegs *r)
+void hm_PrepareNightPalette(uint8_t *ram, HmRegs *r)
 {
   uint16_t map = *hm_dp(ram, r, 0x22);
   set16(ram, r, 0x80, map);

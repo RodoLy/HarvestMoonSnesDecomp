@@ -4,8 +4,8 @@
  *
  * An item that leaves the player's hands becomes a map object (see
  * objects.c, BAAAA): its record keeps the item ($0984 while it is worked
- * on), a state ($0976) and its sprite. SUB_818000 puts it down; then, each
- * frame, SUB_81809A runs the item's own routine (table DATA8_8197C0, one
+ * on), a state ($0976) and its sprite. PutItemDown puts it down; then, each
+ * frame, RunItemRoutine runs the item's own routine (table DATA8_8197C0, one
  * per item), which acts by the state: lands, breaks, is eaten...
  */
 #include "hm_decomp.h"
@@ -19,7 +19,7 @@
 static uint32_t db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_8180B7 ($81:80B7, JSL, RTL; the start of HM-Decomp's SUB_8180B7
+ * GetItemSprite ($81:80B7, JSL, RTL; the start of HM-Decomp's GetItemSprite
  * block): the sprite of item $0984 for the case Y (a facing, + 2 when put
  * down): DATA8_8196AF gives the item's list (3 bytes per item), and in it
  * 3 bytes per case: the sprite (to $097A) and a byte that x 64 is the flip
@@ -27,7 +27,7 @@ static uint32_t db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 |
  * Leftovers: $72-$74 = the list, $7E = Y, A = the flip, Y = 3 Y + 2,
  * X = 3 item + 2, C = 0.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_8180B7(uint8_t *ram, HmRegs *r)
+void hm_GetItemSprite(uint8_t *ram, HmRegs *r)
 {
   uint16_t item = hm_bus_rd8(ram, db(r, ITEM));
   hm_dp_w16(ram, r, 0x7E, item);
@@ -49,7 +49,7 @@ void hm_SUB_8180B7(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_818000 ($81:8000, JSL, RTL): the item in hand ($091D) is put down
+ * PutItemDown ($81:8000, JSL, RTL): the item in hand ($091D) is put down
  * in front of the player: a map object in state 0 ($0974 = $0975 = 1,
  * $0976 = 0) with the item's sprite for the player's facing (+ 2), two
  * pixels below the player (SpawnMapObject). Then the tile in front, and if
@@ -58,7 +58,7 @@ void hm_SUB_8180B7(uint8_t *ram, HmRegs *r)
  * sound (DATA8_81A308), sound effect 8 of bank 6.
  * Leftovers: those of the last routine called.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_818000(uint8_t *ram, HmRegs *r)
+void hm_PutItemDown(uint8_t *ram, HmRegs *r)
 {
   hm_bus_wr8(ram, db(r, 0x0974), 1);
   hm_bus_wr8(ram, db(r, 0x0975), 1);
@@ -70,7 +70,7 @@ void hm_SUB_818000(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)sum;
   r->y = r->a;
   hm_jsl(ram, r, 0x8025, 0x81);
-  hm_SUB_8180B7(ram, r);
+  hm_GetItemSprite(ram, r);
   hm_rtl(ram, r);
   r->a = hm_dp_r16(ram, r, 0xD6);
   hm_bus_wr16(ram, db(r, 0x0980), r->a);
@@ -115,25 +115,25 @@ void hm_SUB_818000(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, db(r, 0x0114), 0x08);
   hm_bus_wr8(ram, db(r, 0x0115), 0x06);
   hm_jsl(ram, r, 0x8098, 0x83);
-  hm_UNK_Audio19(ram, r);
+  hm_PlaySoundEffect0A(ram, r);
   hm_rtl(ram, r);
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
- * The item routines (the rest of HM-Decomp's SUB_8180B7 block).
+ * The item routines (the rest of HM-Decomp's GetItemSprite block).
  *
- * SUB_81809A calls one per item (table DATA8_8197C0) with JSR, every frame
+ * RunItemRoutine calls one per item (table DATA8_8197C0) with JSR, every frame
  * while the item is a map object. Most just call one of six state machines
  * (JSR); each machine picks, by the item's state ($0976), one of the steps
  * below (JMP), which does its part and maybe moves to another state:
  *
- *   CODE_8188E5 (most items)   0 hold, 2 carried, 3 dropped, 4 gone,
+ *   ItemCommonSteps (most items)   0 hold, 2 carried, 3 dropped, 4 gone,
  *                              5-6 offered for sale, 7 binned, 8 shipped
- *   CODE_818855 (food, 1-8)    as 8188E5 but 0 asks "eat it?", 1 eats
- *   CODE_8188BC (item $1A)     0, 2, 3 = into a feed box, 4, 8
- *   CODE_81889A (items $0D-$0F, $57)  0, 2 thrown, 3 lands, 4 gone
- *   CODE_81883A (items $25, $26, $29) 0, 2 thrown, 3 = an animal set down
- *   CODE_818923 (shop goods)   0 "buy it?", 1 answer, 2 put back, 3 bought
+ *   ItemFoodSteps (food, 1-8)    as 8188E5 but 0 asks "eat it?", 1 eats
+ *   ItemFodderSteps (item $1A)     0, 2, 3 = into a feed box, 4, 8
+ *   ItemPlaceableSteps (items $0D-$0F, $57)  0, 2 thrown, 3 lands, 4 gone
+ *   ItemAnimalSteps (items $25, $26, $29) 0, 2 thrown, 3 = an animal set down
+ *   ItemShopGoodsSteps (shop goods)   0 "buy it?", 1 answer, 2 put back, 3 bought
  *
  * The bodies keep A, X, Y and C as the original leaves them: X and Y are
  * 16 bits throughout, A changes width as the original does (an 8-bit load
@@ -201,14 +201,14 @@ static uint16_t item_word(uint8_t *ram, HmRegs *r)
   return r->a;
 }
 
-/* LDA $0978; STA $A5; JSL CODE_8581A2 (at a); then JSL CODE_81A4F1 (at b,
+/* LDA $0978; STA $A5; JSL DestroyGameObject (at a); then JSL FreeMapObject (at b,
  * if any): the item's game object, and its map object, go away */
 static void remove_object(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t b)
 {
   r->a = rd16(ram, r, OBJECT);
   hm_dp_w16(ram, r, 0xA5, r->a);
-  jsl(ram, r, a, 0x85, hm_CODE_8581A2);
-  if (b) jsl(ram, r, b, 0x81, hm_CODE_81A4F1);
+  jsl(ram, r, a, 0x85, hm_DestroyGameObject);
+  if (b) jsl(ram, r, b, 0x81, hm_FreeMapObject);
 }
 /* the player stops (action 0) and no longer holds anything ($D2 bit 1) */
 static void hands_free(uint8_t *ram, HmRegs *r)
@@ -248,11 +248,11 @@ static bool text_open(uint8_t *ram, HmRegs *r)
   r->c = v >= 2;
   return v == 2;
 }
-/* LDY #y; JSL SUB_8180B7 (at a): the sprite of case y */
+/* LDY #y; JSL GetItemSprite (at a): the sprite of case y */
 static void sprite(uint8_t *ram, HmRegs *r, uint16_t y, uint16_t at)
 {
   r->y = y;
-  jsl(ram, r, at, 0x81, hm_SUB_8180B7);
+  jsl(ram, r, at, 0x81, hm_GetItemSprite);
 }
 /* CalculateTileinFront (A, X, Y given; at a) */
 static void tile_ahead(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t y, uint16_t at)
@@ -260,14 +260,14 @@ static void tile_ahead(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t
   r->a = a; r->x = x; r->y = y;
   jsl(ram, r, at, 0x81, hm_CalculateTileinFront);
 }
-/* UNK_CheckTileProperty of the tile in front (A = which byte; at a):
+/* GetTileProperty of the tile in front (A = which byte; at a):
  * X = its type, A = the property */
 static void tile_property(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t at)
 {
   r->x = rd16(ram, r, 0x0985);
   r->y = rd16(ram, r, 0x0987);
   r->a = a;
-  jsl(ram, r, at, 0x82, hm_UNK_CheckTileProperty);
+  jsl(ram, r, at, 0x82, hm_GetTileProperty);
 }
 /* "CPX #k" */
 static bool cpx(HmRegs *r, uint16_t k)
@@ -308,41 +308,41 @@ static void machine(uint8_t *ram, HmRegs *r, Step *zero, const uint8_t *states, 
   }
 }
 
-void hm_CODE_818855(uint8_t *ram, HmRegs *r)
+void hm_ItemFoodSteps(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t s[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
-  static Step *const f[] = { hm_CODE_818BA5, hm_CODE_819049, hm_CODE_819379, hm_CODE_81968F,
-                             hm_CODE_818F2A, hm_CODE_818F5A, hm_CODE_819695, hm_CODE_819021 };
-  machine(ram, r, hm_CODE_818B6B, s, f, 8);
+  static Step *const f[] = { hm_FoodEatAnswer, hm_ItemCarried, hm_ItemLands, hm_ItemRemoveMapObject,
+                             hm_ItemAskToSell, hm_ItemSellAnswer, hm_ItemWaitMapAnimation, hm_ItemFinished };
+  machine(ram, r, hm_FoodAskToEat, s, f, 8);
 }
-void hm_CODE_8188E5(uint8_t *ram, HmRegs *r)
+void hm_ItemCommonSteps(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t s[] = { 2, 3, 4, 5, 6, 7, 8 };
-  static Step *const f[] = { hm_CODE_819049, hm_CODE_819379, hm_CODE_81968F, hm_CODE_818F2A,
-                             hm_CODE_818F5A, hm_CODE_819695, hm_CODE_819021 };
-  machine(ram, r, hm_CODE_819010, s, f, 7);
+  static Step *const f[] = { hm_ItemCarried, hm_ItemLands, hm_ItemRemoveMapObject, hm_ItemAskToSell,
+                             hm_ItemSellAnswer, hm_ItemWaitMapAnimation, hm_ItemFinished };
+  machine(ram, r, hm_ItemTakeInHand, s, f, 7);
 }
-void hm_CODE_8188BC(uint8_t *ram, HmRegs *r)
+void hm_ItemFodderSteps(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t s[] = { 2, 3, 4, 8 };
-  static Step *const f[] = { hm_CODE_819049, hm_CODE_818E98, hm_CODE_81968F, hm_CODE_819021 };
-  machine(ram, r, hm_CODE_819010, s, f, 4);
+  static Step *const f[] = { hm_ItemCarried, hm_FodderIntoFeedBox, hm_ItemRemoveMapObject, hm_ItemFinished };
+  machine(ram, r, hm_ItemTakeInHand, s, f, 4);
 }
-void hm_CODE_81889A(uint8_t *ram, HmRegs *r)
+void hm_ItemPlaceableSteps(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t s[] = { 2, 3, 4 };
-  static Step *const f[] = { hm_CODE_818C24, hm_CODE_818D38, hm_CODE_818E16 };
-  machine(ram, r, hm_CODE_819010, s, f, 3);
+  static Step *const f[] = { hm_PlaceableCarried, hm_PlaceableLands, hm_PlaceableGone };
+  machine(ram, r, hm_ItemTakeInHand, s, f, 3);
 }
-void hm_CODE_81883A(uint8_t *ram, HmRegs *r)
+void hm_ItemAnimalSteps(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t s[] = { 2, 3 };
-  static Step *const f[] = { hm_CODE_819228, hm_CODE_818E1B };
-  machine(ram, r, hm_CODE_819010, s, f, 2);
+  static Step *const f[] = { hm_AnimalCarried, hm_AnimalSetDown };
+  machine(ram, r, hm_ItemTakeInHand, s, f, 2);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_818923 ($81:8923, JSR, RTS): the goods of a shop (items $1B-$1D and
+ * ItemShopGoodsSteps ($81:8923, JSR, RTS): the goods of a shop (items $1B-$1D and
  * $44-$56), picked up from the counter. DATA8_81A1A5 has 12 bytes per
  * article (items $44-$56 first, then $1B-$1D): +0 the "buy it?" text, +2
  * the "thank you" text, +4 the "no" text, +6 the "not enough money" text,
@@ -397,7 +397,7 @@ static void shop_put_back(uint8_t *ram, HmRegs *r)         /* CODE_818AA0 */
 {
   remove_object(ram, r, 0x8AA7, 0);
   hands_free(ram, r);
-  jsl(ram, r, 0x8ABE, 0x81, hm_CODE_81A4F1);
+  jsl(ram, r, 0x8ABE, 0x81, hm_FreeMapObject);
   wr8(ram, r, IN_HAND, 0);
   tile_ahead(ram, r, 1, 6, 6, 0x8AD2);
   article(ram, r);
@@ -468,13 +468,13 @@ static void shop_sold(uint8_t *ram, HmRegs *r)             /* CODE_818B19 */
   if (!keep) {
     remove_object(ram, r, 0x8B43, 0);
     hands_free(ram, r);
-    jsl(ram, r, 0x8B5A, 0x81, hm_CODE_81A4F1);
+    jsl(ram, r, 0x8B5A, 0x81, hm_FreeMapObject);
     wr8(ram, r, IN_HAND, 0);
   }
   set_state(ram, r, 0xFF);
 }
 
-void hm_CODE_818923(uint8_t *ram, HmRegs *r)
+void hm_ItemShopGoodsSteps(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t s[] = { 1, 2, 3 };
   static Step *const f[] = { shop_answer, shop_wait, shop_sold };
@@ -482,10 +482,10 @@ void hm_CODE_818923(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Food (items 1-8, CODE_818855). DATA8_819FC6 has 3 bytes per food: the
+ * Food (items 1-8, ItemFoodSteps). DATA8_819FC6 has 3 bytes per food: the
  * "eat it?" text and the stamina it gives.
- * CODE_818B6B (state 0): the sprite in hand (case 1) and the question;
- * state 1. CODE_818BA5 (state 1): once answered: yes, the player eats
+ * FoodAskToEat (state 0): the sprite in hand (case 1) and the question;
+ * state 1. FoodEatAnswer (state 1): once answered: yes, the player eats
  * (action 8, $D2 bit 15 cleared), the item goes and ChangeStamina gets the
  * food's value; no, the player stops and holds it (state 2).
  * Leftovers: those of the last routine called and the stores after it.
@@ -497,7 +497,7 @@ static uint16_t food_entry(uint8_t *ram, HmRegs *r)
   return times3(ram, r, r->a);
 }
 
-void hm_CODE_818B6B(uint8_t *ram, HmRegs *r)
+void hm_FoodAskToEat(uint8_t *ram, HmRegs *r)
 {
   sprite(ram, r, 1, 0x8B70);
   r->x = food_entry(ram, r);
@@ -508,7 +508,7 @@ void hm_CODE_818B6B(uint8_t *ram, HmRegs *r)
   set_state(ram, r, 1);
 }
 
-void hm_CODE_818BA5(uint8_t *ram, HmRegs *r)
+void hm_FoodEatAnswer(uint8_t *ram, HmRegs *r)
 {
   if (text_open(ram, r)) return;
   uint8_t no = rd8(ram, r, ANSWER);
@@ -535,38 +535,38 @@ void hm_CODE_818BA5(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * The common steps.
- * CODE_819010 (state 0): the sprite in hand (case 1); state 2.
- * CODE_819021 (state 8): the item goes, the player stops with free hands.
- * CODE_81968F (state 4): its map object goes (CODE_81A4F1).
- * CODE_819695 (state 7): once the map animation is over ($CF-$D1 = 0) the
+ * ItemTakeInHand (state 0): the sprite in hand (case 1); state 2.
+ * ItemFinished (state 8): the item goes, the player stops with free hands.
+ * ItemRemoveMapObject (state 4): its map object goes (FreeMapObject).
+ * ItemWaitMapAnimation (state 7): once the map animation is over ($CF-$D1 = 0) the
  * map object goes and $D2 bit 0 is set.
  * Leftovers: those of the last routine called and the stores after it.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_CODE_819010(uint8_t *ram, HmRegs *r)
+void hm_ItemTakeInHand(uint8_t *ram, HmRegs *r)
 {
   sprite(ram, r, 1, 0x9015);
   set_state(ram, r, 2);
 }
 
-void hm_CODE_819021(uint8_t *ram, HmRegs *r)
+void hm_ItemFinished(uint8_t *ram, HmRegs *r)
 {
   remove_object(ram, r, 0x9028, 0x902C);
   wr8(ram, r, IN_HAND, 0);
   hands_free(ram, r);
 }
 
-void hm_CODE_81968F(uint8_t *ram, HmRegs *r)
+void hm_ItemRemoveMapObject(uint8_t *ram, HmRegs *r)
 {
-  jsl(ram, r, 0x968F, 0x81, hm_CODE_81A4F1);
+  jsl(ram, r, 0x968F, 0x81, hm_FreeMapObject);
 }
 
-void hm_CODE_819695(uint8_t *ram, HmRegs *r)
+void hm_ItemWaitMapAnimation(uint8_t *ram, HmRegs *r)
 {
   r->a = hm_dp_r16(ram, r, 0xCF);
   if (r->a) return;
   set_a8(r, *hm_dp(ram, r, 0xD1));
   if (r->a & 0xFF) return;
-  jsl(ram, r, 0x96A1, 0x81, hm_CODE_81A4F1);
+  jsl(ram, r, 0x96A1, 0x81, hm_FreeMapObject);
   r->a = (uint16_t)(hm_dp_r16(ram, r, GAME_STATE) | 0x0001);
   hm_dp_w16(ram, r, GAME_STATE, r->a);
 }
@@ -576,7 +576,7 @@ void hm_CODE_819695(uint8_t *ram, HmRegs *r)
  * While carried (state 2) the item follows the player, two pixels lower,
  * with the sprite in hand (case 1); while he jumps (action 3) the sprite of
  * the jump (case $0B, $0974 bit 2) until its animation ends ($A7 = $FFFF
- * from CODE_8581CB). When he throws it (action 5), if nothing is in the way
+ * from ReadGameObject). When he throws it (action 5), if nothing is in the way
  * (CBBBB) it flies (case 6 + his facing, state 3).
  * ───────────────────────────────────────────────────────────────────────── */
 static void carried(uint8_t *ram, HmRegs *r, uint16_t at_hand, uint16_t at_jump, uint16_t at_anim)
@@ -596,7 +596,7 @@ static void carried(uint8_t *ram, HmRegs *r, uint16_t at_hand, uint16_t at_jump,
     }
     r->a = rd16(ram, r, OBJECT);
     hm_dp_w16(ram, r, 0xA5, r->a);
-    jsl(ram, r, at_anim, 0x85, hm_CODE_8581CB);
+    jsl(ram, r, at_anim, 0x85, hm_ReadGameObject);
     r->a = hm_dp_r16(ram, r, 0xA7);
     r->c = r->a >= 0xFFFF;
     if (r->a != 0xFFFF) return;
@@ -627,7 +627,7 @@ static bool in_the_way(uint8_t *ram, HmRegs *r, uint16_t at)
   r->c = 1;
   return r->a != 0;
 }
-/* LDA #6; CLC; ADC $DA; TAY; JSL SUB_8180B7 (at a); state 3: it flies */
+/* LDA #6; CLC; ADC $DA; TAY; JSL GetItemSprite (at a); state 3: it flies */
 static void fly(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   r->a = add16(r, 6, hm_dp_r16(ram, r, 0xDA));
@@ -654,9 +654,9 @@ static int landing(HmRegs *r)
   return 0;
 }
 
-/* CODE_818C24 (state 2 of CODE_81889A): carried; thrown only towards
+/* PlaceableCarried (state 2 of ItemPlaceableSteps): carried; thrown only towards
  * ground or a bin. */
-void hm_CODE_818C24(uint8_t *ram, HmRegs *r)
+void hm_PlaceableCarried(uint8_t *ram, HmRegs *r)
 {
   carried(ram, r, 0x8C43, 0x8C61, 0x8C78);
   if (!throwing(ram, r)) return;
@@ -702,9 +702,9 @@ static void into_spot(uint8_t *ram, HmRegs *r)
   set_state(ram, r, 4);
 }
 
-/* CODE_818D38 (state 3 of CODE_81889A): where it lands: ground, a bin, or
+/* PlaceableLands (state 3 of ItemPlaceableSteps): where it lands: ground, a bin, or
  * neither (the throw stops). */
-void hm_CODE_818D38(uint8_t *ram, HmRegs *r)
+void hm_PlaceableLands(uint8_t *ram, HmRegs *r)
 {
   tile_ahead(ram, r, 1, 6, 6, 0x8D43);
   tile_property(ram, r, 2, 0x8D52);
@@ -714,17 +714,17 @@ void hm_CODE_818D38(uint8_t *ram, HmRegs *r)
   stop_throw(ram, r);
 }
 
-/* CODE_818E16 (state 4 of CODE_81889A): the map object goes. */
-void hm_CODE_818E16(uint8_t *ram, HmRegs *r)
+/* PlaceableGone (state 4 of ItemPlaceableSteps): the map object goes. */
+void hm_PlaceableGone(uint8_t *ram, HmRegs *r)
 {
-  jsl(ram, r, 0x8E16, 0x81, hm_CODE_81A4F1);
+  jsl(ram, r, 0x8E16, 0x81, hm_FreeMapObject);
 }
 
-/* CODE_818E1B (state 3 of CODE_81883A): an animal ($0920) set down: for
+/* AnimalSetDown (state 3 of ItemAnimalSteps): an animal ($0920) set down: for
  * $25 / $26 its record keeps this map and the tile in front (and loses
- * bit 5 of its flags); then its walk starts (SUB_8480F8: script 1 for
+ * bit 5 of its flags); then its walk starts (StartScriptAtTileInFront: script 1 for
  * $26, 2 for $25, $31 otherwise) and the item goes. */
-void hm_CODE_818E1B(uint8_t *ram, HmRegs *r)
+void hm_AnimalSetDown(uint8_t *ram, HmRegs *r)
 {
   uint8_t h = rd8(ram, r, IN_HAND);
   set_a8(r, h);
@@ -758,16 +758,16 @@ void hm_CODE_818E1B(uint8_t *ram, HmRegs *r)
   }
   r->a = rd8(ram, r, 0x0920);
   r->x = 0;
-  jsl(ram, r, 0x8E7D, 0x84, hm_SUB_8480F8);
+  jsl(ram, r, 0x8E7D, 0x84, hm_StartScriptAtTileInFront);
   remove_object(ram, r, 0x8E88, 0x8E8C);
   wr8(ram, r, IN_HAND, 0);
 }
 
-/* CODE_818E98 (state 3 of CODE_8188BC, item $1A): fodder thrown into a
+/* FodderIntoFeedBox (state 3 of ItemFodderSteps, item $1A): fodder thrown into a
  * feed box of the barn (map $27) or the coop ($28), tile types $E2-$EE:
  * that box's bit in $0932 / $0934 and one more in $0930 / $0931, and the
  * fodder lands (CODE_818DAB). Anywhere else, as any dropped item. */
-void hm_CODE_818E98(uint8_t *ram, HmRegs *r)
+void hm_FodderIntoFeedBox(uint8_t *ram, HmRegs *r)
 {
   wr8(ram, r, IN_HAND, 0);
   tile_ahead(ram, r, 1, 6, 6, 0x8EA8);
@@ -778,12 +778,12 @@ void hm_CODE_818E98(uint8_t *ram, HmRegs *r)
   uint16_t flags = 0x0932, count = 0x0930;
   if (map != 0x27) {
     r->c = map >= 0x28;
-    if (map != 0x28) { hm_CODE_819379(ram, r); return; }
+    if (map != 0x28) { hm_ItemLands(ram, r); return; }
     flags = 0x0934; count = 0x0931;
   }
   if (r->x < 0xE2 || r->x >= 0xEF) {
     r->c = r->x >= 0xE2;
-    hm_CODE_819379(ram, r);
+    hm_ItemLands(ram, r);
     return;
   }
   r->a = (uint16_t)((r->x - 0xE2) << 1);                   /* SEC; SBC; ASL */
@@ -800,13 +800,13 @@ void hm_CODE_818E98(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * Selling. DATA8_81A094 has 3 bytes per item: the "sell it?" text and the
  * money (in tens of G).
- * CODE_818F2A (state 5): the question; state 6.
- * CODE_818F5A (state 6): once answered: yes (and the item can be sold:
+ * ItemAskToSell (state 5): the question; state 6.
+ * ItemSellAnswer (state 6): once answered: yes (and the item can be sold:
  * text $0313 means it cannot) text $02FA, the item goes and its money is
  * added; no, text $0303; both "no" and unsellable give it back to the
  * player (sprite in hand at his place $090B / $090D, state 2, holding).
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_CODE_818F2A(uint8_t *ram, HmRegs *r)
+void hm_ItemAskToSell(uint8_t *ram, HmRegs *r)
 {
   wait_for_input(ram, r);
   item_word(ram, r);
@@ -828,7 +828,7 @@ static void give_back(uint8_t *ram, HmRegs *r)             /* CODE_818FEA */
   hands_full(ram, r);
 }
 
-void hm_CODE_818F5A(uint8_t *ram, HmRegs *r)
+void hm_ItemSellAnswer(uint8_t *ram, HmRegs *r)
 {
   if (text_open(ram, r)) return;
   uint8_t no = rd8(ram, r, ANSWER);
@@ -890,12 +890,12 @@ static bool before_5pm(uint8_t *ram, HmRegs *r)
   return h < 0x11;
 }
 
-/* CODE_819049 (state 2): carried. Thrown on a Sunday before 5 pm in town
+/* ItemCarried (state 2): carried. Thrown on a Sunday before 5 pm in town
  * (maps 4-7, $0196 bit 1 clear) at a stall tile ($F0) with a sellable item:
  * it is put there and offered (state 5). Thrown at an object (CBBBB): put
  * at the tile in front and, with $7F1F5C bit 4 and a price before 5 pm,
  * shipped ($7F1F5C bit 6 too); state 8. Otherwise it flies. */
-void hm_CODE_819049(uint8_t *ram, HmRegs *r)
+void hm_ItemCarried(uint8_t *ram, HmRegs *r)
 {
   carried(ram, r, 0x9068, 0x9086, 0x909D);
   if (!throwing(ram, r)) return;
@@ -942,10 +942,10 @@ flies:
   fly(ram, r, 0x9187);
 }
 
-/* CODE_819228 (state 2 of CODE_81883A, an animal carried): thrown only
+/* AnimalCarried (state 2 of ItemAnimalSteps, an animal carried): thrown only
  * where it can stand: the tiles 0, 1 and 2 ahead free (property bits 0-4
  * clear, not type $FF) and the first not $E1 nor $C0-$CF. */
-void hm_CODE_819228(uint8_t *ram, HmRegs *r)
+void hm_AnimalCarried(uint8_t *ram, HmRegs *r)
 {
   carried(ram, r, 0x9247, 0x9265, 0x927C);
   if (!throwing(ram, r)) return;
@@ -973,7 +973,7 @@ stop:
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_819379 (state 3): where a dropped or thrown item lands.
+ * ItemLands (state 3): where a dropped or thrown item lands.
  *  - On the farm (maps 0-3), in the barn or the coop, at a shipping bin
  *    (tile $F2; HM-Decomp's Dropedonsaleplace): an item with a price is
  *    shipped (before 5 pm; after, it is simply lost) and the bin's
@@ -1006,7 +1006,7 @@ static void into_spring(uint8_t *ram, HmRegs *r)            /* CODE_8195F4 */
     r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F66) & 0x2000);
     if (!r->a) {
       r->a = 0; r->x = 0x0010; r->y = 0;
-      jsl(ram, r, 0x961B, 0x84, hm_UNK_LoadCCDataLong);
+      jsl(ram, r, 0x961B, 0x84, hm_StartEventScriptLong);
       r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F66) | 0x2000);
       hm_bus_wr16(ram, 0x7F1F66, r->a);
     }
@@ -1060,7 +1060,7 @@ static void special_place(uint8_t *ram, HmRegs *r)          /* Droped_on_special
   r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F6E) & 0x2000);
   if (r->a) { not_hatching(ram, r); return; }
   r->a = 0x0014; r->x = 0; r->y = 0;                       /* .alreadyhatchingegg */
-  jsl(ram, r, 0x94ED, 0x84, hm_SUB_8480F8);
+  jsl(ram, r, 0x94ED, 0x84, hm_StartScriptAtTileInFront);
   r->y = 0;
   set_a8(r, 3);
   hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0), 3);
@@ -1099,7 +1099,7 @@ static void shipping_bin(uint8_t *ram, HmRegs *r)           /* Dropedonsaleplace
   wr8(ram, r, IN_HAND, 0);
 }
 
-void hm_CODE_819379(uint8_t *ram, HmRegs *r)
+void hm_ItemLands(uint8_t *ram, HmRegs *r)
 {
   uint8_t map = *hm_dp(ram, r, 0x22);
   set_a8(r, map);
@@ -1134,39 +1134,39 @@ void hm_CODE_819379(uint8_t *ram, HmRegs *r)
  *    player's tool slots if it was there, and a bag counts one more (up to
  *    255); a gold tool also takes the plain one's place; fodder fills its
  *    counter (12).
- *  - the 26 tools ($2A-$43, CODE_81A94A + CODE_8187C3) wait for the
+ *  - the 26 tools ($2A-$43, PutToolOnShelf + TakeToolFromShelf) wait for the
  *    frame routines and stay in the original.
  * Leftovers: the machine's, then the loads and compares after it.
  * ───────────────────────────────────────────────────────────────────────── */
 #define ITEM_JSR(name, at, machine_fn) \
   void hm_##name(uint8_t *ram, HmRegs *r) { jsr(ram, r, at, machine_fn); }
-ITEM_JSR(ItemObject_01, 0x80FE, hm_CODE_818855)
-ITEM_JSR(ItemObject_02, 0x8102, hm_CODE_818855)
-ITEM_JSR(ItemObject_03, 0x8106, hm_CODE_818855)
-ITEM_JSR(ItemObject_04, 0x810A, hm_CODE_818855)
-ITEM_JSR(ItemObject_05, 0x810E, hm_CODE_818855)
-ITEM_JSR(ItemObject_06, 0x8112, hm_CODE_818855)
-ITEM_JSR(ItemObject_07, 0x8116, hm_CODE_818855)
-ITEM_JSR(ItemObject_08, 0x811A, hm_CODE_818855)
-ITEM_JSR(ItemObject_09, 0x811E, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_0A, 0x8122, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_0D, 0x8126, hm_CODE_81889A)
-ITEM_JSR(ItemObject_0E, 0x812A, hm_CODE_81889A)
-ITEM_JSR(ItemObject_0F, 0x812E, hm_CODE_81889A)
-ITEM_JSR(ItemObject_14, 0x8192, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_15, 0x8196, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_16, 0x819A, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_17, 0x819E, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_18, 0x81A2, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_19, 0x81A6, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_1A, 0x81AA, hm_CODE_8188BC)
-ITEM_JSR(ItemObject_24, 0x83B7, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_25, 0x83BB, hm_CODE_81883A)
-ITEM_JSR(ItemObject_26, 0x83BF, hm_CODE_81883A)
-ITEM_JSR(ItemObject_29, 0x83C5, hm_CODE_81883A)
-ITEM_JSR(ItemObject_58, 0x87B7, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_59, 0x87BB, hm_CODE_8188E5)
-ITEM_JSR(ItemObject_5A, 0x87BF, hm_CODE_8188E5)
+ITEM_JSR(ItemObject_01, 0x80FE, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_02, 0x8102, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_03, 0x8106, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_04, 0x810A, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_05, 0x810E, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_06, 0x8112, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_07, 0x8116, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_08, 0x811A, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_09, 0x811E, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_0A, 0x8122, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_0D, 0x8126, hm_ItemPlaceableSteps)
+ITEM_JSR(ItemObject_0E, 0x812A, hm_ItemPlaceableSteps)
+ITEM_JSR(ItemObject_0F, 0x812E, hm_ItemPlaceableSteps)
+ITEM_JSR(ItemObject_14, 0x8192, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_15, 0x8196, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_16, 0x819A, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_17, 0x819E, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_18, 0x81A2, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_19, 0x81A6, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_1A, 0x81AA, hm_ItemFodderSteps)
+ITEM_JSR(ItemObject_24, 0x83B7, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_25, 0x83BB, hm_ItemAnimalSteps)
+ITEM_JSR(ItemObject_26, 0x83BF, hm_ItemAnimalSteps)
+ITEM_JSR(ItemObject_29, 0x83C5, hm_ItemAnimalSteps)
+ITEM_JSR(ItemObject_58, 0x87B7, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_59, 0x87BB, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_5A, 0x87BF, hm_ItemCommonSteps)
 
 /* $23, $27, $28: nothing (RTS) */
 void hm_ItemObject_23(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
@@ -1175,7 +1175,7 @@ void hm_ItemObject_28(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
 
 static void crop(uint8_t *ram, HmRegs *r, uint16_t at, uint32_t counter)
 {
-  jsr(ram, r, at, hm_CODE_8188E5);
+  jsr(ram, r, at, hm_ItemCommonSteps);
   r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5E) & 0x0001);
   if (!r->a) return;
   r->a = (uint16_t)(hm_bus_rd16(ram, counter) + 1);
@@ -1189,7 +1189,7 @@ void hm_ItemObject_13(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x817A, 0x7F1F4E);
 /* LDA $0976; CMP #$FF: bought? */
 static bool bought(uint8_t *ram, HmRegs *r, uint16_t at)
 {
-  jsr(ram, r, at, hm_CODE_818923);
+  jsr(ram, r, at, hm_ItemShopGoodsSteps);
   uint8_t s = rd8(ram, r, STATE);
   set_a8(r, s);
   r->c = s >= 0xFF;
@@ -1328,7 +1328,7 @@ static void piece(uint8_t *ram, HmRegs *r, uint8_t n, uint16_t at_edit, uint16_t
     r->y = rd16(ram, r, 0x09AF);
     jsl(ram, r, at_edit, 0x82, hm_EditTileonMap);
   }
-  jsr(ram, r, at_jsr, hm_CODE_8188E5);
+  jsr(ram, r, at_jsr, hm_ItemCommonSteps);
   s = rd8(ram, r, STATE);
   set_a8(r, s);
   r->c = s >= 3;
@@ -1341,7 +1341,7 @@ void hm_ItemObject_21(uint8_t *ram, HmRegs *r) { piece(ram, r, 4, 0x82EB, 0x82EF
 void hm_ItemObject_22(uint8_t *ram, HmRegs *r) { piece(ram, r, 5, 0x8324, 0x8328); }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_81A94A ($81:A94A, JSL, RTL): a tool goes back on its shelf. Only
+ * PutToolOnShelf ($81:A94A, JSL, RTL): a tool goes back on its shelf. Only
  * with something in the bag ($0923). The tool in hand ($0921) has an
  * 8-byte entry at $81:BE0F: +0 X, +2 Y, +4 the tile (ChangeMapTile's
  * arguments), +6 a row of the shed's flags ($7F:1F00 + it), +7 its bit.
@@ -1355,7 +1355,7 @@ void hm_ItemObject_22(uint8_t *ram, HmRegs *r) { piece(ram, r, 5, 0x8324, 0x8328
 #define SHELVES 0x81BE0F   /* 8 bytes a tool */
 #define SHED_ROWS 0x7F1F00
 
-void hm_CODE_81A94A(uint8_t *ram, HmRegs *r)
+void hm_PutToolOnShelf(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, rd8(ram, r, 0x0923));
   if (!rd8(ram, r, 0x0923)) return;
@@ -1389,17 +1389,17 @@ void hm_CODE_81A94A(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_8187C3 ($81:87C3, JSR, RTS): a tool taken off the shelf (items
+ * TakeToolFromShelf ($81:87C3, JSR, RTS): a tool taken off the shelf (items
  * $29 + n, n = 1-$1A: the tools as shop articles). If the bag is empty
  * ($0923) the tool in hand goes into it; the new one is in hand ($0921 =
  * item - $29) and its bit in the shed's rows is cleared (the entry at
- * $81:BE0F, as for CODE_81A94A). The player's action ends ($D4 = 0, $D2
- * bit 1 cleared), the item's game object goes (CODE_8581A2) with the
- * extra drawing of the map refreshed (CODE_81A4F1), nothing is held
+ * $81:BE0F, as for PutToolOnShelf). The player's action ends ($D4 = 0, $D2
+ * bit 1 cleared), the item's game object goes (DestroyGameObject) with the
+ * extra drawing of the map refreshed (FreeMapObject), nothing is held
  * ($091D = 0) and the new tool's noises are loaded (ToolUsedSound2).
  * Leftovers: those of ToolUsedSound2.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_CODE_8187C3(uint8_t *ram, HmRegs *r)
+void hm_TakeToolFromShelf(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
   set_a8(r, rd8(ram, r, 0x0923));
@@ -1426,8 +1426,8 @@ void hm_CODE_8187C3(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, GAME_STATE, r->a);
   r->a = rd16(ram, r, OBJECT);
   hm_dp_w16(ram, r, 0xA5, r->a);
-  jsl(ram, r, 0x8828, 0x85, hm_CODE_8581A2);
-  jsl(ram, r, 0x882C, 0x81, hm_CODE_81A4F1);
+  jsl(ram, r, 0x8828, 0x85, hm_DestroyGameObject);
+  jsl(ram, r, 0x882C, 0x81, hm_FreeMapObject);
   wr8(ram, r, IN_HAND, 0);                                   /* SEP #$20; STZ $091D */
   r->p = entry;
   jsl(ram, r, 0x8835, 0x82, hm_ToolUsedSound2);
@@ -1436,14 +1436,14 @@ void hm_CODE_8187C3(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * The 26 tools as items ($2A-$43, $81:83C9 + 8 n): each frame the tool in
- * hand goes back on its shelf (CODE_81A94A) and this one is taken
- * (CODE_8187C3): picking a tool off the shed's wall swaps it.
+ * hand goes back on its shelf (PutToolOnShelf) and this one is taken
+ * (TakeToolFromShelf): picking a tool off the shed's wall swaps it.
  * ───────────────────────────────────────────────────────────────────────── */
 #define TOOL_ITEM(name, at)                                   \
   void hm_##name(uint8_t *ram, HmRegs *r)                     \
   {                                                           \
-    jsl(ram, r, at, 0x81, hm_CODE_81A94A);                    \
-    jsr(ram, r, (uint16_t)((at) + 4), hm_CODE_8187C3);        \
+    jsl(ram, r, at, 0x81, hm_PutToolOnShelf);                    \
+    jsr(ram, r, (uint16_t)((at) + 4), hm_TakeToolFromShelf);        \
   }
 TOOL_ITEM(ItemObject_2A, 0x83C9) TOOL_ITEM(ItemObject_2B, 0x83D1) TOOL_ITEM(ItemObject_2C, 0x83D9)
 TOOL_ITEM(ItemObject_2D, 0x83E1) TOOL_ITEM(ItemObject_2E, 0x83E9) TOOL_ITEM(ItemObject_2F, 0x83F1)
@@ -1456,7 +1456,7 @@ TOOL_ITEM(ItemObject_3F, 0x8471) TOOL_ITEM(ItemObject_40, 0x8479) TOOL_ITEM(Item
 TOOL_ITEM(ItemObject_42, 0x8489) TOOL_ITEM(ItemObject_43, 0x8491)
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_81809A ($81:809A, JSR, RTS): each frame, the routine of the item
+ * RunItemRoutine ($81:809A, JSR, RTS): each frame, the routine of the item
  * being worked on ($0984), through the table DATA8_8197C0 (JSR (abs,X),
  * X = 2 item, A's high byte 0); then bit 0 of $7F1F5E (an item shipped
  * this frame) is cleared. Items 1-$5A have a routine; the table's entry
@@ -1489,7 +1489,7 @@ static Step *const ITEM_ROUTINES[0x5A] = {
   hm_ItemObject_59, hm_ItemObject_5A,
 };
 
-void hm_SUB_81809A(uint8_t *ram, HmRegs *r)
+void hm_RunItemRoutine(uint8_t *ram, HmRegs *r)
 {
   uint8_t item = rd8(ram, r, ITEM);
   r->a = (uint8_t)(item << 1);                               /* LDA #0; XBA; LDA; ASL */
@@ -1504,16 +1504,16 @@ void hm_SUB_81809A(uint8_t *ram, HmRegs *r)
  * BAAAA ($81:A383, JSL, RTL; HM-Decomp's name): the items left on the map,
  * every frame. Ten records of 16 bytes at $7E:B4E6 ($07-$09 points at the
  * one worked on): +0 flags (bit 0 in use, bit 1 drawn on the map, bit 2
- * kept off screen), +1 the routine (1 = SUB_81809A, through the table
+ * kept off screen), +1 the routine (1 = RunItemRoutine, through the table
  * $81:A58B; 0 = none), +2 the state, +3 the item, +4 its game object,
  * +6 / +8 its sprite and the last one, +$A-$E the flip and the position.
  * For each record in use the fields are copied to $0974-$0982 (the item
- * being worked on), the object is placed (CODE_8581CB: $A7 = $FFFD when
+ * being worked on), the object is placed (ReadGameObject: $A7 = $FFFD when
  * it fell out of the map, $FFFF when it is on screen); out of the map it
- * is destroyed (CODE_8581A2) and, if drawn on the map, the map's extras
- * are redrawn (CODE_81A4F1); off screen it is skipped unless bit 2. Then
+ * is destroyed (DestroyGameObject) and, if drawn on the map, the map's extras
+ * are redrawn (FreeMapObject); off screen it is skipped unless bit 2. Then
  * the routine runs and everything is copied back; the object follows
- * (CODE_8580B9) and gets the new sprite if it changed (CODE_858100).
+ * (MoveGameObject) and gets the new sprite if it changed (ChangeGameObjectSprite).
  * Only routine 1 exists: the table's other words are the bytes of the
  * code after it.
  * Leftovers: A = $B586 (the pointer past the last record), X = $0A, C = 1.
@@ -1545,16 +1545,16 @@ void hm_BAAAA(uint8_t *ram, HmRegs *r)
         wr16(ram, r, words[i], r->a);
         if (i == 0) hm_dp_w16(ram, r, 0xA5, r->a);
       }
-      jsl(ram, r, 0xA3F5, 0x85, hm_CODE_8581CB);
+      jsl(ram, r, 0xA3F5, 0x85, hm_ReadGameObject);
       r->a = hm_dp_r16(ram, r, 0xA7);
       bool run = true;
       r->c = r->a >= 0xFFFD;
       if (r->a == 0xFFFD) {                                  /* out of the map */
         r->a = rd16(ram, r, OBJECT);
         hm_dp_w16(ram, r, 0xA5, r->a);
-        jsl(ram, r, 0xA420, 0x85, hm_CODE_8581A2);
+        jsl(ram, r, 0xA420, 0x85, hm_DestroyGameObject);
         set_a8(r, rd8(ram, r, 0x0974) & 0x02);
-        if (r->a & 0xFF) jsl(ram, r, 0xA42D, 0x81, hm_CODE_81A4F1);
+        if (r->a & 0xFF) jsl(ram, r, 0xA42D, 0x81, hm_FreeMapObject);
       } else {
         r->c = r->a >= 0xFFFF;
         if (r->a != 0xFFFF) {                                /* off screen */
@@ -1569,7 +1569,7 @@ void hm_BAAAA(uint8_t *ram, HmRegs *r)
         r->x = r->a;
         r->c = 1;                                            /* CPX #0 */
         if (r->x) {
-          if (r->x == 2) jsr(ram, r, 0xA444, hm_SUB_81809A);
+          if (r->x == 2) jsr(ram, r, 0xA444, hm_RunItemRoutine);
           static const uint16_t back8[3][2] = { { 0, 0x0974 }, { 2, 0x0976 }, { 3, ITEM } };
           for (int i = 0; i < 3; i++) {
             set_a8(r, rd8(ram, r, back8[i][1]));
@@ -1581,14 +1581,14 @@ void hm_BAAAA(uint8_t *ram, HmRegs *r)
             hm_bus_wr16(ram, rec_at(ram, r, (uint16_t)(4 + 2 * i)), r->a);
             if (to_dp[i]) hm_dp_w16(ram, r, to_dp[i], r->a);
           }
-          jsl(ram, r, 0xA49B, 0x85, hm_CODE_8580B9);
+          jsl(ram, r, 0xA49B, 0x85, hm_MoveGameObject);
           r->a = rd16(ram, r, 0x097A);
           uint16_t last = rd16(ram, r, 0x097C);
           r->c = r->a >= last;
           if (r->a != last) {
             hm_dp_w16(ram, r, 0xA1, r->a);
             hm_bus_wr16(ram, rec_at(ram, r, 8), r->a);
-            jsl(ram, r, 0xA4AE, 0x85, hm_CODE_858100);
+            jsl(ram, r, 0xA4AE, 0x85, hm_ChangeGameObjectSprite);
           }
         }
       }

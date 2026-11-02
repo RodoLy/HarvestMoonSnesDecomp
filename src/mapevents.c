@@ -5,7 +5,7 @@
  * its routine from UNK_TableFunctionSelect ($83:CAA9, one word per map).
  * Each routine starts the event scripts of the people and things of that
  * map, depending on the date, the time and the story flags, with
- * UNK_LoadCCDataLong (A = the slot, X = the script group, Y = the script).
+ * StartEventScriptLong (A = the slot, X = the script group, Y = the script).
  *
  * Flags seen so far (16-bit words in $7F:1F64-$7F:1F74):
  *   $7F1F66  bits 0-4: one per girl (Maria, Ann, Nina, Ellen, Eve: which
@@ -16,7 +16,7 @@
  *   $7F1F68, $7F1F6A, $7F1F74: events seen
  *
  * All the routines here are JSR / RTS, entered with 16-bit A, X and Y.
- * Leftovers: those of the last UNK_LoadCCDataLong, or of the last test.
+ * Leftovers: those of the last StartEventScriptLong, or of the last test.
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
@@ -26,12 +26,12 @@
 #define KID1_AGE 0x7F1F37
 #define KID2_AGE 0x7F1F39
 
-/* LDA #a; LDX #x; LDY #y; JSL UNK_LoadCCDataLong at $83:`at` */
+/* LDA #a; LDX #x; LDY #y; JSL StartEventScriptLong at $83:`at` */
 static void spawn(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t y, uint16_t at)
 {
   r->a = a; r->x = x; r->y = y;
   hm_jsl(ram, r, (uint16_t)(at + 3), 0x84);
-  hm_UNK_LoadCCDataLong(ram, r);
+  hm_StartEventScriptLong(ram, r);
   hm_rtl(ram, r);
 }
 /* LDA.L addr; AND #mask (16 bits): true if any of the bits is set */
@@ -455,7 +455,7 @@ void hm_MapEvent_E407(uint8_t *ram, HmRegs *r)
 }
 
 /* E4CB, map $29: until $7F1F6A bit 6, a script at the tile (224, 384)
- * (SUB_8480F8: slot $10, script $1F). Coming from below ($D8 >= $200)
+ * (StartScriptAtTileInFront: slot $10, script $1F). Coming from below ($D8 >= $200)
  * with $D2 bit 11: the bit off and the
  * dog placed on this season's farm at (120, 424), the player's animation
  * = his direction. Then group $1D with $7F1F6C bit 4, group $1B with bit
@@ -467,7 +467,7 @@ void hm_MapEvent_E4CB(uint8_t *ram, HmRegs *r)
     hm_bus_wr16(ram, db(r, 0x0987), 0x0180);
     r->a = 0x0010; r->x = 0; r->y = 0x001F;
     hm_jsl(ram, r, 0xE4EE, 0x84);
-    hm_SUB_8480F8(ram, r);
+    hm_StartScriptAtTileInFront(ram, r);
     hm_rtl(ram, r);
   }
   r->a = hm_dp_r16(ram, r, 0xD8);
@@ -1061,16 +1061,16 @@ void hm_MapEvent_CB69(uint8_t *ram, HmRegs *r)
 }
 
 /* ── DED3, the player's house (maps $15-$17, its three sizes) ───────────
- *   - summer 30 of the third year (year 2): the ending (JMP CODE_83F4D8);
+ *   - summer 30 of the third year (year 2): the ending (JMP StartEnding);
  *   - the music of the house after the extensions ($098B = $17 with
  *     $7F1F64 bit 7, $16 with bit 6);
  *   - with $7F1F6C bit 13 (and not bit 14), a script at the tile (156,
- *     144) (SUB_8480F8: slot $10, script $1F);
+ *     144) (StartScriptAtTileInFront: slot $10, script $1F);
  *   - things the night left to do, each one flag of $7F1F6E cleared:
- *     bit 7, song $19 (UNK_Audio26) and the nine tiles from (576, 704)
+ *     bit 7, song $19 (ChangeMusic) and the nine tiles from (576, 704)
  *     to (608, 736) set to 2 (EditTileonMapandsets0181); bit 8, song $15;
  *     bit 9, noise $22 of bank 7 twice (after 20 and 30 frames,
- *     UNK_Audio24); bit 5, noise $20 and 60 frames;
+ *     PlayEffectWithSongInstrument); bit 5, noise $20 and 60 frames;
  *   - then one scene, the first that fits:
  *       bit 4: group $1F (script 2 with $7F1F5E bit 14; else script 1
  *              with bit 13, and $099F = 5 if the first child is 60 days
@@ -1106,18 +1106,18 @@ static void call_waits(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bank, HmFn 
   hm_rtl(ram, r);
   r->p = keep;
 }
-/* SEP #$20; LDA #song; JSL UNK_Audio26 */
+/* SEP #$20; LDA #song; JSL ChangeMusic */
 static void song(uint8_t *ram, HmRegs *r, uint8_t s, uint16_t at)
 {
   r->a = (uint16_t)((r->a & 0xFF00) | s);
-  call_waits(ram, r, at, 0x83, hm_UNK_Audio26);
+  call_waits(ram, r, at, 0x83, hm_ChangeMusic);
 }
-/* SEP #$20; REP #$10; LDA #effect; LDX #7; LDY #frames; JSL UNK_Audio24 */
+/* SEP #$20; REP #$10; LDA #effect; LDX #7; LDY #frames; JSL PlayEffectWithSongInstrument */
 static void noise(uint8_t *ram, HmRegs *r, uint8_t effect, uint16_t frames, uint16_t at)
 {
   r->a = (uint16_t)((r->a & 0xFF00) | effect);
   r->x = 7; r->y = frames;
-  call_waits(ram, r, at, 0x83, hm_UNK_Audio24);
+  call_waits(ram, r, at, 0x83, hm_PlayEffectWithSongInstrument);
 }
 /* LDA $7F1F6E; AND #~bit; STA $7F1F6E */
 static void flag_off(uint8_t *ram, HmRegs *r, uint32_t addr, uint16_t bit)
@@ -1185,7 +1185,7 @@ static bool morning_of(uint8_t *ram, HmRegs *r, uint8_t year, uint8_t season, ui
 void hm_MapEvent_DED3(uint8_t *ram, HmRegs *r)
 {
   if (byte_is(ram, r, YEAR, 2) && byte_is(ram, r, SEASON, 1) && byte_is(ram, r, DAY, 0x1E) && !g_hm_no_ending) {
-    hm_CODE_83F4D8(ram, r);                                  /* JMP */
+    hm_StartEnding(ram, r);                                  /* JMP */
     return;
   }
   if (flag(ram, r, 0x7F1F64, 0x0080)) {
@@ -1200,7 +1200,7 @@ void hm_MapEvent_DED3(uint8_t *ram, HmRegs *r)
     hm_bus_wr16(ram, db(r, 0x0987), 0x0090);
     r->a = 0x0010; r->x = 0; r->y = 0x001F;
     hm_jsl(ram, r, 0xDF46, 0x84);
-    hm_SUB_8480F8(ram, r);
+    hm_StartScriptAtTileInFront(ram, r);
     hm_rtl(ram, r);
   }
   if (flag(ram, r, 0x7F1F6E, 0x0080)) {

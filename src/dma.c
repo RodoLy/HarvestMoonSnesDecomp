@@ -70,7 +70,7 @@ void hm_RemoveProgrammedDMA(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_SetDMA2 ($83:81B7, JSL, RTL). Draws a 2x2 block of BG3 tilemap
+ * DrawTilemapBlock2x2 ($83:81B7, JSL, RTL). Draws a 2x2 block of BG3 tilemap
  * entries: X = VRAM address of its top row, $72-$74 = the 4 words (two
  * per row). Two 4-byte DMAs: channel 6 for the top row, channel 7 for the
  * bottom one (X + $20, one tilemap row below; source $72 + 4).
@@ -80,7 +80,7 @@ void hm_RemoveProgrammedDMA(uint8_t *ram, HmRegs *r)
 #define RET_1B7_TOP     0x81CF
 #define RET_1B7_BOTTOM  0x81F6
 
-void hm_UNK_SetDMA2(uint8_t *ram, HmRegs *r)
+void hm_DrawTilemapBlock2x2(uint8_t *ram, HmRegs *r)
 {
   uint16_t top = r->x;
   *hm_dp(ram, r, 0x27) = 6;
@@ -105,7 +105,7 @@ void hm_UNK_SetDMA2(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_SetDMA1 ($83:8166, JSL, RTL). Copies one letter of the font to VRAM:
+ * CopyLetterToVram ($83:8166, JSL, RTL). Copies one letter of the font to VRAM:
  * X = VRAM address, $72-$74 = its graphics, A = extra width (0: one 8x8
  * tile of 16 bytes per half; each unit adds 16 bytes). Two DMAs: the top
  * half on channel 6, the bottom half (source + $100, VRAM X + $80) on
@@ -115,7 +115,7 @@ void hm_UNK_SetDMA2(uint8_t *ram, HmRegs *r)
 #define RET_166_TOP     0x818A
 #define RET_166_BOTTOM  0x81B5
 
-void hm_UNK_SetDMA1(uint8_t *ram, HmRegs *r)
+void hm_CopyLetterToVram(uint8_t *ram, HmRegs *r)
 {
   uint16_t extra = (uint16_t)(r->a << 4), top = r->x;
   hm_dp_w16(ram, r, 0x7E, extra);

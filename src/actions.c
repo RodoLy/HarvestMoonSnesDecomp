@@ -7,7 +7,7 @@
  * PlayerInteractionSelector then runs action $096E (JSR; A = $096E x 2,
  * 16 bits) until the action clears $D2 bit 6. $096F counts the action's
  * steps and $0970 its frames (both start at 0). In HM-Decomp they all sit
- * in the block of CODE_81D716 (the TV), partly read as data; they are
+ * in the block of PlayerAction_0F_Tv (the TV), partly read as data; they are
  * named here PlayerAction_<number>.
  *
  * As everywhere, the bodies keep A, X, Y and C as the original leaves them.
@@ -135,14 +135,14 @@ static void walk(uint8_t *ram, HmRegs *r, uint16_t action, uint16_t facing)
   hm_dp_w16(ram, r, FACING, facing);
   wr16(ram, r, 0x0911, facing);
 }
-/* the player's own animation: action a with sprite s ($0901), CODE_81CFE6 */
+/* the player's own animation: action a with sprite s ($0901), UpdatePlayerObject */
 static void pose(uint8_t *ram, HmRegs *r, uint16_t action, uint16_t sprite, uint16_t at)
 {
   r->a = action;
   hm_dp_w16(ram, r, ACTION, action);
   r->a = sprite;
   wr16(ram, r, 0x0901, sprite);
-  jsr(ram, r, at, hm_CODE_81CFE6);
+  jsr(ram, r, at, hm_UpdatePlayerObject);
 }
 /* CalculateTileinFront (A, X, Y given; JSL at a) */
 static void tile_ahead(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t y, uint16_t at)
@@ -167,11 +167,11 @@ static void hold(uint8_t *ram, HmRegs *r, uint8_t item)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * The TVs: $0F CODE_81D716 (the first house), $12 and $13 (the bigger
+ * The TVs: $0F PlayerAction_0F_Tv (the first house), $12 and $13 (the bigger
  * houses; their map animations start at $27 and $34 instead of 0).
  * Step 0: $D2 bit 8 (watching), the screen turns on (animation base,
  * unless $0196 bit 4); step 1: once the animation is over ($CF = 0), the
- * weather report (SUB_8281C0), the channel's text for the season
+ * weather report (TvWeatherForecast), the channel's text for the season
  * (DATA8_81D510: 8 bytes per channel $0990, a word per season; $FFFF none)
  * and its picture (base + channel + 1); step 2: once the text is closed,
  * the screen turns off (animation $46, $47, $48) and $D2 bits 6 and 8 go.
@@ -187,7 +187,7 @@ static void tv(uint8_t *ram, HmRegs *r, const Tv *t)
   if (is(r, 1)) {
     r->a = rd16(ram, r, 0x00CF);
     if (r->a) return;
-    jsl(ram, r, t->at_weather, 0x82, hm_SUB_8281C0);
+    jsl(ram, r, t->at_weather, 0x82, hm_TvWeatherForecast);
     uint8_t ch = rd8(ram, r, 0x0990);
     r->a = ch;                                             /* LDA #0; XBA; LDA */
     uint8_t v = ch;
@@ -228,7 +228,7 @@ static void tv(uint8_t *ram, HmRegs *r, const Tv *t)
   next_step(ram, r);
 }
 
-void hm_CODE_81D716(uint8_t *ram, HmRegs *r)
+void hm_PlayerAction_0F_Tv(uint8_t *ram, HmRegs *r)
 {
   static const Tv t = { 0x0000, 0x0046, 0xD73B, 0xD74E, 0xD780, 0xD78F, 0xD7A8 };
   tv(ram, r, &t);
@@ -408,7 +408,7 @@ void hm_PlayerAction_1E(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * The girls' diaries ($26, $2D, $33, $36, $3F): "read it?" (text $23);
- * yes: the page for her hearts (text $03A6 + CODE_81D1C5 of her affection,
+ * yes: the page for her hearts (text $03A6 + AffectionToHearts of her affection,
  * $7F1F1F-$7F1F27) and one happiness less (AddPlayerHappiness -1).
  * ───────────────────────────────────────────────────────────────────────── */
 static void girls_diary(uint8_t *ram, HmRegs *r, uint16_t at, uint32_t affection)
@@ -422,7 +422,7 @@ static void girls_diary(uint8_t *ram, HmRegs *r, uint16_t at, uint32_t affection
   if (text_open(ram, r)) return;
   if (!said_no(ram, r)) {
     r->a = hm_bus_rd16(ram, affection);
-    jsr(ram, r, (uint16_t)(at + 0x40), hm_CODE_81D1C5);
+    jsr(ram, r, (uint16_t)(at + 0x40), hm_AffectionToHearts);
     uint32_t sum = (uint32_t)r->a + 0x03A6;
     r->c = sum > 0xFFFF;
     r->a = (uint16_t)sum;
@@ -797,7 +797,7 @@ void hm_PlayerAction_42(uint8_t *ram, HmRegs *r)
  *      the offer (text $030E), step 2;
  *   2  yes: text $030F, step 3; no: text $0309, step 5;
  *   3  sold: the price ($7F1F15, 24 bits) is added, the dealer leaves
- *      (SUB_848020 7, event 7 / $23), the cow too (its slot: event $22),
+ *      (FreeEventSlot 7, event 7 / $23), the cow too (its slot: event $22),
  *      its record is cleared, one cow less, -50 happiness; step 4;
  *   4  after $42 frames: ends, or with $7F1F60 bit 13 back to the dealer;
  *   5  once the text is closed the dealer leaves; step 6;
@@ -830,7 +830,7 @@ static uint8_t cow_bits(uint8_t *ram, HmRegs *r, uint8_t mask)
 static void event_long(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t y, uint16_t at)
 {
   r->a = a; r->x = 0; r->y = y;
-  jsl(ram, r, at, 0x84, hm_UNK_LoadCCDataLong);
+  jsl(ram, r, at, 0x84, hm_StartEventScriptLong);
 }
 static void dealer_comes_at(uint8_t *ram, HmRegs *r, uint16_t at)
 {
@@ -844,11 +844,11 @@ static bool flag_60_bit(uint8_t *ram, HmRegs *r, uint16_t bit)
   return r->a != 0;
 }
 static bool flag_60(uint8_t *ram, HmRegs *r) { return flag_60_bit(ram, r, 0x2000); }
-/* the dealer (slot a) leaves: SUB_848020 and event a / y */
+/* the dealer (slot a) leaves: FreeEventSlot and event a / y */
 static void leaves(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t y, uint16_t at_free, uint16_t at_event)
 {
   r->a = a;
-  jsl(ram, r, at_free, 0x84, hm_SUB_848020);
+  jsl(ram, r, at_free, 0x84, hm_FreeEventSlot);
   event_long(ram, r, a, y, at_event);
 }
 /* the animal leaves too (its slot runs event y), its record goes, one less */
@@ -867,7 +867,7 @@ static void animal_leaves(uint8_t *ram, HmRegs *r, const Animal *an, uint16_t at
 {
   r->a = rd8(ram, r, an->slot);
   r->x = 0; r->y = an->event;
-  jsl(ram, r, at_event, 0x84, hm_UNK_LoadCCDataShort);
+  jsl(ram, r, at_event, 0x84, hm_StartEventScript);
   animal_record(ram, r, an, at_rec);
   r->y = 0;
   set_a8(r, 0);
@@ -1022,7 +1022,7 @@ void hm_PlayerAction_43(uint8_t *ram, HmRegs *r)
  * $7C, step 7); otherwise the dealer comes. Step 1 waits $42 frames and
  * has no sick or young check; the sale gives -20 happiness; step 6 waits
  * $42 frames; text $0148 / $014A for the festival, where the chicken
- * starts event $10 / $1F at its place (SUB_8480F8 with $0985 / $0987
+ * starts event $10 / $1F at its place (StartScriptAtTileInFront with $0985 / $0987
  * from its record +4 / +6).
  * Leftovers: those of the last routine called and the stores after it.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -1119,7 +1119,7 @@ void hm_PlayerAction_44(uint8_t *ram, HmRegs *r)
     r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, 6));
     wr16(ram, r, 0x0987, r->a);
     r->a = 0x0010; r->x = 0; r->y = 0x001F;
-    jsl(ram, r, 0xEF4A, 0x84, hm_SUB_8480F8);
+    jsl(ram, r, 0xEF4A, 0x84, hm_StartScriptAtTileInFront);
     happiness(ram, r, 0xFFEC, 0xEF53);
     r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_60) | 0x1000);
     hm_bus_wr16(ram, FLAGS_60, r->a);
@@ -1176,7 +1176,7 @@ void hm_PlayerAction_45(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * $46 ($81:F061): the shipper's visit: event 6 / $26 (he comes); after $42
  * frames his text: $031A, or $031B when nothing was shipped ($7F1F07-09
- * = 0); once closed he leaves (SUB_848020 6, event 6 / $27), and after $42
+ * = 0); once closed he leaves (FreeEventSlot 6, event 6 / $27), and after $42
  * frames more the action ends.
  * Bug: when the low word of the shipped money is not 0 the branch to the
  * text keeps A in 16 bits, so "LDA #$00; STA $0191" is read as "LDA
@@ -1240,7 +1240,7 @@ void hm_PlayerAction_46(uint8_t *ram, HmRegs *r)
 static void event_short(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t y, uint16_t at)
 {
   r->a = a; r->x = 0; r->y = y;
-  jsl(ram, r, at, 0x84, hm_UNK_LoadCCDataShort);
+  jsl(ram, r, at, 0x84, hm_StartEventScript);
 }
 
 void hm_PlayerAction_47(uint8_t *ram, HmRegs *r)
@@ -1496,7 +1496,7 @@ void hm_PlayerAction_57(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * $35 ($81:E36E): a sound: effect $24 of bank 7, then 120 frames of wait
- * (UNK_Audio24); the noises of the item in hand loaded again ($0119 = 0,
+ * (PlayEffectWithSongInstrument); the noises of the item in hand loaded again ($0119 = 0,
  * ToolUsedSound2); the action is over.
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_PlayerAction_35(uint8_t *ram, HmRegs *r)
@@ -1505,7 +1505,7 @@ void hm_PlayerAction_35(uint8_t *ram, HmRegs *r)
   set_a8(r, 0x24);                                         /* SEP #$20; REP #$10 */
   r->x = 0x0007;
   r->y = 0x0078;
-  jsl(ram, r, 0xE37A, 0x83, hm_UNK_Audio24);
+  jsl(ram, r, 0xE37A, 0x83, hm_PlayEffectWithSongInstrument);
   wr8(ram, r, 0x0119, 0);
   r->p = entry;
   jsl(ram, r, 0xE383, 0x82, hm_ToolUsedSound2);

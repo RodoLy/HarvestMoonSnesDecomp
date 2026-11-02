@@ -268,14 +268,14 @@ Algunos trucos que fueron necesarios:
   vuelta al comienzo de su cuadro (un cuadro), o donde sigue a otra de
   estas rutinas: un gancho en esa instrucción lo manda a un RTL
   (`$80:972B`) que saca el marco del comprobador, y la reescritura vuelve
-  en el mismo lugar. Dos necesitaron más: `Unk_NamesInput` deja un byte
+  en el mismo lugar. Dos necesitaron más: `NamesScreen` deja un byte
   suelto en la pila (error 30, abajo), que la parada quita primero; y RESET
   borra toda la WRAM, la pila también, así que el comprobador guarda su
   marco y el puntero de pila en la primera instrucción de RESET y los
   repone en la parada (la reescritura hace lo mismo al final). RESET además
   sube el programa de sonido por la ROM de arranque del chip, así que,
-  como `UNK_Audio1`, se prueba una vez en el cuadro 1 (`HM_LIVE`). El bucle
-  de una sola instrucción `SUB_82878E` (`BRA` a sí mismo) se para en su
+  como `UploadSoundProgram`, se prueba una vez en el cuadro 1 (`HM_LIVE`). El bucle
+  de una sola instrucción `UnusedEndlessLoop` (`BRA` a sí mismo) se para en su
   segunda vuelta.
 - **Rutinas largas hechas de otras (bandera `HM_LOOSE`).** Las esperas que
   llaman estas rutinas guardan las banderas (PHP), y el NMI las empuja:
@@ -296,7 +296,7 @@ Algunos trucos que fueron necesarios:
 - **Entradas que una rutina larga no debe recibir.** Una rutina hecha de
   muchas otras se encuentra con lo que encuentra cada una, así que su
   preparación tiene que dejar las entradas reales para todas. Las
-  encontradas: un mapa que se entra por `SUB_80972C` debe tener paleta de
+  encontradas: un mapa que se entra por `LoadAndShowMap` debe tener paleta de
   sprites (los mapas $4B-$56 no la tienen: su entrada en `UNK_Table11`
   apunta más allá de la tabla de paletas, al bus abierto); el bit 15 de
   `$0196` (un dibujo guardado tal cual) solo viene con la granja, el
@@ -305,7 +305,7 @@ Algunos trucos que fueron necesarios:
   partidas guardadas debe ser 0-2; el HDMA debe estar apagado (un HDMA que
   copia a la WRAM mientras corre el original no tiene igual en la corrida
   de la reescritura, que no mueve el haz); una granja que dibuja
-  `UNK_PartialMap` debe tener códigos de casilla reales; y `ChangeStamina`
+  `DrawWholeMap` debe tener códigos de casilla reales; y `ChangeStamina`
   lee la bandera N de quien la llama (error 11), que una reescritura que
   la llama debe poner como la pondría el `LDA` del original.
   `HM_DECOMP_WATCH=<índice de WRAM>` imprime cada instrucción del original
@@ -316,7 +316,7 @@ Algunos trucos que fueron necesarios:
   cables). En el juego eso nunca pasa, así que las preparaciones dejan las
   entradas dentro de la ROM. Ojo con lo que la preparación *no* toca: la
   regresión completa del 23 de octubre encontró una diferencia en
-  `UNK_CheckTileProperty` porque la mitad de las veces se dejaba el puntero
+  `GetTileProperty` porque la mitad de las veces se dejaba el puntero
   a la tabla de propiedades ($0D-$0F) que había en ese momento del juego, y
   en ese cuadro apuntaba por debajo de $8000 de un banco de la ROM. Ahora
   solo se conserva si toda la tabla (4 bytes por 256 tipos) es memoria de
@@ -485,7 +485,7 @@ código en `$098C`:
   cultivos (1/32).
 - **El "desarrollo del rancho"** (`CalculateFarmDevelopment`) es contar
   las casillas con cerca, cultivo o pasto.
-  En porcentaje, para el final (`CODE_83F4D8`, el 30 de verano del año
+  En porcentaje, para el final (`StartEnding`, el 30 de verano del año
   3, el último día): cuenta x 10 / 295, como mucho 100. Esa misma rutina
   arranca el guion del final ($2E) y elige la vaca que muestra el final:
   la de más cariño (+04; la última si hay empate), cuyo nombre va a
@@ -508,7 +508,7 @@ regadera.
 **Rareza:** cualquier objeto que no esté en la lista "funciona".
 
 **Primero la animación** (`src/toolanim.c`). Apretar Y corre
-`UNK_ToolUsed`: sin energía ($D2 bit 3) el jugador solo muestra la
+`StartToolAnimation`: sin energía ($D2 bit 3) el jugador solo muestra la
 animación de "cansado" ($4D). Si no, revisa la casilla de enfrente, lo que
 también elige el sonido de la herramienta, y llama a la rutina de animación
 de la herramienta (`Tool_Animation_Table`, de nuevo una por objeto). Cada
@@ -517,9 +517,9 @@ más la dirección para las herramientas que se ven distintas según hacia
 dónde mira. La regadera tiene tres: regando, vacía y llenándose (frente al
 agua además llena la regadera, 20 usos). La campana además levanta $7F1F5A
 bit $10, que llama a las vacas. Lo que la herramienta le hace a la casilla
-viene después, cuando la animación llega a ese momento (`SUB_829260`).
+viene después, cuando la animación llega a ese momento (`UseToolInHand`).
 
-**Quién las llama:** `SUB_829260` toma el objeto en la mano ($0921), busca
+**Quién las llama:** `UseToolInHand` toma el objeto en la mano ($0921), busca
 su rutina en `Tool_Used_Table` (una por objeto, en el orden de los
 objetos: 28 en total) y la corre; después levanta la bandera "se usó una
 herramienta" ($7F1F5A bit $0040).
@@ -577,7 +577,7 @@ Fuera de su estación, la casilla queda como brote muerto.
 ($82:9054) tiene 3 bytes por objeto en la mano: un banco de sonidos y dos
 efectos, uno para cuando la herramienta da en algo y otro para cuando no
 ($0922 = 0 o 1; 2 es en silencio). `ToolUsedSound1` ($82:8FB1) elige el
-efecto y lo toca en el chip de sonido (`UNK_Audio19`); un efecto 0 es sin
+efecto y lo toca en el chip de sonido (`PlaySoundEffect0A`); un efecto 0 es sin
 sonido.
 
 ### 5.6 La energía
@@ -687,7 +687,7 @@ cruzada), mapa, días de preñez, **felicidad**, veces golpeada y posición.
   María, Ann, Nina, Ellen, Eve. Hablarles suma +8.
 - **La favorita** (`FindMostLovedName`): en caso de empate gana la
   última.
-- **De puntos a corazones** (`CODE_81D1C5`): los puntos (0-999) se
+- **De puntos a corazones** (`AffectionToHearts`): los puntos (0-999) se
   convierten en un nivel de corazones, 0-9, según estos rangos (tabla $81:D1E8): 0-49,
   50-119, 120-199, 200-249, 250-299, 300-399, 400-499, 500-599, 600-799,
   800-999. Los escalones no son iguales: los primeros corazones cuestan y
@@ -751,7 +751,7 @@ va. Algunos comandos:
 | `UNKCCchanges17` | si el jugador le habló al slot, este se gira hacia el jugador, se para y el guion salta |
 | `UNKCCchanges5` (1E, 1F), `UNKCCchanges9` (2D) | **hablar con alguien**: si el jugador le habló al slot (+0C), no está usando ni mostrando una herramienta ni silbando, no carga nada, los bits 1-2 de `$7F1F60` están apagados y acaba de apretar A: el slot se gira hacia el jugador, el jugador se para (acción 0, bit `$40` de `$D2`, `$096E` = `$56`) y el guion salta. 2D tiene una segunda dirección, para cuando el jugador muestra algo en alto (acción 5 con un objeto: ese objeto también va a `$091E`) |
 | `UNKCFD1` (2A) | empieza una animación de mapa (`StartMapAnimation`, el número del argumento) |
-| `AudioRelated2` (0E) | cambia la música a la pedida en `$0110` (`UNK_Audio25`) |
+| `AudioRelated2` (0E) | cambia la música a la pedida en `$0110` (`FadeOutSongSlowly`) |
 
 Los 90 comandos están reescritos. Los tres últimos fueron los dos
 fundidos de pantalla (0A, 0F) y `AudioRelated3` (2C, un efecto de
@@ -815,7 +815,7 @@ $7F1F5C:
   (`EventInstructionInterpreter`: el byte del comando elige una de 90
   rutinas, `$84:9419`); si no, la espera baja en uno. `$DE` avanza $33 por
   slot, así que los slots que tiran el dado en el mismo cuadro sacan
-  números distintos; los slots con sprite lo actualizan (`SUB_848286`). Al
+  números distintos; los slots con sprite lo actualizan (`UpdateSlotSprite`). Al
   final se borran los bits que duran un cuadro.
 
 ### 5.11 Los mapas
@@ -852,7 +852,7 @@ $7F1F5C:
   dibujo nuevo en ese mapa en memoria, deja en la cola de DMA la copia a
   la memoria de video y, si hace falta, cambia el tipo de casilla. Lo que
   hay que poner sale de la tabla `$81:B363`.
-- **Dibujar el mapa entero** (`UNK_PartialMap`): para cada una de las 64 ×
+- **Dibujar el mapa entero** (`DrawWholeMap`): para cada una de las 64 ×
   64 baldosas toma el dibujo del byte +0 de la propiedad de su tipo (0:
   nada). Los tipos $73-$79 se unen con sus vecinos de la misma clase
   (cercas y parecidos, "autotiling"): los cuatro vecinos forman una máscara
@@ -868,13 +868,13 @@ $7F1F5C:
   34, la disposición usual de LZSS). Las repeticiones (una fila de la misma
   baldosa, el mismo dibujo otra vez) ocupan dos bytes en vez de muchos.
 
-**Huellas en la nieve** (`CODE_81A58F`). Cada 8 pasos el juego recuerda
+**Huellas en la nieve** (`SnowFootprints`). Cada 8 pasos el juego recuerda
 dónde está el jugador ($0907 / $0909); en invierno, en la granja o en la
 montaña, el sitio recordado 8 pasos antes recibe una huella si su casilla
 es nieve (tipos 1, 2, $A8, $F6). Solo cambia el dibujo en la memoria de
 video, no el mapa: las huellas desaparecen al volver a cargar el mapa.
 
-**Animaciones de mapa** (`CODE_81A600`, cada cuadro, tras
+**Animaciones de mapa** (`RunMapAnimation`, cada cuadro, tras
 `StartMapAnimation`). Un guion de pasos de 7 bytes: un cambio de casillas,
 su X y su Y, y cuántos cuadros esperar; `$FFFF` lo termina y `$FFFE` salta
 a otro guion. Las judías mágicas creciendo son una.
@@ -887,7 +887,7 @@ a otro guion. Las judías mágicas creciendo son una.
   números 0-$261 se describen en el banco $86 y $262-$44F en el $87.
 - **Gráficos de las piezas:** si el dibujo de una pieza ya está en video
   se reutiliza; si no, va a una cola que vacía el NMI.
-- **El cargador** (`CODE_858CB2`, en el NMI): mientras la cola tiene
+- **El cargador** (`LoadQueuedSpritePieces`, en el NMI): mientras la cola tiene
   piezas y al presupuesto del cuadro (`$C7`) le quedan $100 bytes para una
   más, toma la pieza siguiente y le da un hueco de gráficos: uno nuevo
   mientras se hayan repartido menos de 64 (`$0846`), y después el primero
@@ -900,23 +900,23 @@ a otro guion. Las judías mágicas creciendo son una.
   esperando.
 - **Objetos del mapa** (`$7E:B4E6`, 10): los efectos que dejan las
   herramientas, como la hierba cortada o el golpe en la piedra.
-- **Destruir uno** (`CODE_8581A2`, `src/objects.c`): cada hueco de
+- **Destruir uno** (`DestroyGameObject`, `src/objects.c`): cada hueco de
   gráficos cuenta cuántas piezas lo usan ($7E:A320); destruir un objeto
   devuelve los huecos de sus piezas y libera el registro. Pero si alguna
   de sus piezas aún espera en la cola, no se libera nada: $0740 cuenta un
   rechazo más y el objeto simplemente se queda. Los guiones destruyen
   objetos con los comandos `Event_UNK1` (el suyo) y `Event_UNKCCchanges7`
   (el de otro slot).
-- **Moverlo y cambiarlo:** `CODE_8580B9` mueve un objeto (volteo, X, Y);
-  `CODE_858100` le pone otro sprite: se liberan las piezas viejas (con el
-  mismo rechazo de arriba) y se cargan las nuevas. `CODE_8581CB` vuelve a
+- **Moverlo y cambiarlo:** `MoveGameObject` mueve un objeto (volteo, X, Y);
+  `ChangeGameObjectSprite` le pone otro sprite: se liberan las piezas viejas (con el
+  mismo rechazo de arriba) y se cargan las nuevas. `ReadGameObject` vuelve a
   leer un objeto en esas variables.
 - **Sprites volteados:** la distancia de una pieza pasa a ser -distancia -
   16 cuando el objeto está volteado en ese sentido (`InvertIfFlipedX` /
   `Y`): el sitio reflejado de una pieza de 16 píxeles.
   `ClearSpriteDataTables` vacía la cola y libera todos los huecos de
   gráficos (al cargar un mapa).
-- **Animar los objetos** (`CODE_8582C7`, cada cuadro): la entrada de un
+- **Animar los objetos** (`AnimateGameObjects`, cada cuadro): la entrada de un
   sprite (+0C) es una lista de cuadros de 3 bytes: la lista de piezas del
   cuadro y cuántos cuadros dura; una lista de piezas 0 vuelve al primer
   cuadro (un bucle). Cada objeto descuenta su temporizador (+12); al
@@ -941,15 +941,15 @@ a otro guion. Las judías mágicas creciendo son una.
   $DC = 0) y vacía la tabla; los huecos de gráficos quedan como estaban.
 - **El objeto del propio jugador** ($0905): su animación ($0901) elige un
   sprite y un volteo de `DATA8_81D210` (3 bytes cada una; el byte del
-  volteo x 64 se guarda en $090F). `CODE_81CFA0` lo crea en la posición
-  del jugador; cada cuadro `CODE_81CFE6` lo lleva hasta el jugador y,
+  volteo x 64 se guarda en $090F). `CreatePlayerObject` lo crea en la posición
+  del jugador; cada cuadro `UpdatePlayerObject` lo lleva hasta el jugador y,
   si la animación cambió ($0903 = la que se muestra), le da el sprite
-  nuevo; después `CODE_81D03D` lo relee y, cuando su cuadro dura para
+  nuevo; después `ReadPlayerObjectTimer` lo relee y, cuando su cuadro dura para
   siempre ($FF: la animación terminó), apaga el bit $2000 del estado ($D2).
-- **Un slot que camina** (`SUB_848331`): con el bit 5 de +01, cada +05
+- **Un slot que camina** (`StepSlot`): con el bit 5 de +01, cada +05
   cuadros el slot se mueve (+03, +04), bytes con signo, sumados a su
   posición.
-- **Un slot que pasea solo** (`SUB_8483CC`, 531 instrucciones; la gente
+- **Un slot que pasea solo** (`WanderSlot`, 531 instrucciones; la gente
   del pueblo, los animales del establo): con el bit 3 de +01, justo
   después de cada paso (+05 = +06):
   - si no le quedan pasos (+08 = 0) elige un paseo nuevo de +07 pasos: la
@@ -973,7 +973,7 @@ a otro guion. Las judías mágicas creciendo son una.
     que es lo que dejó la última comprobación de cualquier otro.
   - El "azar" de $DE: el bucle de los slots le suma $33 antes de cada slot
     activo, así que cada uno recibe un valor distinto en el mismo cuadro.
-- **El sprite de un slot, cada cuadro** (`SUB_848286`): si no está
+- **El sprite de un slot, cada cuadro** (`UpdateSlotSprite`): si no está
   congelado (+01 bit 4), el slot pasea y da su paso (las dos de arriba).
   Luego su objeto con sprite (+12) recibe la posición (+1A, +1C), la
   animación (+14) y el sprite (+16), y según +01: bit 6 lo destruye, bit 1
@@ -1036,7 +1036,7 @@ texto.
   reloj otra vez, salvo que ya estuviera detenido antes ($0196 bit 5).
 - **La flecha de "hay más texto"** (`BlinkTextBoxArrow`): mientras el
   cuadro espera un botón, cada 20 cuadros la flecha cambia entre sus dos
-  dibujos. Es un bloque de 2×2 casillas que `UNK_SetDMA2` copia a la VRAM
+  dibujos. Es un bloque de 2×2 casillas que `DrawTilemapBlock2x2` copia a la VRAM
   con dos DMA pequeños (fila de arriba y fila de abajo). Tiene 12 lugares
   posibles.
 
@@ -1050,7 +1050,7 @@ casilla siguiente:
   `FindLetterGraphics` convierte un código de letra en la dirección de sus
   gráficos.
 - `DrawLetter` copia esas dos casillas a la VRAM en el cursor ($0185) con
-  `UNK_SetDMA1` (dos DMA pequeños: mitad de arriba y mitad de abajo).
+  `CopyLetterToVram` (dos DMA pequeños: mitad de arriba y mitad de abajo).
 - `AdvanceLetterCursor` mueve el cursor una casilla; al final de una línea
   salta las mitades de abajo.
 - Los **números** (dinero, días...) se imprimen cifra por cifra con
@@ -1063,7 +1063,7 @@ casilla siguiente:
 **La impresora** (`PrintTextFrame`, `ADDDDFFFF` en HM-Decomp) corre una
 vez por cuadro. Un texto es una lista de códigos de 16 bits. Un código
 normal es una letra: se imprime **una cada 5 cuadros**, cada una con un
-pequeño efecto de sonido (`UNK_Audio19`, ver 5.15). Algunos códigos son
+pequeño efecto de sonido (`PlaySoundEffect0A`, ver 5.15). Algunos códigos son
 órdenes:
 
 | Código | Significado |
@@ -1110,16 +1110,16 @@ sonido) y las canciones. Todas las órdenes:
 
 | Orden | Rutina | Qué es |
 |---|---|---|
-| $01 | `UNK_Audio4` | los datos del programa de sonido ($3F2 bytes desde $B2:D120), al encender |
-| $02 | `UNK_Audio3` | los 10 instrumentos que están siempre |
-| $03 | `UNK_Audio9`, `UNK_Audio12` | los instrumentos de una canción (hasta 11), o de un efecto de sonido |
-| $04 | `UNK_Audio10` | parar un canal (y olvidar los instrumentos anotados desde él) |
-| $05 | `UNK_Audio11` | las notas de una canción |
-| $07 | `UNK_Audio13` | (sin argumento; el que recibe se guarda y nunca se manda) |
-| $08, $09 | `UNK_Audio14`, `UNK_Audio6` | órdenes de dos argumentos que se usan al cambiar de canción (1 y $10 o $40: quizá un fundido) |
+| $01 | `SendSoundData` | los datos del programa de sonido ($3F2 bytes desde $B2:D120), al encender |
+| $02 | `LoadDefaultInstruments` | los 10 instrumentos que están siempre |
+| $03 | `LoadSongInstruments`, `LoadEffectInstrument` | los instrumentos de una canción (hasta 11), o de un efecto de sonido |
+| $04 | `DropInstrumentsFrom` | parar un canal (y olvidar los instrumentos anotados desde él) |
+| $05 | `SendSongData` | las notas de una canción |
+| $07 | `SoundCommand07` | (sin argumento; el que recibe se guarda y nunca se manda) |
+| $08, $09 | `SoundCommand08`, `SoundCommand09IfBusy` | órdenes de dos argumentos que se usan al cambiar de canción (1 y $10 o $40: quizá un fundido) |
 | $0A-$0C | ver arriba | efectos de sonido y dos pequeñas |
 
-**Antes de todo eso, el propio programa de sonido** (`UNK_Audio1`, una
+**Antes de todo eso, el propio programa de sonido** (`UploadSoundProgram`, una
 vez, al encender): el chip arranca en una ROM de arranque diminuta con su
 propio protocolo. El juego espera a que los puertos 0-1 lean $BBAA,
 escribe la dirección ($0500) en los puertos 2-3, 1 en el puerto 1 ("van
@@ -1143,22 +1143,22 @@ una: dónde están las notas y los 11 instrumentos), 40 instrumentos
 instrumento necesita cada uno de los 50 efectos de sonido (`$83:927F`).
 
 $0110 es la canción que se quiere y $0117 la que suena; cuando difieren,
-`UNK_Audio21`, `UNK_Audio22` y `UNK_Audio25` mandan el cambio.
-**Qué canción pide un mapa** (`UNK_Audio5`, al entrar): desde las 6 de la
+`FadeOutSong`, `StartSong` y `FadeOutSongSlowly` mandan el cambio.
+**Qué canción pide un mapa** (`PickMapMusic`, al entrar): desde las 6 de la
 tarde ninguna ($FF), salvo en el mapa $1E; con el bit 4 de `$0196` la
 canción $16; con el bit 1 de `$0196` los mapas por debajo del $57 tienen
 la $13 o la $14 (según el rango) y los $57-$5A ninguna; si no, cada mapa
 tiene una lista de cuatro canciones, una por estación, en la tabla
 `$80:B8E7` ($FFFF: ninguna).
-`Unk_Audio23` no tiene nada que ver con el sonido: multiplica dos números
+`Multiply16` no tiene nada que ver con el sonido: multiplica dos números
 de 16 bits con el multiplicador de 8 x 8 de la consola.
 
-*Rarezas:* `UNK_Audio6` solo manda su orden cuando el chip dice que está
+*Rarezas:* `SoundCommand09IfBusy` solo manda su orden cuando el chip dice que está
 ocupado (al revés que las demás). Después de los instrumentos de una canción,
-`UNK_Audio9` manda siempre también el instrumento 6: lo hace cuando la
+`LoadSongInstruments` manda siempre también el instrumento 6: lo hace cuando la
 lista termina en huecos vacíos, y las listas de las 26 canciones terminan
 así. Y otra vez una dirección de HM-Decomp va un byte antes:
-`UNK_Audio14` empieza en $83:8D39, no en 8D38. `UNUSED2` ($83:8376), que nadie llama, solo
+`SoundCommand08` empieza en $83:8D39, no en 8D38. `UNUSED2` ($83:8376), que nadie llama, solo
 suma uno a la cuenta de instrumentos ($0103).
 
 ### 5.16 Las partidas guardadas
@@ -1241,7 +1241,7 @@ agrega la letra (hasta 4, en $0885) u obedece el código; "listo" necesita
 al menos una letra. B borra la última letra (una letra vacía es $B1).
 Cambiar de página desplaza BG1: las tres páginas están en la misma imagen,
 la 1 a la derecha de la 0 y la 2 debajo.
-El sprite del cursor se pone en la x y la y de la casilla (`SUB_82EB57`,
+El sprite del cursor se pone en la x y la y de la casilla (`NameCursorPosition`,
 en $099B / $099D).
 
 **Mientras hay un cuadro de texto abierto** (modo 2, `ImmobileInputs`):
@@ -1264,7 +1264,7 @@ la fila o la columna que está a punto de verse, un poco antes de que la
 veas.
 
 **Cada cuadro, para cada dirección** (abajo `UpdateBGOffset`, arriba
-`SUB_80A0E1`, derecha `UNK_StaticMapScroling`, izquierda `SUB_80A152`):
+`ScrollCameraUp`, derecha `ScrollCameraRight`, izquierda `ScrollCameraLeft`):
 
 1. La posición de la cámara ($F5 horizontal, $F7 vertical) se copia al
    desplazamiento de BG1 ($013C / $013E): eso es lo que mueve la imagen.
@@ -1276,8 +1276,8 @@ veas.
    horizontal, $21 vertical, de 0 a 7). Cuando llega a 8 (o baja de 0) da
    la vuelta, y hace falta una línea nueva de baldosas.
 
-**La línea nueva** (`SUB_80A18D` la fila de abajo, `SUB_80A308` la de
-arriba, `SUB_80A481` la columna de la derecha, `SUB_80A617` la de la
+**La línea nueva** (`LoadMapRowBelow` la fila de abajo, `LoadMapRowAbove` la de
+arriba, `LoadMapColumnRight` la columna de la derecha, `LoadMapColumnLeft` la de la
 izquierda):
 
 - El mapa en la WRAM está guardado en bloques de 32 × 32 baldosas (una
@@ -1301,12 +1301,12 @@ izquierda):
 | $1E | la velocidad de la cámara (píxeles por cuadro) |
 | $20 / $21 | píxeles dentro de la baldosa (0-7), horizontal / vertical |
 
-**Al entrar a un mapa** (`SUB_809EBC`): la cámara se pone de modo que el
+**Al entrar a un mapa** (`PlaceCameraOnMapEntry`): la cámara se pone de modo que el
 jugador quede en el centro de la pantalla (128 píxeles), salvo que así se
 viera más allá de un límite; entonces se queda en el límite y el jugador
 queda corrido. $090B / $090D dicen dónde está el jugador en la pantalla.
 
-**El segundo fondo, BG2** (`SUB_809F61`, cada cuadro):
+**El segundo fondo, BG2** (`MoveSecondBackground`, cada cuadro):
 
 - en el cobertizo de herramientas (mapa $26), nada;
 - en los mapas desde $31 (la cima de la montaña y otros) un paralaje: a
@@ -1355,7 +1355,7 @@ está apagado; HM-Decomp llama a ese bit "soleado") nunca se tocan:
 probablemente son los del cuadro de texto y la ventana, que no deben
 oscurecerse.
 
-**La paleta de noche** la prepara `UNK_CustomisePalette` al entrar a un
+**La paleta de noche** la prepara `PrepareNightPalette` al entrar a un
 mapa: los fondos de la paleta "18:00" del mapa y los sprites de su paleta
 de sprites de noche (tabla `UNK_Table11`, $80:BE44, dos por mapa: día y
 noche).
@@ -1410,7 +1410,7 @@ Izquierda, así que su `PlayerActionLeft` en realidad es "derecha".
 
 ### 5.21 Apretar A
 
-Cuando el jugador aprieta A frente a algo, `SUB_82AD0E` mira el tipo de la
+Cuando el jugador aprieta A frente a algo, `PressAOnTile` mira el tipo de la
 baldosa de enfrente (0 si la baldosa no da al lado del jugador) y sus 4
 bytes en la tabla de propiedades del mapa:
 
@@ -1452,7 +1452,7 @@ su byte +$0C = 1, y su propio guion (una persona, un animal) reacciona.
 vez de un sitio; `PlayerInteractionSelector` la ejecuta desde la tabla
 $81:D593. De sus 14 entradas solo cuatro hacen algo: la 2 saca madera del
 montón (`GetFenceFromStack`: 2 piezas de madera, y llevas el objeto $57),
-la 4 es `CODE_81D670`, y la 6 / 7 arrancan las animaciones de mapa $11 /
+la 4 es `PlayerAction_04_Jingle`, y la 6 / 7 arrancan las animaciones de mapa $11 /
 $12. Las demás son un RTS suelto (`Unused01`-`Unused11`). Cada una borra
 el bit 6 de $D2 al terminar.
 
@@ -1475,13 +1475,13 @@ este orden:
 
 | Botón | Qué hace |
 |---|---|
-| A | hablar, leer, abrir, levantar (`SUB_82AD0E`, 5.21); con el perro en brazos, soltarlo enfrente (acción $16; se guardan el lugar y el mapa del perro); con algo en brazos, dejarlo en un lado libre (acción $18); con un objeto en la mano, tirarlo (acción 5) |
+| A | hablar, leer, abrir, levantar (`PressAOnTile`, 5.21); con el perro en brazos, soltarlo enfrente (acción $16; se guardan el lugar y el mapa del perro); con algo en brazos, dejarlo en un lado libre (acción $18); con un objeto en la mano, tirarlo (acción 5) |
 | B (mantenido) | correr (acción 2); frente a una baldosa con el bit de propiedad $20 o $40, saltarla (acción 3, 28 o 33 píxeles) si hay lugar para caer |
 | Select | mostrar el objeto en la mano (acción $0C) |
 | X | acción $1C |
 | R | silbarle al caballo, si lo tienes ($7F1F68 bit $100; acción $0D) |
 | L | silbarle al perro, si lo tienes (bit $80; acción $1B) |
-| Y | usar la herramienta (acción $0A, `UNK_ToolUsed`); con la caña: lanzar ($0F → $10), recoger vacía ($11 → $0F), o si picó ($12 → $13) una de cuatro animaciones de pesca al azar |
+| Y | usar la herramienta (acción $0A, `StartToolAnimation`); con la caña: lanzar ($0F → $10), recoger vacía ($11 → $0F), o si picó ($12 → $13) una de cuatro animaciones de pesca al azar |
 
 R, L, Select, X y Y no hacen nada mientras se carga algo ($D2 bits 1, 4,
 11).
@@ -1510,7 +1510,7 @@ de la paleta, paso a paso (ciclo de paleta, `src/coloranim.c`).
 - Una lista son pasos de 3 bytes: el color nuevo (una palabra) y cuántos
   cuadros se queda (un byte). $FFFE seguido de un puntero salta (así la
   lista da vueltas); $FFFF la termina.
-- `UNK_BigLoop` corre cada cuadro: avanza cada canal y, si alguno anduvo,
+- `RunColourAnimations` corre cada cuadro: avanza cada canal y, si alguno anduvo,
   manda la paleta a la consola por DMA. Los canales 0-3 solo corren
   mientras llueve o nieva. Desde el canal 4, el primer canal vacío termina
   el recorrido, así que siempre se usan en orden.
@@ -1518,7 +1518,7 @@ de la paleta, paso a paso (ciclo de paleta, `src/coloranim.c`).
   del día, con `Subrutines_Table` ($80:BEEC): 6 palabras por mapa (5 partes
   del día, y una palabra que, si no es $FFFF, significa "solo en otoño e
   invierno"). Cada palabra es una de 51 rutinas pequeñas, y cada una
-  arranca unos canales (`UNK_SetPointer42`: lista, color, fila, canal).
+  arranca unos canales (`StartColourAnimation`: lista, color, fila, canal).
 
 *Rareza:* después de la marca de fin $FFFF el puntero del canal se borra,
 pero el mismo cuadro sigue y todavía escribe el color $FFFF y mueve el
@@ -1556,7 +1556,7 @@ verdad.
 La forma de cada mapa está guardada una sola vez en el cartucho. Lo que
 cambia durante el juego (las ampliaciones de tu casa, las herramientas que
 compraste, el forraje que pusiste...) se añade encima cada vez que se carga
-el mapa: `UNK_ExecuteFromPointers` ($81:A9E5, `src/maptiles.c`) llama a la
+el mapa: `RunMapExtras` ($81:A9E5, `src/maptiles.c`) llama a la
 rutina de ese mapa desde una tabla (una palabra por mapa, $00-$5F). La
 mayoría de los mapas no tienen nada que añadir y apuntan a un RTS suelto.
 
@@ -1577,13 +1577,13 @@ túnel de los elfos: algo que haces y se nota en tres sitios.
 
 Tres piezas hacen el trabajo:
 
-- `SUB_81A7CE` estampa un cambio de casillas (dibujo y tipo de casilla) en
+- `ChangeMapTileNoVram` estampa un cambio de casillas (dibujo y tipo de casilla) en
   una posición. Es `ChangeMapTile` sin mandar nada a la VRAM: mientras se
   carga un mapa, el dibujo entero se manda después.
-- `SUB_82B0A7` escribe luego el tipo de cada casilla del cambio, desde una
+- `SetTileTypesFromChange` escribe luego el tipo de cada casilla del cambio, desde una
   segunda hoja en $A7:F500 ordenada como los gráficos (para cambios hechos
   de casillas distintas, como una ampliación con su puerta).
-- `SUB_81B2BB` muestra un objeto de una lista (el cobertizo, la
+- `DrawShelfItem` muestra un objeto de una lista (el cobertizo, la
   floristería, la tienda general, la de animales; 8 bytes cada uno:
   posición, cambio y un bit de $7F1F00-) siempre, solo si su bit está
   puesto (lo tienes), o solo si no lo está (todavía se vende).
@@ -1602,7 +1602,7 @@ $81:AC7F (ese byte es el RTS de `ReplaceTilesForkWinter`), y
 Al entrar a un mapa, `RunsFunctionbyIndex` ($83:CA98) llama a su rutina de
 `UNK_TableFunctionSelect` ($83:CAA9, una palabra por mapa). Cada una
 arranca los guiones de evento de la gente y las cosas de ese lugar, según
-la fecha, la hora y las banderas de la historia, con `UNK_LoadCCDataLong`
+la fecha, la hora y las banderas de la historia, con `StartEventScriptLong`
 (slot, grupo de guiones, guion). HM-Decomp las tiene todas como un solo
 bloque; acá cada una es `MapEvent_xxxx` (su dirección). Están todas salvo
 `DED3` (la casa del jugador, mapas $15-$17), que llama a rutinas de sonido
@@ -1641,14 +1641,14 @@ $15-$17 `DED3`, $18-$19 `D4D7`, $1A `D5E7`, $1B `D613`, $1C `D74E`, $1D
 ### 5.27 Las cosas que se dejan
 
 Cuando el jugador deja o tira lo que carga, eso se vuelve un **objeto del
-mapa** (ver 5.12). `SUB_818000` lo crea delante de él en el estado 0, con
-el sprite del objeto según hacia dónde mira (`SUB_8180B7`: `DATA8_8196AF`
+mapa** (ver 5.12). `PutItemDown` lo crea delante de él en el estado 0, con
+el sprite del objeto según hacia dónde mira (`GetItemSprite`: `DATA8_8196AF`
 tiene, por objeto, una lista de 3 bytes por caso: el sprite y un byte que
 x 64 es el volteo), dos píxeles debajo de él. Si el objeto deja algo en el
 suelo (`DATA8_81A2AD`, por objeto) ese tipo de casilla, sacado de la tabla
 de propiedades del mapa, se dibuja delante; y si hace ruido
 (`DATA8_81A308`) suena el efecto 8 del banco 6. Después, cada cuadro,
-`SUB_81809A` corre la rutina propia del objeto (tabla `DATA8_8197C0`, 91
+`RunItemRoutine` corre la rutina propia del objeto (tabla `DATA8_8197C0`, 91
 objetos) según su estado (`$0976`).
 
 **Las rutinas de los objetos** (`items.c`). Casi todos los objetos solo
@@ -1657,14 +1657,14 @@ estado (JMP):
 
 | Máquina | Objetos | Estados |
 |---|---|---|
-| `CODE_8188E5` | la mayoría | 0 en la mano, 2 cargado, 3 soltado, 4 se va, 5-6 ofrecido en venta, 7 enviado, 8 puesto sobre un objeto |
-| `CODE_818855` | comida (1-8) | como arriba, pero 0 pregunta "¿comerlo?" y 1 lo come (`ChangeStamina` con el valor de la comida, `DATA8_819FC6`) |
-| `CODE_8188BC` | forraje ($1A) | 3: a un comedero del establo o del gallinero (casillas $E2-$EE: su bit en $0932 / $0934 y uno más en $0930 / $0931) |
-| `CODE_81889A` | $0D-$0F, $57 | 2 se tira solo hacia suelo o un cajón, 3 cae (la casilla pasa a ser la del objeto, primer byte de `Items_Price_Table`) |
-| `CODE_81883A` | animales ($25, $26, $29) | 2 se tira solo donde puede pararse (tres casillas libres delante), 3 se baja: el registro de la gallina guarda el mapa y la casilla, y empieza su paseo |
-| `CODE_818923` | mercancía de tienda ($1B-$1D, $44-$56) | 0 "¿comprarlo?", 1 paga (`AddMoney` con el precio negativo) o "no te alcanza", 2 vuelve al mostrador, 3 comprado |
+| `ItemCommonSteps` | la mayoría | 0 en la mano, 2 cargado, 3 soltado, 4 se va, 5-6 ofrecido en venta, 7 enviado, 8 puesto sobre un objeto |
+| `ItemFoodSteps` | comida (1-8) | como arriba, pero 0 pregunta "¿comerlo?" y 1 lo come (`ChangeStamina` con el valor de la comida, `DATA8_819FC6`) |
+| `ItemFodderSteps` | forraje ($1A) | 3: a un comedero del establo o del gallinero (casillas $E2-$EE: su bit en $0932 / $0934 y uno más en $0930 / $0931) |
+| `ItemPlaceableSteps` | $0D-$0F, $57 | 2 se tira solo hacia suelo o un cajón, 3 cae (la casilla pasa a ser la del objeto, primer byte de `Items_Price_Table`) |
+| `ItemAnimalSteps` | animales ($25, $26, $29) | 2 se tira solo donde puede pararse (tres casillas libres delante), 3 se baja: el registro de la gallina guarda el mapa y la casilla, y empieza su paseo |
+| `ItemShopGoodsSteps` | mercancía de tienda ($1B-$1D, $44-$56) | 0 "¿comprarlo?", 1 paga (`AddMoney` con el precio negativo) o "no te alcanza", 2 vuelve al mostrador, 3 comprado |
 
-Dónde cae un objeto soltado (`CODE_819379`): en la granja, el establo o el
+Dónde cae un objeto soltado (`ItemLands`): en la granja, el establo o el
 gallinero, en un cajón de envío (casilla $F2) un objeto con precio se
 envía (se suma a $7F1F07 antes de las 5 de la tarde; después simplemente
 se pierde) y se anima el cajón; un huevo en la incubadora del gallinero
@@ -1683,7 +1683,7 @@ cuenta una más (hasta 255), una herramienta de oro reemplaza a la normal
 en el cobertizo y en las dos ranuras del jugador, el forraje llena su
 contador (12). Los cultivos ($10-$13) cuentan uno más enviado en el cuadro
 en que se envían. Las 26 herramientas ($2A-$43) siguen en el original:
-usan las rutinas que esperan cuadros (`CODE_81A94A`).
+usan las rutinas que esperan cuadros (`PutToolOnShelf`).
 
 **El día normal.** Cada persona tiene un guion en cada uno de varios
 grupos, uno por tipo de día: $0B antes del primer evento de la historia
@@ -1703,7 +1703,7 @@ Apretar A en una casilla tipo puerta cuya propiedad tiene el bit 0 del byte
 cuadro `PlayerInteractionSelector` corre la acción `$096E` (tabla en
 `$81:D593`, 88 entradas) hasta que la acción borra ese bit. `$096F` cuenta
 sus pasos y `$0970` sus cuadros. HM-Decomp mete las acciones $10-$57 dentro
-de `CODE_81D716` (la tele) y lee parte de ellas como datos; `actions.c` las
+de `PlayerAction_0F_Tv` (la tele) y lee parte de ellas como datos; `actions.c` las
 llama `PlayerAction_XX`:
 
 | Acciones | Qué son |
@@ -1724,42 +1724,42 @@ llama `PlayerAction_XX`:
 | $51, $52 | un trago en el bar (200 / 300 G, +1 / +3 de felicidad) |
 | $53 | un huevo de un nido del gallinero (`$7F1F45`) |
 
-La acción $35 toca el efecto $24 del banco 7 y espera 120 cuadros (`UNK_Audio24`); después recarga los ruidos del objeto (`ToolUsedSound2`).
+La acción $35 toca el efecto $24 del banco 7 y espera 120 cuadros (`PlayEffectWithSongInstrument`); después recarga los ruidos del objeto (`ToolUsedSound2`).
 
 
 ### 5.29 El jugador cada cuadro
 
-`SUB_81BFB7` corre una vez por cuadro. Sin el bit 0 de `$D2` solo termina
+`PlayerFrame` corre una vez por cuadro. Sin el bit 0 de `$D2` solo termina
 el cuadro; con el bit 6 corre una acción (5.28); si no, salta según la
 acción del jugador (`$D4`, tabla `DATA16_81C027`) a su paso, en
 `playerstate.c`. Casi todos ponen la animación del jugador (`$0901`, a
-menudo + su dirección) y la reproducen (`CODE_81CFE6`); cuando termina
+menudo + su dirección) y la reproducen (`UpdatePlayerObject`); cuando termina
 (`$0915 = $FFFF`) cambia la acción. Todos terminan por
 `ResetIdleAnimatioTimer`:
 
 | Acción | Paso |
 |---|---|
-| 0 | quieto (`CODE_81C556`): la animación de estar parado según el estado (cargando $14, en nieve $B0, $C0, $4F, $D0, $EA); con el bit 14 de `$D2` un contador de ocio (`$0925`) arranca una animación de espera (acción 9) al llegar a $F0 |
+| 0 | quieto (`PlayerStandStill`): la animación de estar parado según el estado (cargando $14, en nieve $B0, $C0, $4F, $D0, $EA); con el bit 14 de `$D2` un contador de ocio (`$0925`) arranca una animación de espera (acción 9) al llegar a $F0 |
 | 1, 2, $0E | caminar, correr (solo con el bit 12 de `$D2`, o el 14 sin el 13) y ser empujado: 1, 2 o 3 píxeles (nieve honda) con un sonido de paso cada 16 cuadros |
 | 3 | un salto: efecto de sonido 6, 1 o 2 píxeles |
-| 4, 5 | levantar (`SUB_818000` deja / toma el objeto) y tirar (efecto 7) |
+| 4, 5 | levantar (`PutItemDown` deja / toma el objeto) y tirar (efecto 7) |
 | 8 | comer; el objeto 8 da además +10 de felicidad y 10 más de aguante máximo |
 | 9 | una animación de espera |
-| $0A | usar una herramienta: `SUB_829260` al final de la animación, su sonido en el cuadro $18 |
+| $0A | usar una herramienta: `UseToolInHand` al final de la animación, su sonido en el cuadro $18 |
 | $0C | el reloj: un texto según la hora ($046A-$0478) |
 | $0B, $0D, $0F-$1B | otras animaciones y lo que sigue (eventos, banderas) |
 | $1C | cambiar de herramienta: animación $90 + la herramienta de la bolsa; después se cambian de lugar y se cargan los ruidos de la nueva (ToolUsedSound2) |
 
-`CODE_81CB77` mueve al jugador `$1E` píxeles hacia donde mira: los objetos
+`MovePlayer` mueve al jugador `$1E` píxeles hacia donde mira: los objetos
 de evento (`CBBBB`) o una casilla sólida (`CEEEE`) lo paran; cuando solo
 una de las esquinas del frente está bloqueada se desliza de lado para
 rodearla (siempre en los tipos 0 y $A0-$AF; si no, según en qué mitad de
 la casilla está); una puerta ($C0-$CF) lo para enseguida; luego la cámara
-lo sigue y cada 8 movimientos deja una huella (`CODE_81A58F`).
+lo sigue y cada 8 movimientos deja una huella (`SnowFootprints`).
 
 ### 5.30 Las puertas y la montaña
 
-`SUB_809A64` corre cada cuadro con las dos casillas bajo el jugador
+`CheckDoors` corre cada cuadro con las dos casillas bajo el jugador
 (`$0878` / `$087A`). Si las dos son salidas ($C0-$CF), lo hace salir:
 
 - No con el bit 4 de `$D2` ni los bits 1-2 de `$7F1F60`; con el bit 0 de
@@ -1783,7 +1783,7 @@ lo sigue y cada 8 movimientos deja una huella (`CODE_81A58F`).
   de los mapas $0C-$0F pasa una hora (no más allá de las 18:00, con
   `HaveLunch`); después el bit 14 de `$0196` arranca la transición.
 
-Un tipo de casilla desde $D0 sigue en `SUB_809D0B`, la montaña (mapas
+Un tipo de casilla desde $D0 sigue en `CheckMountainFinds`, la montaña (mapas
 $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
 
 - Casilla $F9 en primavera, $FA en otoño y $FB en invierno: una
@@ -1842,22 +1842,22 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   cuenta hacia atrás, el mapa se mueve `$087C` / `$087E` en cada cuadro.
 - **Cargas fijas.** `LoadDialogueBox`: el mapa de la caja de texto
   ($A5:CB05, descomprimido en `$7E:2000`) a la VRAM $7800 y los gráficos de
-  las letras ($9C:BBA3) a la VRAM $5000. `SUB_82E5E7` (pantallas de título
+  las letras ($9C:BBA3) a la VRAM $5000. `DrawTileBlock3x2` (pantallas de título
   y de nombre) dibuja un bloque de 3 x 2 casillas desde $82:E666 en la
-  dirección de una tabla ($82:E73E); `SUB_82EA80` dibuja cuatro letras $A8
+  dirección de una tabla ($82:E73E); `DrawNameEntryBlanks` dibuja cuatro letras $A8
   en la pantalla del nombre.
 - **Barras de casillas** (los marcos de las pantallas de título y de
-  partidas): `SUB_82EAB4` dibuja una, `SUB_82E742` ocho, una columna cada
+  partidas): `DrawScreenBar` dibuja una, `DrawScreenBars` ocho, una columna cada
   vez. Las cuatro casillas de la columna (casilla, + 1, + $10, + $11) se
   guardan en la página directa ($7E-$84) y se copian desde ahí por DMA
   ($80:007E y $80:0082) a la dirección de VRAM ($86) y a la fila de abajo;
   luego todo avanza 2.
-- **La línea de una partida guardada** (`CODE_82E405`, pantalla de
+- **La línea de una partida guardada** (`DrawSaveFileLine`, pantalla de
   partidas): el resumen de la ranura (`LoadGameSlotResume`); vacía, un
-  bloque en blanco (`SUB_82E5E7`); si no, el nombre del jugador, el año
+  bloque en blanco (`DrawTileBlock3x2`); si no, el nombre del jugador, el año
   (+ 1) y su sufijo, el día y el nombre de la estación, cada letra enviada
   a la VRAM en el acto.
-- **Herramientas de vuelta al estante** (`CODE_81A94A`): con algo en la
+- **Herramientas de vuelta al estante** (`PutToolOnShelf`): con algo en la
   bolsa, si la herramienta es de la tienda que se ve (herramientas 1-$18
   mapa $26, la $19 mapa $28, desde la $1A mapa $27), su lugar en el
   estante se vuelve a dibujar (`ChangeMapTile`) y se envía; después se
@@ -1884,8 +1884,8 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   descomprime ahí (o, con el bit 15 de `$0196`, se copia tal cual: los
   mapas grandes de exterior lo guardan sin comprimir, un banco entero de
   la ROM), recibe los campos dibujados en las
-  granjas (`UNK_PartialMap`) y los añadidos del mapa
-  (`UNK_ExecuteFromPointers`) y va a la VRAM en filas de $40 bytes. Al
+  granjas (`DrawWholeMap`) y los añadidos del mapa
+  (`RunMapExtras`) y va a la VRAM en filas de $40 bytes. Al
   final el jugador se lleva de 8 en 8 píxeles desde 0 hasta su posición de
   entrada (`$017D`, `$017F`), dibujando y enviando en cada paso la columna
   o fila nueva: la pantalla se construye igual que al desplazarse.
@@ -1909,30 +1909,30 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   hasta `$94`; después el bit 15 de `$7F1F5A` dice si la pantalla está
   encendida. Los comandos de guion `Event_ScreenFadein` /
   `Event_ScreenFadeout` funden de 3 a 15 y de 15 a 0, 3 cuadros por nivel.
-- **Sonidos que esperan** (5.15): `UNK_Audio18` hace sitio para el
-  instrumento de un efecto (quita los de después con `UNK_Audio10` y espera
-  un cuadro) y lo manda; `UNK_Audio24` toca el efecto A del banco X y
-  espera Y cuadros; `UNK_Audio20` cambia la canción (quita todos los
+- **Sonidos que esperan** (5.15): `PrepareSoundEffect` hace sitio para el
+  instrumento de un efecto (quita los de después con `DropInstrumentsFrom` y espera
+  un cuadro) y lo manda; `PlayEffectWithSongInstrument` toca el efecto A del banco X y
+  espera Y cuadros; `SetSong` cambia la canción (quita todos los
   instrumentos, lo que primero espera a que el chip no esté ocupado, y
-  manda los de la canción); `UNK_Audio26` apaga la canción vieja, pone la
+  manda los de la canción); `ChangeMusic` apaga la canción vieja, pone la
   nueva, espera 180 cuadros y elige la música del mapa; `ToolUsedSound2`
   carga los ruidos del objeto en la mano cuando cambia. El comando de
   guion `Event_AudioRelated3` toca un efecto y espera, y luego recarga los
-  ruidos del objeto; la acción 4 (`CODE_81D670`) toca el efecto $19 y
+  ruidos del objeto; la acción 4 (`PlayerAction_04_Jingle`) toca el efecto $19 y
   arranca la animación de mapa $44, y 32 cuadros después termina.
 - **Los objetos en el mapa** (5.27): en cada cuadro `BAAAA` recorre los
   diez registros de `$7E:B4E6`: coloca el objeto de cada uno
-  (`CODE_8581CB`), lo destruye si se salió del mapa y corre su rutina
-  (`SUB_81809A`: la del objeto, tabla `$81:97C0`); las 26 herramientas
+  (`ReadGameObject`), lo destruye si se salió del mapa y corre su rutina
+  (`RunItemRoutine`: la del objeto, tabla `$81:97C0`); las 26 herramientas
   que se toman de la pared del cobertizo se cambian por la de la mano
-  (`CODE_81A94A` la devuelve a su estante, `CODE_8187C3` toma la nueva y
+  (`PutToolOnShelf` la devuelve a su estante, `TakeToolFromShelf` toma la nueva y
   carga sus ruidos).
 
 ### 5.33 Del encendido a la granja
 
 - **RESET** (`$80:8428`): modo nativo, la pila en `$1F00`, cada registro de
   la CPU y del chip de imagen a su valor inicial, toda la WRAM borrada, el
-  programa de sonido subido y arrancado (`UNK_Audio1`-`4`), la VRAM, la
+  programa de sonido subido y arrancado (`UploadSoundProgram`-`4`), la VRAM, la
   OAM y la CGRAM borradas, las partidas guardadas revisadas
   (`CheckSRAMIntegrity`), el NMI encendido, y el título (`IntroScreen`,
   JML).
@@ -1944,29 +1944,29 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   entra deslizándose; 3 sube; 6 y 9 el fondo de la pantalla de título,
   con fundido; 4 las marcas del menú; 5 el menú (tras 600 cuadros, 10 s,
   las demos); 7 la pantalla de partida nueva; 8 la de partida guardada
-  (`SUB_82E1F1`); 10 la primera demo. Si la revisión de las partidas
+  (`ContinueFileScreen`); 10 la primera demo. Si la revisión de las partidas
   falla, el menú empieza en "continuar" (`$098D` = 2).
 - **Las pantallas de partidas**: los marcos y las líneas de las dos
   partidas (nombre, año, estación, día), la elegida encendida, el fondo
   moviéndose un píxel cada dos cuadros; de vuelta al título (`$94` = 1) o
   al juego (`$94` = 2): `StartFromNewGame` (`NewGameSetup`) o
   `StartFromLoad` (`LoadGameSlot`), y luego `SpawnAfterLoad`.
-- **Las demos** (`SUB_82D1C0`, `DemoPresentation`): una partida nueva en la
+- **Las demos** (`FirstDemo`, `DemoPresentation`): una partida nueva en la
   granja jugada por el guion de evento del grupo $47 (el paso de la demo
   en `$7F1F48` elige la siguiente, 12 por turno) en los cuadros del propio
   juego, hasta que el guion acaba.
 - **La primera mañana** (`SpawnAfterLoad`, `$80:8000`): la música de la
   casa, la pantalla borrada, el estado del día desde cero
   (`FirstNightReset`), el jugador en su silla (136, 120) de la casa
-  (`UNK_ScreenTransition`); después del primer día, el desayuno. Luego el
+  (`EnterMap`); después del primer día, el desayuno. Luego el
   bucle del juego.
 - **El bucle del juego** (`GameLoop`, `$80:8083`), un cuadro por vuelta:
   esperar el NMI; `$C7` = `$1800`; salvo que haya que escribir un nombre
   (bit 13 de `$0196`: la pantalla de los nombres); `SetScreenTransition`,
-  `SUB_809A64`, `UpdateTime`, `PrintTextFrame`,
-  `TransitionTimeofDayPalettes`, `UNK_BigLoop`, `InputTypeSelector`,
-  `BAAAA`, `SUB_81BFB7`, `AutoMapScrolling`, `IterateCCStructures`,
-  `CODE_81A600`, `CODE_8582C7`, `CODE_858CB2`, `PrepareOAMData`; `$00`
+  `CheckDoors`, `UpdateTime`, `PrintTextFrame`,
+  `TransitionTimeofDayPalettes`, `RunColourAnimations`, `InputTypeSelector`,
+  `BAAAA`, `PlayerFrame`, `AutoMapScrolling`, `IterateCCStructures`,
+  `RunMapAnimation`, `AnimateGameObjects`, `LoadQueuedSpritePieces`, `PrepareOAMData`; `$00`
   borrado.
 - **El reloj** (`UpdateTime`): un segundo por cuadro, 60 segundos por
   minuto y 15 minutos por hora, así que una hora del juego son 900 cuadros
@@ -1982,8 +1982,8 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   noche, pasa a ser el verano 30 del tercer año, el último día (error 33).
 - **Ir a otro mapa** (`SetScreenTransition`, cada cuadro): con el bit 14 de
   `$0196`, la música del mapa nuevo, el fundido de salida, la pantalla en
-  blanco; `UNK_ScreenTransition` borra lo del mapa viejo, pone la gente
-  del nuevo (`RunsFunctionbyIndex`, 5.26) y lo carga (`SUB_80972C`: el
+  blanco; `EnterMap` borra lo del mapa viejo, pone la gente
+  del nuevo (`RunsFunctionbyIndex`, 5.26) y lo carga (`LoadAndShowMap`: el
   dibujo, los colores, el jugador y lo que lleva, los animales, la música,
   el fundido de entrada).
 - **La casa** (`MapEvent_DED3`, mapas $15-$17): el final en el verano 30
@@ -1993,7 +1993,7 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   (su nombre en el texto), la de la esposa a las 6:00 o su propio grupo,
   la de los hijos, el grupo $0A en sus días, el grupo $28 en la primavera
   1 y el grupo $0F en el invierno 24.
-- **La pantalla de los nombres** (`Unk_NamesInput`, `$82:E80C`): la
+- **La pantalla de los nombres** (`NamesScreen`, `$82:E80C`): la
   cuadrícula de letras, el sprite del cursor, el marco del nombre; un
   cuadro a la vez el cursor parpadea y se mueve, hasta "fin"; entonces el
   nombre va adonde dice `$099F`: `SetPlayerName`, `SetCowNameBought` (una
@@ -2046,7 +2046,7 @@ Con todas las rutinas reescritas, el juego corre sin el código recompilado
   WRAM entre cuadros y solo con valores que el juego mismo pone, y tres
   ganchos en el C (`g_hm_oam_right/left` en PrepareOAMData para la
   pantalla ancha, `g_hm_no_ending` en MapEvent_DED3 para el juego sin fin,
-  `g_hm_year_suffix` en CODE_82E405 para "4th", "5th"...) que por defecto
+  `g_hm_year_suffix` en DrawSaveFileLine para "4th", "5th"...) que por defecto
   valen lo de la ROM, así que el comprobador no ve diferencia.
 - **El punto limpio.** Al empezar cada cuadro de GameLoop (`main` está por
   llamar a `hm_GameLoop`) no hay ninguna rutina a medias, solo la WRAM, los
@@ -2134,7 +2134,7 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     empezaban en el objeto 5.
 23. **Un bucle que nunca termina.** Cuando una pieza devuelve su hueco
     de gráficos, el juego espera mientras el contador del hueco sea 0 antes
-    de bajarlo (`LDA; BEQ` a sí mismo, `CODE_858C9F`). Con 0 se colgaría
+    de bajarlo (`LDA; BEQ` a sí mismo, `ReleaseSpriteSlot`). Con 0 se colgaría
     para siempre; no pasa porque un hueco que se devuelve siempre está en
     uso.
 24. **Una bandera que nunca se borra.** Al entrar al pueblo con el bit 10
@@ -2156,7 +2156,7 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     se busca el nido de la columna de la casilla de enfrente entre 13; si
     no hay ninguno salta a sí mismo para siempre (`$81:F856`).
 28. **Tres lugares donde gira para siempre.** El cargador de piezas
-    (`CODE_858CB2`) salta a sí mismo cuando no hay ningún hueco de gráficos
+    (`LoadQueuedSpritePieces`) salta a sí mismo cuando no hay ningún hueco de gráficos
     libre, cuando un número de hueco es $2000 o más, y en la pieza 32 de un
     cuadro (su lista de copias tiene sitio para 31). Como en el 23, son
     callejones sin salida de los que el propio juego se mantiene lejos: el
@@ -2167,10 +2167,10 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     `$420C`, HDMAEN, así que cada cuadro con trabajo termina con el HDMA
     apagado.
 30. **Un JSL a una rutina que acaba en RTS.** La pantalla de los nombres
-    (`Unk_NamesInput`, `$82:E8E7`) llama a `SUB_82EAB4` con JSL, pero esta
+    (`NamesScreen`, `$82:E8E7`) llama a `DrawScreenBar` con JSL, pero esta
     vuelve con RTS: el byte de banco que empujó el JSL se queda en la
     pila. La pantalla de los nombres nunca vuelve, así que no hace daño.
-31. **Un bucle de una instrucción.** `SUB_82878E` es un BRA a sí mismo.
+31. **Un bucle de una instrucción.** `UnusedEndlessLoop` es un BRA a sí mismo.
     Nadie la llama.
 32. **Código al que no se llega en la pantalla de título.** Tras el bucle
     de la escena de los padres (`$82:D99A`-`$82:D9B2`), una cuenta de
@@ -2320,6 +2320,6 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 28-oct-2026 | 88,12 % | las pantallas de título y de partidas (barras de casillas, la línea de una partida), herramientas de vuelta al estante, la tabla de sprites |
 | 28-oct-2026 | 88,80 % | el dibujo de un mapa (BackgroundsManager: tilemaps, dibujos de capa y el paseo de la cámara); dos preparaciones del fuzz más realistas (el año de una partida, los pasos y la dirección de un slot que pasea) |
 | 28-oct-2026 | 88,94 % | las interrupciones (NMI, IRQ por línea) y las esperas al cuadro siguiente, con el NMI adelantado por la prueba al azar (HM_WAIT) |
-| 28-oct-2026 | 90,73 % | lo que espera cuadros: los fundidos, los sonidos que esperan (UNK_Audio18/20/24/26, ToolUsedSound2), dos comandos de guion, la acción 4, los objetos en el mapa (BAAAA, SUB_81809A) y las 26 herramientas del cobertizo, el intérprete de guiones y su bucle, el cambio de herramienta (estado $1C del jugador), el cuadro del jugador (SUB_81BFB7, PlayerInteractionSelector) y la acción $35; la prueba al azar ahora repone la máquina entera antes de cada llamada de una rutina de sonido |
+| 28-oct-2026 | 90,73 % | lo que espera cuadros: los fundidos, los sonidos que esperan (PrepareSoundEffect/20/24/26, ToolUsedSound2), dos comandos de guion, la acción 4, los objetos en el mapa (BAAAA, RunItemRoutine) y las 26 herramientas del cobertizo, el intérprete de guiones y su bucle, el cambio de herramienta (estado $1C del jugador), el cuadro del jugador (PlayerFrame, PlayerInteractionSelector) y la acción $35; la prueba al azar ahora repone la máquina entera antes de cada llamada de una rutina de sonido |
 | 29-oct-2026 | 100,00 % | todo lo demás: del encendido a la granja (RESET, la pantalla de título y su menú, las pantallas de partidas, las demos, la primera mañana, el bucle del juego), el reloj y la noche, ir a otro mapa y cargarlo, la casa (quién aparece ahí), la pantalla de los nombres y adónde va cada nombre; la prueba al azar para las rutinas que nunca vuelven donde entran a su bucle (HM_TOLOOP) |
 | 29-oct-2026 | 100,00 % | la versión nativa: el juego se juega solo con el C reescrito (`native/`), con los chips de imagen y de sonido de la consola alrededor |

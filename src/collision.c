@@ -74,7 +74,7 @@ static bool crop_for_player(uint8_t *ram, const HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * CFFFF ($83:B0F6, JSR, RTS). X, Y = a point; A = 0 for the first corner,
- * 1 for the second. Reads the tile's property (UNK_CheckTileProperty):
+ * 1 for the second. Reads the tile's property (GetTileProperty):
  *   bit 0       the whole tile is solid;
  *   bits 1 / 2  only the half with x & 8 clear / set is solid;
  *   bits 3 / 4  only the half with y & 8 clear / set is solid;
@@ -97,7 +97,7 @@ void hm_CFFFF(uint8_t *ram, HmRegs *r)
   set16(ram, r, 0x90, 0x0000);
   r->a = 0x0002;
   hm_jsl(ram, r, 0xB119, 0x82);
-  hm_UNK_CheckTileProperty(ram, r);
+  hm_GetTileProperty(ram, r);
   hm_rtl(ram, r);
   uint8_t prop = (uint8_t)r->a;
   *hm_dp(ram, r, 0x92) = prop;

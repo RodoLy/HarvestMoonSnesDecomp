@@ -353,7 +353,7 @@ void hm_LoadsFromVRAMwithOffset(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * CopiesWRAMtoOBJVGRAM ($85:8E57, JSL, RTL): the sprite pieces the loader
- * (CODE_858CB2) queued at $7E:A420 (6 bytes each: source, bank, VRAM
+ * (LoadQueuedSpritePieces) queued at $7E:A420 (6 bytes each: source, bank, VRAM
  * address; $FFFF ends the list) go to VRAM, each as two DMAs of $40 bytes
  * on channel 0: the top half of the 16 x 16 piece from the source to the
  * address, the bottom half from source + $200 to address + $100.
@@ -476,7 +476,7 @@ void hm_LoadDialogueBox(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_82E5E7 ($82:E5E7, JSR, RTS; the title and name screens): draws a
+ * DrawTileBlock3x2 ($82:E5E7, JSR, RTS; the title and name screens): draws a
  * 3 x 2 block of tiles. A = which block: its VRAM address from the table at
  * $82:E73E ($80); Y = 0 or not ($84): the second set of tiles. For each of
  * the two rows ($82 = 0, 1; the row's address + $400 each time) three DMAs
@@ -485,7 +485,7 @@ void hm_LoadDialogueBox(uint8_t *ram, HmRegs *r)
  * Leftovers: A = 2, C = 1 (CMP #2), X = the last address + $60, Y = $24;
  * $7E, $80, $82, $84 as they ended.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_82E5E7(uint8_t *ram, HmRegs *r)
+void hm_DrawTileBlock3x2(uint8_t *ram, HmRegs *r)
 {
   r->x = (uint16_t)(r->a << 1);
   hm_dp_w16(ram, r, 0x80, hm_bus_rd16(ram, 0x82E73Eu + r->x));
@@ -525,13 +525,13 @@ void hm_SUB_82E5E7(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_82EA80 ($82:EA80, JSL, RTL; the name screen): four letters $A8 drawn
+ * DrawNameEntryBlanks ($82:EA80, JSL, RTL; the name screen): four letters $A8 drawn
  * (DrawLetter, X = 1) at the positions $82:EB4D, + $10 each ($0185 = the
  * position), each sent at once (StartProgramedDMA).
  * Leftovers: X = 4, C = 1 (CPX #4), A = $82 = the last position + $10, Y
  * that of the calls.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_82EA80(uint8_t *ram, HmRegs *r)
+void hm_DrawNameEntryBlanks(uint8_t *ram, HmRegs *r)
 {
   hm_dp_w16(ram, r, 0x82, hm_bus_rd16(ram, 0x82EB4D));
   for (uint16_t i = 0; i < 4; i++) {
@@ -555,9 +555,9 @@ void hm_SUB_82EA80(uint8_t *ram, HmRegs *r)
  * tile + $10, tile + $11) and are copied from there ($80:007E, $80:0082, 4
  * bytes each, channels 0 and 1) to VRAM $86 and $86 + $20; then the four
  * tiles and the address move on by 2.
- *   SUB_82EAB4 ($82:EAB4, JSR, RTS): one bar: the first tile at
+ *   DrawScreenBar ($82:EAB4, JSR, RTS): one bar: the first tile at
  *     $82:EB4B, the address at $82:EB49, the columns at $82:EB55.
- *   SUB_82E742 ($82:E742, JSR, RTS): eight bars, from the tables at
+ *   DrawScreenBars ($82:E742, JSR, RTS): eight bars, from the tables at
  *     $82:F268 (tiles), $82:F258 (addresses), $82:F288 (columns).
  * Leftovers: A = Y = $88 = the bar's columns, C = 1 (CPY); X = 8 (from
  * StartProgramedDMA) or, for the eight bars, $10.
@@ -588,7 +588,7 @@ static void bar_column(uint8_t *ram, HmRegs *r, const uint16_t at[3])
     hm_dp_w16(ram, r, v, (uint16_t)(hm_dp_r16(ram, r, v) + 2));
 }
 
-void hm_SUB_82EAB4(uint8_t *ram, HmRegs *r)
+void hm_DrawScreenBar(uint8_t *ram, HmRegs *r)
 {
   static const uint16_t at[3] = { 0xEAF3, 0xEB1E, 0xEB22 };
   bar_start(ram, r, hm_bus_rd16(ram, 0x82EB4B), hm_bus_rd16(ram, 0x82EB49));
@@ -605,7 +605,7 @@ void hm_SUB_82EAB4(uint8_t *ram, HmRegs *r)
   r->c = 1;
 }
 
-void hm_SUB_82E742(uint8_t *ram, HmRegs *r)
+void hm_DrawScreenBars(uint8_t *ram, HmRegs *r)
 {
   static const uint16_t at[3] = { 0xE787, 0xE7B2, 0xE7B6 };
   for (uint16_t x = 0; x != 0x10; x += 2) {
@@ -628,10 +628,10 @@ void hm_SUB_82E742(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_82E405 ($82:E405, JSR, RTS): one saved game's line on the file
- * screen; A = the line (slot), Y as SUB_82E5E7 wants it. The slot's summary
+ * DrawSaveFileLine ($82:E405, JSR, RTS): one saved game's line on the file
+ * screen; A = the line (slot), Y as DrawTileBlock3x2 wants it. The slot's summary
  * is read (LoadGameSlotResume); an empty one (X = 0) is drawn as a blank
- * block (JML SUB_82E5E7). Otherwise, at the positions of the line's 8-byte
+ * block (JML DrawTileBlock3x2). Otherwise, at the positions of the line's 8-byte
  * entry at $82:F278 (the text position goes in $0185, + 8 a letter):
  *   +0 the player's name, 4 letters ($0881-$0884);
  *   +2 the year (+ 1, PrintDigit) and its two-letter suffix ($82:F298);
@@ -667,7 +667,7 @@ static void digit_now(uint8_t *ram, HmRegs *r, uint8_t which, uint16_t at)
   jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_StartProgramedDMA);
 }
 
-void hm_CODE_82E405(uint8_t *ram, HmRegs *r)
+void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r)
 {
   uint16_t a = r->a, y = r->y;
   push16(ram, r, a);                                       /* PHA; PHY */
@@ -676,7 +676,7 @@ void hm_CODE_82E405(uint8_t *ram, HmRegs *r)
   r->y = pull16(ram, r);                                   /* PLY; PLA */
   r->a = pull16(ram, r);
   r->c = r->x >= 0;                                        /* CPX #0 */
-  if (r->x == 0) { hm_SUB_82E5E7(ram, r); return; }        /* JML: an empty slot */
+  if (r->x == 0) { hm_DrawTileBlock3x2(ram, r); return; }        /* JML: an empty slot */
 
   uint16_t entry = (uint16_t)(r->a << 3);
   push16(ram, r, entry);                                   /* PHX */
@@ -750,8 +750,8 @@ void hm_CODE_82E405(uint8_t *ram, HmRegs *r)
  *   - for each layer picture: its VRAM address ($8A) and long address. It
  *     is unpacked to $7E:2000 (or, if bit 15 of $0196 is set, copied as it
  *     is, $8000 bytes); the farms (maps 0-3) get their fields and houses
- *     drawn on it (UNK_PartialMap); a map with one picture also gets its
- *     extras (UNK_ExecuteFromPointers) unless bit 1 of $7F1F5E is set.
+ *     drawn on it (DrawWholeMap); a map with one picture also gets its
+ *     extras (RunMapExtras) unless bit 1 of $7F1F5E is set.
  *     Then, with the position, the scroll and the subpixels cleared, it
  *     goes to VRAM as 2 x 32 x 2 rows of $40 bytes (LoadsFromVRAMwithOffset);
  *     $1A / $1C come from the tables $80:AA68 / $80:AA72 (by $0181), and
@@ -760,7 +760,7 @@ void hm_CODE_82E405(uint8_t *ram, HmRegs *r)
  *     gap between the halves, are skipped.
  * Last, for maps below $57, the camera is walked to where it should be
  * ($017D, $017F) 8 pixels at a time (by the word at $1E, its low byte just
- * set to 8), each step drawing the new column (UNK_StaticMapScroling) or
+ * set to 8), each step drawing the new column (ScrollCameraRight) or
  * row (UpdateBGOffset) and sending it (StartProgramedDMA).
  * Leftovers: C = 1; A, X and Y those of the last step.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -801,7 +801,7 @@ static void walk_camera(uint8_t *ram, HmRegs *r, uint8_t at, uint16_t target, ui
     r->c = sum > 0xFFFF;
     r->a = (uint16_t)sum;
     hm_dp_w16(ram, r, at, r->a);
-    jsl(ram, r, call, 0x80, hm_SUB_809EBC);
+    jsl(ram, r, call, 0x80, hm_PlaceCameraOnMapEntry);
     jsl(ram, r, (uint16_t)(call + 4), 0x80, draw);
     jsl(ram, r, (uint16_t)(call + 8), 0x80, hm_StartProgramedDMA);
   }
@@ -906,12 +906,12 @@ void hm_BackgroundsManager(uint8_t *ram, HmRegs *r)
     }
     set_a8(r, map);
     r->c = map >= 0x04;
-    if (map < 0x04) jsl(ram, r, 0xA909, 0x82, hm_UNK_PartialMap);  /* a farm */
+    if (map < 0x04) jsl(ram, r, 0xA909, 0x82, hm_DrawWholeMap);  /* a farm */
     set_a8(r, *hm_dp(ram, r, 0x93));
     r->c = *hm_dp(ram, r, 0x93) >= 1;
     if (*hm_dp(ram, r, 0x93) == 1) {
       r->a = hm_bus_rd16(ram, 0x7F1F5E) & 0x0002;
-      if (!r->a) jsl(ram, r, 0xA920, 0x81, hm_UNK_ExecuteFromPointers);
+      if (!r->a) jsl(ram, r, 0xA920, 0x81, hm_RunMapExtras);
     }
     hm_dp_w16(ram, r, 0xF5, 0);
     hm_dp_w16(ram, r, 0xF7, 0);
@@ -997,6 +997,6 @@ void hm_BackgroundsManager(uint8_t *ram, HmRegs *r)
   if (map >= 0x57) return;
   set_a8(r, 0x08);
   *hm_dp(ram, r, 0x1E) = 0x08;
-  walk_camera(ram, r, 0xD6, 0x017D, 0xAA0B, hm_UNK_StaticMapScroling);
+  walk_camera(ram, r, 0xD6, 0x017D, 0xAA0B, hm_ScrollCameraRight);
   walk_camera(ram, r, 0xD8, 0x017F, 0xAA29, hm_UpdateBGOffset);
 }

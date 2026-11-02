@@ -1,8 +1,8 @@
 /*
  * interact.c — pressing A in front of something.
  *
- * SUB_82AD0E ($82:AD0E, JSL, RTL) is called by PlayerKeyA with X = the type
- * of the tile in front (UNK_CheckTileProperty; 0 when it does not face the
+ * PressAOnTile ($82:AD0E, JSL, RTL) is called by PlayerKeyA with X = the type
+ * of the tile in front (GetTileProperty; 0 when it does not face the
  * player's side). The map's tile property table [$0D] has 4 bytes per type;
  * what pressing A does depends on the type:
  *
@@ -92,7 +92,7 @@ static bool rule_applies(uint8_t *ram, HmRegs *r, uint8_t rule)
   return r->a != 0;
 }
 
-void hm_SUB_82AD0E(uint8_t *ram, HmRegs *r)
+void hm_PressAOnTile(uint8_t *ram, HmRegs *r)
 {
   uint16_t type = r->x;
   uint16_t at = (uint16_t)(type << 2);                     /* TXA; ASL; ASL */
@@ -185,13 +185,13 @@ void hm_SUB_82AD0E(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * The player's actions ($096E, set by pressing A on a door-like tile: see
- * SUB_82AD0E), run by PlayerInteractionSelector through the table $81:D593
+ * PressAOnTile), run by PlayerInteractionSelector through the table $81:D593
  * (JSR, RTS each). Most entries are a lone RTS (Unused01-11). The others
  * end by clearing $D2 bit 6 (the "an action is pending" bit):
  *   2 GetFenceFromStack ($81:D644): take lumber from the stack (AddWood
  *     with -2): if there was enough, you hold item $57 and $D4 = 4 (the
  *     "carrying" action);
- *   6 / 7 CODE_81D6E2 / CODE_81D6F8: start map animation $11 / $12.
+ *   6 / 7 PlayerAction_06_MapAnimation11 / PlayerAction_07_MapAnimation12: start map animation $11 / $12.
  * Leftovers: A = the new $D2, C from the last compare.
  * ───────────────────────────────────────────────────────────────────────── */
 #define GAME_STATE    0xD2
@@ -225,8 +225,8 @@ static void map_animation_action(uint8_t *ram, HmRegs *r, uint16_t animation, ui
   hm_rtl(ram, r);
   action_done(ram, r);
 }
-void hm_CODE_81D6E2(uint8_t *ram, HmRegs *r) { map_animation_action(ram, r, 0x11, 0xD6EA); }
-void hm_CODE_81D6F8(uint8_t *ram, HmRegs *r) { map_animation_action(ram, r, 0x12, 0xD700); }
+void hm_PlayerAction_06_MapAnimation11(uint8_t *ram, HmRegs *r) { map_animation_action(ram, r, 0x11, 0xD6EA); }
+void hm_PlayerAction_07_MapAnimation12(uint8_t *ram, HmRegs *r) { map_animation_action(ram, r, 0x12, 0xD700); }
 
 /* the actions that do nothing: a lone RTS. Also the other routines that
  * are only a return: COP_Return ($80:872A, RTS), ScreenTransitionReturn
@@ -235,21 +235,21 @@ void hm_CODE_81D6F8(uint8_t *ram, HmRegs *r) { map_animation_action(ram, r, 0x12
 void hm_ActionNothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_81D670 ($81:D670, JSR, RTS): action 4, run every frame while it
+ * PlayerAction_04_Jingle ($81:D670, JSR, RTS): action 4, run every frame while it
  * lasts. The first time ($096F != 1): the sound effect $19 of bank 6 with
- * the song's instrument (UNK_Audio18, played by UNK_Audio19), $7F1F5A
+ * the song's instrument (PrepareSoundEffect, played by PlaySoundEffect0A), $7F1F5A
  * bit 4, the map animation $44 (StartMapAnimation), $096F + 1. Then it
  * counts $0970 up to $20: there the action is over ($D2 bit 6 cleared) and
  * the noises of the item in hand are loaded again ($0119 = 0,
  * ToolUsedSound2).
- * UNK_Audio18 keeps V, D and I of the entry flags (nothing here changes
+ * PrepareSoundEffect keeps V, D and I of the entry flags (nothing here changes
  * them).
  * Leftovers: those of StartMapAnimation / ToolUsedSound2, or A = the
  * counter and C from its compare.
  * ───────────────────────────────────────────────────────────────────────── */
 static uint32_t db_at(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 
-void hm_CODE_81D670(uint8_t *ram, HmRegs *r)
+void hm_PlayerAction_04_Jingle(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
   uint8_t state = hm_bus_rd8(ram, db_at(r, 0x096F));
@@ -264,10 +264,10 @@ void hm_CODE_81D670(uint8_t *ram, HmRegs *r)
     r->a = (uint16_t)((r->a & 0xFF00) | n);
     hm_bus_wr8(ram, db_at(r, 0x0103), n);
     hm_jsl(ram, r, 0xD69D, 0x83);
-    hm_UNK_Audio18(ram, r);
+    hm_PrepareSoundEffect(ram, r);
     hm_rtl(ram, r);
     hm_jsl(ram, r, 0xD6A1, 0x83);
-    hm_UNK_Audio19(ram, r);
+    hm_PlaySoundEffect0A(ram, r);
     hm_rtl(ram, r);
     r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5A) | 0x0010);
     hm_bus_wr16(ram, 0x7F1F5A, r->a);

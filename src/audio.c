@@ -14,7 +14,7 @@
  *
  * Command $0A plays a sound effect: $0114-$0116 = its arguments (a letter
  * of text sets them to 3, 6, $0A). $0B with an argument in A, $0C alone.
- * Before sending, UNK_Audio15 asks (port 0 bit 4) whether the chip is busy
+ * Before sending, PlaySoundEffect asks (port 0 bit 4) whether the chip is busy
  * and, if so, drops the sound.
  *
  * The ports are addressed with the data bank (STA.W $2140), as the original.
@@ -63,10 +63,10 @@ static void send(uint8_t *ram, HmRegs *r, uint8_t p0, uint8_t p1, uint8_t p2)
 static void set_a8(HmRegs *r, uint8_t v) { r->a = (uint16_t)((r->a & 0xFF00) | v); }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio17 ($83:8EE4, JSR, RTS): waits for "ready" and returns
+ * SoundChipBusy ($83:8EE4, JSR, RTS): waits for "ready" and returns
  * A = port 0 & $10 (nonzero: the chip is busy). C = 1 (from CMP).
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio17(uint8_t *ram, HmRegs *r)
+void hm_SoundChipBusy(uint8_t *ram, HmRegs *r)
 {
   wait_steady_then(ram, r, 1);
   set_a8(r, port(ram, r, 0) & 0x10);
@@ -74,9 +74,9 @@ void hm_UNK_Audio17(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio7 ($83:8EC9, JSR, RTS): the same with A = port 0 & $11.
+ * SoundChipBusyOrPlaying ($83:8EC9, JSR, RTS): the same with A = port 0 & $11.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio7(uint8_t *ram, HmRegs *r)
+void hm_SoundChipBusyOrPlaying(uint8_t *ram, HmRegs *r)
 {
   wait_steady_then(ram, r, 1);
   set_a8(r, port(ram, r, 0) & 0x11);
@@ -84,12 +84,12 @@ void hm_UNK_Audio7(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio8 ($83:8E8B, JSR, RTS): sends the simple command $92 (ports
+ * SoundStartCommand ($83:8E8B, JSR, RTS): sends the simple command $92 (ports
  * 1-2 = 0) and waits for "done" (4). Unlike the others, after the first
  * steady read it only waits for 1 (it does not check steadiness again).
  * Leftovers: A = 4 (the last read), C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio8(uint8_t *ram, HmRegs *r)
+void hm_SoundStartCommand(uint8_t *ram, HmRegs *r)
 {
   wait_steady(ram, r);
   while (port(ram, r, 3) != 1) {}
@@ -102,20 +102,20 @@ void hm_UNK_Audio8(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio15 ($83:8DDF, JSL, RTL): play sound effect $0114-$0116. If the
- * chip is busy (UNK_Audio17), nothing. Otherwise it sends command $0A
- * (UNK_Audio8), then the three arguments, and waits for "done" (8).
- * Leftovers: A = 8, C = 1; or those of UNK_Audio17.
+ * PlaySoundEffect ($83:8DDF, JSL, RTL): play sound effect $0114-$0116. If the
+ * chip is busy (SoundChipBusy), nothing. Otherwise it sends command $0A
+ * (SoundStartCommand), then the three arguments, and waits for "done" (8).
+ * Leftovers: A = 8, C = 1; or those of SoundChipBusy.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_DDF_READY   0x8DE1
 #define RET_DDF_COMMAND 0x8DEC
 
-void hm_UNK_Audio15(uint8_t *ram, HmRegs *r)
+void hm_PlaySoundEffect(uint8_t *ram, HmRegs *r)
 {
-  jsr(ram, r, RET_DDF_READY, hm_UNK_Audio17);
+  jsr(ram, r, RET_DDF_READY, hm_SoundChipBusy);
   if (r->a & 0xFF) return;                            /* busy */
   *hm_dp(ram, r, 0x92) = 0x0A;
-  jsr(ram, r, RET_DDF_COMMAND, hm_UNK_Audio8);
+  jsr(ram, r, RET_DDF_COMMAND, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
   send(ram, r, rd8(ram, r, 0x0114), rd8(ram, r, 0x0115), rd8(ram, r, 0x0116));
   wait_steady_then(ram, r, 8);
@@ -125,44 +125,44 @@ void hm_UNK_Audio15(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio19 ($83:8332, JSL, RTL): UNK_Audio15 with $0116 = $0A.
+ * PlaySoundEffect0A ($83:8332, JSL, RTL): PlaySoundEffect with $0116 = $0A.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_332_SOUND   0x833C
 
-void hm_UNK_Audio19(uint8_t *ram, HmRegs *r)
+void hm_PlaySoundEffect0A(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 0x0A);
   hm_bus_wr8(ram, db_addr(r, 0x0116), 0x0A);
   hm_jsl(ram, r, RET_332_SOUND, 0x83);
-  hm_UNK_Audio15(ram, r);
+  hm_PlaySoundEffect(ram, r);
   hm_rtl(ram, r);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio16 ($83:8E7F, JSL, RTL): sends command $0C.
+ * SoundCommand0C ($83:8E7F, JSL, RTL): sends command $0C.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_E7F_COMMAND 0x8E89
 
-void hm_UNK_Audio16(uint8_t *ram, HmRegs *r)
+void hm_SoundCommand0C(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 0x0C);
   *hm_dp(ram, r, 0x92) = 0x0C;
-  jsr(ram, r, RET_E7F_COMMAND, hm_UNK_Audio8);
+  jsr(ram, r, RET_E7F_COMMAND, hm_SoundStartCommand);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio2 ($83:8E32, JSL, RTL): A (low byte) = argument. Sends command
+ * SoundCommand0B ($83:8E32, JSL, RTL): A (low byte) = argument. Sends command
  * $0B, then the argument in port 0, and waits for "done" (8).
  * $94 = the argument. Leftovers: A = 8, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_E32_COMMAND 0x8E3E
 
-void hm_UNK_Audio2(uint8_t *ram, HmRegs *r)
+void hm_SoundCommand0B(uint8_t *ram, HmRegs *r)
 {
   *hm_dp(ram, r, 0x94) = (uint8_t)r->a;
   set_a8(r, 0x0B);
   *hm_dp(ram, r, 0x92) = 0x0B;
-  jsr(ram, r, RET_E32_COMMAND, hm_UNK_Audio8);
+  jsr(ram, r, RET_E32_COMMAND, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
   send(ram, r, *hm_dp(ram, r, 0x94), 0, 0);
   wait_steady_then(ram, r, 8);
@@ -173,23 +173,23 @@ void hm_UNK_Audio2(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * The music. $0110 = the song wanted, $0117 = the one playing. Command $09
- * (UNK_Audio6) and $08 (UNK_Audio14) take two arguments, $07
- * (UNK_Audio13) and $04 (UNK_Audio10) one.
+ * (SoundCommand09IfBusy) and $08 (SoundCommand08) take two arguments, $07
+ * (SoundCommand07) and $04 (DropInstrumentsFrom) one.
  *
- * UNK_Audio6 ($83:8D8B, JSL, RTL): command $09 with $0112 / $0113. Only
- * when UNK_Audio7 says the chip is busy (port 0 & $11 not 0); otherwise it
+ * SoundCommand09IfBusy ($83:8D8B, JSL, RTL): command $09 with $0112 / $0113. Only
+ * when SoundChipBusyOrPlaying says the chip is busy (port 0 & $11 not 0); otherwise it
  * returns at once.
- * Leftovers: A = 8 and C = 1 when sent; UNK_Audio7's otherwise.
+ * Leftovers: A = 8 and C = 1 when sent; SoundChipBusyOrPlaying's otherwise.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_D8B_BUSY    0x8D8F
 #define RET_D8B_COMMAND 0x8D9A
 
-void hm_UNK_Audio6(uint8_t *ram, HmRegs *r)
+void hm_SoundCommand09IfBusy(uint8_t *ram, HmRegs *r)
 {
-  jsr(ram, r, RET_D8B_BUSY, hm_UNK_Audio7);
+  jsr(ram, r, RET_D8B_BUSY, hm_SoundChipBusyOrPlaying);
   if ((r->a & 0xFF) == 0) return;
   *hm_dp(ram, r, 0x92) = 0x09;
-  jsr(ram, r, RET_D8B_COMMAND, hm_UNK_Audio8);
+  jsr(ram, r, RET_D8B_COMMAND, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
   send(ram, r, rd8(ram, r, 0x0112), rd8(ram, r, 0x0113), 0);
   wait_steady_then(ram, r, 8);
@@ -199,11 +199,11 @@ void hm_UNK_Audio6(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio13 ($83:8CF3, JSL, RTL): sends command $07 by itself (without
- * UNK_Audio8) and waits for 4. A is kept in $94 but never sent.
+ * SoundCommand07 ($83:8CF3, JSL, RTL): sends command $07 by itself (without
+ * SoundStartCommand) and waits for 4. A is kept in $94 but never sent.
  * Leftovers: A = 4, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio13(uint8_t *ram, HmRegs *r)
+void hm_SoundCommand07(uint8_t *ram, HmRegs *r)
 {
   *hm_dp(ram, r, 0x94) = (uint8_t)r->a;
   *hm_dp(ram, r, 0x92) = 0x07;
@@ -217,18 +217,18 @@ void hm_UNK_Audio13(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio14 ($83:8D39, JSL, RTL; HM-Decomp says $83:8D38, the RTL of
- * UNK_Audio13): waits while the chip is busy, then command $08 with
+ * SoundCommand08 ($83:8D39, JSL, RTL; HM-Decomp says $83:8D38, the RTL of
+ * SoundCommand07): waits while the chip is busy, then command $08 with
  * $0111 / $0113. Leftovers: A = 8, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_D39_BUSY    0x8D3B
 #define RET_D39_COMMAND 0x8D46
 
-void hm_UNK_Audio14(uint8_t *ram, HmRegs *r)
+void hm_SoundCommand08(uint8_t *ram, HmRegs *r)
 {
-  do jsr(ram, r, RET_D39_BUSY, hm_UNK_Audio7); while (r->a & 0xFF);
+  do jsr(ram, r, RET_D39_BUSY, hm_SoundChipBusyOrPlaying); while (r->a & 0xFF);
   *hm_dp(ram, r, 0x92) = 0x08;
-  jsr(ram, r, RET_D39_COMMAND, hm_UNK_Audio8);
+  jsr(ram, r, RET_D39_COMMAND, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
   send(ram, r, rd8(ram, r, 0x0111), rd8(ram, r, 0x0113), 0);
   wait_steady_then(ram, r, 8);
@@ -238,7 +238,7 @@ void hm_UNK_Audio14(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio10 ($83:89C7, JSL, RTL): A = n. Command $04 with n (when n is
+ * DropInstrumentsFrom ($83:89C7, JSL, RTL): A = n. Command $04 with n (when n is
  * 0 it first waits until the chip is not busy), then clears $0104 + n up to
  * $010E. Unlike the others, the final wait for 8 is a plain loop (no
  * "same twice" check).
@@ -247,15 +247,15 @@ void hm_UNK_Audio14(uint8_t *ram, HmRegs *r)
 #define RET_9C7_BUSY    0x89D2
 #define RET_9C7_COMMAND 0x89DD
 
-void hm_UNK_Audio10(uint8_t *ram, HmRegs *r)
+void hm_DropInstrumentsFrom(uint8_t *ram, HmRegs *r)
 {
   uint8_t n = (uint8_t)r->a;
   hm_push8(ram, r, n);                                       /* PHA */
   *hm_dp(ram, r, 0x94) = n;
   if (n == 0)
-    do jsr(ram, r, RET_9C7_BUSY, hm_UNK_Audio7); while (r->a & 0xFF);
+    do jsr(ram, r, RET_9C7_BUSY, hm_SoundChipBusyOrPlaying); while (r->a & 0xFF);
   *hm_dp(ram, r, 0x92) = 0x04;
-  jsr(ram, r, RET_9C7_COMMAND, hm_UNK_Audio8);
+  jsr(ram, r, RET_9C7_COMMAND, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
   send(ram, r, n, 0, 0);
   while (port(ram, r, 3) != 8) {}
@@ -269,13 +269,13 @@ void hm_UNK_Audio10(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * When the song changes ($0110 != $0117 and something is playing):
- * UNK_Audio21 ($83:841F) sends command $09 with 1, $10; UNK_Audio25
+ * FadeOutSong ($83:841F) sends command $09 with 1, $10; FadeOutSongSlowly
  * ($83:8401) with 1, $40 (its "nothing playing" branch jumps to the RTL
- * of the routine before it, $83:8400). UNK_Audio22 ($83:8380): if the new
+ * of the routine before it, $83:8400). StartSong ($83:8380): if the new
  * song is not 0, $FF nor the one playing, command $08 with 1, $40; then
  * $0119 = 0. All JSL, RTL.
  * Leftovers: A's low byte = the last value compared, C from the compare,
- * or those of UNK_Audio6 / UNK_Audio14.
+ * or those of SoundCommand09IfBusy / SoundCommand08.
  * ───────────────────────────────────────────────────────────────────────── */
 static void change_song(uint8_t *ram, HmRegs *r, uint8_t speed, uint16_t ret)
 {
@@ -289,13 +289,13 @@ static void change_song(uint8_t *ram, HmRegs *r, uint8_t speed, uint16_t ret)
   hm_bus_wr8(ram, db_addr(r, 0x0113), speed);
   set_a8(r, speed);
   hm_jsl(ram, r, ret, 0x83);
-  hm_UNK_Audio6(ram, r);
+  hm_SoundCommand09IfBusy(ram, r);
   hm_rtl(ram, r);
 }
-void hm_UNK_Audio21(uint8_t *ram, HmRegs *r) { change_song(ram, r, 0x10, 0x843B); }
-void hm_UNK_Audio25(uint8_t *ram, HmRegs *r) { change_song(ram, r, 0x40, 0x841D); }
+void hm_FadeOutSong(uint8_t *ram, HmRegs *r) { change_song(ram, r, 0x10, 0x843B); }
+void hm_FadeOutSongSlowly(uint8_t *ram, HmRegs *r) { change_song(ram, r, 0x40, 0x841D); }
 
-void hm_UNK_Audio22(uint8_t *ram, HmRegs *r)
+void hm_StartSong(uint8_t *ram, HmRegs *r)
 {
   uint8_t want = rd8(ram, r, 0x0110), playing = rd8(ram, r, 0x0117);
   set_a8(r, want);
@@ -308,7 +308,7 @@ void hm_UNK_Audio22(uint8_t *ram, HmRegs *r)
         hm_bus_wr8(ram, db_addr(r, 0x0113), 0x40);
         set_a8(r, 0x40);
         hm_jsl(ram, r, 0x839D, 0x83);
-        hm_UNK_Audio14(ram, r);
+        hm_SoundCommand08(ram, r);
         hm_rtl(ram, r);
       }
     }
@@ -349,7 +349,7 @@ static void jsl83(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, H
   fn(ram, r);
   hm_rtl(ram, r);
 }
-/* A x $7E with Unk_Audio23 (JSL), from 16-bit code right after LDA #k:
+/* A x $7E with Multiply16 (JSL), from 16-bit code right after LDA #k:
  * its PHP saves the flags of that moment: C = 1 (every caller has just
  * compared equal), N = Z = 0, 16-bit A / X, and V, D, I as they came in. */
 static void times(uint8_t *ram, HmRegs *r, uint16_t ret)
@@ -357,7 +357,7 @@ static void times(uint8_t *ram, HmRegs *r, uint16_t ret)
   uint8_t entry = r->p;
   r->c = 1;
   r->p = (uint8_t)((entry & 0x4C) | 0x01);
-  jsl83(ram, r, ret, hm_Unk_Audio23);
+  jsl83(ram, r, ret, hm_Multiply16);
   r->p = entry;
 }
 /* bytes -> groups of 3, rounded up: $80 (DivisionUnsigned leaves Y = 0) */
@@ -428,14 +428,14 @@ static void send_instrument(uint8_t *ram, HmRegs *r, uint16_t ret_times, uint16_
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio12 ($83:8AFF, JSL, RTL): command $03, the instrument of sound
+ * LoadEffectInstrument ($83:8AFF, JSL, RTL): command $03, the instrument of sound
  * effect $0114 (Table2), noted in $0104 + $0103 ($0103 counts them).
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio12(uint8_t *ram, HmRegs *r)
+void hm_LoadEffectInstrument(uint8_t *ram, HmRegs *r)
 {
   r->x = 0;
   *hm_dp(ram, r, 0x92) = 0x03;
-  jsr(ram, r, 0x8B0C, hm_UNK_Audio8);
+  jsr(ram, r, 0x8B0C, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
   uint8_t ins = rom8(ram, AUDIO_TABLE2 + rd8(ram, r, 0x0114));
   *hm_dp(ram, r, 0x94) = ins;
@@ -447,14 +447,14 @@ void hm_UNK_Audio12(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio9 ($83:878C, JSL, RTL): the instruments of song $0110 (its 11 in
+ * LoadSongInstruments ($83:878C, JSL, RTL): the instruments of song $0110 (its 11 in
  * Table6, skipping the 0s), each with command $03, noted in $0104-$010E;
  * $0103 and $010F count them. Quirk: when the list ends with 0s,
  * instrument 6 is sent as well (and not noted).
  * Leftovers: $84 = where the list ends, X = $84, Y = how many were sent,
  * A from the last instrument, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio9(uint8_t *ram, HmRegs *r)
+void hm_LoadSongInstruments(uint8_t *ram, HmRegs *r)
 {
   hm_bus_wr8(ram, db_addr(r, 0x0103), 0);
   hm_bus_wr8(ram, db_addr(r, 0x010F), 0);
@@ -481,7 +481,7 @@ void hm_UNK_Audio9(uint8_t *ram, HmRegs *r)
     }
     r->x = x;
     *hm_dp(ram, r, 0x92) = 0x03;
-    jsr(ram, r, 0x87EF, hm_UNK_Audio8);
+    jsr(ram, r, 0x87EF, hm_SoundStartCommand);
     wait_steady_then(ram, r, 1);
     uint16_t y = r->y;
     hm_push8(ram, r, (uint8_t)(x >> 8)); hm_push8(ram, r, (uint8_t)x);   /* PHX; PHY */
@@ -497,11 +497,11 @@ void hm_UNK_Audio9(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio3 ($83:8598, JSL, RTL): the 10 instruments of Table4 (0 =
+ * LoadDefaultInstruments ($83:8598, JSL, RTL): the 10 instruments of Table4 (0 =
  * skip), each with command $02. Leftovers: X = 10, A from the last one
  * sent (or Table4's last 0), C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio3(uint8_t *ram, HmRegs *r)
+void hm_LoadDefaultInstruments(uint8_t *ram, HmRegs *r)
 {
   for (uint16_t x = 0; x != 0x0A; x++) {
     uint8_t ins = rom8(ram, AUDIO_TABLE4 + x);
@@ -510,7 +510,7 @@ void hm_UNK_Audio3(uint8_t *ram, HmRegs *r)
     r->x = x;
     if (!ins) continue;
     *hm_dp(ram, r, 0x92) = 0x02;
-    jsr(ram, r, 0x85B8, hm_UNK_Audio8);
+    jsr(ram, r, 0x85B8, hm_SoundStartCommand);
     wait_steady_then(ram, r, 1);
     hm_push8(ram, r, (uint8_t)(x >> 8)); hm_push8(ram, r, (uint8_t)x);   /* PHX */
     send_instrument(ram, r, 0x85DE, 0x86E8);
@@ -521,15 +521,15 @@ void hm_UNK_Audio3(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio11 ($83:8A26, JSL, RTL): command $05, the data of song $0110
+ * SendSongData ($83:8A26, JSL, RTL): command $05, the data of song $0110
  * (Table6's pointer, Table7's size). The wait for the count's "done" is a
  * plain loop, and each group starts by clearing port 3.
  * Leftovers: A = the count's high byte : 0, X = 0, Y = 3 count, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio11(uint8_t *ram, HmRegs *r)
+void hm_SendSongData(uint8_t *ram, HmRegs *r)
 {
   *hm_dp(ram, r, 0x92) = 0x05;
-  jsr(ram, r, 0x8A30, hm_UNK_Audio8);
+  jsr(ram, r, 0x8A30, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
   uint8_t song = rd8(ram, r, 0x0110);
   uint16_t count = groups_of_3(ram, r, rom16(ram, AUDIO_TABLE7 + (uint8_t)(song << 1)), 0x8A5E);
@@ -554,15 +554,15 @@ void hm_UNK_Audio11(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio4 ($83:84D3, JSL, RTL): command $01, then $3F2 bytes from
+ * SendSoundData ($83:84D3, JSL, RTL): command $01, then $3F2 bytes from
  * $B2:D120 (the sound program's data). Here each group waits for "ready"
  * with the full check and nothing waits after the last one.
  * Leftovers: A = the count's high byte : 0, X = 0, Y = 3 count, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio4(uint8_t *ram, HmRegs *r)
+void hm_SendSoundData(uint8_t *ram, HmRegs *r)
 {
   *hm_dp(ram, r, 0x92) = 0x01;
-  jsr(ram, r, 0x84DD, hm_UNK_Audio8);
+  jsr(ram, r, 0x84DD, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
   uint16_t count = groups_of_3(ram, r, 0x03F2, 0x8502);
   send(ram, r, (uint8_t)count, (uint8_t)(count >> 8), 0);
@@ -583,7 +583,7 @@ void hm_UNK_Audio4(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio5 ($80:95DE, JSL, RTL): which music the map being entered ($22)
+ * PickMapMusic ($80:95DE, JSL, RTL): which music the map being entered ($22)
  * asks for, into $0110:
  *   - from 6 pm (hour 18) on, none ($FF), except on map $1E;
  *   - $0196 bit 4: song $16; else $0196 bit 1: maps $57-$5A none (0),
@@ -596,7 +596,7 @@ void hm_UNK_Audio4(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 #define TRACKS_BY_MAP 0x80B8E7
 
-void hm_UNK_Audio5(uint8_t *ram, HmRegs *r)
+void hm_PickMapMusic(uint8_t *ram, HmRegs *r)
 {
   uint8_t map = *hm_dp(ram, r, 0x22);
   set_a8(r, map);
@@ -611,11 +611,11 @@ void hm_UNK_Audio5(uint8_t *ram, HmRegs *r)
       return;
     }
   }
-  hm_UNK_Audio5_95F5(ram, r);
+  hm_PickMapMusicAnyHour(ram, r);
 }
-/* $80:95F5, UNK_Audio5 past its 6 pm test (NightReset calls it there: the
+/* $80:95F5, PickMapMusic past its 6 pm test (NightReset calls it there: the
  * new day's music even at night) */
-void hm_UNK_Audio5_95F5(uint8_t *ram, HmRegs *r)
+void hm_PickMapMusicAnyHour(uint8_t *ram, HmRegs *r)
 {
   uint8_t map = *hm_dp(ram, r, 0x22);
   hm_bus_wr8(ram, db_addr(r, 0x0110), 0);
@@ -656,7 +656,7 @@ void hm_UNK_Audio5_95F5(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio1 ($83:843D, JSL, RTL; at power-on, from RESET): the sound
+ * UploadSoundProgram ($83:843D, JSL, RTL; at power-on, from RESET): the sound
  * program goes to the chip with the protocol of its boot ROM (the "IPL"):
  *   1. wait until ports 0-1 read $BBAA (the chip is waiting);
  *   2. the block's address ($0500) in ports 2-3, 1 in port 1 ("data
@@ -683,7 +683,7 @@ static void wait_echo(uint8_t *ram, HmRegs *r, uint8_t v)
   while (port(ram, r, 0) != v) {}
 }
 
-void hm_UNK_Audio1(uint8_t *ram, HmRegs *r)
+void hm_UploadSoundProgram(uint8_t *ram, HmRegs *r)
 {
   uint8_t flags = r->p;
   hm_push8(ram, r, flags);                                    /* PHP */
@@ -729,7 +729,7 @@ void hm_UNK_Audio1(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * UNUSED2 ($83:8376, JSL, RTL; nothing calls it): one more instrument
- * noted, $0103 + 1 (the count UNK_Audio3 and UNK_Audio9 keep).
+ * noted, $0103 + 1 (the count LoadDefaultInstruments and LoadSongInstruments keep).
  * Leftovers: A's low byte = the new count; X, Y, C untouched.
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_UNUSED2(uint8_t *ram, HmRegs *r)
@@ -740,18 +740,18 @@ void hm_UNUSED2(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio18 ($83:833E, JSL, RTL): a sound effect, $0114. If the
+ * PrepareSoundEffect ($83:833E, JSL, RTL): a sound effect, $0114. If the
  * instrument slot $0104 + $0103 is taken, the instruments from $0103 + 1
- * on are dropped first (UNK_Audio10) and a frame is waited (WaitForNMI);
+ * on are dropped first (DropInstrumentsFrom) and a frame is waited (WaitForNMI);
  * then, if the effect has an instrument (Table2), it is sent
- * (UNK_Audio12).
- * WaitForNMI saves the flags: there they are those UNK_Audio10 leaves
+ * (LoadEffectInstrument).
+ * WaitForNMI saves the flags: there they are those DropInstrumentsFrom leaves
  * (8-bit A, 16-bit indexes, Z and C set, N clear) with V, D and I of the
  * entry.
- * Leftovers: those of UNK_Audio12, or A = 0 and X = $0114 (C as it was, or
- * 1 after UNK_Audio10).
+ * Leftovers: those of LoadEffectInstrument, or A = 0 and X = $0114 (C as it was, or
+ * 1 after DropInstrumentsFrom).
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio18(uint8_t *ram, HmRegs *r)
+void hm_PrepareSoundEffect(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
   r->a = rd8(ram, r, 0x0103);                              /* LDA #0; XBA; LDA $0103 */
@@ -760,7 +760,7 @@ void hm_UNK_Audio18(uint8_t *ram, HmRegs *r)
   if ((uint8_t)r->a) {
     r->a = (uint16_t)(r->x + 1);                           /* TXA; INC A */
     hm_jsl(ram, r, 0x8359, 0x83);
-    hm_UNK_Audio10(ram, r);
+    hm_DropInstrumentsFrom(ram, r);
     hm_rtl(ram, r);
     r->p = (uint8_t)((entry & 0x4C) | 0x23);
     hm_jsl(ram, r, 0x835D, 0x80);
@@ -773,7 +773,7 @@ void hm_UNK_Audio18(uint8_t *ram, HmRegs *r)
   set_a8(r, rom8(ram, AUDIO_TABLE2 + r->x));
   if (!(uint8_t)r->a) return;
   hm_jsl(ram, r, 0x8374, 0x83);
-  hm_UNK_Audio12(ram, r);
+  hm_LoadEffectInstrument(ram, r);
   hm_rtl(ram, r);
 }
 
@@ -802,21 +802,21 @@ static uint8_t flags16(uint8_t p, uint16_t a, uint8_t c)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio20 ($83:83A4, JSL, RTL): the song changes to $0110. If it is
+ * SetSong ($83:83A4, JSL, RTL): the song changes to $0110. If it is
  * not the one playing ($0117): the instruments from 0 on are dropped
- * (UNK_Audio10 with 0, which first waits until the chip is not busy) and,
- * unless the song is 0 or $FF, the song is sent (UNK_Audio11) with its
- * instruments (UNK_Audio9). Then the sound effect 3 of bank 6 with the
+ * (DropInstrumentsFrom with 0, which first waits until the chip is not busy) and,
+ * unless the song is 0 or $FF, the song is sent (SendSongData) with its
+ * instruments (LoadSongInstruments). Then the sound effect 3 of bank 6 with the
  * song's instrument ($0118 = the song, 0 for $FF; $0103 from the table
- * $80:B8CD), UNK_Audio18.
+ * $80:B8CD), PrepareSoundEffect.
  * The bytes $83:83C9-$83:83CF (clear $0110) are never reached.
- * UNK_Audio18 keeps V, D and I of its entry flags: V is 0 after
- * UNK_Audio9 (its ADC), as it was otherwise.
- * Leftovers: those of UNK_Audio18.
+ * PrepareSoundEffect keeps V, D and I of its entry flags: V is 0 after
+ * LoadSongInstruments (its ADC), as it was otherwise.
+ * Leftovers: those of PrepareSoundEffect.
  * ───────────────────────────────────────────────────────────────────────── */
 #define SONG_INSTRUMENTS 0x80B8CD
 
-void hm_UNK_Audio20(uint8_t *ram, HmRegs *r)
+void hm_SetSong(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p, p = entry;
   uint8_t want = rd8(ram, r, 0x0110), playing = rd8(ram, r, 0x0117);
@@ -824,14 +824,14 @@ void hm_UNK_Audio20(uint8_t *ram, HmRegs *r)
   r->c = want >= playing;
   if (want != playing) {
     set_a8(r, 0);
-    call83(ram, r, 0x83B3, hm_UNK_Audio10);
+    call83(ram, r, 0x83B3, hm_DropInstrumentsFrom);
     uint8_t v = rd8(ram, r, 0x0110);
     set_a8(r, v);
     if (v) {
       r->c = v >= 0xFF;
       if (v != 0xFF) {
-        call83(ram, r, 0x83C2, hm_UNK_Audio11);
-        call83(ram, r, 0x83C6, hm_UNK_Audio9);
+        call83(ram, r, 0x83C2, hm_SendSongData);
+        call83(ram, r, 0x83C6, hm_LoadSongInstruments);
         p &= (uint8_t)~0x40;
       }
     }
@@ -850,20 +850,20 @@ void hm_UNK_Audio20(uint8_t *ram, HmRegs *r)
   set_a8(r, rom8(ram, SONG_INSTRUMENTS + r->x));
   hm_bus_wr8(ram, db_addr(r, 0x0103), (uint8_t)r->a);
   r->p = p;
-  call83(ram, r, 0x83FF, hm_UNK_Audio18);
+  call83(ram, r, 0x83FF, hm_PrepareSoundEffect);
   r->p = entry;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio24 ($83:82FE, JSL, RTL): sound effect A of bank X with the
- * instrument of the song playing ($0118: table $80:B8CD + 1), UNK_Audio18,
- * played (UNK_Audio19); then Y frames are waited (WaitForNMIATimes; Y = 0
+ * PlayEffectWithSongInstrument ($83:82FE, JSL, RTL): sound effect A of bank X with the
+ * instrument of the song playing ($0118: table $80:B8CD + 1), PrepareSoundEffect,
+ * played (PlaySoundEffect0A); then Y frames are waited (WaitForNMIATimes; Y = 0
  * would be 65536).
- * Leftovers: A = 0, Y as it came, X from UNK_Audio19, the flags of
+ * Leftovers: A = 0, Y as it came, X from PlaySoundEffect0A, the flags of
  * WaitForNMIATimes's entry (PLP): 16-bit, N and Z of Y, the carry of
- * UNK_Audio19.
+ * PlaySoundEffect0A.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio24(uint8_t *ram, HmRegs *r)
+void hm_PlayEffectWithSongInstrument(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
   hm_bus_wr8(ram, db_addr(r, 0x0114), (uint8_t)r->a);       /* SEP #$20; REP #$10 */
@@ -875,8 +875,8 @@ void hm_UNK_Audio24(uint8_t *ram, HmRegs *r)
   r->x = r->a;
   set_a8(r, (uint8_t)(rom8(ram, SONG_INSTRUMENTS + r->x) + 1));
   hm_bus_wr8(ram, db_addr(r, 0x0103), (uint8_t)r->a);
-  call83(ram, r, 0x8324, hm_UNK_Audio18);
-  call83(ram, r, 0x8328, hm_UNK_Audio19);
+  call83(ram, r, 0x8324, hm_PrepareSoundEffect);
+  call83(ram, r, 0x8328, hm_PlaySoundEffect0A);
   uint8_t lo = hm_pull8(ram, r);                             /* REP #$30; PLY; TYA */
   r->y = (uint16_t)(lo | hm_pull8(ram, r) << 8);
   r->a = r->y;
@@ -884,25 +884,25 @@ void hm_UNK_Audio24(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_Audio26 ($83:82C6, JSL, RTL): the music changes to song A: the old
- * one fades (UNK_Audio21), the new one is set ($0110, UNK_Audio20,
- * UNK_Audio22) and noted as playing ($0117); after 180 frames
+ * ChangeMusic ($83:82C6, JSL, RTL): the music changes to song A: the old
+ * one fades (FadeOutSong), the new one is set ($0110, SetSong,
+ * StartSong) and noted as playing ($0117); after 180 frames
  * (WaitForNMIATimes $B4) the music of the map being entered ($098B, to
- * $22) is chosen (UNK_Audio5) and faded in (UNK_Audio25).
- * Leftovers: those of UNK_Audio25.
+ * $22) is chosen (PickMapMusic) and faded in (FadeOutSongSlowly).
+ * Leftovers: those of FadeOutSongSlowly.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_Audio26(uint8_t *ram, HmRegs *r)
+void hm_ChangeMusic(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p, p = entry;
   hm_push8(ram, r, (uint8_t)r->a);                           /* SEP #$20; REP #$10; PHA */
-  call83(ram, r, 0x82CE, hm_UNK_Audio21);
+  call83(ram, r, 0x82CE, hm_FadeOutSong);
   set_a8(r, hm_pull8(ram, r));                               /* PLA */
   uint8_t song = (uint8_t)r->a;
   hm_bus_wr8(ram, db_addr(r, 0x0110), song);
-  /* UNK_Audio20 sends the song (and its ADC clears V) when it changes */
+  /* SetSong sends the song (and its ADC clears V) when it changes */
   if (song != rd8(ram, r, 0x0117) && song != 0 && song != 0xFF) p &= (uint8_t)~0x40;
-  call83(ram, r, 0x82D8, hm_UNK_Audio20);
-  call83(ram, r, 0x82DC, hm_UNK_Audio22);
+  call83(ram, r, 0x82D8, hm_SetSong);
+  call83(ram, r, 0x82DC, hm_StartSong);
   set_a8(r, rd8(ram, r, 0x0110));
   hm_bus_wr8(ram, db_addr(r, 0x0117), (uint8_t)r->a);
   r->a = 0x00B4;                                             /* REP #$30; LDA #$B4 */
@@ -913,8 +913,8 @@ void hm_UNK_Audio26(uint8_t *ram, HmRegs *r)
   *hm_dp(ram, r, 0x22) = map;
   r->p = (uint8_t)((pw & ~0x82) | 0x20 | (map & 0x80) | (map ? 0 : 0x02));
   hm_jsl(ram, r, 0x82F8, 0x80);
-  hm_UNK_Audio5(ram, r);
+  hm_PickMapMusic(ram, r);
   hm_rtl(ram, r);
-  call83(ram, r, 0x82FC, hm_UNK_Audio25);
+  call83(ram, r, 0x82FC, hm_FadeOutSongSlowly);
   r->p = entry;
 }

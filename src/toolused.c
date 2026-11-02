@@ -1,7 +1,7 @@
 /*
  * toolused.c — what each tool does when it lands (the ToolUsed* routines,
  * bank $82; table Tool_Used_Table at $82:A5C3, indexed by the item in hand
- * $0921 and called by SUB_829260). All are JSR / RTS and start with an
+ * $0921 and called by UseToolInHand). All are JSR / RTS and start with an
  * 8-bit A.
  *
  * Most follow the same plan:
@@ -11,7 +11,7 @@
  *   2. ChangeMapTile: put the new tile (tilled soil, a stump...).
  *   3. SpawnMapObject: an effect sprite on the tile ($0974-$0982 say which).
  *   4. Sometimes a find (1 chance in n, at most once a day or once ever,
- *      with flags in $7F1F5A-$7F1F6A) that starts an event (SUB_8480F8).
+ *      with flags in $7F1F5A-$7F1F6A) that starts an event (StartScriptAtTileInFront).
  *   5. The player goes back to idle ($D4 = 0) and loses stamina:
  *      ChangeStamina with A = $FE (2), $FF (1), $FC (4) or $F8 (8).
  *
@@ -181,11 +181,11 @@ static void effect_in_front(uint8_t *ram, HmRegs *r, uint16_t sprite, uint16_t r
 {
   effect(ram, r, tile_x(ram), tile_y(ram), sprite, ret);
 }
-/* SUB_8480F8: start event A (X, Y its arguments) */
+/* StartScriptAtTileInFront: start event A (X, Y its arguments) */
 static void event(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t y, uint16_t ret)
 {
   r->a = a; r->x = x; r->y = y;
-  jsl(ram, r, ret, 0x84, hm_SUB_8480F8);
+  jsl(ram, r, ret, 0x84, hm_StartScriptAtTileInFront);
 }
 static void add(uint8_t *ram, HmRegs *r, void (*fn)(uint8_t *, HmRegs *), uint16_t n,
                 uint16_t ret)
@@ -474,7 +474,7 @@ static void hammer(uint8_t *ram, HmRegs *r, const HammerRets *ret, bool gold)
         || test(ram, r, FLAGS_5C, 0x0080))
       goto done;
     r->a = 0x0015; r->x = 0; r->y = 0x0016;
-    jsl(ram, r, ret->spring, 0x84, hm_UNK_LoadCCDataShort);
+    jsl(ram, r, ret->spring, 0x84, hm_StartEventScript);
     if (!one_in(ram, r, 4, ret->roll) || test(ram, r, FLAGS_64, 0x0200)) goto done;
     set_flag(ram, r, FLAGS_64, 0x0200);
     hm_wr16(ram, HM_TILE_IN_FRONT_X, add_c(r, hm_dp_r16(ram, r, HM_PLAYER_X), 0x10));
@@ -573,7 +573,7 @@ void hm_ToolUsedAxe(uint8_t *ram, HmRegs *r)
       goto done;
     set_flag(ram, r, FLAGS_6A, 0x0020);
     r->a = 0; r->x = 0x0017; r->y = 0;
-    jsl(ram, r, 0x9988, 0x84, hm_UNK_LoadCCDataLong);
+    jsl(ram, r, 0x9988, 0x84, hm_StartEventScriptLong);
     goto done;
   }
   if (!is(r, load8(r, ++ram[HM_HITS]), 6)) {
@@ -722,7 +722,7 @@ void hm_ToolUsedPaint(uint8_t *ram, HmRegs *r)
  * mountain top), the beans are planted: $7F1F68 bit $0200, map animation
  * $42 (StartMapAnimation), the hand is emptied. Anywhere else nothing.
  * ToolUsedGemSeed ($82:A3AA): before 17:00, on map $34, facing tile F6:
- * event $12 of group 0 (UNK_LoadCCDataLong) and the hand is emptied.
+ * event $12 of group 0 (StartEventScriptLong) and the hand is emptied.
  * Both end idle, with no stamina cost.
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_ToolUsedMagicBeans(uint8_t *ram, HmRegs *r)
@@ -742,10 +742,10 @@ void hm_ToolUsedGemSeed(uint8_t *ram, HmRegs *r)
     r->a = 1; r->x = 0; r->y = 0;
     jsl(ram, r, 0xA3CA, 0x81, hm_CalculateTileinFront);
     r->x = tile_x(ram); r->y = tile_y(ram); r->a = 0;
-    jsl(ram, r, 0xA3D9, 0x82, hm_UNK_CheckTileProperty);
+    jsl(ram, r, 0xA3D9, 0x82, hm_GetTileProperty);
     if (is(r, r->x, 0x00F6)) {
       r->a = 0; r->x = 0x0012; r->y = 0;
-      jsl(ram, r, 0xA3EF, 0x84, hm_UNK_LoadCCDataLong);
+      jsl(ram, r, 0xA3EF, 0x84, hm_StartEventScriptLong);
       ram[HM_TOOL_SELECTED] = 0;
     }
   }
@@ -775,7 +775,7 @@ static void feed(uint8_t *ram, HmRegs *r, const Feeding *f)
     r->a = 1; r->x = 6; r->y = 6;
     jsl(ram, r, f->ret_front, 0x81, hm_CalculateTileinFront);
     r->x = tile_x(ram); r->y = tile_y(ram); r->a = 0;
-    jsl(ram, r, f->ret_property, 0x82, hm_UNK_CheckTileProperty);
+    jsl(ram, r, f->ret_property, 0x82, hm_GetTileProperty);
     if (!below(r, r->x, 0x00E2) && below(r, r->x, 0x00EF)) {
       uint16_t n = sub_c(r, r->x, 0x00E2);
       r->c = (n & 0x8000) != 0;                          /* ASL */
@@ -813,7 +813,7 @@ void hm_ToolUsedCowFeed(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * The watering can and the sprinkler. Both first make their sound (effect
- * 0, 7, $0A: UNK_Audio19). A tile that can be watered (PreCheckToolSuccess
+ * 0, 7, $0A: PlaySoundEffect0A). A tile that can be watered (PreCheckToolSuccess
  * leaves its type in X) becomes type + 1 in the map (EditTileonMap) and
  * gets the picture of entry 4 (type + 1) of the tile table [$0D] (the
  * byte there is the ChangeMapTile change).
@@ -825,7 +825,7 @@ static void make_sound(uint8_t *ram, HmRegs *r, uint16_t ret)
   load8(r, 0x07);
   ram[0x0114] = 0x00;
   ram[0x0115] = 0x07;
-  jsl(ram, r, ret, 0x83, hm_UNK_Audio19);
+  jsl(ram, r, ret, 0x83, hm_PlaySoundEffect0A);
 }
 static void water_tile(uint8_t *ram, HmRegs *r, uint16_t ret_edit, uint16_t ret_change)
 {
@@ -869,7 +869,7 @@ void hm_ToolUsedSprinkler(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_829260 ($82:9260, JSL, RTL): uses the tool in hand. JSR through
+ * UseToolInHand ($82:9260, JSL, RTL): uses the tool in hand. JSR through
  * Tool_Used_Table ($82:A5C3, one routine per item, in item order) with
  * A = X = 2 x item (ASL in 8 bits: C = bit 7 of the item), then sets
  * $7F1F5A bit $0040 (FLAG5A: "a tool was used").
@@ -877,7 +877,7 @@ void hm_ToolUsedSprinkler(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_260_TOOL    0x926E
 
-void hm_SUB_829260(uint8_t *ram, HmRegs *r)
+void hm_UseToolInHand(uint8_t *ram, HmRegs *r)
 {
   static void (*const used[])(uint8_t *, HmRegs *) = {
     hm_ToolUsedNoAction, hm_ToolUsedSickle, hm_ToolUsedHoe, hm_ToolUsedHammer,

@@ -34,11 +34,11 @@ static uint16_t pull16(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_81A801 ($81:A801, JSL, RTL). A = entry of the tile-changes table;
+ * ReadTileChange ($81:A801, JSL, RTL). A = entry of the tile-changes table;
  * $7E = graphics offset, $82 = rows, $80 = columns, $84 = tile type.
  * Leftovers: A = $84, X = 6 A + 4, C from the 6 A sum.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_81A801(uint8_t *ram, HmRegs *r)
+void hm_ReadTileChange(uint8_t *ram, HmRegs *r)
 {
   uint16_t n = r->a;
   uint32_t s = (uint32_t)(uint16_t)(n << 2) + n;      /* ASL; ASL; CLC; ADC */
@@ -54,7 +54,7 @@ void hm_SUB_81A801(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_81A83A ($81:A83A, JSL, RTL). A = tile change, X/Y = position in
+ * DrawTileChange ($81:A83A, JSL, RTL). A = tile change, X/Y = position in
  * pixels. Copies its graphics (rows x columns of 16x16 tiles, each 2x2
  * tilemap entries) from $A6:A096 into the BG1 tilemap at $7E:2000. The
  * tilemap is 32 entries wide per screen and the map is $0181 screens wide
@@ -62,9 +62,9 @@ void hm_SUB_81A801(uint8_t *ram, HmRegs *r)
  * Leftovers: $72-$7A pointers, $86 start, $88 row stride, $8E/$90 the
  * screen-crossing counters; A = the final $7E, X = $80, Y = rows, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-#define RET_83A_CHANGES 0xA88A   /* JSL SUB_81A801 at $81:A887 */
+#define RET_83A_CHANGES 0xA88A   /* JSL ReadTileChange at $81:A887 */
 
-void hm_SUB_81A83A(uint8_t *ram, HmRegs *r)
+void hm_DrawTileChange(uint8_t *ram, HmRegs *r)
 {
   uint16_t change = r->a;
   push16(ram, r, change);                                /* PHA */
@@ -84,7 +84,7 @@ void hm_SUB_81A83A(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, 0x86, (uint16_t)(hm_dp_r16(ram, r, 0x7E) + row));
   r->a = pull16(ram, r);                                 /* PLA */
   hm_jsl(ram, r, RET_83A_CHANGES, 0x81);
-  hm_SUB_81A801(ram, r);
+  hm_ReadTileChange(ram, r);
   hm_rtl(ram, r);
 
   uint16_t cols4 = (uint16_t)(hm_dp_r16(ram, r, 0x80) << 2);
@@ -139,7 +139,7 @@ void hm_SUB_81A83A(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_82B060 ($82:B060, JSL, RTL). A (8-bit) = a tile type; writes it into
+ * SetTileTypeBlock ($82:B060, JSL, RTL). A (8-bit) = a tile type; writes it into
  * the map's tile types ($09B6) for a block of $86 columns x $88 rows of
  * tiles whose top-left corner is X, Y (pixels). The per-tile offsets are
  * kept 8-bit in $8E/$90 but read back as 16-bit words, so the bytes $8F
@@ -149,7 +149,7 @@ void hm_SUB_81A83A(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_B060_INDEX 0xB090   /* JSR GetTileIndex at $82:B08E */
 
-void hm_SUB_82B060(uint8_t *ram, HmRegs *r)
+void hm_SetTileTypeBlock(uint8_t *ram, HmRegs *r)
 {
   uint8_t type = (uint8_t)r->a;
   *hm_dp(ram, r, 0x99) = type;
@@ -189,11 +189,11 @@ void hm_SUB_82B060(uint8_t *ram, HmRegs *r)
  * (the 64x64 window is four 32x32 screens) and the right / bottom screens
  * add $3E0 / $400. The first pair uses DMA channels 2 and 3, the next
  * ones 0 and 1.
- * Leftovers: $7E/$80/$82/$84 (SUB_81A801, then $80 = 4 cols, $82 = 2 rows),
+ * Leftovers: $7E/$80/$82/$84 (ReadTileChange, then $80 = 4 cols, $82 = 2 rows),
  * $72/$75 source pointers, $86 base, $92 = 0; A = the last source, X =
  * rows*2, Y = 4 cols, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-#define RET_6C1_CHANGES 0xA747   /* JSL SUB_81A801 at $81:A744 */
+#define RET_6C1_CHANGES 0xA747   /* JSL ReadTileChange at $81:A744 */
 #define RET_6C1_DMA_A   0xA788   /* JSL AddProgrammedDMA at $81:A785 */
 #define RET_6C1_DMA_B   0xA7B7   /* ... at $81:A7B4 */
 
@@ -229,7 +229,7 @@ void hm_QueueTileGraphicsDMA(uint8_t *ram, HmRegs *r)
 
   r->a = pull16(ram, r);                                 /* PLA */
   hm_jsl(ram, r, RET_6C1_CHANGES, 0x81);
-  hm_SUB_81A801(ram, r);
+  hm_ReadTileChange(ram, r);
   hm_rtl(ram, r);
 
   hm_dp_w16(ram, r, 0x80, (uint16_t)(hm_dp_r16(ram, r, 0x80) << 2));
@@ -260,13 +260,13 @@ void hm_QueueTileGraphicsDMA(uint8_t *ram, HmRegs *r)
  * change (0 = nothing), X/Y = position in pixels. Does all of it: queues
  * the VRAM copy, writes the BG1 tilemap in WRAM, and, if the change has a
  * tile type, writes it into $09B6 for the whole block.
- * Leftovers: $86/$88 = columns / rows; registers from SUB_82B060 when it
- * runs, otherwise A = 0, X/Y = the position and C from SUB_81A801.
+ * Leftovers: $86/$88 = columns / rows; registers from SetTileTypeBlock when it
+ * runs, otherwise A = 0, X/Y = the position and C from ReadTileChange.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_688_QUEUE   0xA698   /* JSL QueueTileGraphicsDMA at $81:A695 */
-#define RET_688_BG1     0xA6A4   /* JSL SUB_81A83A at $81:A6A1 */
-#define RET_688_CHANGES 0xA6AB   /* JSL SUB_81A801 at $81:A6A8 */
-#define RET_688_TYPES   0xA6BF   /* JSL SUB_82B060 at $81:A6BC */
+#define RET_688_BG1     0xA6A4   /* JSL DrawTileChange at $81:A6A1 */
+#define RET_688_CHANGES 0xA6AB   /* JSL ReadTileChange at $81:A6A8 */
+#define RET_688_TYPES   0xA6BF   /* JSL SetTileTypeBlock at $81:A6BC */
 
 void hm_ChangeMapTile(uint8_t *ram, HmRegs *r)
 {
@@ -280,11 +280,11 @@ void hm_ChangeMapTile(uint8_t *ram, HmRegs *r)
   push16(ram, r, y); push16(ram, r, x); push16(ram, r, change);
   r->a = change; r->x = x; r->y = y;
   hm_jsl(ram, r, RET_688_BG1, 0x81);
-  hm_SUB_81A83A(ram, r);
+  hm_DrawTileChange(ram, r);
   hm_rtl(ram, r);
   r->a = pull16(ram, r);                                 /* PLA */
   hm_jsl(ram, r, RET_688_CHANGES, 0x81);
-  hm_SUB_81A801(ram, r);
+  hm_ReadTileChange(ram, r);
   hm_rtl(ram, r);
   r->x = pull16(ram, r);                                 /* PLX; PLY */
   r->y = pull16(ram, r);
@@ -293,7 +293,7 @@ void hm_ChangeMapTile(uint8_t *ram, HmRegs *r)
   r->a = hm_dp_r16(ram, r, 0x84);
   if (r->a == 0) return;
   hm_jsl(ram, r, RET_688_TYPES, 0x82);
-  hm_SUB_82B060(ram, r);
+  hm_SetTileTypeBlock(ram, r);
   hm_rtl(ram, r);
 }
 
@@ -301,7 +301,7 @@ void hm_ChangeMapTile(uint8_t *ram, HmRegs *r)
  * StartMapAnimation ($81:A5E1, JSL, RTL; CODE_81A5E1 in HM-Decomp). A =
  * an entry of the table $81:B963 (3 bytes each: a long pointer to a map
  * animation script). Points $CF-$D1 at it and clears $0989 (the script's
- * wait counter); CODE_81A600 then plays it frame by frame (the magic
+ * wait counter); RunMapAnimation then plays it frame by frame (the magic
  * beans growing, for one).
  * Leftovers: $7E = A in; A = (high byte of the pointer word : bank),
  * X = 3 A + 2, C from the 3 A sum.
@@ -366,13 +366,13 @@ void hm_EditTileonMapandsets0181(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_PartialMap ($82:AF00, JSL, RTL): draw the whole map (64 x 64 tiles of
+ * DrawWholeMap ($82:AF00, JSL, RTL): draw the whole map (64 x 64 tiles of
  * 16 pixels) from its tile types ($09B6). For each tile type t (1-$9F):
  * the drawing is byte +0 of its entry in the property table [$0D] (0:
  * nothing to draw). The types $73-$79 join with their neighbours of the
  * same kind ("autotiling", fences and the like): the four neighbours give
  * a mask (left 8, right 2, up 4, down 1) and DATA8_82B02A[mask] - 1 is
- * added to the drawing. Each tile is drawn with SUB_81A83A.
+ * added to the drawing. Each tile is drawn with DrawTileChange.
  * ───────────────────────────────────────────────────────────────────────── */
 #define JOINS        0x82B02A   /* DATA8_82B02A: 16 entries */
 
@@ -388,7 +388,7 @@ static bool joins(HmRegs *r, uint8_t t)                    /* CMP #$73; CMP #$7A
   return !r->c;
 }
 
-void hm_UNK_PartialMap(uint8_t *ram, HmRegs *r)
+void hm_DrawWholeMap(uint8_t *ram, HmRegs *r)
 {
   for (uint16_t y = 0; y != 0x0400; ) {
     for (uint16_t x = 0; x != 0x0400; ) {
@@ -458,7 +458,7 @@ void hm_UNK_PartialMap(uint8_t *ram, HmRegs *r)
         r->x = hm_dp_r16(ram, r, 0x82);
         r->y = hm_dp_r16(ram, r, 0x84);
         hm_jsl(ram, r, 0xB008, 0x81);
-        hm_SUB_81A83A(ram, r);
+        hm_DrawTileChange(ram, r);
         hm_rtl(ram, r);
       }
       x = pull16(ram, r);                                  /* PLX; PLY */
@@ -477,7 +477,7 @@ void hm_UNK_PartialMap(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_81A58F ($81:A58F, JSL, RTL): footprints in the snow. Called every 8
+ * SnowFootprints ($81:A58F, JSL, RTL): footprints in the snow. Called every 8
  * steps of the player with $0907 / $0909 = where the player was 8 steps
  * before. In winter, on the farm (maps 0-3) or the mountain ($10-$14), if
  * that tile's type is 1, 2, $A8 or $F6 (snow), the picture of change $11
@@ -489,7 +489,7 @@ void hm_UNK_PartialMap(uint8_t *ram, HmRegs *r)
 #define PRINT_X       0x0907    /* DB: */
 #define PRINT_Y       0x0909
 
-void hm_CODE_81A58F(uint8_t *ram, HmRegs *r)
+void hm_SnowFootprints(uint8_t *ram, HmRegs *r)
 {
   uint8_t season = hm_bus_rd8(ram, SEASON_LONG);
   r->a = (uint16_t)((r->a & 0xFF00) | season);
@@ -509,7 +509,7 @@ void hm_CODE_81A58F(uint8_t *ram, HmRegs *r)
   r->x = hm_bus_rd16(ram, db | PRINT_X);
   r->y = hm_bus_rd16(ram, db | PRINT_Y);
   hm_jsl(ram, r, 0xA5B7, 0x82);
-  hm_UNK_CheckTileProperty(ram, r);
+  hm_GetTileProperty(ram, r);
   hm_rtl(ram, r);
   r->a = r->x;                                             /* TXA */
   static const uint16_t snow[4] = { 0x0001, 0x0002, 0x00A8, 0x00F6 };
@@ -528,7 +528,7 @@ void hm_CODE_81A58F(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_81A600 ($81:A600, JSL, RTL): plays the map animation started by
+ * RunMapAnimation ($81:A600, JSL, RTL): plays the map animation started by
  * StartMapAnimation, one step per call: [$CF-$D1] points at 7-byte steps
  * (tile change, X, Y words, then frames to wait); each is done with
  * ChangeMapTile and $0989 counts the wait down. $FFFF ends it ($CF-$D1 =
@@ -538,7 +538,7 @@ void hm_CODE_81A58F(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 #define ANIMATION_WAIT 0x0989    /* DB: */
 
-void hm_CODE_81A600(uint8_t *ram, HmRegs *r)
+void hm_RunMapAnimation(uint8_t *ram, HmRegs *r)
 {
   uint32_t wait = (uint32_t)r->db << 16 | ANIMATION_WAIT;
   r->a = hm_dp_r16(ram, r, 0xCF);
@@ -586,9 +586,9 @@ void hm_CODE_81A600(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, 0xCF, r->a);
 }
 
-/* CODE_81A4F1 ($81:A4F1, JSL, RTL): frees the map object at [$07] (its
+/* FreeMapObject ($81:A4F1, JSL, RTL): frees the map object at [$07] (its
  * flags = 0) and clears $0974 (its flags' copy). A's low byte = 0. */
-void hm_CODE_81A4F1(uint8_t *ram, HmRegs *r)
+void hm_FreeMapObject(uint8_t *ram, HmRegs *r)
 {
   r->y = 0;
   r->a &= 0xFF00;

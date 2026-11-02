@@ -4,7 +4,7 @@
  *
  * IntroScreen ($82:D75E, from RESET) sets up the Natsume logo and then
  * runs a frame at a time ($82:D80D): it waits for the NMI, runs the
- * colour cycles (UNK_BigLoop) and the joypad (InputTypeSelector), then the
+ * colour cycles (RunColourAnimations) and the joypad (InputTypeSelector), then the
  * part of the intro of $95 (the stage):
  *   0  the logo, 2 seconds (120 frames), then it fades out: stage 1;
  *   1  the parents' scene: a small game (script 0 of group 9) played on its
@@ -16,13 +16,13 @@
  *   6, 9  the title screen's background (map $5C; 9 also clears the
  *      screen first), faded in: stage 4;
  *   4  a second (BG2 drifting), then the menu's marks (colour cycles,
- *      UNK_SetPointer42) with the choice $098D: stage 5;
+ *      StartColourAnimation) with the choice $098D: stage 5;
  *   5  the menu: BG2 drifting, the marks again when the choice changed
  *      ($97, set by the menu's inputs), and the demo's count $90 + 1;
  *   7  the new game's file screen (map $5E, the two files' frames and
  *      names), on its own frames ($82:E0EB);
- *   8  the saved game's file screen: SUB_82E1F1;
- *   10 the first demo: SUB_82D1C0;
+ *   8  the saved game's file screen: ContinueFileScreen;
+ *   10 the first demo: FirstDemo;
  * and at the end of each frame ($82:D871, "democheck"), after 600 frames
  * of the menu (10 s), the other demos (DemoPresentation).
  * The file screens go back to the title ($94 = 1, $82:DEC5), or start the
@@ -30,7 +30,7 @@
  *
  * Nothing here returns: each check stops at the end of one frame (the
  * jump back to the frame's start) or where it goes on to another of these
- * routines (HM_TOLOOP). IntroScreen_D80D, _D93F, _E0EB and SUB_82E1F1_E337
+ * routines (HM_TOLOOP). IntroScreen_D80D, _D93F, _E0EB and ContinueFileScreenFrame
  * check one frame of each loop on its own.
  */
 #include "hm_decomp.h"
@@ -100,13 +100,13 @@ static void colours(uint8_t *ram, HmRegs *r, uint16_t from, uint16_t at)
   jsl(ram, r, at, 0x80, hm_AddProgrammedDMA);
   jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_StartLastPreparedDMA);
 }
-/* the music of map $22 changes (UNK_Audio21, 20, 22) and is noted as the
+/* the music of map $22 changes (FadeOutSong, 20, 22) and is noted as the
  * one playing ($0117) */
 static void new_music(uint8_t *ram, HmRegs *r, uint16_t at)
 {
-  jsl(ram, r, at, 0x83, hm_UNK_Audio21);
-  jsl(ram, r, (uint16_t)(at + 4), 0x83, hm_UNK_Audio20);
-  jsl(ram, r, (uint16_t)(at + 8), 0x83, hm_UNK_Audio22);
+  jsl(ram, r, at, 0x83, hm_FadeOutSong);
+  jsl(ram, r, (uint16_t)(at + 4), 0x83, hm_SetSong);
+  jsl(ram, r, (uint16_t)(at + 8), 0x83, hm_StartSong);
   uint8_t song = rd8(ram, r, 0x0110);                      /* SEP #$20 */
   set_a8(r, song);
   wr8(ram, r, 0x0117, song);
@@ -119,12 +119,12 @@ static void lit(uint8_t *ram, HmRegs *r, uint16_t at)
 }
 /* everything of the old picture cleared, from `at` (JSLs 4 bytes apart):
  * ZeroesVRAM, ZeroesCGRAM, Zeroes42Pointers, ClearSpriteDataTables,
- * InitializeOBJs, UNK_PresetsMemory3, ClearsofAllCCStructs */
+ * InitializeOBJs, ClearItemRecords, ClearsofAllCCStructs */
 static void clear_all(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   static const struct { uint8_t bank; Fn *fn; } ALL[7] = {
     { 0x80, hm_ZeroesVRAM }, { 0x80, hm_ZeroesCGRAM }, { 0x80, hm_Zeroes42Pointers },
-    { 0x85, hm_ClearSpriteDataTables }, { 0x85, hm_InitializeOBJs }, { 0x81, hm_UNK_PresetsMemory3 },
+    { 0x85, hm_ClearSpriteDataTables }, { 0x85, hm_InitializeOBJs }, { 0x81, hm_ClearItemRecords },
     { 0x84, hm_ClearsofAllCCStructs },
   };
   for (int i = 0; i < 7; i++) jsl(ram, r, (uint16_t)(at + 4 * i), ALL[i].bank, ALL[i].fn);
@@ -145,7 +145,7 @@ static void no_place(uint8_t *ram, HmRegs *r)
   wr16(ram, r, 0x017F, 0);
   wr16(ram, r, 0x0196, 0);
 }
-/* a colour cycle (UNK_SetPointer42) from $82:`table`: A = which, X / Y
+/* a colour cycle (StartColourAnimation) from $82:`table`: A = which, X / Y
  * the cycle's numbers, with 8-bit indexes */
 static void cycle(uint8_t *ram, HmRegs *r, uint16_t table, uint8_t a, uint8_t x, uint8_t y, uint16_t at)
 {
@@ -154,7 +154,7 @@ static void cycle(uint8_t *ram, HmRegs *r, uint16_t table, uint8_t a, uint8_t x,
   set_a8(r, 0x82); set_dp8(ram, r, 0x74, 0x82);            /* SEP #$20 */
   set_a8(r, a);
   r->x = x; r->y = y;
-  call(ram, r, at, 0x80, hm_UNK_SetPointer42, 1);
+  call(ram, r, at, 0x80, hm_StartColourAnimation, 1);
 }
 #define MARK_ON  0xF2C9   /* the menu's chosen line */
 #define MARK_OFF 0xF2DA
@@ -286,7 +286,7 @@ static void parents_end(uint8_t *ram, HmRegs *r)
   r->a = 0x0100;                                           /* REP #$20 */
   static const uint16_t AT[4] = { 0x013C, 0x0140, 0x013E, 0x0142 };
   for (int i = 0; i < 4; i++) wr16(ram, r, AT[i], 0x0100);
-  jsl(ram, r, 0xDA4C, 0x80, hm_UNK_Audio5);
+  jsl(ram, r, 0xDA4C, 0x80, hm_PickMapMusic);
   new_music(ram, r, 0xDA50);
   lit(ram, r, 0xDA64);
   fade_in(ram, r, 0x01, 6, 0xDA7A);
@@ -310,13 +310,13 @@ static void parents(uint8_t *ram, HmRegs *r, uint8_t entry)
   r->a = 0x0100;                                           /* REP #$20 */
   wr16(ram, r, 0x0146, 0x0100);
   r->a = 0; r->x = 0x0009; r->y = 0;                       /* REP #$30 */
-  jsl(ram, r, 0xD90A, 0x84, hm_UNK_LoadCCDataLong);
+  jsl(ram, r, 0xD90A, 0x84, hm_StartEventScriptLong);
   jsl(ram, r, 0xD90E, 0x84, hm_IterateCCStructures);
   map_is(ram, r, rd8(ram, r, 0x098B));                     /* SEP #$20 */
-  jsl(ram, r, 0xD919, 0x80, hm_UNK_Audio5);
+  jsl(ram, r, 0xD919, 0x80, hm_PickMapMusic);
   new_music(ram, r, 0xD91D);
   set_a8(r, rd8(ram, r, 0x098B));                          /* SEP #$20 */
-  jsl(ram, r, 0xD936, 0x80, hm_SUB_80972C);
+  jsl(ram, r, 0xD936, 0x80, hm_LoadAndShowMap);
   r->y = 0;                                                /* REP #$30 */
   if (parents_frame(ram, r, entry)) parents_end(ram, r);
 }
@@ -358,12 +358,12 @@ static void title_screen(uint8_t *ram, HmRegs *r)
   next_stage(ram, r, 4);
   democheck(ram, r);
 }
-/* the music of map $5C (UNK_Audio5, UNK_Audio25) and the fast fade out */
+/* the music of map $5C (PickMapMusic, FadeOutSongSlowly) and the fast fade out */
 static void title_music_out(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   map_is(ram, r, 0x5C);
-  jsl(ram, r, at, 0x80, hm_UNK_Audio5);
-  jsl(ram, r, (uint16_t)(at + 4), 0x83, hm_UNK_Audio25);
+  jsl(ram, r, at, 0x80, hm_PickMapMusic);
+  jsl(ram, r, (uint16_t)(at + 4), 0x83, hm_FadeOutSongSlowly);
   fade_out(ram, r, 1, (uint16_t)(at + 0x16));
   jsl(ram, r, (uint16_t)(at + 0x1A), 0x80, hm_ForceBlank);
 }
@@ -469,14 +469,14 @@ static void back_to_title(uint8_t *ram, HmRegs *r)
 }
 
 /* a file screen's start: map $5E's music, the screen (preset 4, palette
- * $6F, colours from $A9:8C00), the two files' frames (SUB_82E742) and
- * contents (CODE_82E405, Y = `kind`: 0 the new game's, 1 the saved
+ * $6F, colours from $A9:8C00), the two files' frames (DrawScreenBars) and
+ * contents (DrawSaveFileLine, Y = `kind`: 0 the new game's, 1 the saved
  * game's); the calls from `at` on (the routine's own address) */
 static void file_screen_start(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t kind)
 {
   map_is(ram, r, 0x5E);
-  jsl(ram, r, (uint16_t)(at + 0x06), 0x80, hm_UNK_Audio5);
-  jsl(ram, r, (uint16_t)(at + 0x0A), 0x83, hm_UNK_Audio25);
+  jsl(ram, r, (uint16_t)(at + 0x06), 0x80, hm_PickMapMusic);
+  jsl(ram, r, (uint16_t)(at + 0x0A), 0x83, hm_FadeOutSongSlowly);
   fade_out(ram, r, 3, (uint16_t)(at + 0x1C));
   jsl(ram, r, (uint16_t)(at + 0x20), 0x80, hm_ForceBlank);
   jsl(ram, r, (uint16_t)(at + 0x24), 0x80, hm_ZeroesVRAM);
@@ -486,10 +486,10 @@ static void file_screen_start(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t kin
   r->a = 0x006F;                                           /* REP #$20 */
   jsl(ram, r, (uint16_t)(at + 0x39), 0x80, hm_LoadFirstHalfPaletteToWRAM);
   colours(ram, r, 0x8C00, (uint16_t)(at + 0x5C));
-  jsr(ram, r, (uint16_t)(at + 0x66), hm_SUB_82E742);
+  jsr(ram, r, (uint16_t)(at + 0x66), hm_DrawScreenBars);
   for (uint16_t f = 0; f < 2; f++) {                       /* REP #$30 */
     r->a = f; r->y = kind;
-    jsr(ram, r, (uint16_t)(at + 0x71 + 0x0B * f), hm_CODE_82E405);
+    jsr(ram, r, (uint16_t)(at + 0x71 + 0x0B * f), hm_DrawSaveFileLine);
   }
   jsl(ram, r, (uint16_t)(at + 0x7D), 0x80, hm_Zeroes42Pointers);
 }
@@ -534,7 +534,7 @@ static void new_file_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
   wait_nmi(ram, r, 0xE0ED, entry);
   r->a = 0x1800;                                           /* REP #$20 */
   hm_dp_w16(ram, r, 0xC7, 0x1800);
-  jsl(ram, r, 0xE0F8, 0x80, hm_UNK_BigLoop);
+  jsl(ram, r, 0xE0F8, 0x80, hm_RunColourAnimations);
   jsl(ram, r, 0xE0FC, 0x84, hm_InputTypeSelector);
   uint8_t changed = dp8(ram, r, 0x97);                     /* SEP #$20 */
   set_a8(r, changed);
@@ -566,7 +566,7 @@ static void new_file(uint8_t *ram, HmRegs *r, uint8_t entry)
 static void intro_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
 {
   wait_nmi(ram, r, 0xD80F, entry);
-  jsl(ram, r, 0xD813, 0x80, hm_UNK_BigLoop);
+  jsl(ram, r, 0xD813, 0x80, hm_RunColourAnimations);
   jsl(ram, r, 0xD817, 0x84, hm_InputTypeSelector);
   uint8_t s = dp8(ram, r, STAGE);                          /* SEP #$20; LDA $95 */
   set_a8(r, s);
@@ -583,9 +583,9 @@ static void intro_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
   case 5: menu(ram, r); return;
   case 6: stage6(ram, r); return;
   case 7: new_file(ram, r, entry); return;
-  case 8: g_hm_next = 0x82E1F1; return;                    /* JML SUB_82E1F1: the check stops */
+  case 8: g_hm_next = 0x82E1F1; return;                    /* JML ContinueFileScreen: the check stops */
   case 9: stage9(ram, r); return;
-  case 10: g_hm_next = 0x82D1C0; return;                   /* JML SUB_82D1C0: the check stops */
+  case 10: g_hm_next = 0x82D1C0; return;                   /* JML FirstDemo: the check stops */
   default: democheck(ram, r); return;
   }
 }
@@ -640,7 +640,7 @@ void hm_IntroScreen_E0EB(uint8_t *ram, HmRegs *r) { new_file_frame(ram, r, r->p)
 void hm_IntroScreen_D871(uint8_t *ram, HmRegs *r) { democheck(ram, r); }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_82E1F1 ($82:E1F1, stage 8, JML): the saved game's file screen: as
+ * ContinueFileScreen ($82:E1F1, stage 8, JML): the saved game's file screen: as
  * the new game's, with the files' contents of the saved games, and its
  * frames ($82:E337): a changed choice ($97) lights the other file's frame;
  * $94 = 1 back to the title, 2 the saved game (StartFromLoad).
@@ -650,7 +650,7 @@ static void load_file_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
   wait_nmi(ram, r, 0xE339, entry);
   r->a = 0x1800;                                           /* REP #$20 */
   hm_dp_w16(ram, r, 0xC7, 0x1800);
-  jsl(ram, r, 0xE344, 0x80, hm_UNK_BigLoop);
+  jsl(ram, r, 0xE344, 0x80, hm_RunColourAnimations);
   jsl(ram, r, 0xE348, 0x84, hm_InputTypeSelector);
   uint8_t changed = dp8(ram, r, 0x97);                     /* SEP #$20 */
   set_a8(r, changed);
@@ -662,7 +662,7 @@ static void load_file_frame(uint8_t *ram, HmRegs *r, uint8_t entry)
   }
   file_screen_end(ram, r, 0x82E337, 0x82E7E9);             /* SUB_82E3D1 */
 }
-void hm_SUB_82E1F1(uint8_t *ram, HmRegs *r)
+void hm_ContinueFileScreen(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
   file_screen_start(ram, r, 0xE1F1, 1);
@@ -673,15 +673,15 @@ void hm_SUB_82E1F1(uint8_t *ram, HmRegs *r)
   file_screen_lit(ram, r, 0xE301);
   load_file_frame(ram, r, entry);
 }
-void hm_SUB_82E1F1_E337(uint8_t *ram, HmRegs *r) { load_file_frame(ram, r, r->p); }
+void hm_ContinueFileScreenFrame(uint8_t *ram, HmRegs *r) { load_file_frame(ram, r, r->p); }
 
 /* ─────────────────────────────────────────────────────────────────────────
  * StartFromLoad ($82:E7E9, JML): the saved game of slot $098E
  * (LoadGameSlot) and its first day (SpawnAfterLoad, JML).
  * StartFromNewGame ($82:E7F9, JML): a new game (NewGameSetup) and its
  * first day.
- * SUB_UNUSED_1 ($82:E801, nothing reaches it): the player's name written
- * again ($099F = 0, Unk_NamesInput).
+ * UnusedRewritePlayerName ($82:E801, nothing reaches it): the player's name written
+ * again ($099F = 0, NamesScreen).
  * The checks stop where SpawnAfterLoad goes into GameLoop, or after the
  * names screen's first frame.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -696,9 +696,9 @@ void hm_StartFromNewGame(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0xE7F9, 0x83, hm_NewGameSetup);
   hm_SpawnAfterLoad(ram, r);                               /* JML */
 }
-void hm_SUB_UNUSED_1(uint8_t *ram, HmRegs *r)
+void hm_UnusedRewritePlayerName(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 0x00);                                         /* SEP #$20 */
   wr8(ram, r, 0x099F, 0);
-  hm_Unk_NamesInput(ram, r);                               /* JML */
+  hm_NamesScreen(ram, r);                               /* JML */
 }

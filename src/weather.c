@@ -280,7 +280,7 @@ void hm_WeatherTomorrow(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_8281C0 ($82:81C0, JSL, RTL): the TV weather report. $0990 = what the
+ * TvWeatherForecast ($82:81C0, JSL, RTL): the TV weather report. $0990 = what the
  * forecast shows (the TV code at $81:D9xx picks the text with it and the
  * season): table $82:81FD maps tomorrow's code (0-3 as they are, the two
  * scripted storms as 0, festivals 6..0B as 5..0A), then a hurricane day
@@ -292,7 +292,7 @@ void hm_WeatherTomorrow(uint8_t *ram, HmRegs *r)
 #define TV_FORECAST      0x00990
 #define TV_FORECAST_MAP  0x8281FD
 
-void hm_SUB_8281C0(uint8_t *ram, HmRegs *r)
+void hm_TvWeatherForecast(uint8_t *ram, HmRegs *r)
 {
   r->x = ram[HM_WEATHER_TOMORROW];
   ram[TV_FORECAST] = hm_bus_rd8(ram, TV_FORECAST_MAP + r->x);

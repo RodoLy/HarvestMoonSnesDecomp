@@ -8,8 +8,8 @@
  * copied from WRAM into a buffer ($0746 / $07C6, two halves of 32 entries)
  * and queued as two DMAs to VRAM:
  *
- *   SUB_80A18D  a new row at the bottom   SUB_80A308  a new row at the top
- *   SUB_80A481  a new column at the right SUB_80A617  a new column at the left
+ *   LoadMapRowBelow  a new row at the bottom   LoadMapRowAbove  a new row at the top
+ *   LoadMapColumnRight  a new column at the right LoadMapColumnLeft  a new column at the left
  *
  * Direct page: $10 / $14 the VRAM position of the next column / row,
  * $12 / $16 the WRAM position, $1A the row length, $1C the camera's offset
@@ -93,7 +93,7 @@ static void queue(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t half, uint16_t 
   }
 }
 
-/* the row windows from $12 (SUB_80A18D / SUB_80A308) */
+/* the row windows from $12 (LoadMapRowBelow / LoadMapRowAbove) */
 static void row_runs(uint8_t *ram, HmRegs *r)
 {
   uint16_t v = dp16(ram, r, 0x12);
@@ -103,7 +103,7 @@ static void row_runs(uint8_t *ram, HmRegs *r)
   else if (v < 0xC0) runs(ram, r, (uint16_t)(v - 0x20), (uint16_t)(v - 0xA0), 0x80, 0);
   /* $C0 and more: the runs are left as they are */
 }
-/* the column windows from $16 (SUB_80A481 / SUB_80A617): the buffer
+/* the column windows from $16 (LoadMapColumnRight / LoadMapColumnLeft): the buffer
  * position is the screen row, (offset >> 8) * 2 */
 static void column_runs(uint8_t *ram, HmRegs *r, uint16_t last_mask)
 {
@@ -142,11 +142,11 @@ static void next_position(HmRegs *r, uint8_t *ram, unsigned at, uint16_t next,
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_80A18D ($80:A18D, JSL, RTL): the row below comes into view.
+ * LoadMapRowBelow ($80:A18D, JSL, RTL): the row below comes into view.
  * Leftovers: A = the new $14, X = 1 (AddProgrammedDMA), Y = $40, C from
  * the wrap compares.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_80A18D(uint8_t *ram, HmRegs *r)
+void hm_LoadMapRowBelow(uint8_t *ram, HmRegs *r)
 {
   row_runs(ram, r);
   uint16_t inner = (uint16_t)(dp16(ram, r, 0x1C) >> 2);
@@ -161,8 +161,8 @@ void hm_SUB_80A18D(uint8_t *ram, HmRegs *r)
   next_position(r, ram, 0x14, (uint16_t)(dp16(ram, r, 0x14) + 0x20), 0x0400, 0x0800, 0x0C00, 0x0000);
 }
 
-/* SUB_80A308 ($80:A308): the row above. */
-void hm_SUB_80A308(uint8_t *ram, HmRegs *r)
+/* LoadMapRowAbove ($80:A308): the row above. */
+void hm_LoadMapRowAbove(uint8_t *ram, HmRegs *r)
 {
   row_runs(ram, r);
   uint16_t inner = (uint16_t)(dp16(ram, r, 0x1C) >> 2);
@@ -175,11 +175,11 @@ void hm_SUB_80A308(uint8_t *ram, HmRegs *r)
   next_position(r, ram, 0x14, (uint16_t)(dp16(ram, r, 0x14) - 0x20), 0xFFE0, 0x0BE0, 0x07E0, 0x03E0);
 }
 
-/* SUB_80A481 ($80:A481): the column at the right. The second run's source
+/* LoadMapColumnRight ($80:A481): the column at the right. The second run's source
  * is $72 + $2000 with the carry of the first sum (no CLC). The last window
- * masks the screen row with $0F where SUB_80A617 uses $1F (the same here,
+ * masks the screen row with $0F where LoadMapColumnLeft uses $1F (the same here,
  * the row is below $10). */
-void hm_SUB_80A481(uint8_t *ram, HmRegs *r)
+void hm_LoadMapColumnRight(uint8_t *ram, HmRegs *r)
 {
   column_runs(ram, r, 0x0F);
   uint32_t s = 0x2000u + dp16(ram, r, 0x12);           /* CLC; ADC $12; ADC #$60 */
@@ -192,8 +192,8 @@ void hm_SUB_80A481(uint8_t *ram, HmRegs *r)
   next_position(r, ram, 0x10, (uint16_t)(dp16(ram, r, 0x10) + 1), 0x0020, 0x0400, 0x0420, 0x0000);
 }
 
-/* SUB_80A617 ($80:A617): the column at the left. */
-void hm_SUB_80A617(uint8_t *ram, HmRegs *r)
+/* LoadMapColumnLeft ($80:A617): the column at the left. */
+void hm_LoadMapColumnLeft(uint8_t *ram, HmRegs *r)
 {
   column_runs(ram, r, 0x1F);
   uint16_t first = (uint16_t)(0x2000 + dp16(ram, r, 0x12) - 0x20);
@@ -272,40 +272,40 @@ void hm_UpdateBGOffset(uint8_t *ram, HmRegs *r)
 {
   if (follow(ram, r, 0xF7, 0x013E, 0xEF, 0xF3, true) && forwards(ram, r, 0x21)) {
     hm_jsl(ram, r, 0xA0DF, 0x80);
-    hm_SUB_80A18D(ram, r);
+    hm_LoadMapRowBelow(ram, r);
     hm_rtl(ram, r);
   }
 }
-/* SUB_80A0E1 ($80:A0E1): the camera goes up. */
-void hm_SUB_80A0E1(uint8_t *ram, HmRegs *r)
+/* ScrollCameraUp ($80:A0E1): the camera goes up. */
+void hm_ScrollCameraUp(uint8_t *ram, HmRegs *r)
 {
   if (follow(ram, r, 0xF7, 0x013E, 0xEF, 0xF3, false) && backwards(ram, r, 0x21)) {
     hm_jsl(ram, r, 0xA11A, 0x80);
-    hm_SUB_80A308(ram, r);
+    hm_LoadMapRowAbove(ram, r);
     hm_rtl(ram, r);
   }
 }
-/* UNK_StaticMapScroling ($80:A11C): the camera goes right. */
-void hm_UNK_StaticMapScroling(uint8_t *ram, HmRegs *r)
+/* ScrollCameraRight ($80:A11C): the camera goes right. */
+void hm_ScrollCameraRight(uint8_t *ram, HmRegs *r)
 {
   if (follow(ram, r, 0xF5, 0x013C, 0xED, 0xF1, true) && forwards(ram, r, 0x20)) {
     hm_jsl(ram, r, 0xA150, 0x80);
-    hm_SUB_80A481(ram, r);
+    hm_LoadMapColumnRight(ram, r);
     hm_rtl(ram, r);
   }
 }
-/* SUB_80A152 ($80:A152): the camera goes left. */
-void hm_SUB_80A152(uint8_t *ram, HmRegs *r)
+/* ScrollCameraLeft ($80:A152): the camera goes left. */
+void hm_ScrollCameraLeft(uint8_t *ram, HmRegs *r)
 {
   if (follow(ram, r, 0xF5, 0x013C, 0xED, 0xF1, false) && backwards(ram, r, 0x20)) {
     hm_jsl(ram, r, 0xA18B, 0x80);
-    hm_SUB_80A617(ram, r);
+    hm_LoadMapColumnLeft(ram, r);
     hm_rtl(ram, r);
   }
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
- * SUB_809EBC ($80:9EBC, JSL, RTL): place the camera on entering a map: the
+ * PlaceCameraOnMapEntry ($80:9EBC, JSL, RTL): place the camera on entering a map: the
  * player in the middle of the screen (128 pixels), unless that would show
  * past a limit; then the camera stays at the limit and the player is off
  * centre. $090B / $090D = where the player is on the screen; the sub-tile
@@ -343,14 +343,14 @@ static void place_axis(uint8_t *ram, HmRegs *r, unsigned pos, unsigned low, unsi
   r->a = hi;
   set16(ram, r, cam, hi);
 }
-void hm_SUB_809EBC(uint8_t *ram, HmRegs *r)
+void hm_PlaceCameraOnMapEntry(uint8_t *ram, HmRegs *r)
 {
   place_axis(ram, r, 0xD6, 0xED, 0xF1, 0x090B, 0x20, 0xF5);
   place_axis(ram, r, 0xD8, 0xEF, 0xF3, 0x090D, 0x21, 0xF7);
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
- * SUB_809F61 ($80:9F61, JSL, RTL): the second background (BG2: $0140 /
+ * MoveSecondBackground ($80:9F61, JSL, RTL): the second background (BG2: $0140 /
  * $0142), every frame.
  *  - In the tool shed (map $26): nothing.
  *  - Maps $31 and up: BG2 follows the camera across; up and down it moves
@@ -394,7 +394,7 @@ static void follow_bg2(uint8_t *ram, HmRegs *r)
   r->a = dp16(ram, r, 0xF7);
   wrw(ram, r, BG2_Y, r->a);
 }
-void hm_SUB_809F61(uint8_t *ram, HmRegs *r)
+void hm_MoveSecondBackground(uint8_t *ram, HmRegs *r)
 {
   uint8_t map = *hm_dp(ram, r, 0x22);
   r->a = (uint16_t)((r->a & 0xFF00) | map);

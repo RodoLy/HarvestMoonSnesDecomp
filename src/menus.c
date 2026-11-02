@@ -41,13 +41,13 @@ static void jsl83(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, H
   fn(ram, r);
   hm_rtl(ram, r);
 }
-/* $0114 = sound, $0115 = 6, UNK_Audio19 (effect sound, 6, $0A) */
+/* $0114 = sound, $0115 = 6, PlaySoundEffect0A (effect sound, 6, $0A) */
 static void beep(uint8_t *ram, HmRegs *r, uint8_t sound, uint16_t ret)
 {
   wr8(ram, r, 0x0114, sound);
   set_a8(r, 6);
   wr8(ram, r, 0x0115, 6);
-  jsl83(ram, r, ret, hm_UNK_Audio19);
+  jsl83(ram, r, ret, hm_PlaySoundEffect0A);
 }
 /* LDA Joy; BIT #button (A = the buttons) */
 static bool pressed(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t button)
@@ -75,7 +75,7 @@ static void answer(uint8_t *ram, HmRegs *r, uint8_t which, uint8_t sound, uint16
  * SaveSlotMenuInputs ($84:C2FE, RTL; CODE_84C2FE, menu 7): up / down
  * change the slot, B cancels ($94 = 1), A accepts ($94 = 2).
  * Leftovers: A = the buttons if none was pressed; otherwise those of
- * UNK_Audio19.
+ * PlaySoundEffect0A.
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_SaveSlotMenuInputs(uint8_t *ram, HmRegs *r)
 {
@@ -104,7 +104,7 @@ void hm_LoadSlotMenuInputs(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * StartMenuInputs ($84:C428, RTL; CODE_84C428, menus 2 and 3): with
  * $7F1F5A bit $8000, Start goes to menu 6.
- * Leftovers: A = $7F1F5A & $8000 or the buttons; else UNK_Audio19's.
+ * Leftovers: A = $7F1F5A & $8000 or the buttons; else PlaySoundEffect0A's.
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_StartMenuInputs(uint8_t *ram, HmRegs *r)
 {
@@ -342,7 +342,7 @@ void hm_ImmobileInputs(uint8_t *ram, HmRegs *r)
     set_a8(r, box & 0x08);
     if (box & 0x08) {                                 /* waiting: A = go on */
       if (!pressed(ram, r, JOY_NEW, BTN_A)) return;
-      jsl83(ram, r, 0xCF70, hm_SUB_83932D);
+      jsl83(ram, r, 0xCF70, hm_ClearTextBox);
       hm_bus_wr16(ram, db_addr(r, 0x0187), (uint16_t)(rd16(ram, r, 0x0187) + 1));
       hm_bus_wr16(ram, db_addr(r, 0x0185), 0x5010);
       r->c = 0;                                       /* CLC; ADC #$10 */
@@ -417,11 +417,11 @@ void hm_NameCursorPharse(uint8_t *ram, HmRegs *r)
   r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, r->y));  /* LDA #0; XBA; LDA [$72],Y */
 }
 
-/* SUB_82EB57 ($82:EB57, JSL, RTL): the cursor's place on the name screen:
+/* NameCursorPosition ($82:EB57, JSL, RTL): the cursor's place on the name screen:
  * the first two bytes of the current cell (x, y) into $099B / $099D.
  * Leftovers: $72-$74 = the page's grid, A = y, Y = 8 x cell + 1, C = bit
  * 13 of the cell number (the last ASL). */
-void hm_SUB_82EB57(uint8_t *ram, HmRegs *r)
+void hm_NameCursorPosition(uint8_t *ram, HmRegs *r)
 {
   uint16_t grid = 0xEBF8;
   uint8_t page = rd8(ram, r, NAME_PAGE);
@@ -438,9 +438,9 @@ void hm_SUB_82EB57(uint8_t *ram, HmRegs *r)
   hm_bus_wr16(ram, db_addr(r, 0x099D), r->a);
 }
 
-/* Unk_OutOfMenu ($82:EA60, JSL, RTL): draw letter A at the name's place
+/* DrawNameLetter ($82:EA60, JSL, RTL): draw letter A at the name's place
  * $0994 (the letter cursor $0185 from DATA16_82EB4D: $5010, $5020...). */
-void hm_Unk_OutOfMenu(uint8_t *ram, HmRegs *r)
+void hm_DrawNameLetter(uint8_t *ram, HmRegs *r)
 {
   uint16_t letter = r->a;
   hm_push8(ram, r, (uint8_t)(letter >> 8));
@@ -484,7 +484,7 @@ void hm_NameMenuKeyB(uint8_t *ram, HmRegs *r)
     if (n != 4) {
       r->a = 0x00A8;                                       /* the cursor's place: blank */
       hm_jsl(ram, r, 0xC0BE, 0x82);
-      hm_Unk_OutOfMenu(ram, r);
+      hm_DrawNameLetter(ram, r);
       hm_rtl(ram, r);
     }
     r->a = (uint8_t)(rd8(ram, r, NAME_COUNT) - 1);         /* LDA #0; XBA; LDA; DEC */
@@ -547,7 +547,7 @@ void hm_NameMenuKeyA(uint8_t *ram, HmRegs *r)
     r->a = (uint16_t)(hm_pull8(ram, r));                   /* PLA (A high = 0) */
     wr8(ram, r, (uint16_t)(NAME + r->x), letter);
     hm_jsl(ram, r, 0xC13A, 0x82);
-    hm_Unk_OutOfMenu(ram, r);
+    hm_DrawNameLetter(ram, r);
     hm_rtl(ram, r);
     n = (uint8_t)(rd8(ram, r, NAME_COUNT) + 1);
     set_a8(r, n);
@@ -569,11 +569,11 @@ void hm_NameMenuInputs(uint8_t *ram, HmRegs *r)
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
- * Menu 1 (CODE_84C2B4): the player moved by an event's pad (unless in the
- * air); with $7F1F5A bit $8000, Start skips: menu 9 (CODE_84C2D8, which
+ * Menu 1 (MenuEventPad): the player moved by an event's pad (unless in the
+ * air); with $7F1F5A bit $8000, Start skips: menu 9 (SkipEventScene, which
  * also sets $7F1F5C bit 2).
  * ═════════════════════════════════════════════════════════════════════════ */
-void hm_CODE_84C2D8(uint8_t *ram, HmRegs *r)
+void hm_SkipEventScene(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 9);
   *hm_dp(ram, r, 0x95) = 9;
@@ -581,25 +581,25 @@ void hm_CODE_84C2D8(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5C) | 0x0004);
   hm_bus_wr16(ram, 0x7F1F5C, r->a);
 }
-void hm_CODE_84C2B4(uint8_t *ram, HmRegs *r)
+void hm_MenuEventPad(uint8_t *ram, HmRegs *r)
 {
   r->a = hm_dp_r16(ram, r, 0xD4);
   r->c = r->a >= 3;
   if (r->a != 3) {
     hm_jsl(ram, r, 0xC2C0, 0x84);
-    hm_CODE_84C7D6(ram, r);
+    hm_ReadEventPad(ram, r);
     hm_rtl(ram, r);
   }
   r->a = hm_bus_rd16(ram, 0x7F1F5A) & 0x8000;
   if (!r->a) return;
-  if (pressed(ram, r, JOY_NEW, BTN_START)) hm_CODE_84C2D8(ram, r);
+  if (pressed(ram, r, JOY_NEW, BTN_START)) hm_SkipEventScene(ram, r);
 }
 
 /* MenuInputs ($84:C288): by the menu number $95 */
 void hm_MenuInputs(uint8_t *ram, HmRegs *r)
 {
   static const struct { uint8_t menu; void (*fn)(uint8_t *, HmRegs *); } M[] = {
-    { 1, hm_CODE_84C2B4 }, { 2, hm_StartMenuInputs }, { 3, hm_StartMenuInputs },
+    { 1, hm_MenuEventPad }, { 2, hm_StartMenuInputs }, { 3, hm_StartMenuInputs },
     { 5, hm_TitleMenuInputs }, { 7, hm_SaveSlotMenuInputs }, { 8, hm_LoadSlotMenuInputs },
   };
   uint8_t m = *hm_dp(ram, r, 0x95);
@@ -610,9 +610,9 @@ void hm_MenuInputs(uint8_t *ram, HmRegs *r)
   }
 }
 
-/* CODE_84CED2 ($84:CED2, input mode 6): with $019B bit 2, after 120 frames
+/* TextBoxAutoClose ($84:CED2, input mode 6): with $019B bit 2, after 120 frames
  * close the text box and go back to walking (and forget a pressed A). */
-void hm_CODE_84CED2(uint8_t *ram, HmRegs *r)
+void hm_TextBoxAutoClose(uint8_t *ram, HmRegs *r)
 {
   uint8_t box = rd8(ram, r, 0x019B);
   set_a8(r, box & 0x04);
@@ -638,7 +638,7 @@ void hm_InputTypeSelector(uint8_t *ram, HmRegs *r)
 {
   static void (*const mode[])(uint8_t *, HmRegs *) = {
     hm_PlayerMovementInputs, hm_ImmobileInputs, hm_ListInputs, hm_MenuInputs,
-    hm_NameMenuInputs, hm_CODE_84CED2,
+    hm_NameMenuInputs, hm_TextBoxAutoClose,
   };
   uint8_t m = rd8(ram, r, 0x019A);
   set_a8(r, m);

@@ -77,15 +77,15 @@ void hm_ResetsCurrentCCStructureShort(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Starting an event script: SUB_8480F8, UNK_LoadCCDataLong and
- * UNK_LoadCCDataShort ($84:80F8, $84:8097, $84:803F; JSL, RTL).
+ * Starting an event script: StartScriptAtTileInFront, StartEventScriptLong and
+ * StartEventScript ($84:80F8, $84:8097, $84:803F; JSL, RTL).
  *   A = CC slot, X = script group, Y = script number in the group.
  * They point the slot ($CC, SetCCPoiner) at the script: +30 = the 16-bit
  * offset, entry `script` of the group's table, +32 = its bank. The group's
  * table is entry `group` (24-bit) of $B3:8000 (only the first entry of
  * Events_Bank_Table is used). Then:
  *  - Long: full reset, +3F = the slot's number;
- *  - SUB_8480F8: the same, and it also places the event on the tile in
+ *  - StartScriptAtTileInFront: the same, and it also places the event on the tile in
  *    front of the player (+1A/+1C);
  *  - Short: short reset, and the script pointer is also left in $C9-$CB
  *    (Long uses $72-$74 / $C9-$CB for the tables, Short $75-$77 / $78-$7A).
@@ -150,19 +150,19 @@ static uint16_t start_script_numbered(uint8_t *ram, HmRegs *r, const ScriptStart
   return slot;
 }
 
-void hm_UNK_LoadCCDataShort(uint8_t *ram, HmRegs *r)
+void hm_StartEventScript(uint8_t *ram, HmRegs *r)
 {
   static const ScriptStart s = { 0x8044, 0x8095, 0x75, 0x78, true };
   start_script(ram, r, &s);
 }
 
-void hm_UNK_LoadCCDataLong(uint8_t *ram, HmRegs *r)
+void hm_StartEventScriptLong(uint8_t *ram, HmRegs *r)
 {
   static const ScriptStart s = { 0x809D, 0x80EA, 0x72, 0xC9, false };
   start_script_numbered(ram, r, &s);
 }
 
-void hm_SUB_8480F8(uint8_t *ram, HmRegs *r)
+void hm_StartScriptAtTileInFront(uint8_t *ram, HmRegs *r)
 {
   static const ScriptStart s = { 0x80FE, 0x814B, 0x72, 0xC9, false };
   start_script_numbered(ram, r, &s);
@@ -198,12 +198,12 @@ void hm_ClearsofAllCCStructs(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_848895 ($84:8895, JSL, RTL): the slot's animation from a table at
+ * SetSlotAnimation ($84:8895, JSL, RTL): the slot's animation from a table at
  * [$72]: 3 bytes per entry, entry = the slot's +02. The word goes to +16,
  * the byte (x 64) to +14.
  * Leftovers: $7E = the entry, A = byte x 64, Y = $14, C = 0.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_848895(uint8_t *ram, HmRegs *r)
+void hm_SetSlotAnimation(uint8_t *ram, HmRegs *r)
 {
   uint16_t entry = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x02));
   hm_dp_w16(ram, r, 0x7E, entry);
@@ -219,12 +219,12 @@ void hm_SUB_848895(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_848020 ($84:8020, JSL, RTL): frees slot A (its +00 = 0, through
+ * FreeEventSlot ($84:8020, JSL, RTL): frees slot A (its +00 = 0, through
  * SetCCPoiner: $CC-$CE then point at it) and destroys its game object (the
- * slot's +12, CODE_8581A2).
- * Leftovers: those of CODE_8581A2.
+ * slot's +12, DestroyGameObject).
+ * Leftovers: those of DestroyGameObject.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SUB_848020(uint8_t *ram, HmRegs *r)
+void hm_FreeEventSlot(uint8_t *ram, HmRegs *r)
 {
   hm_jsl(ram, r, 0x8025, 0x84);
   hm_SetCCPoiner(ram, r);
@@ -236,12 +236,12 @@ void hm_SUB_848020(uint8_t *ram, HmRegs *r)
   r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x12));
   hm_dp_w16(ram, r, 0xA5, r->a);
   hm_jsl(ram, r, 0x803D, 0x85);
-  hm_CODE_8581A2(ram, r);
+  hm_DestroyGameObject(ram, r);
   hm_rtl(ram, r);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_848331 ($84:8331, JSR, RTS): one step of a slot's walk. Only if +01
+ * StepSlot ($84:8331, JSR, RTS): one step of a slot's walk. Only if +01
  * bit 5 (walking): the step timer +06 goes down; at 0 it is reloaded from
  * +05 and the slot moves by (+03, +04), signed bytes, added to its
  * position (+1A, +1C).
@@ -256,7 +256,7 @@ static uint8_t slot8(uint8_t *ram, HmRegs *r, uint16_t at)
   return v;
 }
 
-void hm_SUB_848331(uint8_t *ram, HmRegs *r)
+void hm_StepSlot(uint8_t *ram, HmRegs *r)
 {
   if (!(slot8(ram, r, 0x01) & 0x20)) { r->a &= 0xFF20; return; }  /* AND #$20 */
   uint8_t timer = (uint8_t)(slot8(ram, r, 0x06) - 1);
@@ -281,7 +281,7 @@ void hm_SUB_848331(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_8483CC ($84:83CC, JSR, RTS): a slot that wanders on its own (+01
+ * WanderSlot ($84:83CC, JSR, RTS): a slot that wanders on its own (+01
  * bit 3: villagers in town, the animals in the barn...). Each time its
  * step timers agree (+05 == +06, that is, right after a step):
  *  - if no steps are left (+08 = 0) it picks a new walk of +07 steps: the
@@ -309,8 +309,8 @@ void hm_SUB_848331(uint8_t *ram, HmRegs *r)
  * Leftovers: $92 = +06; $7E/$80 from the area check; $72-$74 = the
  * animation table; A, Y and C as each way out leaves them.
  * ───────────────────────────────────────────────────────────────────────── */
-#define RET_STAND_ANIM   0x86DC   /* JSL SUB_848895 at $84:86D9 */
-#define RET_WALK_ANIM    0x8706   /* JSL SUB_848895 at $84:8703 */
+#define RET_STAND_ANIM   0x86DC   /* JSL SetSlotAnimation at $84:86D9 */
+#define RET_WALK_ANIM    0x8706   /* JSL SetSlotAnimation at $84:8703 */
 #define RET_LOOK_MAP     0x87B1   /* JSL CEEEE at $84:87AE */
 #define RET_LOOK_PLAYER  0x8810   /* JSL CDDDD at $84:880D */
 #define ANIMATION_BANK   0xB3
@@ -362,7 +362,7 @@ static void set_slot_animation(uint8_t *ram, HmRegs *r, uint16_t table, uint16_t
   r->a = (uint16_t)((r->a & 0xFF00) | ANIMATION_BANK);
   *hm_dp(ram, r, 0x74) = ANIMATION_BANK;
   hm_jsl(ram, r, ret, 0x84);
-  hm_SUB_848895(ram, r);
+  hm_SetSlotAnimation(ram, r);
   hm_rtl(ram, r);
   put8(ram, r, 0x01, slot8(ram, r, 0x01) | 0x04);
 }
@@ -406,7 +406,7 @@ static bool may_pass_e1(uint8_t *ram, HmRegs *r)
   return r->c;
 }
 
-void hm_SUB_8483CC(uint8_t *ram, HmRegs *r)
+void hm_WanderSlot(uint8_t *ram, HmRegs *r)
 {
   uint8_t flags = slot8(ram, r, 0x01);
   r->a = (uint16_t)((r->a & 0xFF00) | (flags & 0x08));
@@ -439,7 +439,7 @@ void hm_SUB_8483CC(uint8_t *ram, HmRegs *r)
     /* going on: the area, on the side of the current direction (0-3;
      * anything else counts as down). (The carry of the comparisons here
      * and in the choice above never survives: the area check or
-     * SUB_848895 sets it.) */
+     * SetSlotAnimation sets it.) */
     uint8_t now = slot8(ram, r, 0x02);
     switch (now < 4 ? now : 0) {
     case 0:  dir = inside_area(ram, r, false, true) ? -1 : -2; break;
@@ -520,25 +520,25 @@ void hm_SUB_8483CC(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_848286 ($84:8286, JSR, RTS): a slot's sprite, each frame. Unless
- * +01 bit 4 (frozen), the slot first wanders (SUB_8483CC) and steps
- * (SUB_848331). Then its game object (+12) gets the slot's position (+1A,
+ * UpdateSlotSprite ($84:8286, JSR, RTS): a slot's sprite, each frame. Unless
+ * +01 bit 4 (frozen), the slot first wanders (WanderSlot) and steps
+ * (StepSlot). Then its game object (+12) gets the slot's position (+1A,
  * +1C), animation (+14) and sprite (+16), through $A5, $9F, $9B, $9D, $A1;
  * and by +01:
- *   bit 6  destroy the object (CODE_8581A2);
+ *   bit 6  destroy the object (DestroyGameObject);
  *   bit 1  create it (CreateGameObject; the new object goes to +12);
- *   bit 2  the sprite changed (+16 != +18, the last one): CODE_858100;
- *   none   just move it (CODE_8580B9).
+ *   bit 2  the sprite changed (+16 != +18, the last one): ChangeGameObjectSprite;
+ *   none   just move it (MoveGameObject).
  * Then +18 = +16 and the one-time bits 1, 2 and 4 of +01 are cleared
  * (AND #$E9).
  * Leftovers: A = the new +01, Y = 1; X and C from the object routine.
  * ───────────────────────────────────────────────────────────────────────── */
-#define RET_WANDER       0x8297   /* JSR SUB_8483CC at $84:8295 */
-#define RET_STEP         0x829A   /* JSR SUB_848331 at $84:8298 */
-#define RET_MOVE_OBJECT  0x82DC   /* JSL CODE_8580B9 at $84:82D9 */
+#define RET_WANDER       0x8297   /* JSR WanderSlot at $84:8295 */
+#define RET_STEP         0x829A   /* JSR StepSlot at $84:8298 */
+#define RET_MOVE_OBJECT  0x82DC   /* JSL MoveGameObject at $84:82D9 */
 #define RET_NEW_OBJECT   0x82E2   /* JSL CreateGameObject at $84:82DF */
-#define RET_NEW_SPRITE   0x8307   /* JSL CODE_858100 at $84:8304 */
-#define RET_DROP_OBJECT  0x830D   /* JSL CODE_8581A2 at $84:830A */
+#define RET_NEW_SPRITE   0x8307   /* JSL ChangeGameObjectSprite at $84:8304 */
+#define RET_DROP_OBJECT  0x830D   /* JSL DestroyGameObject at $84:830A */
 
 static void object_call(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmRegs *))
 {
@@ -547,13 +547,13 @@ static void object_call(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_
   hm_rtl(ram, r);
 }
 
-void hm_SUB_848286(uint8_t *ram, HmRegs *r)
+void hm_UpdateSlotSprite(uint8_t *ram, HmRegs *r)
 {
   uint8_t flags = slot8(ram, r, 0x01);
   r->a = (uint16_t)((r->a & 0xFF00) | (flags & 0x10));
   if (!(flags & 0x10)) {
-    jsr(ram, r, RET_WANDER, hm_SUB_8483CC);
-    jsr(ram, r, RET_STEP, hm_SUB_848331);
+    jsr(ram, r, RET_WANDER, hm_WanderSlot);
+    jsr(ram, r, RET_STEP, hm_StepSlot);
   }
   static const struct { uint8_t field, dp; } to_object[5] = {
     { 0x12, 0xA5 }, { 0x14, 0x9F }, { 0x1A, 0x9B }, { 0x1C, 0x9D }, { 0x16, 0xA1 } };
@@ -563,7 +563,7 @@ void hm_SUB_848286(uint8_t *ram, HmRegs *r)
   flags = slot8(ram, r, 0x01);
   if (flags & 0x40) {
     r->a = (uint16_t)((r->a & 0xFF00) | 0x40);
-    object_call(ram, r, RET_DROP_OBJECT, hm_CODE_8581A2);
+    object_call(ram, r, RET_DROP_OBJECT, hm_DestroyGameObject);
   } else if (flags & 0x02) {
     r->a = (uint16_t)((r->a & 0xFF00) | 0x02);
     object_call(ram, r, RET_NEW_OBJECT, hm_CreateGameObject);
@@ -576,10 +576,10 @@ void hm_SUB_848286(uint8_t *ram, HmRegs *r)
     hm_dp_w16(ram, r, 0x7E, sprite);
     uint16_t last = slot16(ram, r, 0x18);
     r->c = last >= sprite;                       /* CMP $7E */
-    if (last != sprite) object_call(ram, r, RET_NEW_SPRITE, hm_CODE_858100);
+    if (last != sprite) object_call(ram, r, RET_NEW_SPRITE, hm_ChangeGameObjectSprite);
   } else {
     r->a &= 0xFF00;
-    object_call(ram, r, RET_MOVE_OBJECT, hm_CODE_8580B9);
+    object_call(ram, r, RET_MOVE_OBJECT, hm_MoveGameObject);
   }
   slot16(ram, r, 0x16);
   r->y = 0x18;
@@ -650,7 +650,7 @@ void hm_EventInstructionInterpreter(uint8_t *ram, HmRegs *r)
  * (EventInstructionInterpreter; +03/+04 cleared first unless +01 bit 3),
  * else the wait goes down by one (and at 0 the script runs this same
  * frame); $DE + $33 for the next slot; a slot with a sprite (+01 bit 0)
- * gets it updated (SUB_848286). At the end the one-frame bits are cleared:
+ * gets it updated (UpdateSlotSprite). At the end the one-frame bits are cleared:
  * $7F1F5A bits 4, 6, 7, 8; $7F1F5C bit 10; $7F1F5E bit 6; $7F1F60 bit 4.
  * Leftovers: A = the new $7F1F60, C = 1 (or that of the compare that
  * stopped it), X = $31 after the slots.
@@ -710,7 +710,7 @@ void hm_IterateCCStructures(uint8_t *ram, HmRegs *r)
         r->y = 1;
         uint8_t flags = hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 1));
         r->a = (uint16_t)((r->a & 0xFF00) | (flags & 0x01));
-        if (flags & 0x01) jsr(ram, r, 0x8208, hm_SUB_848286);
+        if (flags & 0x01) jsr(ram, r, 0x8208, hm_UpdateSlotSprite);
       }
       uint32_t next = (uint32_t)hm_dp_r16(ram, r, 0xCC) + 0x40;  /* REP #$30; CLC; ADC */
       r->a = (uint16_t)next;

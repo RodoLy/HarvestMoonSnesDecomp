@@ -80,15 +80,15 @@ void hm_StartTextBox(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SUB_83932D ($83:932D, JSL, RTL). Wipes the box: queues a DMA of $0C00
+ * ClearTextBox ($83:932D, JSL, RTL). Wipes the box: queues a DMA of $0C00
  * bytes of the empty BG3 tilemap ($9C:BBA3) to VRAM $5000 on channel 6 and
- * drops whatever was queued on channel 7 (half of an arrow, UNK_SetDMA2).
+ * drops whatever was queued on channel 7 (half of an arrow, DrawTilemapBlock2x2).
  * Leftovers: those of RemoveProgrammedDMA; Y = $0C00.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_32D_ADD     0x9353
 #define RET_32D_REMOVE  0x935D
 
-void hm_SUB_83932D(uint8_t *ram, HmRegs *r)
+void hm_ClearTextBox(uint8_t *ram, HmRegs *r)
 {
   *hm_dp(ram, r, 0x27) = 6;
   *hm_dp(ram, r, 0x29) = 0x18;                        /* VRAM data port */
@@ -110,9 +110,9 @@ void hm_SUB_83932D(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * CloseTextBox ($83:93F9, JSL, RTL; CODE_8393F9 in HM-Decomp). The reverse
  * of StartTextBox: $019B = 0, BG3 scrolls back down, the box is wiped
- * (SUB_83932D), the clock runs again (time_running |= 1) unless $0196
+ * (ClearTextBox), the clock runs again (time_running |= 1) unless $0196
  * bit 5 is set, and FLAG5A is cleared.
- * Leftovers: A = the new $7F1F5A; X, Y, C those of SUB_83932D.
+ * Leftovers: A = the new $7F1F5A; X, Y, C those of ClearTextBox.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_3F9_WIPE    0x9424
 
@@ -123,7 +123,7 @@ void hm_CloseTextBox(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, 0x7E, extra);
   wr16(ram, r, 0x0146, (uint16_t)(rd16(ram, r, 0x0146) + 0x0100 + extra));
   hm_jsl(ram, r, RET_3F9_WIPE, 0x83);
-  hm_SUB_83932D(ram, r);
+  hm_ClearTextBox(ram, r);
   hm_rtl(ram, r);
   if (rd16(ram, r, 0x0196) & 0x0020)
     wr8(ram, r, 0x0973, rd8(ram, r, 0x0973) | 0x01);
@@ -134,8 +134,8 @@ void hm_CloseTextBox(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * DrawTextBoxArrow ($83:94D7, JSL, RTL; CODE_8394D7 in HM-Decomp). A = the
  * frame (1 = $83:945F, anything else = $83:9457). Draws the 2x2 arrow at
- * place $018A (at most 11) with UNK_SetDMA2.
- * Leftovers: those of UNK_SetDMA2. The PHA / PLA of A stays on the stack.
+ * place $018A (at most 11) with DrawTilemapBlock2x2.
+ * Leftovers: those of DrawTilemapBlock2x2. The PHA / PLA of A stays on the stack.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_4D7_DRAW    0x951A
 
@@ -153,7 +153,7 @@ void hm_DrawTextBoxArrow(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)((tiles & 0xFF00) | 0x83);         /* SEP; LDA #$83 */
   *hm_dp(ram, r, 0x74) = 0x83;
   hm_jsl(ram, r, RET_4D7_DRAW, 0x83);
-  hm_UNK_SetDMA2(ram, r);
+  hm_DrawTilemapBlock2x2(ram, r);
   hm_rtl(ram, r);
 }
 
@@ -262,10 +262,10 @@ void hm_FindLetterGraphics(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * DrawLetter ($83:9823, JSL, RTL; CODE_839823 in HM-Decomp). A = letter
- * code: copies it to the tile at the cursor $0185 (UNK_SetDMA1). Callers
+ * code: copies it to the tile at the cursor $0185 (CopyLetterToVram). Callers
  * pass X = 1 or 0 (a wide letter?), but the routine starts with LDX #0
  * and the width is always 0: one 8x8 tile per half.
- * Leftovers: those of UNK_SetDMA1. The PHX of 0 stays on the stack.
+ * Leftovers: those of CopyLetterToVram. The PHX of 0 stays on the stack.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_823_FIND    0x982B
 #define RET_823_COPY    0x9836
@@ -278,7 +278,7 @@ void hm_DrawLetter(uint8_t *ram, HmRegs *r)
   hm_pull8(ram, r); hm_pull8(ram, r);                 /* PLX */
   r->a = 0;                                           /* TXA: the width */
   r->x = rd16(ram, r, 0x0185);
-  jsl(ram, r, RET_823_COPY, hm_UNK_SetDMA1);
+  jsl(ram, r, RET_823_COPY, hm_CopyLetterToVram);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -582,7 +582,7 @@ void hm_PrintTextFrame(uint8_t *ram, HmRegs *r)
     set_a8(r, 6);
     wr8(ram, r, 0x0114, 3);
     wr8(ram, r, 0x0115, 6);
-    jsl(ram, r, 0x95BC, hm_UNK_Audio19);
+    jsl(ram, r, 0x95BC, hm_PlaySoundEffect0A);
     set_flags_019B(ram, r, 0x02);
     next_letter(ram, r);
     return;

@@ -8,7 +8,7 @@
  *
  * ToolUsedSound1 ($82:8FB1, JSL, RTL): plays the tool's noise, unless
  * $0922 is 2 (silent). It sets the bank, picks the effect by $0922 and
- * plays it with UNK_Audio19.
+ * plays it with PlaySoundEffect0A.
  * Leftovers: A, X = where it read the effect, C = 0; with $0922 = 2,
  * A = 2 and C = 1. When the game calls it with an 8-bit X the index wraps
  * at 256 (TAX / INX keep only the low byte).
@@ -44,7 +44,7 @@ void hm_ToolUsedSound1(uint8_t *ram, HmRegs *r)
   if (!effect) return;
   hm_bus_wr8(ram, db_(r, 0x0114), effect);
   hm_jsl(ram, r, RET_SOUND1_PLAY, 0x83);
-  hm_UNK_Audio19(ram, r);
+  hm_PlaySoundEffect0A(ram, r);
   hm_rtl(ram, r);
 }
 
@@ -52,13 +52,13 @@ void hm_ToolUsedSound1(uint8_t *ram, HmRegs *r)
  * ToolUsedSound2 ($82:8FF3, JSL, RTL): when the item in hand ($0921) is
  * not the last one noted ($0119), its noises' instruments are loaded: the
  * bank ($0115) and, for each of the two effects that is not 0, the effect
- * ($0114) with UNK_Audio18 (the first also with the instrument of the song
+ * ($0114) with PrepareSoundEffect (the first also with the instrument of the song
  * playing, $0103 = table $80:B8CD + 1). Then $0119 = the item.
  * The game calls it with 16-bit indexes (PHX / PLX around the first
  * effect would not match otherwise). The ADC that makes 3 x item clears V,
- * which UNK_Audio18 keeps.
+ * which PrepareSoundEffect keeps.
  * Leftovers: A = the item (8-bit), X where it last read the table, C = 0
- * from the ADC or that of the compare / UNK_Audio18.
+ * from the ADC or that of the compare / PrepareSoundEffect.
  * ───────────────────────────────────────────────────────────────────────── */
 #define SONG_INSTRUMENTS 0x80B8CD
 
@@ -92,7 +92,7 @@ void hm_ToolUsedSound2(uint8_t *ram, HmRegs *r)
         hm_bus_wr8(ram, db_(r, 0x0103), ins);
         r->p = (uint8_t)(entry & ~0x40);
         hm_jsl(ram, r, 0x9037, 0x83);
-        hm_UNK_Audio18(ram, r);
+        hm_PrepareSoundEffect(ram, r);
         hm_rtl(ram, r);
       }
       uint8_t lo = hm_pull8(ram, r);                       /* SEP #$20; REP #$10; PLX; INX */
@@ -103,7 +103,7 @@ void hm_ToolUsedSound2(uint8_t *ram, HmRegs *r)
         hm_bus_wr8(ram, db_(r, 0x0114), second);
         r->p = (uint8_t)(entry & ~0x40);
         hm_jsl(ram, r, 0x904A, 0x83);
-        hm_UNK_Audio18(ram, r);
+        hm_PrepareSoundEffect(ram, r);
         hm_rtl(ram, r);
       }
       r->p = entry;

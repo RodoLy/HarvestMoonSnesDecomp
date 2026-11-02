@@ -3,7 +3,7 @@
  *
  * PlayerMovementInputs ($84:C6B7) runs every frame while the player can
  * move. HM-Decomp writes it as many labels (PlayerActionKeysPressed,
- * PlayerActionDown..., PlayerKeyA..., CODE_84C7D6...) joined by JMPs: it is
+ * PlayerActionDown..., PlayerKeyA..., ReadEventPad...) joined by JMPs: it is
  * one routine with many exits. The arrows set the action "walk" ($D4 = 1)
  * and the direction ($DA: 0 down, 1 up, 2 right, 3 left; HM-Decomp's button
  * names swap left and right), then one button is looked at, in this order:
@@ -126,7 +126,7 @@ static void key_y(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)((r->a & 0xFF00) | tool);
   if (!tool) return;
   act(ram, r, 0x000A);                                     /* using a tool */
-  jsl(ram, r, 0xCDDB, 0x82, hm_UNK_ToolUsed);
+  jsl(ram, r, 0xCDDB, 0x82, hm_StartToolAnimation);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ static void tile_in_front(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint1
   r->x = rdw(ram, r, FRONT_X);
   r->y = rdw(ram, r, FRONT_Y);
   r->a = prop;
-  jsl(ram, r, ret_prop, 0x82, hm_UNK_CheckTileProperty);
+  jsl(ram, r, ret_prop, 0x82, hm_GetTileProperty);
 }
 /* $DF / $E1 = the player, no step, $E3 = how far */
 static void from_player(uint8_t *ram, HmRegs *r, uint16_t far)
@@ -243,7 +243,7 @@ static void put_down(uint8_t *ram, HmRegs *r)
   wrw(ram, r, FRONT_X, dp16(ram, r, PLAYER_X));
   wrw(ram, r, FRONT_Y, dp16(ram, r, PLAYER_Y));
   r->a = 0x0017; r->x = 0; r->y = 0x0014;
-  jsl(ram, r, 0xCD07, 0x84, hm_SUB_8480F8);               /* the putting-down script */
+  jsl(ram, r, 0xCD07, 0x84, hm_StartScriptAtTileInFront);               /* the putting-down script */
   wrw(ram, r, 0x0878, 0);
   wrw(ram, r, 0x087A, 0);
   hm_bus_wr8(ram, db_addr(r, 0x0939), 0);
@@ -301,7 +301,7 @@ static void key_a(uint8_t *ram, HmRegs *r)
   }
   if (state(ram, r, 0x0002)) { act(ram, r, 0x0005); return; }   /* drop the item */
   tile_in_front(ram, r, 0, 7, 7, 0xCAE1, 2, 0xCAF0);
-  jsl(ram, r, 0xCAF4, 0x82, hm_SUB_82AD0E);               /* what is in front */
+  jsl(ram, r, 0xCAF4, 0x82, hm_PressAOnTile);               /* what is in front */
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -356,9 +356,9 @@ static bool arrows(uint8_t *ram, HmRegs *r, uint16_t pad_at)
   return false;
 }
 
-/* CODE_84C7D6 ($84:C7D6, also called with JSL from MenuInputs, menu 1):
+/* ReadEventPad ($84:C7D6, also called with JSL from MenuInputs, menu 1):
  * the event's pad, $08FD: an arrow, else a button. */
-void hm_CODE_84C7D6(uint8_t *ram, HmRegs *r)
+void hm_ReadEventPad(uint8_t *ram, HmRegs *r)
 {
   if (!arrows(ram, r, PAD_SCRIPT)) script_buttons(ram, r);
 }
@@ -370,7 +370,7 @@ void hm_PlayerMovementInputs(uint8_t *ram, HmRegs *r)
   if (is(r, 0x0003)) return;                               /* in the air */
   r->a = hm_bus_rd16(ram, FLAGS_5C) & 0x0020;
   if (r->a) return;
-  if (state(ram, r, 0x1000)) { hm_CODE_84C7D6(ram, r); return; }   /* an event's pad */
+  if (state(ram, r, 0x1000)) { hm_ReadEventPad(ram, r); return; }   /* an event's pad */
   if (!state(ram, r, 0x4000)) return;
   r->a = dp16(ram, r, ACTION);
   if (is(r, 0x0011) || is(r, 0x0012)) {                    /* fishing: only Y */

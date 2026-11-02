@@ -25,7 +25,7 @@
  * 4 slot counts the pieces using the slot. Pieces not loaded go into a ring
  * queue of 64 entries of 4 bytes at $7E:A220 (piece, address of the byte
  * that will receive the slot): $BD is where the next one goes, $BB where
- * the loader (CODE_858CB2, run at the NMI) takes them out.
+ * the loader (LoadQueuedSpritePieces, run at the NMI) takes them out.
  *
  * Map objects: 10 records of 16 bytes at $7E:B4E6:
  *   +0 flags (bit 0 = in use)   +1 its routine (table $81:A58B)   +2, +3
@@ -271,11 +271,11 @@ void hm_SpawnMapObject(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_PresetsMemory3 ($81:A4C7, JSL, RTL): clears the first byte of the
+ * ClearItemRecords ($81:A4C7, JSL, RTL): clears the first byte of the
  * 10 records of 16 bytes at $7E:B4E6 (right before the event slots).
  * Leftovers: $07-$09 = $7E:B586, A = $B586, X = 10, Y = 0, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_PresetsMemory3(uint8_t *ram, HmRegs *r)
+void hm_ClearItemRecords(uint8_t *ram, HmRegs *r)
 {
   hm_dp_w16(ram, r, 0x07, 0xB4E6);
   *hm_dp(ram, r, 0x09) = 0x7E;
@@ -292,18 +292,18 @@ void hm_UNK_PresetsMemory3(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * Destroying a game object.
  *
- * CODE_8581A2 ($85:81A2, JSL, RTL): object $A5 ($A9 = its offset, from
+ * DestroyGameObject ($85:81A2, JSL, RTL): object $A5 ($A9 = its offset, from
  * Table_GameOBJIndexes at $85:8BE0). If one of its pieces is still waiting
  * in the loader's queue (slot $FF), nothing can be freed yet: $0740 counts
  * one more postponed destruction, $AF = A = $FFFF and it returns. Otherwise
  * every piece gives its graphics slot back, the record is freed (+0 = 0)
  * and A = its +0E. The callers do not retry: the object simply stays.
  *
- * CODE_858B7B ($85:8B7B, JSR, RTS): the check, $AF = 0 (all loaded) or
- * $FFFF. CODE_858B41 ($85:8B41, JSR, RTS): the freeing; each piece's slot
- * byte becomes $FF. CODE_858C9F ($85:8C9F, JSR, RTS): one user less for
+ * CheckSpritePiecesLoaded ($85:8B7B, JSR, RTS): the check, $AF = 0 (all loaded) or
+ * $FFFF. FreeSpritePieces ($85:8B41, JSR, RTS): the freeing; each piece's slot
+ * byte becomes $FF. ReleaseSpriteSlot ($85:8C9F, JSR, RTS): one user less for
  * slot $B3 ($7E:A320 + 4 slot).
- * Bug: CODE_858C9F waits while the slot's count is 0 ("LDA; BEQ" to
+ * Bug: ReleaseSpriteSlot waits while the slot's count is 0 ("LDA; BEQ" to
  * itself), which would hang the game; a slot in use is never at 0, so it
  * does not happen. The rewrite does not wait (the fuzz never gives 0).
  * Leftovers: see each one; C = 1 at the end of the loops (CPY / CMP).
@@ -311,7 +311,7 @@ void hm_UNK_PresetsMemory3(uint8_t *ram, HmRegs *r)
 #define GOBJ_OFFSETS    0x858BE0
 #define POSTPONED_FREES 0x0740     /* DB: */
 
-void hm_CODE_858C9F(uint8_t *ram, HmRegs *r)
+void hm_ReleaseSpriteSlot(uint8_t *ram, HmRegs *r)
 {
   uint16_t slot = hm_dp_r16(ram, r, 0xB3);
   r->c = (slot >> 14) & 1;                                 /* the second ASL */
@@ -328,7 +328,7 @@ static uint16_t pieces_of(uint8_t *ram, HmRegs *r, uint16_t x)
   return r->a;
 }
 
-void hm_CODE_858B7B(uint8_t *ram, HmRegs *r)
+void hm_CheckSpritePiecesLoaded(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = hm_dp_r16(ram, r, 0xA9);
   uint16_t y = pieces_of(ram, r, x);
@@ -354,9 +354,9 @@ void hm_CODE_858B7B(uint8_t *ram, HmRegs *r)
   r->x = x; r->y = y;
 }
 
-#define RET_B41_SLOT 0x8B6B   /* JSR CODE_858C9F at $85:8B69 */
+#define RET_B41_SLOT 0x8B6B   /* JSR ReleaseSpriteSlot at $85:8B69 */
 
-void hm_CODE_858B41(uint8_t *ram, HmRegs *r)
+void hm_FreeSpritePieces(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = hm_dp_r16(ram, r, 0xA9);
   uint16_t y = pieces_of(ram, r, x);
@@ -370,7 +370,7 @@ void hm_CODE_858B41(uint8_t *ram, HmRegs *r)
       hm_bus_wr8(ram, abs_x(r, GOBJ + 0x14, x), 0xFF);
       push16(ram, r, y); push16(ram, r, x);                /* PHY; PHX */
       push16(ram, r, RET_B41_SLOT);
-      hm_CODE_858C9F(ram, r);
+      hm_ReleaseSpriteSlot(ram, r);
       pull16(ram, r);
       x = pull16(ram, r); y = pull16(ram, r);              /* PLX; PLY */
     }
@@ -384,7 +384,7 @@ void hm_CODE_858B41(uint8_t *ram, HmRegs *r)
 #define RET_1A2_CHECK 0x81B0
 #define RET_1A2_FREE  0x81BA
 
-void hm_CODE_8581A2(uint8_t *ram, HmRegs *r)
+void hm_DestroyGameObject(uint8_t *ram, HmRegs *r)
 {
   uint16_t n = hm_dp_r16(ram, r, 0xA5);
   r->c = (n >> 15) & 1;                                    /* ASL */
@@ -392,12 +392,12 @@ void hm_CODE_8581A2(uint8_t *ram, HmRegs *r)
   uint16_t obj = hm_bus_rd16(ram, (GOBJ_OFFSETS + r->x) & 0xFFFFFF);
   hm_dp_w16(ram, r, 0xA9, obj);
   push16(ram, r, RET_1A2_CHECK);
-  hm_CODE_858B7B(ram, r);
+  hm_CheckSpritePiecesLoaded(ram, r);
   pull16(ram, r);
   r->a = hm_dp_r16(ram, r, 0xAF);
   if (r->a) return;                                        /* JMP to an RTL */
   push16(ram, r, RET_1A2_FREE);
-  hm_CODE_858B41(ram, r);
+  hm_FreeSpritePieces(ram, r);
   pull16(ram, r);
   r->x = hm_dp_r16(ram, r, 0xA9);
   hm_bus_wr16(ram, abs_x(r, GOBJ, r->x), 0);
@@ -409,11 +409,11 @@ void hm_CODE_8581A2(uint8_t *ram, HmRegs *r)
  * offset from Table_GameOBJIndexes; $77 / $7A = the bank of sprite $A1's
  * table, $86 or $87).
  *
- * CODE_8580B9 ($85:80B9): moves it: flip $9F, X $9B, Y $9D. $A7 = 0 when
+ * MoveGameObject ($85:80B9): moves it: flip $9F, X $9B, Y $9D. $A7 = 0 when
  * done, 1 when the record is not in use (then nothing changes).
- * CODE_858100 ($85:8100): gives it another sprite ($A1, with $9F, $A3,
+ * ChangeGameObjectSprite ($85:8100): gives it another sprite ($A1, with $9F, $A3,
  * $9B, $9D as CreateGameObject): its pieces are freed (unless one is still
- * queued: then nothing, as CODE_8581A2) and the new sprite's are loaded.
+ * queued: then nothing, as DestroyGameObject) and the new sprite's are loaded.
  * Leftovers: A = 0 (or $FFFF / the record's first word), X = the offset,
  * C from the last arithmetic.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -436,7 +436,7 @@ static uint16_t object_offset(uint8_t *ram, HmRegs *r)
   return r->a;
 }
 
-void hm_CODE_8580B9(uint8_t *ram, HmRegs *r)
+void hm_MoveGameObject(uint8_t *ram, HmRegs *r)
 {
   sprite_bank(ram, r);
   uint16_t x = object_offset(ram, r);
@@ -456,17 +456,17 @@ void hm_CODE_8580B9(uint8_t *ram, HmRegs *r)
 #define RET_100_FREE   0x8132
 #define RET_100_PIECES 0x819B
 
-void hm_CODE_858100(uint8_t *ram, HmRegs *r)
+void hm_ChangeGameObjectSprite(uint8_t *ram, HmRegs *r)
 {
   sprite_bank(ram, r);
   object_offset(ram, r);
   push16(ram, r, RET_100_CHECK);
-  hm_CODE_858B7B(ram, r);
+  hm_CheckSpritePiecesLoaded(ram, r);
   pull16(ram, r);
   r->a = hm_dp_r16(ram, r, 0xAF);
   if (r->a) return;                                        /* a piece still queued */
   push16(ram, r, RET_100_FREE);
-  hm_CODE_858B41(ram, r);
+  hm_FreeSpritePieces(ram, r);
   pull16(ram, r);
   r->y = hm_dp_r16(ram, r, 0xA5);
   uint16_t x = r->x = hm_dp_r16(ram, r, 0xA9);
@@ -494,13 +494,13 @@ void hm_CODE_858100(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_8581CB ($85:81CB, JSL, RTL): reads object $A5 back into the
+ * ReadGameObject ($85:81CB, JSL, RTL): reads object $A5 back into the
  * variables CreateGameObject takes ($A1 sprite, $9F flip, $A3, $9B / $9D
  * position; only if the record is in use), and $A7 = its byte +12 (from
  * the sprite's entry) sign-extended, in use or not.
  * Leftovers: $A9 / X = the offset, A = $A7, C = 1 (CMP #0).
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_CODE_8581CB(uint8_t *ram, HmRegs *r)
+void hm_ReadGameObject(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = object_offset(ram, r);
   r->x = x;
@@ -560,13 +560,13 @@ void hm_ClearSpriteDataTables(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_8582C7 ($85:82C7, JSL, RTL): animates the game objects, every
+ * AnimateGameObjects ($85:82C7, JSL, RTL): animates the game objects, every
  * frame. A sprite's entry (+0C) is a list of frames, 3 bytes each: the
  * piece list of the frame and how many frames it lasts; a piece list of 0
  * goes back to the first frame (a loop). For each of the $DC objects in
  * use, by its timer +12:
  *   0     the next frame: unless a piece of the current one is still
- *         queued (CODE_858B7B; then it waits), its pieces are freed and
+ *         queued (CheckSpritePiecesLoaded; then it waits), its pieces are freed and
  *         those of the frame at +0E are loaded; +10 = the frame's piece
  *         list, +12 = its duration, +0E = the frame after it;
  *   $FE   the object is freed (its pieces and +00 = 0). Only found right
@@ -578,10 +578,10 @@ void hm_ClearSpriteDataTables(uint8_t *ram, HmRegs *r)
  * Leftovers: $A9 = $24 x $DC, $AB = $DC, A = $AB, C = 1; X, Y and $75 /
  * $77 / $7A of the last object worked on.
  * ───────────────────────────────────────────────────────────────────────── */
-#define RET_2C7_CHECK  0x830E   /* JSR CODE_858B7B at $85:830C */
-#define RET_2C7_FREE   0x8315   /* JSR CODE_858B41 at $85:8313 */
+#define RET_2C7_CHECK  0x830E   /* JSR CheckSpritePiecesLoaded at $85:830C */
+#define RET_2C7_FREE   0x8315   /* JSR FreeSpritePieces at $85:8313 */
 #define RET_2C7_LOAD   0x8344   /* JSR LoadGameObjectComponents at $85:8342 */
-#define RET_2C7_END    0x8356   /* JSR CODE_858B41 at $85:8354 */
+#define RET_2C7_END    0x8356   /* JSR FreeSpritePieces at $85:8354 */
 
 static void jsr85(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmRegs *))
 {
@@ -599,10 +599,10 @@ static uint8_t gobj8(uint8_t *ram, HmRegs *r, uint16_t field, uint16_t x)   /* 8
 /* the next frame (.CODE_858303 with a timer of 0); false if it must wait */
 static bool next_frame(uint8_t *ram, HmRegs *r)
 {
-  jsr85(ram, r, RET_2C7_CHECK, hm_CODE_858B7B);
+  jsr85(ram, r, RET_2C7_CHECK, hm_CheckSpritePiecesLoaded);
   r->a = hm_dp_r16(ram, r, 0xAF);
   if (r->a) return false;
-  jsr85(ram, r, RET_2C7_FREE, hm_CODE_858B41);
+  jsr85(ram, r, RET_2C7_FREE, hm_FreeSpritePieces);
   uint16_t x = r->x = hm_dp_r16(ram, r, 0xA9);
   hm_dp_w16(ram, r, 0x75, r->a = hm_bus_rd16(ram, abs_x(r, GOBJ + 0x0E, x)));
   while ((r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x75, 0))) == 0)    /* the end: loop */
@@ -620,7 +620,7 @@ static bool next_frame(uint8_t *ram, HmRegs *r)
   return true;
 }
 
-void hm_CODE_8582C7(uint8_t *ram, HmRegs *r)
+void hm_AnimateGameObjects(uint8_t *ram, HmRegs *r)
 {
   hm_dp_w16(ram, r, 0xA9, 0);
   hm_dp_w16(ram, r, 0xAB, 0);
@@ -641,7 +641,7 @@ void hm_CODE_8582C7(uint8_t *ram, HmRegs *r)
       } else {
         r->c = timer >= 0xFE;                              /* CMP #$FE */
         if (timer == 0xFE) {
-          jsr85(ram, r, RET_2C7_END, hm_CODE_858B41);
+          jsr85(ram, r, RET_2C7_END, hm_FreeSpritePieces);
           r->a = 0;
           hm_bus_wr16(ram, abs_x(r, GOBJ, r->x), 0);
           count_down = false;
@@ -784,12 +784,12 @@ void hm_InitializeOBJs(uint8_t *ram, HmRegs *r)
  * ($81:D210, 3 bytes each: the sprite, and a byte that x 64 is the flip,
  * kept in $090F).
  *
- * CODE_81CFA0 ($81:CFA0, JSL, RTL): creates the object at the player's
+ * CreatePlayerObject ($81:CFA0, JSL, RTL): creates the object at the player's
  * position (CreateGameObject) and keeps its number in $0905.
- * CODE_81CFE6 ($81:CFE6, JSR, RTS), every frame: moves it to the player
- * (CODE_8580B9); if the animation changed, gives it the new sprite
- * (CODE_858100); then CODE_81D03D.
- * CODE_81D03D ($81:D03D, JSR, RTS): reads the object back (CODE_8581CB);
+ * UpdatePlayerObject ($81:CFE6, JSR, RTS), every frame: moves it to the player
+ * (MoveGameObject); if the animation changed, gives it the new sprite
+ * (ChangeGameObjectSprite); then ReadPlayerObjectTimer.
+ * ReadPlayerObjectTimer ($81:D03D, JSR, RTS): reads the object back (ReadGameObject);
  * $0915 = its timer byte, sign-extended ($A7); at $FFFF (the frame lasts
  * for ever: the animation is over) the game state bit $2000 is cleared.
  * Leftovers: those of the object routines; A = $A5 / $0905 (CFA0), the
@@ -817,7 +817,7 @@ static void player_sprite(uint8_t *ram, HmRegs *r, uint16_t anim)
   hm_dp_w16(ram, r, 0x9F, flip);
 }
 
-void hm_CODE_81CFA0(uint8_t *ram, HmRegs *r)
+void hm_CreatePlayerObject(uint8_t *ram, HmRegs *r)
 {
   uint16_t anim = hm_bus_rd16(ram, abs_db(r, PLAYER_ANIM));
   player_sprite(ram, r, anim);
@@ -833,11 +833,11 @@ void hm_CODE_81CFA0(uint8_t *ram, HmRegs *r)
   hm_bus_wr16(ram, abs_db(r, PLAYER_GOBJ), r->a);
 }
 
-void hm_CODE_81D03D(uint8_t *ram, HmRegs *r)
+void hm_ReadPlayerObjectTimer(uint8_t *ram, HmRegs *r)
 {
   hm_dp_w16(ram, r, 0xA5, hm_bus_rd16(ram, abs_db(r, PLAYER_GOBJ)));
   hm_jsl(ram, r, 0xD047, 0x85);
-  hm_CODE_8581CB(ram, r);
+  hm_ReadGameObject(ram, r);
   hm_rtl(ram, r);
   r->a = hm_dp_r16(ram, r, 0xA7);
   hm_bus_wr16(ram, abs_db(r, PLAYER_TIMER), r->a);
@@ -847,7 +847,7 @@ void hm_CODE_81D03D(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, 0xD2, r->a);
 }
 
-void hm_CODE_81CFE6(uint8_t *ram, HmRegs *r)
+void hm_UpdatePlayerObject(uint8_t *ram, HmRegs *r)
 {
   hm_dp_w16(ram, r, 0xA5, hm_bus_rd16(ram, abs_db(r, PLAYER_GOBJ)));
   hm_dp_w16(ram, r, 0x9B, hm_dp_r16(ram, r, 0xD6));
@@ -855,7 +855,7 @@ void hm_CODE_81CFE6(uint8_t *ram, HmRegs *r)
   r->a = hm_bus_rd16(ram, abs_db(r, PLAYER_FLIP));
   hm_dp_w16(ram, r, 0x9F, r->a);
   hm_jsl(ram, r, 0xCFFD, 0x85);
-  hm_CODE_8580B9(ram, r);
+  hm_MoveGameObject(ram, r);
   hm_rtl(ram, r);
   uint16_t anim = hm_bus_rd16(ram, abs_db(r, PLAYER_ANIM));
   uint16_t shown = hm_bus_rd16(ram, abs_db(r, PLAYER_ANIM_SHOWN));
@@ -866,16 +866,16 @@ void hm_CODE_81CFE6(uint8_t *ram, HmRegs *r)
     r->a = hm_bus_rd16(ram, abs_db(r, PLAYER_GOBJ));
     hm_dp_w16(ram, r, 0xA5, r->a);
     hm_jsl(ram, r, 0xD038, 0x85);
-    hm_CODE_858100(ram, r);
+    hm_ChangeGameObjectSprite(ram, r);
     hm_rtl(ram, r);
   }
-  push16(ram, r, 0xD03B);                                  /* JSR CODE_81D03D */
-  hm_CODE_81D03D(ram, r);
+  push16(ram, r, 0xD03B);                                  /* JSR ReadPlayerObjectTimer */
+  hm_ReadPlayerObjectTimer(ram, r);
   pull16(ram, r);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CODE_858CB2 ($85:8CB2, JSL, RTL): the loader of the queued pieces (run
+ * LoadQueuedSpritePieces ($85:8CB2, JSL, RTL): the loader of the queued pieces (run
  * at the NMI). While the queue ($BB != $BD) has pieces and the budget $C7
  * has $100 bytes left for one more, takes the piece at $BB:
  *   - its slot: the next new one while $0846 < $40 (then $0846 + 1), or
@@ -916,7 +916,7 @@ static uint16_t graphics_times(uint8_t *ram, HmRegs *r, uint16_t index, uint8_t 
   return (uint16_t)(a * by);
 }
 
-void hm_CODE_858CB2(uint8_t *ram, HmRegs *r)
+void hm_LoadQueuedSpritePieces(uint8_t *ram, HmRegs *r)
 {
   *hm_dp(ram, r, 0x7A) = 0x80;
   hm_dp_w16(ram, r, 0xBF, 0);

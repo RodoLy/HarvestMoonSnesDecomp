@@ -162,7 +162,7 @@ static void hen_timer(uint8_t *ram, HmRegs *r)
   r->a = slot8(ram, r, 0x3F);                                          /* XBA; LDA #0; XBA */
   r->x = 0; r->y = script;
   hm_jsl(ram, r, ret, 0x84);
-  hm_UNK_LoadCCDataShort(ram, r);
+  hm_StartEventScript(ram, r);
   hm_rtl(ram, r);
 }
 
@@ -223,7 +223,7 @@ void hm_Event_UNKChickenRelated(uint8_t *ram, HmRegs *r)
  *     ($7F1F52);
  *   - otherwise every $78 frames ($0938 counts; 2 seconds) its mood
  *     changes. $7F1F58 holds one mood bit (1, 2, 4, 8 or $10) and the
- *     random byte $DE picks a script for slot $16 (UNK_LoadCCDataShort)
+ *     random byte $DE picks a script for slot $16 (StartEventScript)
  *     and maybe the next mood:
  *       1:   < $40 script $3D, mood 2;  < $C0: by $DE again, < $33 $3E,
  *            < $66 / < $99 $40, < $CC $47, else $48, mood $10
@@ -253,7 +253,7 @@ static void dog_script(uint8_t *ram, HmRegs *r, uint8_t script, uint16_t ret)
 {
   r->a = DOG_SLOT; r->x = 0; r->y = script;
   hm_jsl(ram, r, ret, 0x84);
-  hm_UNK_LoadCCDataShort(ram, r);
+  hm_StartEventScript(ram, r);
   hm_rtl(ram, r);
 }
 static void set_mood(uint8_t *ram, HmRegs *r, uint16_t clear, uint16_t set)
@@ -371,7 +371,7 @@ static void dog_called(uint8_t *ram, HmRegs *r)
   r->a = slot8(ram, r, 0x3F);                              /* XBA; LDA #0; XBA */
   r->x = 0; r->y = 0x003F;
   hm_jsl(ram, r, 0xB2AD, 0x84);
-  hm_UNK_LoadCCDataShort(ram, r);
+  hm_StartEventScript(ram, r);
   hm_rtl(ram, r);
   hm_dp_w16(ram, r, 0x82, 0);
   hm_dp_w16(ram, r, 0x84, 0);
@@ -1191,7 +1191,7 @@ void hm_Event_UNKPickupMole(uint8_t *ram, HmRegs *r)
     if (lda8(r, *hm_dp(ram, r, 0xDE) & 0x80)) {
       r->a = 0x0011; r->x = 0; r->y = 0x0081;
       hm_jsl(ram, r, 0xAA4E, 0x84);
-      hm_UNK_LoadCCDataShort(ram, r);
+      hm_StartEventScript(ram, r);
       hm_rtl(ram, r);
     }
   }
@@ -1337,14 +1337,14 @@ static void rec_and(uint8_t *ram, HmRegs *r, uint16_t y, uint8_t bits)
 {
   rec_w8(ram, r, y, lda8(r, (uint8_t)(record8(ram, r, y) & bits)));
 }
-/* UNK_LoadCCDataShort: script `script` on the cow's own slot */
+/* StartEventScript: script `script` on the cow's own slot */
 static void cow_script(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t ret)
 {
   r->a = slot8(ram, r, 0x3F);
   r->x = 0;
   r->y = script;
   hm_jsl(ram, r, ret, 0x84);
-  hm_UNK_LoadCCDataShort(ram, r);
+  hm_StartEventScript(ram, r);
   hm_rtl(ram, r);
 }
 /* the slot's +02 picks one of four versions of a script; any other value
@@ -1769,7 +1769,7 @@ void hm_Event_Cmd52(uint8_t *ram, HmRegs *r) { pressed_on(ram, r, 0x0002); }
 void hm_Event_Cmd53(uint8_t *ram, HmRegs *r) { pressed_on(ram, r, 0x0004); }
 
 /* Command 54 ($84:BED6): <text word> <lines byte>: a text box that closes
- * by itself (input mode 6, CODE_84CED2: after 120 frames). */
+ * by itself (input mode 6, TextBoxAutoClose: after 120 frames). */
 void hm_Event_Cmd54(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
@@ -1810,7 +1810,7 @@ void hm_Event_Cmd56(uint8_t *ram, HmRegs *r)
   r->a = 0x000A;
   hm_dp_w16(ram, r, 0xD4, 0x000A);
   hm_jsl(ram, r, 0xBF9E, 0x82);
-  hm_UNK_ToolUsed(ram, r);
+  hm_StartToolAnimation(ram, r);
   hm_rtl(ram, r);
 }
 /* Command 57 ($84:BFA0): <byte>: change the stamina by it (ChangeStamina). */
@@ -1861,7 +1861,7 @@ static void group17(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t ret)
 {
   r->a = 0x0017; r->x = 0; r->y = script;
   hm_jsl(ram, r, ret, 0x84);
-  hm_UNK_LoadCCDataShort(ram, r);
+  hm_StartEventScript(ram, r);
   hm_rtl(ram, r);
 }
 static void request(uint8_t *ram, HmRegs *r, uint16_t and_mask, uint16_t or_mask)
@@ -1897,7 +1897,7 @@ static void towards_player(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t re
   r->a = slot8(ram, r, 0x3F);                              /* XBA; LDA #0; XBA */
   r->x = 0; r->y = script;
   hm_jsl(ram, r, ret, 0x84);
-  hm_UNK_LoadCCDataShort(ram, r);
+  hm_StartEventScript(ram, r);
   hm_rtl(ram, r);
   hm_dp_w16(ram, r, 0x82, 0);
   hm_dp_w16(ram, r, 0x84, 0);
@@ -2144,7 +2144,7 @@ void hm_Event_UNKTools(uint8_t *ram, HmRegs *r)
  * Event_UNKCCchanges7 ($84:9375): <slot>: frees that slot and destroys
  * its object, then goes back to its own slot ($72-$74 keep it meanwhile).
  * Event_UNKCCchanges11 ($84:9810): <word>: +33 = the word, then the
- * animation from the table at $B3:<word> (SUB_848895), and +01 bit 2.
+ * animation from the table at $B3:<word> (SetSlotAnimation), and +01 bit 2.
  * (JSR, RTS each, like every command.)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_Event_UNK1(uint8_t *ram, HmRegs *r)
@@ -2154,7 +2154,7 @@ void hm_Event_UNK1(uint8_t *ram, HmRegs *r)
   r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x12));
   hm_dp_w16(ram, r, 0xA5, r->a);
   hm_jsl(ram, r, 0xB363, 0x85);
-  hm_CODE_8581A2(ram, r);
+  hm_DestroyGameObject(ram, r);
   hm_rtl(ram, r);
 }
 
@@ -2175,7 +2175,7 @@ void hm_Event_UNKCCchanges7(uint8_t *ram, HmRegs *r)
   r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x12));
   hm_dp_w16(ram, r, 0xA5, r->a);
   hm_jsl(ram, r, 0x93BB, 0x85);
-  hm_CODE_8581A2(ram, r);
+  hm_DestroyGameObject(ram, r);
   hm_rtl(ram, r);
   r->a = hm_dp_r16(ram, r, 0x72);                          /* back to ours */
   hm_dp_w16(ram, r, 0xCC, r->a);
@@ -2195,7 +2195,7 @@ void hm_Event_UNKCCchanges11(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)((r->a & 0xFF00) | 0xB3);
   *hm_dp(ram, r, 0x74) = 0xB3;
   hm_jsl(ram, r, 0x9841, 0x84);
-  hm_SUB_848895(ram, r);
+  hm_SetSlotAnimation(ram, r);
   hm_rtl(ram, r);
   r->y = 1;
   uint8_t flags = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x01)) | 0x04);
@@ -2208,7 +2208,7 @@ void hm_Event_UNKCCchanges11(uint8_t *ram, HmRegs *r)
  * Event_UNKCCchanges8 ($84:957D): <table word> <entry>; Event_UNKCCchanges15
  * ($84:B8D9): <table word>, the entry being the player's direction ($DA).
  * Both: +33 = the table ($B3:<word>), +02 = the entry, +01 bits 0-1 set,
- * the animation read (SUB_848895), and the slot's frame counter +10 one up.
+ * the animation read (SetSlotAnimation), and the slot's frame counter +10 one up.
  * Leftovers: A = the new +10, Y = $10, C from that add.
  * ───────────────────────────────────────────────────────────────────────── */
 /* +02 already written: the flags, the animation, the frame counter */
@@ -2223,7 +2223,7 @@ static void set_animation(uint8_t *ram, HmRegs *r, uint16_t ret)
   r->a = (uint16_t)((r->a & 0xFF00) | 0xB3);
   *hm_dp(ram, r, 0x74) = 0xB3;
   hm_jsl(ram, r, ret, 0x84);
-  hm_SUB_848895(ram, r);
+  hm_SetSlotAnimation(ram, r);
   hm_rtl(ram, r);
   r->y = 0x10;
   uint16_t frames = hm_bus_rd16(ram, hm_dp_long(ram, r, 0xCC, 0x10));
@@ -2299,7 +2299,7 @@ static void turn_to_player(uint8_t *ram, HmRegs *r, uint16_t ret)
   lda8(r, 0xB3);
   *hm_dp(ram, r, 0x74) = 0xB3;
   hm_jsl(ram, r, ret, 0x84);
-  hm_SUB_848895(ram, r);
+  hm_SetSlotAnimation(ram, r);
   hm_rtl(ram, r);
   r->y = 1;
   uint8_t flags = lda8(r, (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0x01)) | 0x14));
@@ -2307,7 +2307,7 @@ static void turn_to_player(uint8_t *ram, HmRegs *r, uint16_t ret)
 }
 
 /* Event_UNKCCchanges17 ($84:BA72): <address>: if the player talked to the
- * slot (+0C, see SUB_82AD0E), is not in action $0A and $7F1F5E bit 6 is set,
+ * slot (+0C, see PressAOnTile), is not in action $0A and $7F1F5E bit 6 is set,
  * the slot turns to face the player (+02 = the player's direction with bit 0
  * flipped: the opposite one), stops (+03 / +04 / +0C = 0, +08 = +07), gets
  * +01 bits 2 and 4, a frame (+10 one up), and the script jumps to the
@@ -2339,12 +2339,12 @@ void hm_Event_UNKCCchanges17(uint8_t *ram, HmRegs *r)
 }
 
 /* Event_AudioRelated2 ($84:8CA8): <byte, unused>: the music changes to the
- * one asked for in $0110, if it is not the one playing (UNK_Audio25). */
+ * one asked for in $0110, if it is not the one playing (FadeOutSongSlowly). */
 void hm_Event_AudioRelated2(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 2);
   hm_jsl(ram, r, 0x8CB7, 0x83);
-  hm_UNK_Audio25(ram, r);
+  hm_FadeOutSongSlowly(ram, r);
   hm_rtl(ram, r);
 }
 
@@ -2455,11 +2455,11 @@ void hm_Event_ScreenFadeout(uint8_t *ram, HmRegs *r) { event_fade(ram, r, 0x0F, 
 /* ─────────────────────────────────────────────────────────────────────────
  * Event_AudioRelated3 ($84:95E8, JSR, RTS; HM-Decomp's comment gives bank
  * $80): command [effect] [bank, word] [frames, word]: plays the sound
- * effect and waits the frames (UNK_Audio24), then reloads the noises of
+ * effect and waits the frames (PlayEffectWithSongInstrument), then reloads the noises of
  * the item in hand ($0119 = 0 forgets the last one, ToolUsedSound2).
- * UNK_Audio24 keeps V, D and I of its entry flags; V is the third ADC's.
+ * PlayEffectWithSongInstrument keeps V, D and I of its entry flags; V is the third ADC's.
  * Leftovers: A = $C9 (past the command), C from that ADC, X and Y from
- * ToolUsedSound2 / UNK_Audio24.
+ * ToolUsedSound2 / PlayEffectWithSongInstrument.
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_Event_AudioRelated3(uint8_t *ram, HmRegs *r)
 {
@@ -2480,7 +2480,7 @@ void hm_Event_AudioRelated3(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)((r->a & 0xFF00) | hm_pull8(ram, r));   /* SEP #$20; PLA */
   r->p = (uint8_t)((entry & 0x0C) | v);
   hm_jsl(ram, r, 0x961E, 0x83);
-  hm_UNK_Audio24(ram, r);
+  hm_PlayEffectWithSongInstrument(ram, r);
   hm_rtl(ram, r);
   hm_bus_wr8(ram, (uint32_t)r->db << 16 | 0x0119, 0);      /* STZ $0119 */
   r->p = (uint8_t)(entry & 0x0C);

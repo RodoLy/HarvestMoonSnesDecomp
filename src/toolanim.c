@@ -1,15 +1,15 @@
 /*
  * toolanim.c — pressing Y: the tool's animation.
  *
- * UNK_ToolUsed ($82:90A8) runs when the player presses Y with a tool in
+ * StartToolAnimation ($82:90A8) runs when the player presses Y with a tool in
  * hand. Without stamina ($D2 bit 3) the player only shows the "tired"
- * animation. Otherwise it checks the tile in front (SUB_82927D, which also
+ * animation. Otherwise it checks the tile in front (CheckToolSuccessForSound, which also
  * chooses the tool's sound) and calls the tool's animation routine through
  * Tool_Animation_Table ($82:A58B, one per item, the same order as the tools
  * in toolused.c). Each puts the player's animation number in $0901: a base
  * per tool, plus the direction ($DA, 0-3) for the ones that look different
  * when facing each way. What the tool does to the tile comes later, when
- * the animation reaches its moment (SUB_829260, toolused.c).
+ * the animation reaches its moment (UseToolInHand, toolused.c).
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
@@ -108,9 +108,9 @@ void hm_ToolAnimationCowFeed(uint8_t *ram, HmRegs *r)       { facing(ram, r, 0x7
 void hm_ToolAnimationUNK(uint8_t *ram, HmRegs *r)           { animation(ram, r, 0x88); }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNK_ToolUsed ($82:90A8, JSL, RTL).
+ * StartToolAnimation ($82:90A8, JSL, RTL).
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNK_ToolUsed(uint8_t *ram, HmRegs *r)
+void hm_StartToolAnimation(uint8_t *ram, HmRegs *r)
 {
   static void (*const animate[])(uint8_t *, HmRegs *) = {
     hm_ToolAnimationNoAction, hm_ToolAnimationSickle, hm_ToolAnimationHoe,
@@ -131,7 +131,7 @@ void hm_UNK_ToolUsed(uint8_t *ram, HmRegs *r)
     hm_dp_w16(ram, r, 0xD4, 0x000B);                       /* action: tired */
     return;
   }
-  jsr(ram, r, 0x90BA, hm_SUB_82927D);
+  jsr(ram, r, 0x90BA, hm_CheckToolSuccessForSound);
   hm_bus_wr8(ram, db_addr(r, TOOL_SOUND), 0);
   uint8_t item = hm_bus_rd8(ram, db_addr(r, TOOL));
   r->c = item >> 7;                                        /* ASL (8 bits) */
