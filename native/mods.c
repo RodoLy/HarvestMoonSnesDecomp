@@ -970,7 +970,7 @@ static int s_ws_l, s_ws_r;
 static bool ws_start_screen(void)
 {
   uint8_t m = g_ram[HM_MAP_ID];
-  return m == 0x5C || m == 0x5D || m == 0x5E || m == 0x5F || (m == 0x3C && !hm_diary_loaded(g_ram));
+  return m == 0x5B || m == 0x5C || m == 0x5D || m == 0x5E || m == 0x5F || (m == 0x3C && !hm_diary_loaded(g_ram));
 }
 /* The margins a side: as wide as the screen's shape, up to 16:9 (the
  * picture's pixels are square, 224 high: 16:9 = 398 wide, 71 a side;
@@ -1004,6 +1004,19 @@ static void ws_frame(void)
     }
   }
   if (g_cfg.widescreen && ws_start_screen()) l = r = mods_ws_budget();
+  /* leaving a start screen, the game changes the screen's number before it
+   * fades out: the margins stay as they were until the picture is dark (at
+   * most two seconds), so the old picture never flashes 4:3 */
+  static bool was_start;
+  static int hold;
+  bool start = g_cfg.widescreen && ws_start_screen();
+  bool dark = PPU_forcedBlank(g_ppu) || PPU_brightness(g_ppu) == 0;
+  if (!start && was_start && (l < s_ws_l || r < s_ws_r) && !dark && hold < 120) {
+    l = s_ws_l; r = s_ws_r; hold++;
+  } else {
+    hold = 0;
+    was_start = start;
+  }
   s_ws_l = l; s_ws_r = r;
   g_hm_oam_right = (uint16_t)(0x0100 + r);
   g_hm_oam_left = (uint16_t)(0xFFF0 - l);
