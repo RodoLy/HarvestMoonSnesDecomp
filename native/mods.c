@@ -1003,7 +1003,21 @@ static void ws_frame(void)
       r = iclamp(imin(cr - cam, cr - pc), 0, mods_ws_budget());
     }
   }
-  if (g_cfg.widescreen && ws_start_screen()) l = r = mods_ws_budget();
+  if (g_cfg.widescreen && ws_start_screen()) {
+    l = r = mods_ws_budget();
+    /* the intro's farm ($5B): BG1 (the fence, the gate, the mountains) is a
+     * panorama 512 pixels wide that scrolls from 256 to 0. Past its right
+     * end it is reflected at that end (hills and trees, mods_ws_world_bg1);
+     * near its left end, where the gate is, both sides narrow with it,
+     * evenly, and open again once the view has risen to the sky */
+    if (g_ram[HM_MAP_ID] == 0x5B) {
+      int hs = g_ppu->hScroll[0] & 0x1FF, vs = g_ppu->vScroll[0] & 0x1FF;
+      if (hs < l) {
+        int open = vs < 80 ? (80 - vs) * l / 80 : 0;
+        l = r = hs > open ? hs : open;
+      }
+    }
+  }
   /* leaving a start screen, the game changes the screen's number before it
    * fades out: the margins stay as they were until the picture is dark (at
    * most two seconds), so the old picture never flashes 4:3 */
@@ -1028,6 +1042,12 @@ void mods_ws_margins(int *left, int *right) { *left = s_ws_l; *right = s_ws_r; }
 unsigned mods_ws_mirror(void)
 {
   return g_ram[HM_MAP_ID] == 0x3C && !hm_diary_loaded(g_ram) ? 0x0F : 0;
+}
+/* the intro's farm ($5B): its BG1 panorama's width, reflected at its own
+ * edges (0 = none) */
+unsigned mods_ws_world_bg1(void)
+{
+  return g_ram[HM_MAP_ID] == 0x5B ? 512 : 0;
 }
 unsigned mods_ws_clamp(void)
 {

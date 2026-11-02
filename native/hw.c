@@ -271,6 +271,8 @@ void native_draw_frame(uint8_t *pixels, int field_w, int left, int right)
     }
     if (left || right) PpuSetWidescreenLayerClamp(g_ppu, mods_ws_clamp());   /* kept in the 256: BG3 (the text, the clock), more on some screens */
     PpuSetWidescreenLayerMirror(g_ppu, (left || right) ? mods_ws_mirror() : 0);   /* margins reflected from the picture */
+    if ((left || right) && mods_ws_world_bg1())                                     /* a panorama: reflected at its ends */
+      PpuSetWidescreenLayerWorldMirrorBand(g_ppu, 0, 0, 224, 0, (uint16_t)mods_ws_world_bg1());
   }
   Dma *dma = g_snes->dma;
   dma_startDma(dma, g_snesrecomp_last_hdmaen, true);

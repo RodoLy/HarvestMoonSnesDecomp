@@ -39,6 +39,8 @@ void mods_ws_margins(int *left, int *right);
 unsigned mods_ws_clamp(void);
 /* the background layers whose margins reflect the picture */
 unsigned mods_ws_mirror(void);
+/* a BG1 panorama's width, reflected at its own edges (0 = none) */
+unsigned mods_ws_world_bg1(void);
 /* the widest margins (16:9 with square pixels: 398 = 256 + 2 x 71); the
  * margins of the chosen shape: mods_ws_budget() */
 enum { WS_BUDGET = 71 };
