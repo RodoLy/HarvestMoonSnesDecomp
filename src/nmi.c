@@ -19,9 +19,24 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define NMI_STATUS 0x00       /* DP: set by the NMI (UpdateGraphics) */
-#define NMITIMEN   0x004200   /* NMI on, the line IRQ on, the pads read */
-#define NMI_ON     0xA1
+/* ── Names of the memory locations used here ────────────────────────────── */
+
+/* Direct page */
+#define NMI_STATUS      0x00   /* 8b: set by the NMI (UpdateGraphics) */
+#define FADE_BRIGHTNESS 0x25   /* 8b: the fades' brightness now */
+#define FADE_FRAME      0x26   /* 8b: the fades' frames left at this level */
+#define FADE_FROM       0x92   /* 8b: the fades' arguments: the starting brightness
+                                  ($FF = from where it is, FADE_BRIGHTNESS), */
+#define FADE_FRAMES     0x93   /* 8b: frames per brightness level, */
+#define FADE_TO         0x94   /* 8b: the brightness they end at */
+
+/* WRAM $7F:1Fxx (bus address) */
+#define FLAGS_5A        0x7F1F5A /* 16b flags: bit 15 = the screen is faded in */
+
+/* The CPU's registers */
+#define NMITIMEN        0x004200 /* NMI on, the line IRQ on, the pads read */
+#define NMI_ON          0xA1
+#define TIMEUP          0x4211   /* the line IRQ's flag (reading it lets the IRQ go) */
 
 static void push16(uint8_t *ram, HmRegs *r, uint16_t v)
 {
@@ -92,7 +107,7 @@ void hm_COP_Interrupt(uint8_t *ram, HmRegs *r)
   push16(ram, r, r->x);
   push16(ram, r, r->y);
   r->a = (uint16_t)(r->a >> 8);                            /* LDA #0; XBA */
-  set_a8(r, hm_bus_rd8(ram, (uint32_t)r->db << 16 | 0x4211));
+  set_a8(r, hm_bus_rd8(ram, (uint32_t)r->db << 16 | TIMEUP));
   hm_push8(ram, r, 0x86); hm_push8(ram, r, 0xA9);          /* JSR COP_Return at $86A7 */
   hm_pull8(ram, r); hm_pull8(ram, r);
   r->y = pull16(ram, r);                                   /* REP #$30; PLY PLX PLA PLB */
@@ -186,10 +201,6 @@ void hm_WaitForNMIATimes(uint8_t *ram, HmRegs *r)
  * WaitForNMI save them (PHP) and the NMI pushes them.
  * Leftovers: A = the new $7F1F5A (16-bit), C = 1, X and Y 8-bit.
  * ───────────────────────────────────────────────────────────────────────── */
-#define FADE_BRIGHTNESS 0x25   /* DP */
-#define FADE_FRAME      0x26   /* DP */
-#define FLAGS_5A        0x7F1F5A
-
 static uint8_t nz8(uint8_t p, uint8_t v) { return (uint8_t)((p & ~0x82) | (v & 0x80) | (v ? 0 : 0x02)); }
 static uint8_t lda8(HmRegs *r, uint8_t p, uint8_t v) { set_a8(r, v); return nz8(p, v); }
 static uint8_t cmp8(HmRegs *r, uint8_t p, uint8_t a, uint8_t m)
@@ -212,20 +223,20 @@ static void fade(uint8_t *ram, HmRegs *r, int up)
   uint8_t p = (uint8_t)(r->p | 0x30);                      /* SEP #$30 */
   r->x &= 0x00FF; r->y &= 0x00FF;
   uint16_t at = up ? 0x87CE : 0x880A;                      /* the routine's start */
-  p = lda8(r, p, *hm_dp(ram, r, 0x92));
+  p = lda8(r, p, *hm_dp(ram, r, FADE_FROM));
   p = cmp8(r, p, (uint8_t)r->a, 0xFF);
   if ((uint8_t)r->a != 0xFF) {
-    p = lda8(r, p, *hm_dp(ram, r, 0x92));
+    p = lda8(r, p, *hm_dp(ram, r, FADE_FROM));
     *hm_dp(ram, r, FADE_BRIGHTNESS) = (uint8_t)r->a;
   }
-  p = lda8(r, p, *hm_dp(ram, r, 0x93));
+  p = lda8(r, p, *hm_dp(ram, r, FADE_FRAMES));
   *hm_dp(ram, r, FADE_FRAME) = (uint8_t)r->a;
   for (;;) {
     p = lda8(r, p, *hm_dp(ram, r, FADE_BRIGHTNESS));
     call_with_flags(ram, r, p, (uint16_t)(at + 0x12), hm_SetBrightness);
     p = lda8(r, p, *hm_dp(ram, r, FADE_BRIGHTNESS));
-    p = cmp8(r, p, (uint8_t)r->a, *hm_dp(ram, r, 0x94));
-    if ((uint8_t)r->a == *hm_dp(ram, r, 0x94)) break;
+    p = cmp8(r, p, (uint8_t)r->a, *hm_dp(ram, r, FADE_TO));
+    if ((uint8_t)r->a == *hm_dp(ram, r, FADE_TO)) break;
     uint8_t b = (uint8_t)(*hm_dp(ram, r, FADE_BRIGHTNESS) + (up ? 1 : -1));
     *hm_dp(ram, r, FADE_BRIGHTNESS) = b;                   /* INC / DEC $25 */
     p = nz8(p, b);
@@ -235,7 +246,7 @@ static void fade(uint8_t *ram, HmRegs *r, int up)
       *hm_dp(ram, r, FADE_FRAME) = f;                      /* DEC $26; LDA $26 */
       p = lda8(r, p, f);
     } while (*hm_dp(ram, r, FADE_FRAME));
-    p = lda8(r, p, *hm_dp(ram, r, 0x93));
+    p = lda8(r, p, *hm_dp(ram, r, FADE_FRAMES));
     *hm_dp(ram, r, FADE_FRAME) = (uint8_t)r->a;
   }
   uint16_t v = hm_bus_rd16(ram, FLAGS_5A);                 /* REP #$20 */

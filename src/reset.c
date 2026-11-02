@@ -17,6 +17,133 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
+/* ── Names of the memory locations used here ────────────────────────────── */
+
+/* Direct page */
+#define SOUND_PROGRAM     0x0A   /* 24b $0A-$0C: UploadSoundProgram's argument, where
+                                    the sound program is */
+#define SOUND_PROGRAM_BANK 0x0C  /* 16b: its bank (and a 0 byte) */
+
+/* WRAM of the data bank */
+#define STACK_TOP         0x1F00 /* the stack starts here (S), the WRAM's first bank
+                                    ends at $2000 */
+#define PAD1              0x0124 /* 16b: pad 1's buttons held (joypad.c) */
+#define PAD1_LAST         0x0126 /* 16b: last frame's */
+#define PAD1_NEW          0x0128 /* 16b: pressed this frame (HM_JOY_NEW elsewhere) */
+#define PAD1_UP           0x012A /* 16b: let go this frame */
+#define PAD2              0x0130 /* 16b: the same for pad 2 */
+#define PAD2_LAST         0x0132
+#define PAD2_NEW          0x0134
+#define PAD2_UP           0x0136
+#define UNKNOWN_0148      0x0148 /* 8b: cleared here and by FirstNightReset (day.c);
+                                    nothing found reads it */
+#define WRAM_LOW_END      0x2000 /* the first $2000 bytes of WRAM, seen in every bank */
+#define WRAM_REST         0x7E2000u /* bus address: the rest of bank $7E */
+#define WRAM_REST_SIZE    0xE000
+#define WRAM_BANK_7F      0x7F0000u /* bus address: the bank $7F, all of it */
+
+/* The CPU's registers ($42xx) */
+#define NMITIMEN          0x4200 /* NMI, line IRQ and automatic pad reading on / off */
+#define WRIO              0x4201 /* the I/O port */
+#define WRMPYA            0x4202 /* multiplier: first number */
+#define WRMPYB            0x4203 /* multiplier: second number (starts it) */
+#define WRDIVL            0x4204 /* divider: the number divided (16b) */
+#define WRDIVH            0x4205
+#define WRDIVB            0x4206 /* divider: the divisor (starts it) */
+#define HTIMEL            0x4207 /* the IRQ's dot (16b) */
+#define HTIMEH            0x4208
+#define VTIMEL            0x4209 /* the IRQ's line (16b) */
+#define VTIMEH            0x420A
+#define MDMAEN            0x420B /* starts the DMA channels */
+#define HDMAEN            0x420C /* the HDMA channels on */
+#define MEMSEL            0x420D /* bit 0: FastROM */
+#define RDNMI             0x4210 /* read-only from here to $421F */
+#define TIMEUP            0x4211
+#define HVBJOY            0x4212
+#define RDIO              0x4213
+#define RDDIVL            0x4214
+#define RDDIVH            0x4215
+#define RDMPYL            0x4216
+#define RDMPYH            0x4217
+#define JOY1L             0x4218
+#define JOY1H             0x4219
+#define JOY2L             0x421A
+#define JOY2H             0x421B
+#define JOY3L             0x421C
+#define JOY3H             0x421D
+#define JOY4L             0x421E
+#define JOY4H             0x421F
+
+/* The picture chip's registers ($21xx) */
+#define INIDISP           0x2100 /* forced blank (bit 7) and brightness */
+#define OBSEL             0x2101 /* sprite sizes and graphics address */
+#define OAMADDL           0x2102 /* OAM address (16b) */
+#define OAMADDH           0x2103
+#define OAMDATA           0x2104 /* OAM data (written twice) */
+#define BGMODE            0x2105
+#define MOSAIC            0x2106
+#define BG1SC             0x2107 /* the backgrounds' tile maps */
+#define BG2SC             0x2108
+#define BG3SC             0x2109
+#define BG4SC             0x210A
+#define BG12NBA           0x210B /* the backgrounds' graphics */
+#define BG34NBA           0x210C
+#define BG1HOFS           0x210D /* the scrolls (written twice) */
+#define BG1VOFS           0x210E
+#define BG2HOFS           0x210F
+#define BG2VOFS           0x2110
+#define BG3HOFS           0x2111
+#define BG3VOFS           0x2112
+#define BG4HOFS           0x2113
+#define BG4VOFS           0x2114
+#define VMAIN             0x2115 /* VRAM increment */
+#define VMADDL            0x2116 /* VRAM address (16b) */
+#define VMADDH            0x2117
+#define VMDATAL           0x2118 /* VRAM data (16b) */
+#define VMDATAH           0x2119
+#define M7SEL             0x211A /* mode 7 (the matrix and centre written twice) */
+#define M7A               0x211B
+#define M7B               0x211C
+#define M7C               0x211D
+#define M7D               0x211E
+#define M7X               0x211F
+#define M7Y               0x2120
+#define CGADD             0x2121 /* CGRAM address */
+#define CGDATA            0x2122 /* CGRAM data (written twice) */
+#define W12SEL            0x2123 /* the windows */
+#define W34SEL            0x2124
+#define WOBJSEL           0x2125
+#define WH0               0x2126
+#define WH1               0x2127
+#define WH2               0x2128
+#define WH3               0x2129
+#define WBGLOG            0x212A
+#define WOBJLOG           0x212B
+#define TM                0x212C /* main screen layers */
+#define TS                0x212D /* sub screen layers */
+#define TMW               0x212E
+#define TSW               0x212F
+#define CGWSEL            0x2130 /* colour math */
+#define CGADSUB           0x2131
+#define COLDATA           0x2132 /* the fixed colour */
+#define SETINI            0x2133
+#define MPYL              0x2134 /* read-only from here to $213F */
+#define MPYM              0x2135
+#define MPYH              0x2136
+#define SLHV              0x2137
+#define RDOAM             0x2138
+#define RDVRAML           0x2139
+#define RDVRAMH           0x213A
+#define RDCGRAM           0x213B
+#define OPHCT             0x213C
+#define OPVCT             0x213D
+#define STAT77            0x213E
+#define STAT78            0x213F
+#define WMDATA            0x2180 /* the WRAM port: data */
+#define WMADDL            0x2181 /* its address (24b) */
+#define WMADDM            0x2182
+#define WMADDH            0x2183
+
 typedef void Fn(uint8_t *ram, HmRegs *r);
 
 static uint32_t db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
@@ -40,29 +167,29 @@ static void jsl(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bank, Fn *fn)
  * port ($2134-$2183). */
 typedef struct { uint16_t reg; uint8_t v; } Write;
 static const Write REGS[] = {
-  { 0x4200, 0 }, { 0x420B, 0 }, { 0x420C, 0 }, { 0x4201, 0xFF },
-  { 0x4202, 0 }, { 0x4203, 0 }, { 0x4204, 0 }, { 0x4205, 0 }, { 0x4206, 0 },
-  { 0x4207, 0 }, { 0x4208, 0 }, { 0x4209, 0 }, { 0x420A, 0 }, { 0x420B, 0 }, { 0x420C, 0 },
-  { 0x420D, 0x01 },
-  { 0x4210, 0 }, { 0x4211, 0 }, { 0x4212, 0 }, { 0x4213, 0 }, { 0x4214, 0 }, { 0x4215, 0 },
-  { 0x4216, 0 }, { 0x4217, 0 }, { 0x4218, 0 }, { 0x4219, 0 }, { 0x421A, 0 }, { 0x421B, 0 },
-  { 0x421C, 0 }, { 0x421D, 0 }, { 0x421E, 0 }, { 0x421F, 0 },
-  { 0x2100, 0 }, { 0x2101, 0 }, { 0x2102, 0 }, { 0x2103, 0 }, { 0x2104, 0 }, { 0x2104, 0 },
-  { 0x2105, 0 }, { 0x2106, 0 }, { 0x2107, 0 }, { 0x2108, 0 }, { 0x2109, 0 }, { 0x210A, 0 },
-  { 0x210B, 0 }, { 0x210C, 0 },
-  { 0x210D, 0 }, { 0x210D, 0 }, { 0x210E, 0 }, { 0x210E, 0 }, { 0x210F, 0 }, { 0x210F, 0 },
-  { 0x2110, 0 }, { 0x2110, 0 }, { 0x2111, 0 }, { 0x2111, 0 }, { 0x2112, 0 }, { 0x2112, 0 },
-  { 0x2113, 0 }, { 0x2113, 0 }, { 0x2114, 0 }, { 0x2114, 0 },
-  { 0x2115, 0x80 }, { 0x2116, 0 }, { 0x2117, 0 }, { 0x2118, 0 }, { 0x2119, 0 }, { 0x211A, 0 },
-  { 0x211B, 0 }, { 0x211B, 0 }, { 0x211C, 0 }, { 0x211C, 0 }, { 0x211D, 0 }, { 0x211D, 0 },
-  { 0x211E, 0 }, { 0x211E, 0 }, { 0x211F, 0 }, { 0x211F, 0 }, { 0x2120, 0 }, { 0x2120, 0 },
-  { 0x2121, 0 }, { 0x2122, 0 }, { 0x2122, 0 },
-  { 0x2123, 0 }, { 0x2124, 0 }, { 0x2125, 0 }, { 0x2126, 0 }, { 0x2127, 0 }, { 0x2128, 0 },
-  { 0x2129, 0 }, { 0x212A, 0 }, { 0x212B, 0 }, { 0x212C, 0 }, { 0x212D, 0 }, { 0x212E, 0 },
-  { 0x212F, 0 }, { 0x2130, 0x30 }, { 0x2131, 0 }, { 0x2132, 0xE0 }, { 0x2133, 0 },
-  { 0x2134, 0 }, { 0x2135, 0 }, { 0x2136, 0 }, { 0x2137, 0 }, { 0x2138, 0 }, { 0x2139, 0 },
-  { 0x213A, 0 }, { 0x213B, 0 }, { 0x213B, 0 }, { 0x213C, 0 }, { 0x213D, 0 }, { 0x213E, 0 },
-  { 0x213F, 0 }, { 0x2180, 0 }, { 0x2181, 0 }, { 0x2182, 0 }, { 0x2183, 0 },
+  { NMITIMEN, 0 }, { MDMAEN, 0 }, { HDMAEN, 0 }, { WRIO, 0xFF },
+  { WRMPYA, 0 }, { WRMPYB, 0 }, { WRDIVL, 0 }, { WRDIVH, 0 }, { WRDIVB, 0 },
+  { HTIMEL, 0 }, { HTIMEH, 0 }, { VTIMEL, 0 }, { VTIMEH, 0 }, { MDMAEN, 0 }, { HDMAEN, 0 },
+  { MEMSEL, 0x01 },
+  { RDNMI, 0 }, { TIMEUP, 0 }, { HVBJOY, 0 }, { RDIO, 0 }, { RDDIVL, 0 }, { RDDIVH, 0 },
+  { RDMPYL, 0 }, { RDMPYH, 0 }, { JOY1L, 0 }, { JOY1H, 0 }, { JOY2L, 0 }, { JOY2H, 0 },
+  { JOY3L, 0 }, { JOY3H, 0 }, { JOY4L, 0 }, { JOY4H, 0 },
+  { INIDISP, 0 }, { OBSEL, 0 }, { OAMADDL, 0 }, { OAMADDH, 0 }, { OAMDATA, 0 }, { OAMDATA, 0 },
+  { BGMODE, 0 }, { MOSAIC, 0 }, { BG1SC, 0 }, { BG2SC, 0 }, { BG3SC, 0 }, { BG4SC, 0 },
+  { BG12NBA, 0 }, { BG34NBA, 0 },
+  { BG1HOFS, 0 }, { BG1HOFS, 0 }, { BG1VOFS, 0 }, { BG1VOFS, 0 }, { BG2HOFS, 0 }, { BG2HOFS, 0 },
+  { BG2VOFS, 0 }, { BG2VOFS, 0 }, { BG3HOFS, 0 }, { BG3HOFS, 0 }, { BG3VOFS, 0 }, { BG3VOFS, 0 },
+  { BG4HOFS, 0 }, { BG4HOFS, 0 }, { BG4VOFS, 0 }, { BG4VOFS, 0 },
+  { VMAIN, 0x80 }, { VMADDL, 0 }, { VMADDH, 0 }, { VMDATAL, 0 }, { VMDATAH, 0 }, { M7SEL, 0 },
+  { M7A, 0 }, { M7A, 0 }, { M7B, 0 }, { M7B, 0 }, { M7C, 0 }, { M7C, 0 },
+  { M7D, 0 }, { M7D, 0 }, { M7X, 0 }, { M7X, 0 }, { M7Y, 0 }, { M7Y, 0 },
+  { CGADD, 0 }, { CGDATA, 0 }, { CGDATA, 0 },
+  { W12SEL, 0 }, { W34SEL, 0 }, { WOBJSEL, 0 }, { WH0, 0 }, { WH1, 0 }, { WH2, 0 },
+  { WH3, 0 }, { WBGLOG, 0 }, { WOBJLOG, 0 }, { TM, 0 }, { TS, 0 }, { TMW, 0 },
+  { TSW, 0 }, { CGWSEL, 0x30 }, { CGADSUB, 0 }, { COLDATA, 0xE0 }, { SETINI, 0 },
+  { MPYL, 0 }, { MPYM, 0 }, { MPYH, 0 }, { SLHV, 0 }, { RDOAM, 0 }, { RDVRAML, 0 },
+  { RDVRAMH, 0 }, { RDCGRAM, 0 }, { RDCGRAM, 0 }, { OPHCT, 0 }, { OPVCT, 0 }, { STAT77, 0 },
+  { STAT78, 0 }, { WMDATA, 0 }, { WMADDL, 0 }, { WMADDM, 0 }, { WMADDH, 0 },
 };
 
 void hm_RESET(uint8_t *ram, HmRegs *r)
@@ -73,8 +200,8 @@ void hm_RESET(uint8_t *ram, HmRegs *r)
   for (int i = 0; i < 3; i++) frame[i] = ram[(uint16_t)(s_in + 1 + i)];
 
   r->c = 0;                                                /* SEI; CLC; XCE (native already) */
-  r->x = 0x1F00;                                           /* REP #$30; LDX; TXS */
-  r->s = 0x1F00;
+  r->x = STACK_TOP;                                        /* REP #$30; LDX; TXS */
+  r->s = STACK_TOP;
   r->a = 0;                                                /* LDA #0; TCD */
   r->d = 0;
   for (unsigned i = 0; i < sizeof REGS / sizeof REGS[0]; i++) {   /* SEP #$30 */
@@ -82,17 +209,17 @@ void hm_RESET(uint8_t *ram, HmRegs *r)
     wr8(ram, r, REGS[i].reg, REGS[i].v);
   }
   r->a = 0;                                                /* REP #$30: all the WRAM cleared */
-  for (r->x = 0; r->x != 0x2000; r->x += 2) wr16(ram, r, r->x, 0);
-  for (r->x = 0; r->x != 0xE000; r->x += 2) hm_bus_wr16(ram, 0x7E2000u + r->x, 0);
+  for (r->x = 0; r->x != WRAM_LOW_END; r->x += 2) wr16(ram, r, r->x, 0);
+  for (r->x = 0; r->x != WRAM_REST_SIZE; r->x += 2) hm_bus_wr16(ram, WRAM_REST + r->x, 0);
   r->x = 0;
-  do { hm_bus_wr16(ram, 0x7F0000u + r->x, 0); r->x += 2; } while (r->x != 0);
+  do { hm_bus_wr16(ram, WRAM_BANK_7F + r->x, 0); r->x += 2; } while (r->x != 0);
   r->c = 1;                                                /* CPX #0 */
-  static const uint16_t PADS[8] = { 0x0124, 0x0128, 0x0126, 0x012A, 0x0130, 0x0134, 0x0132, 0x0136 };
+  static const uint16_t PADS[8] = { PAD1, PAD1_NEW, PAD1_LAST, PAD1_UP, PAD2, PAD2_NEW, PAD2_LAST, PAD2_UP };
   for (int i = 0; i < 8; i++) wr16(ram, r, PADS[i], 0);
   r->a = 0x8000;                                           /* the sound program at $AD:8000 */
-  hm_dp_w16(ram, r, 0x0A, 0x8000);
+  hm_dp_w16(ram, r, SOUND_PROGRAM, 0x8000);
   r->a = 0x00AD;
-  hm_dp_w16(ram, r, 0x0C, 0x00AD);
+  hm_dp_w16(ram, r, SOUND_PROGRAM_BANK, 0x00AD);
   jsl(ram, r, 0x85FC, 0x83, hm_UploadSoundProgram);
   set_a8(r, 0x00);                                         /* SEP #$20 */
   jsl(ram, r, 0x8604, 0x83, hm_SoundCommand0B);
@@ -106,10 +233,10 @@ void hm_RESET(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0x8624, 0x85, hm_InitializeOBJs);
   jsl(ram, r, 0x8628, 0x83, hm_CheckSRAMIntegrity);
   set_a8(r, 0x80);                                         /* SEP #$20; REP #$10 */
-  wr8(ram, r, 0x2100, 0x80);                               /* the screen off */
-  wr8(ram, r, 0x0148, 0);
-  wr8(ram, r, 0x4200, 0x80);                               /* the NMI on */
-  wr8(ram, r, 0x2100, 0);
+  wr8(ram, r, INIDISP, 0x80);                              /* the screen off */
+  wr8(ram, r, UNKNOWN_0148, 0);
+  wr8(ram, r, NMITIMEN, 0x80);                             /* the NMI on */
+  wr8(ram, r, INIDISP, 0);
   /* CLI; JML IntroScreen: the check stops here and puts its frame back */
   for (int i = 0; i < 3; i++) ram[(uint16_t)(s_in + 1 + i)] = frame[i];
   r->s = s_in;

@@ -14,6 +14,55 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_GAME_STATE ($D2),
+ * HM_PLAYER_ACTION ($D4), HM_ANIM_REQUEST ($0901), HM_TOOL_SELECTED ($0921),
+ * HM_TOOL_BACKPACK ($0923), the seed bags HM_SEEDS_GRASS_N...TURNIP_N
+ * ($0927-$092B), HM_TIME_RUNNING ($0973), HM_ITEM_ON_HAND ($091D), and,
+ * through WRAM_LONG, HM_SEASON ($7F1F19), HM_HOUR ($7F1F1C), HM_MINUTES and
+ * HM_SECONDS. */
+#define WRAM_LONG(a)      (0x7E0000 + (a))   /* a ram[] offset as a bus address */
+
+/* Direct page */
+#define NMI_STATUS        0x00   /* 8b: set by the NMI (UpdateGraphics), cleared each frame */
+#define MENU_FRAMES       0x90   /* 16b: the title menu's frames, to the demo (intro.c: DEMO) */
+#define FADE_FROM         0x92   /* 8b: ScreenFadeOut's arguments: the starting brightness, */
+#define FADE_FRAMES       0x93   /* 8b: frames per brightness level, */
+#define FADE_TO           0x94   /* 8b: the brightness it ends at; also the intro's frame
+                                    count (intro.c: COUNT) */
+#define INTRO_STAGE       0x95   /* 8b: the intro's stage (intro.c: STAGE) */
+#define LOAD_BUDGET       0xC7   /* 16b: bytes the sprite piece loader may still send this
+                                    frame (objects.c) */
+#define HM_PLAYER_DIRECTION 0xDA /* 16b: the way the player faces (0 down) */
+
+/* WRAM of the data bank */
+#define BG3_Y             0x0146 /* 16b: BG3's scroll, up-down (the text box's layer) */
+#define HM_WAIT_FLAGS     0x08FD /* 16b: what the player may do to go on */
+#define HM_WAIT_FRAMES    0x08FF /* 16b: frames left */
+#define PLAYER_TURN       0x0911 /* 16b: the direction being tried (playerinput.c) */
+#define PLAYER_TIMER      0x0915 /* 16b: the player's object's timer (objects.c) */
+#define HM_COW_TROUGHS    0x0932 /* 16b: which troughs have food (toolused.c) */
+#define HM_CHICKEN_TROUGHS 0x0934 /* 16b */
+#define TRANSITION_MAP    0x098B /* 8b: the map a transition goes to */
+
+/* WRAM $7E:xxxx and $7F:1Fxx (bus addresses) */
+#define CHICKENS          0x7EC286 /* the chickens' records, 8 bytes each (HM_CHICKEN_DATA) */
+#define SHED_ITEMS        0x7F1F00 /* 4 bytes: the shed, one bit per tool (HM_SHED_ITEMS) */
+#define SHED_ITEMS_2      0x7F1F01 /* the shed's second row of tools */
+#define SHED_ITEMS_3      0x7F1F02
+#define SHED_ITEMS_4      0x7F1F03
+#define DEMO_STEP         0x7F1F48 /* 8b: the next demo of DemoPresentation (0-$0B) */
+#define INTRO_STEP        0x7F1F49 /* 8b: the days of the introduction (mapevents.c) */
+#define FLAGS_5A          0x7F1F5A /* 16b flags (the day's, cleared here) */
+#define FLAGS_5C          0x7F1F5C /* 16b flags: bit 2 = the demo's script is over */
+#define FLAGS_5E          0x7F1F5E /* 16b flags */
+#define FLAGS_60          0x7F1F60 /* 16b flags: bit 7 = the demo is over */
+#define FLAGS_64          0x7F1F64 /* the story's flags: 16b words $7F1F64-$7F1F72 */
+#define FLAGS_72          0x7F1F72 /* the last of them */
+#define FLAGS_74          0x7F1F74 /* 16b flags (the day's, cleared here) */
+#define FLAGS_76          0x7F1F76
+#define FLAGS_78          0x7F1F78
+
 typedef void Fn(uint8_t *ram, HmRegs *r);
 
 static uint32_t db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
@@ -46,55 +95,55 @@ typedef struct {
 /* the fade out (from 15, 3 frames a level, to 1) and the fresh day */
 static void fresh_game(uint8_t *ram, HmRegs *r, const Demo *d)
 {
-  set_a8(r, 0x0F); *hm_dp(ram, r, 0x92) = 0x0F;            /* SEP #$20; REP #$10 */
-  set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
-  set_a8(r, 0x01); *hm_dp(ram, r, 0x94) = 0x01;
+  set_a8(r, 0x0F); *hm_dp(ram, r, FADE_FROM) = 0x0F;       /* SEP #$20; REP #$10 */
+  set_a8(r, 0x03); *hm_dp(ram, r, FADE_FRAMES) = 0x03;
+  set_a8(r, 0x01); *hm_dp(ram, r, FADE_TO) = 0x01;
   jsl(ram, r, (uint16_t)(d->base + 0x10), 0x80, hm_ScreenFadeOut);
   set_a8(r, 0x06);                                         /* SEP #$20: 6:00:00 */
-  hm_bus_wr8(ram, 0x7F1F1C, 6);
+  hm_bus_wr8(ram, WRAM_LONG(HM_HOUR), 6);
   set_a8(r, 0x00);
-  hm_bus_wr8(ram, 0x7F1F1D, 0);
-  hm_bus_wr8(ram, 0x7F1F1E, 0);
+  hm_bus_wr8(ram, WRAM_LONG(HM_MINUTES), 0);
+  hm_bus_wr8(ram, WRAM_LONG(HM_SECONDS), 0);
   set_a8(r, 0x01);
-  *hm_dp(ram, r, 0x95) = 0x01;
-  *hm_dp(ram, r, 0x94) = 0;
+  *hm_dp(ram, r, INTRO_STAGE) = 0x01;
+  *hm_dp(ram, r, FADE_TO) = 0;
   r->a = 0;                                                /* REP #$20: the day's flags */
-  static const uint32_t day[] = { 0x7F1F5A, 0x7F1F5C, 0x7F1F5E, 0x7F1F60, 0x7F1F74, 0x7F1F76, 0x7F1F78 };
+  static const uint32_t day[] = { FLAGS_5A, FLAGS_5C, FLAGS_5E, FLAGS_60, FLAGS_74, FLAGS_76, FLAGS_78 };
   for (unsigned i = 0; i < 7; i++) hm_bus_wr16(ram, day[i], 0);
   r->a = d->flags60;
-  hm_bus_wr16(ram, 0x7F1F60, d->flags60);
+  hm_bus_wr16(ram, FLAGS_60, d->flags60);
   r->a = 0;                                                /* the story's */
-  for (uint32_t f = 0x7F1F64; f <= 0x7F1F72; f += 2) hm_bus_wr16(ram, f, 0);
-  if (!d->demo) hm_bus_wr8(ram, 0x7F1F49, 0);              /* SEP #$20 */
-  set_a8(r, 0x8F); hm_bus_wr8(ram, 0x7F1F00, 0x8F);        /* the shed */
-  set_a8(r, d->shed2); hm_bus_wr8(ram, 0x7F1F01, d->shed2);
-  set_a8(r, 0x00); hm_bus_wr8(ram, 0x7F1F02, 0); hm_bus_wr8(ram, 0x7F1F03, 0);
-  wr8(ram, r, 0x0921, 0);                                  /* nothing in the hands */
-  wr8(ram, r, 0x0923, 0);
+  for (uint32_t f = FLAGS_64; f <= FLAGS_72; f += 2) hm_bus_wr16(ram, f, 0);
+  if (!d->demo) hm_bus_wr8(ram, INTRO_STEP, 0);            /* SEP #$20 */
+  set_a8(r, 0x8F); hm_bus_wr8(ram, SHED_ITEMS, 0x8F);      /* the shed */
+  set_a8(r, d->shed2); hm_bus_wr8(ram, SHED_ITEMS_2, d->shed2);
+  set_a8(r, 0x00); hm_bus_wr8(ram, SHED_ITEMS_3, 0); hm_bus_wr8(ram, SHED_ITEMS_4, 0);
+  wr8(ram, r, HM_TOOL_SELECTED, 0);                        /* nothing in the hands */
+  wr8(ram, r, HM_TOOL_BACKPACK, 0);
   set_a8(r, 0x01);                                         /* seeds: one bag each */
-  wr8(ram, r, 0x0927, 1);
-  wr8(ram, r, 0x092B, 1);
-  if (!d->demo) { wr8(ram, r, 0x0928, 1); wr8(ram, r, 0x0929, 1); }
-  else { wr16(ram, r, 0x08FD, 0); wr16(ram, r, 0x08FF, 0); }   /* REP #$20 */
-  wr16(ram, r, 0x0915, 0);                                 /* REP #$20: the player */
-  hm_dp_w16(ram, r, 0xD2, 0);
-  hm_dp_w16(ram, r, 0xD4, 0);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0001);     /* REP #$30 */
-  hm_dp_w16(ram, r, 0xD2, r->a);
+  wr8(ram, r, HM_SEEDS_GRASS_N, 1);
+  wr8(ram, r, HM_SEEDS_TURNIP_N, 1);
+  if (!d->demo) { wr8(ram, r, HM_SEEDS_CORN_N, 1); wr8(ram, r, HM_SEEDS_TOMATO_N, 1); }
+  else { wr16(ram, r, HM_WAIT_FLAGS, 0); wr16(ram, r, HM_WAIT_FRAMES, 0); }   /* REP #$20 */
+  wr16(ram, r, PLAYER_TIMER, 0);                           /* REP #$20: the player */
+  hm_dp_w16(ram, r, HM_GAME_STATE, 0);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0001);   /* REP #$30 */
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   r->a = 0;
-  hm_dp_w16(ram, r, 0xD4, 0);
-  hm_dp_w16(ram, r, 0xDA, 0);
-  wr16(ram, r, 0x0911, 0);
-  wr16(ram, r, 0x0901, 0);
-  wr8(ram, r, 0x0973, 0);                                  /* SEP #$20: the clock stopped */
-  hm_bus_wr8(ram, 0x7F1F19, 0);                            /* spring */
-  wr8(ram, r, 0x091D, 0);
-  r->a = (uint16_t)(0xFFFD & hm_dp_r16(ram, r, 0xD2));     /* REP #$30 */
-  hm_dp_w16(ram, r, 0xD2, r->a);
-  wr16(ram, r, 0x0932, 0);                                 /* the animals fed */
-  wr16(ram, r, 0x0934, 0);
-  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5C) & 0xFFFB);
-  hm_bus_wr16(ram, 0x7F1F5C, r->a);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
+  hm_dp_w16(ram, r, HM_PLAYER_DIRECTION, 0);
+  wr16(ram, r, PLAYER_TURN, 0);
+  wr16(ram, r, HM_ANIM_REQUEST, 0);
+  wr8(ram, r, HM_TIME_RUNNING, 0);                         /* SEP #$20: the clock stopped */
+  hm_bus_wr8(ram, WRAM_LONG(HM_SEASON), 0);                /* spring */
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
+  r->a = (uint16_t)(0xFFFD & hm_dp_r16(ram, r, HM_GAME_STATE));   /* REP #$30 */
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
+  wr16(ram, r, HM_COW_TROUGHS, 0);                         /* the animals fed */
+  wr16(ram, r, HM_CHICKEN_TROUGHS, 0);
+  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5C) & 0xFFFB);
+  hm_bus_wr16(ram, FLAGS_5C, r->a);
 }
 /* the screen and objects cleared, the farm's map from the ROM, BG3 */
 static void fresh_screen(uint8_t *ram, HmRegs *r, uint16_t at)
@@ -108,7 +157,7 @@ static void fresh_screen(uint8_t *ram, HmRegs *r, uint16_t at)
   jsl(ram, r, (uint16_t)(at + 24), 0x84, hm_ClearAllEventSlots);
   jsl(ram, r, (uint16_t)(at + 28), 0x82, hm_LoadDefaultFarmMap);
   r->a = 0x0100;                                           /* REP #$20 */
-  wr16(ram, r, 0x0146, 0x0100);
+  wr16(ram, r, BG3_Y, 0x0100);
 }
 /* LDA #0; LDX #$47; LDY #script; JSL StartEventScriptLong */
 static void demo_script(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t at)
@@ -120,11 +169,11 @@ static void demo_script(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t at)
 static void demo_map(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   jsl(ram, r, at, 0x84, hm_RunEventSlots);
-  uint8_t map = rd8(ram, r, 0x098B);                       /* SEP #$20 */
+  uint8_t map = rd8(ram, r, TRANSITION_MAP);               /* SEP #$20 */
   set_a8(r, map);
-  *hm_dp(ram, r, 0x22) = map;
+  *hm_dp(ram, r, HM_MAP_ID) = map;
   jsl(ram, r, (uint16_t)(at + 0x0B), 0x80, hm_PickMapMusic);
-  set_a8(r, rd8(ram, r, 0x098B));                          /* SEP #$20 */
+  set_a8(r, rd8(ram, r, TRANSITION_MAP));                  /* SEP #$20 */
   jsl(ram, r, (uint16_t)(at + 0x14), 0x80, hm_LoadAndShowMap);
   r->y = 0;                                                /* REP #$30 */
 }
@@ -132,15 +181,15 @@ static void demo_map(uint8_t *ram, HmRegs *r, uint16_t at)
  * `wait`), the game's work from `work` */
 static void demo_frame(uint8_t *ram, HmRegs *r, uint16_t wait, uint16_t work, uint8_t entry)
 {
-  hm_dp_w16(ram, r, 0x90, 0);                              /* REP #$20; STZ $90 */
+  hm_dp_w16(ram, r, MENU_FRAMES, 0);                       /* REP #$20; STZ $90 */
   for (;;) {
-    uint8_t ready = *hm_dp(ram, r, 0x00);                  /* SEP #$20; LDA $00; BEQ */
+    uint8_t ready = *hm_dp(ram, r, NMI_STATUS);            /* SEP #$20; LDA $00; BEQ */
     set_a8(r, ready);
     if (ready) break;
     hm_nmi(ram, r, wait, (uint8_t)(entry | 0x20));
   }
   r->a = 0x1800;                                           /* REP #$20 */
-  hm_dp_w16(ram, r, 0xC7, 0x1800);
+  hm_dp_w16(ram, r, LOAD_BUDGET, 0x1800);
   hm_game_frame(ram, r, work);
 }
 /* the end: the chickens' first 8 bytes cleared, $95 = 9, $90 = 0 */
@@ -148,15 +197,15 @@ static void demo_end(uint8_t *ram, HmRegs *r)
 {
   for (r->x = 0; r->x != 8; r->x++) {                      /* REP #$30; SEP #$20 */
     set_a8(r, 0);
-    hm_bus_wr8(ram, 0x7EC286 + r->x, 0);
+    hm_bus_wr8(ram, CHICKENS + r->x, 0);
   }
   r->c = 1;                                                /* CPX #8 */
 }
 static void demo_leave(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 0x09);                                         /* SEP #$20 */
-  *hm_dp(ram, r, 0x95) = 0x09;
-  hm_dp_w16(ram, r, 0x90, 0);                              /* REP #$20 */
+  *hm_dp(ram, r, INTRO_STAGE) = 0x09;
+  hm_dp_w16(ram, r, MENU_FRAMES, 0);                       /* REP #$20 */
   g_hm_next = 0x82D871;
   /* JML IntroScreen's demo check: the check stops here (HM_TOLOOP) */
 }
@@ -181,9 +230,9 @@ void hm_FirstDemo(uint8_t *ram, HmRegs *r)
 void hm_DemoFrame(uint8_t *ram, HmRegs *r)
 {
   demo_frame(ram, r, 0xD34D, 0xD358, r->p);
-  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5C) & 0x0004);  /* REP #$20 */
+  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5C) & 0x0004);  /* REP #$20 */
   if (!r->a) {
-    *hm_dp(ram, r, 0x00) = 0;                              /* SEP #$20; STZ $00 */
+    *hm_dp(ram, r, NMI_STATUS) = 0;                              /* SEP #$20; STZ $00 */
     g_hm_next = 0x82D347;
     return;                                                /* JMP back to the wait: the check stops */
   }
@@ -207,7 +256,7 @@ void hm_DemoPresentation(uint8_t *ram, HmRegs *r)
   uint8_t entry = r->p;
   fresh_game(ram, r, &d);
   fresh_screen(ram, r, 0xD4F4);
-  uint8_t step = hm_bus_rd8(ram, 0x7F1F48);                /* SEP #$20 */
+  uint8_t step = hm_bus_rd8(ram, DEMO_STEP);               /* SEP #$20 */
   set_a8(r, step);
   for (uint8_t k = 1; k <= 0x0B && step; k++) {            /* CMP #k; BNE */
     r->c = step >= k;
@@ -217,7 +266,7 @@ void hm_DemoPresentation(uint8_t *ram, HmRegs *r)
   demo_script(ram, r, SCRIPTS[which], (uint16_t)(0xD57F + 0x1A * which));
   uint8_t next = which == 0x0B ? 0 : (uint8_t)(which + 1);
   set_a8(r, next);                                         /* SEP #$20 */
-  hm_bus_wr8(ram, 0x7F1F48, next);
+  hm_bus_wr8(ram, DEMO_STEP, next);
   demo_map(ram, r, 0xD6AC);
   hm_DemoPresentationFrame(ram, r);
   (void)entry;
@@ -226,17 +275,17 @@ void hm_DemoPresentation(uint8_t *ram, HmRegs *r)
 void hm_DemoPresentationFrame(uint8_t *ram, HmRegs *r)
 {
   demo_frame(ram, r, 0xD6CF, 0xD6DA, r->p);
-  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5C) & 0x0004);  /* REP #$20 */
+  r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5C) & 0x0004);  /* REP #$20 */
   if (!r->a) {
-    r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F60) & 0x0080);
+    r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_60) & 0x0080);
     if (!r->a) {
-      *hm_dp(ram, r, 0x00) = 0;                            /* SEP #$20; STZ $00 */
+      *hm_dp(ram, r, NMI_STATUS) = 0;                            /* SEP #$20; STZ $00 */
       g_hm_next = 0x82D6C9;
       return;                                              /* JMP back to the wait: the check stops */
     }
   }
   demo_end(ram, r);
-  uint8_t map = *hm_dp(ram, r, 0x22);                      /* SEP #$20 */
+  uint8_t map = *hm_dp(ram, r, HM_MAP_ID);                 /* SEP #$20 */
   set_a8(r, map);
   r->c = map >= 4;
   if (map < 4) jsl(ram, r, 0xD74C, 0x82, hm_CopyCurrentMapToFarmMap);
