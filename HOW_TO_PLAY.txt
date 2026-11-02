@@ -13,6 +13,13 @@ WINDOWS 10/11 (x64 or ARM)
  3. The first time, choose your ROM (Harvest Moon USA, .sfc or .smc).
     It is checked and remembered.
 
+MAC (Apple Silicon or Intel, macOS 11+)
+ 1. Double-click build_mac.command (if macOS says it is from an
+    unidentified developer: right-click it > Open > Open). The first
+    time it may ask to install Apple's command line tools, and it
+    downloads CMake (50 MB) and SDL3's source. It builds in a few minutes.
+ 2. Double-click "Harvest Moon.command" and choose your ROM.
+
 LINUX
     cmake -S native -B build/native && cmake --build build/native
     build/native/HarvestMoonNative /path/to/your/rom.sfc
@@ -45,6 +52,14 @@ WINDOWS 10/11 (x64 o ARM)
  2. Abre HarvestMoonNative.exe.
  3. La primera vez elige tu ROM (Harvest Moon USA, .sfc o .smc). Se
     revisa y se recuerda.
+
+MAC (Apple Silicon o Intel, macOS 11+)
+ 1. Doble clic en build_mac.command (si macOS dice que es de un
+    desarrollador no identificado: clic derecho > Abrir > Abrir). La
+    primera vez puede pedir instalar las herramientas de linea de
+    comandos de Apple, y descarga CMake (50 MB) y el codigo de SDL3.
+    Compila en unos minutos.
+ 2. Doble clic en "Harvest Moon.command" y elige tu ROM.
 
 Todo viene APAGADO: el juego es el de la consola. Activa lo que quieras
 en el launcher (Esc): Mejoras y Opciones. El idioma se cambia en

@@ -710,6 +710,7 @@ static bool state_read_file(int slot)
 /* ── The menus: the game stands still, the music goes on ──────────────── */
 static bool s_menu_mouse;
 static uint16_t s_test_press;
+static int s_test_mx = -1, s_test_my = -1, s_test_click;   /* HM_UI_TEST's pointer (@x,y ! ~) */
 static void menu_input(UiInput *in, uint16_t *prev, uint32_t *held_frames)
 {
   memset(in, 0, sizeof *in);
@@ -774,12 +775,18 @@ static void menu_input(UiInput *in, uint16_t *prev, uint32_t *held_frames)
   if (tab_l) pressed |= B_L;
   if (tab_r) pressed |= B_R;
   in->held = held; in->pressed = pressed;
+  if (s_test_mx >= 0) {
+    in->mouse_x = s_test_mx; in->mouse_y = s_test_my; in->mouse_moved = true;
+    if (s_test_click == 1) in->click = true; else if (s_test_click == 2) in->rclick = true;
+    s_test_mx = -1; s_test_click = 0;
+  }
   if (pressed & (B_A | B_START)) in->accept = true;
   if (pressed & B_B) in->back = true;
 }
 
 enum { MENU_LAUNCHER, MENU_PAUSE };
-/* HM_UI_TEST=keys (u d l r A B L R X Y, one every 10 frames) and
+/* HM_UI_TEST=keys (u d l r A B L R X Y, one every 10 frames; @x,y the
+ * pointer there, ! a left click there, ~ a right click) and
  * HM_UI_SHOT=dir: the menus' pictures, for checking them without a screen */
 static void ui_test(uint32_t *t, int kind)
 {
@@ -798,6 +805,9 @@ static void ui_test(uint32_t *t, int kind)
   char k = keys[pos];
   if (!k) { if (kind == MENU_PAUSE) pause_action('B'); else s_quit = true; return; }
   pos++;
+  static int lx = -1, ly = -1;
+  if (k == '@') { int n = 0; if (sscanf(keys + pos, "%d,%d%n", &lx, &ly, &n) >= 2) pos += n; s_test_mx = lx; s_test_my = ly; return; }
+  if (k == '!' || k == '~') { s_test_mx = lx; s_test_my = ly; s_test_click = k == '!' ? 1 : 2; return; }
   static const struct { char c; uint16_t m; } M[] = { { 'u', B_UP }, { 'd', B_DOWN }, { 'l', B_LEFT }, { 'r', B_RIGHT },
     { 'A', B_A }, { 'B', B_B }, { 'L', B_L }, { 'R', B_R }, { 'X', B_X }, { 'Y', B_Y } };
   for (size_t i = 0; i < sizeof M / sizeof M[0]; i++) if (M[i].c == k) s_test_press = M[i].m;
@@ -834,6 +844,8 @@ static int run_menu(int kind, bool in_game)
         if (in.pressed & B_DOWN) pause_action('d');
         if (in.pressed & B_LEFT) pause_action('l');
         if (in.pressed & B_RIGHT) pause_action('r');
+        if (s_mods && g_cfg.mouse && (in.mouse_moved || in.click || in.rclick || in.wheel))
+          pause_mouse(in.mouse_x < 0 ? -1 : in.mouse_x - (s_fw - 256) / 2, in.mouse_y, in.mouse_moved, in.click, in.rclick, in.wheel);
       }
       if (!pause_is_open()) break;
       pause_draw(s_ui, s_fw);

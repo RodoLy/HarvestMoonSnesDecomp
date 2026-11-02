@@ -9,3 +9,6 @@ bool pause_is_open(void);
 /* u d l r (move), L R (pages), A X Y, B (close) */
 void pause_action(char a);
 void pause_draw(uint32_t *dst, int dst_w);
+/* the mouse, with mouse controls on: (mx, my) in the menu's 256 x 224
+ * (-1: outside); a left click is A where it points, the right click closes */
+void pause_mouse(int mx, int my, bool moved, bool click, bool rclick, int wheel);

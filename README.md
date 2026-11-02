@@ -15,7 +15,7 @@
 **100.00%** of the game's code rewritten in C and verified: 45176 of 45176 instructions, 778 of 778 routines (100.0%).
 Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Decomp disassembly.
 <!-- /progress -->
-![platform: Windows / Linux](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20Linux-blue)
+![platform: Windows / macOS / Linux](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20macOS%20%7C%20Linux-blue)
 ![ROM: not included](https://img.shields.io/badge/ROM-not%20included-red)
 
 The game rewritten, routine by routine, as C a person can read. Every
@@ -70,6 +70,19 @@ Windows does not treat it as a program downloaded from the internet.
 **Everything starts off**: the game is the console's until you turn on
 what you like in Improvements and Options. On Linux: see
 [How the native build works](#how-the-native-build-works).
+
+### How to play it on a Mac
+
+1. Unzip the download anywhere.
+2. Double-click **`build_mac.command`** (the first time macOS may say it is
+   from an unidentified developer: right-click it → Open → Open). If
+   Apple's command line tools (the C compiler) are missing it asks to
+   install them; then open it again. The first time it downloads CMake
+   (50 MB, checked by its SHA-256) unless you have one, and SDL3's source;
+   the build takes a few minutes. Apple Silicon and Intel, macOS 11 or
+   newer.
+3. Double-click **`Harvest Moon.command`** (or `HarvestMoonNative`) and
+   choose **your own ROM** the first time.
 
 ### A launcher in the look of the game
 
@@ -165,11 +178,13 @@ music keeps playing.
   each one itself, so money and counts are exactly its own. The pause
   menu's Inventory tab shows the bag and lets you pick which one to take
   out; it is kept in your diary.
-- **Mouse controls** *(off by default, in Controls → Keyboard)* — like Stardew Valley: left click
-  next to you uses the tool there, left click farther away walks there
+- **Mouse controls** *(off by default, in Controls → Keyboard)* — left click next to you uses the tool there, left click farther away walks there
   (hold it to follow the pointer), right click talks, picks up or
-  opens. A square marks the tile under the pointer. In text and menus,
-  left click is A and right click is B.
+  opens. A thin square marks the tile under the pointer (light within
+  reach). Seeds are only sown on tilled soil: a click elsewhere walks
+  there. In text and menus, left click is A and right click is B; the
+  pause menu works with the mouse too (point and click, right click
+  closes, the wheel goes through the animals).
 
 | OPTIONS on the title | Improvements | Cheats |
 |---|---|---|

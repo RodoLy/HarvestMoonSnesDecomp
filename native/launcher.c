@@ -341,7 +341,7 @@ static void build(void)
       }
       add(K_ACTION, A_DEFAULT_KEYS, T("Default keys"), T("X = A, Z = B, S = X, A = Y, C = L, V = R, Enter = Start, Right Shift = Select, arrows."));
       add(K_ACTION, A_HOTKEYS, T("Other keys"), T("Tab: fast forward · M: pause menu · Esc: this menu · F11 / Alt+Enter: full screen · F1-F10: load a state · Shift+F1-F10: save one."));
-      toggle(V_MOUSE, "Mouse controls", "Like Stardew Valley: left click next to you uses the tool there, left click farther walks there, right click talks or picks up. The keyboard and the pad still work.");
+      toggle(V_MOUSE, "Mouse controls", "Left click next to you uses the tool there, left click farther walks there, right click talks or picks up. The keyboard and the pad still work.");
     } else {
       int n = host_gamepad_count();
       Item *it = add(K_CHOICE, V_PADSEL, T("Gamepad"), n ? T("The gamepad that plays. Left / right: another one, when more are connected.")

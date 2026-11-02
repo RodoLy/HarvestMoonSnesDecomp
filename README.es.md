@@ -16,7 +16,7 @@
 **100.00%** del código del juego reescrito en C y verificado: 45176 de 45176 instrucciones, 778 de 778 rutinas (100.0%).
 Se calcula con `python3 tools/progress.py --decomp ../HM-Decomp` sobre el desensamblado de HM-Decomp.
 <!-- /progress -->
-![plataforma: Windows / Linux](https://img.shields.io/badge/plataforma-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20Linux-blue)
+![plataforma: Windows / macOS / Linux](https://img.shields.io/badge/plataforma-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20macOS%20%7C%20Linux-blue)
 ![ROM: no incluida](https://img.shields.io/badge/ROM-no%20incluida-red)
 
 El juego reescrito, rutina por rutina, como C que una persona puede leer.
@@ -71,6 +71,19 @@ con él y tu copia del juego. Como lo compilas tú, Windows no lo trata como
 un programa descargado de internet. **Todo viene apagado**: el juego es el
 de la consola hasta que actives lo que quieras en Mejoras y Opciones. En
 Linux: ver [Cómo funciona la versión nativa](#cómo-funciona-la-versión-nativa).
+
+### Cómo jugarlo en Mac
+
+1. Descomprime la descarga donde quieras.
+2. Doble clic en **`build_mac.command`** (la primera vez macOS puede decir
+   que es de un desarrollador no identificado: clic derecho → Abrir →
+   Abrir). Si faltan las herramientas de línea de comandos de Apple (el
+   compilador) pide instalarlas; luego ábrelo otra vez. La primera vez
+   descarga CMake (50 MB, revisado por su SHA-256) si no lo tienes, y el
+   código de SDL3; compilar tarda unos minutos. Apple Silicon e Intel,
+   macOS 11 o más nuevo.
+3. Doble clic en **`Harvest Moon.command`** (o `HarvestMoonNative`) y elige
+   **tu propia ROM** la primera vez.
 
 ### Launcher con el aspecto del juego
 
@@ -169,11 +182,15 @@ tu ROM. La música sigue sonando.
   los contadores son exactamente los suyos. La pestaña Inventario del menú
   de pausa muestra la mochila y te deja elegir cuál sacar; se guarda en tu
   diario.
-- **Controles con ratón** *(apagado por defecto, en Controles → Teclado)* — como en Stardew
-  Valley: clic izquierdo junto a ti usa la herramienta ahí, clic izquierdo
+- **Controles con ratón** *(apagado por defecto, en Controles → Teclado)* — clic izquierdo junto a
+  ti usa la herramienta ahí, clic izquierdo
   más lejos camina hasta ahí (mantenlo para seguir al puntero), clic
   derecho habla, recoge o abre. Un cuadro marca la casilla bajo el
-  puntero. En textos y menús, clic izquierdo es A y clic derecho es B.
+  puntero (claro si está a tu alcance). Las semillas solo se siembran en
+  tierra arada: un clic en otro lado camina hasta ahí. En textos y menús,
+  clic izquierdo es A y clic derecho es B; el menú de pausa también se
+  usa con el ratón (apuntar y clic, clic derecho cierra, la rueda recorre
+  los animales).
 
 | OPTIONS en el título | Mejoras | Trucos |
 |---|---|---|

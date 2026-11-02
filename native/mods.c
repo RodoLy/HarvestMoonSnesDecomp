@@ -503,7 +503,7 @@ static void crops_frame(void)
   else crops_hide();
 }
 
-/* ── Mouse controls (Stardew Valley style) ──────────────────────────────
+/* ── Mouse controls (click to use, click to walk) ──────────────────────────────
  * Only the buttons the game already has are pressed, as a player would:
  *   - left click on the tile next to the player (up, down, left, right):
  *     the player turns to it and uses the tool in hand (Y); on the
@@ -514,8 +514,9 @@ static void crops_frame(void)
  *     presses A (talk, pick up, open, put in the shipping box...);
  *   - with no control of the player (text, menus, the title): left click
  *     is A and right click is B.
- * The arrows or the pad take over at once. A square shows the tile under
- * the pointer: solid within reach of the tool, faint farther away. */
+ * The arrows or the pad take over at once. A thin square shows the tile
+ * under the pointer: light within reach of the tool, brown farther away
+ * (or, with seeds in hand, where they do not go: mouse_tool_fits). */
 enum { MT_NONE, MT_WALK, MT_TOOL, MT_ACT };
 static struct {
   int fx, fy;                 /* the pointer on the field, -1: outside */
@@ -561,6 +562,22 @@ static uint16_t steer(int tx, int ty)
   else if (s_mouse.axis_only == 2 && (m & (B_LEFT | B_RIGHT))) m &= (uint16_t)(B_LEFT | B_RIGHT);
   return m;
 }
+/* seeds in hand only go on tilled soil (on the farm, types 07 / 08): a
+ * click anywhere else walks there instead of tossing seeds on the ground */
+static bool mouse_tool_fits(int tx, int ty)
+{
+  uint8_t tool = g_ram[HM_TOOL_SELECTED];
+  bool seeds = (tool >= 5 && tool <= 8) || tool == 0x0C;
+  if (!seeds) return true;
+  int ptx = hm_rd16(g_ram, 0xD6) >> 4, pty = hm_rd16(g_ram, 0xD8) >> 4;
+  if (tx == ptx && ty == pty) {                 /* the own tile: the one faced */
+    static const int d[4][2] = { { 0, 1 }, { 0, -1 }, { 1, 0 }, { -1, 0 } };
+    unsigned f = hm_rd16(g_ram, 0xDA) & 3;
+    tx += d[f][0]; ty += d[f][1];
+  }
+  uint8_t t = g_ram[HM_MAP_ID] <= 3 ? farm_type(tx, ty) : 0;
+  return t == 0x07 || t == 0x08;
+}
 static void mouse_task(int task, int tx, int ty)
 {
   s_mouse.task = task; s_mouse.tx = tx; s_mouse.ty = ty;
@@ -596,7 +613,7 @@ uint16_t mods_mouse_pad(uint16_t pad)
   player_tile(&ptx, &pty);
   if (click && mouse_tile(&tx, &ty)) {
     if (click == 2) mouse_task(MT_ACT, tx, ty);
-    else if ((tx == ptx && ty == pty) || next_to(tx, ty, ptx, pty)) mouse_task(MT_TOOL, tx, ty);
+    else if (((tx == ptx && ty == pty) || next_to(tx, ty, ptx, pty)) && mouse_tool_fits(tx, ty)) mouse_task(MT_TOOL, tx, ty);
     else { mouse_task(MT_WALK, tx, ty); s_mouse.follow = true; }
   }
   if (s_mouse.task == MT_WALK && s_mouse.follow && s_mouse.left_held && mouse_tile(&tx, &ty) &&
@@ -932,13 +949,12 @@ static bool mouse_hud(uint32_t *px, int w)
   if (!g_cfg.mouse || !mouse_controls_player() || !mouse_tile(&tx, &ty)) return false;
   if (!px) return true;
   player_tile(&ptx, &pty);
-  bool reach = (tx == ptx && ty == pty) || next_to(tx, ty, ptx, pty);
+  bool reach = ((tx == ptx && ty == pty) || next_to(tx, ty, ptx, pty)) && mouse_tool_fits(tx, ty);
   int x = tx * 16 - hm_rd16(g_ram, HM_CAM_X) + (w - 256) / 2, y = ty * 16 - hm_rd16(g_ram, HM_CAM_Y);
   ui_target(px, w, 224);
   uint32_t c = reach ? C_CREAM : UI_RGB(0x8A6236);
   ui_hline(x, y, 16, c); ui_hline(x, y + 15, 16, c);
   ui_vline(x, y, 16, c); ui_vline(x + 15, y, 16, c);
-  if (reach) { ui_hline(x + 1, y + 1, 14, c); ui_hline(x + 1, y + 14, 14, c); ui_vline(x + 1, y + 1, 14, c); ui_vline(x + 14, y + 1, 14, c); }
   return true;
 }
 bool mods_hud(uint32_t *px, int w)

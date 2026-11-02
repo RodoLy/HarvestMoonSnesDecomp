@@ -19,6 +19,7 @@
  *           CODE_8187C3 and the tool table at $81:BE0F (hm_ram.h).
  *   Hearts  the five girls' affection ($7F1F1F.., 0..999).
  *   Farm    money, shipping, stock, cows, happiness, tomorrow's weather.
+ * With mouse controls on, the mouse works here too (pause_mouse).
  */
 #include <math.h>
 #include <stdbool.h>
@@ -719,6 +720,55 @@ void pause_action(char a)
     case 'X': action_x(); break;
     case 'Y': action_y(); break;
     case 'B': s.open = false; break;
+  }
+}
+
+/* ── The mouse (with mouse controls on) ───────────────────────────────
+ * Pointing moves the cursor (the tabs, the hand and backpack, the shed, the
+ * crop bag, the animals); a left click there is A, and on the help lines
+ * does what they say (X swap, Y put away, close); the right click closes;
+ * the wheel goes through the animals. (mx, my): the menu's own 256 x 224. */
+static bool hit(int mx, int my, int x, int y, int w, int h) { return mx >= x && my >= y && mx < x + w && my < y + h; }
+static bool text_hit(int mx, int my, int x, int base, const char *t)
+{
+  return hit(mx, my, x - 2, base - 9, ui_text_w(UI_SMALL, t) + 4, 12);
+}
+void pause_mouse(int mx, int my, bool moved, bool click, bool rclick, int wheel)
+{
+  if (rclick) { s.open = false; return; }
+  if (wheel && s.tab == 3) animals_move(0, -wheel);
+  if (mx < 0 || (!moved && !click)) return;
+  for (int t = 0, x = 8; t < ntabs(); t++) {                    /* the tabs */
+    int w = ui_text_w(UI_SMALL, T(kTabs[t])) + 12;
+    if (hit(mx, my, x, 53, w, 17)) { if (click && s.tab != t) { s.tab = t; s.message[0] = 0; } return; }
+    x += w + 2;
+  }
+  if (click && text_hit(mx, my, 12, 214, T("B / M / Esc  close"))) { s.open = false; return; }
+  if (s.tab == 0) {
+    int cx = 0, cy = -9;
+    if (hit(mx, my, 104, 8, 26, 26)) { cx = 0; cy = -1; }
+    else if (hit(mx, my, 134, 8, 26, 26)) { cx = 1; cy = -1; }
+    for (int i = 0; i < NTOOLS && cy == -9; i++)
+      if (hit(mx, my, 12 + (i % GRID_COLS) * 21, 83 + (i / GRID_COLS) * 21, 20, 20)) { cx = i % GRID_COLS; cy = i / GRID_COLS; }
+    for (int i = 0; i < 9 && cy == -9 && g_cfg.crop_bag; i++)
+      if (hit(mx, my, 12 + i * 18, 72 + 11 + GRID_ROWS * 21 + 1, 18, 18)) { cx = i; cy = BAG_ROW; }
+    if (cy != -9) {
+      if (cx != s.cx || cy != s.cy) { s.cx = cx; s.cy = cy; s.message[0] = 0; }
+      if (click) action_a();
+      return;
+    }
+    if (click && !on_bag()) {                                  /* the help line */
+      const char *xs = T("X  hand ↔ backpack");
+      char ys[96]; snprintf(ys, sizeof ys, "%s %s", T("Y  put away in"), T("the tool shed"));
+      int x2 = 12 + ui_text_w(UI_SMALL, xs) + ui_text_w(UI_SMALL, "    ");
+      if (text_hit(mx, my, 12, 205, xs)) action_x();
+      else if (text_hit(mx, my, x2, 205, ys)) action_y();
+    }
+  } else if (s.tab == 3) {
+    int sec[COWS + CHICKENS], slot[COWS + CHICKENS];
+    int n = animal_list(sec, slot);
+    for (int r = 0; r < ROWS_SHOWN && s.ar + r < n; r++)
+      if (hit(mx, my, 8, 72 + r * 19, 242, 19)) s.ac = s.ar + r;
   }
 }
 
