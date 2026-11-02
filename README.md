@@ -222,7 +222,8 @@ music keeps playing.
   "no", not again that day). Those mornings (6:00-11:00) she fills
   troughs in the barn and the coop and waters the seeds and plants not
   watered yet, at most half of the work, walking the farm in her own pictures (talk to her: her usual
-  lines); away from the farm the work gets done all the same. At 11:00 she
+  lines) and hopping over the fences; away from the farm the work gets done
+  all the same, at the same pace (the clock stops indoors, and so does she). At 11:00 she
   goes to her midday chores, as in the game (Maria, Nina and Ellen on the
   farm, Ann and Eve in the tool shed). Some days she wears the clothes she
   wore before the wedding. Kept in your diary.

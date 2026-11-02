@@ -93,7 +93,8 @@ static struct {
   int inside;                    /* frames left in the barn / coop */
   int facing;                    /* 0 down, 1 up, 2 right, 3 left */
   unsigned frame;
-  int offmap_tick;
+  int offmap_tick;               /* away: the game minute (+1) last worked in */
+  int away_left;                 /* away: things still to do this minute */
   bool spawned;                  /* we put her in slot $13 */
   bool controlled;               /* she worked here, as we moved her */
   bool moving;                   /* she took a step this frame */
@@ -103,7 +104,9 @@ static struct {
   int phase;                     /* indoors: 0 to a trough, 1 filling it, 2 leaving */
   int target;                    /* indoors: the trough or box */
   /* the dialog */
+  bool hop; int hop_len;          /* over a fence: the pixels of the jump */
   int sel, page;
+  int shown, tick;               /* letters printed so far, frames to the next */
 } W;
 
 static int rd16(uint32_t a) { return g_ram[a] | g_ram[a + 1] << 8; }
@@ -177,9 +180,16 @@ static bool walkable(int x, int y)
 {
   if (x < 1 || y < 1 || x >= map_w() - 1 || y >= 63) return false;
   uint8_t t = here(x, y);
-  if (t >= 0x1E && t <= 0x6F) return false;              /* never through the crops */
-  if (t >= 0xC0 && t <= 0xCF) return false;              /* nor the doors */
-  return !(hm_bus_rd8(g_ram, props() + 4u * t + 2) & 0x1F);
+  if (t >= 0xC0 && t <= 0xCF) return false;              /* never through the doors */
+  return !(hm_bus_rd8(g_ram, props() + 4u * t + 2) & 0x1F);   /* as the player: seeds yes, grown plants no */
+}
+/* a fence she hops over (one tile: the farm's own, $A6, and the lumber
+ * ones the player puts up, $05) */
+static bool fence(int x, int y)
+{
+  if (x < 1 || y < 1 || x >= map_w() - 1 || y >= 63) return false;
+  uint8_t t = here(x, y);
+  return t == 0x05 || t == 0xA6;
 }
 static int count_dry(void)
 {
@@ -212,7 +222,13 @@ static bool route(int fx, int fy, int tx, int ty, bool onto)
     for (int k = 0; k < 4; k++) {
       int nx = cx + d4[k][0], ny = cy + d4[k][1], n = ny * 64 + nx;
       if (nx < 0 || ny < 0 || nx >= 64 || ny >= 64 || from[n] != -1) continue;
-      if (!walkable(nx, ny) && !(onto && nx == tx && ny == ty)) continue;
+      if (!walkable(nx, ny) && !(onto && nx == tx && ny == ty)) {
+        int jx = nx + d4[k][0], jy = ny + d4[k][1], j = jy * 64 + jx;   /* over a fence */
+        if (on_farm() && fence(nx, ny) && jx >= 0 && jy >= 0 && jx < 64 && jy < 64 && from[j] == -1 && walkable(jx, jy)) {
+          from[j] = (int16_t)c; queue[qt++] = j;
+        }
+        continue;
+      }
       from[n] = (int16_t)c; queue[qt++] = n;
     }
   }
@@ -220,7 +236,7 @@ static bool route(int fx, int fy, int tx, int ty, bool onto)
   int n = 0, rev[64 * 64 > 96 ? 96 : 96][2], c = goal;
   while (c != start && n < 96) { rev[n][0] = c % 64; rev[n][1] = c / 64; n++; c = from[c]; }
   if (c != start) return false;                      /* too far: not this time */
-  W.plen = n; W.pi = 0;
+  W.plen = n; W.pi = 0; W.hop = false;
   for (int i = 0; i < n; i++) { W.path[i][0] = rev[n - 1 - i][0]; W.path[i][1] = rev[n - 1 - i][1]; }
   if (tx >= 0) { W.tx = tx; W.ty = ty; }
   return true;
@@ -333,10 +349,13 @@ static void next_task(void)
 /* elsewhere than the farm: a task now and then */
 static void work_away(uint8_t *ram, const HmRegs *regs)
 {
-  static int every = -1;                           /* HM_WIFE_AWAY_FRAMES (tests): how often */
-  if (every < 0) { const char *e = getenv("HM_WIFE_AWAY_FRAMES"); every = e ? atoi(e) : 90; }
-  if (++W.offmap_tick < every) return;
-  W.offmap_tick = 0;
+  /* as quick as on the farm: two things each game minute (the clock stops
+   * in the houses, and so does she) */
+  int minute = g_ram[HM_HOUR] * 15 + g_ram[HM_MINUTES];
+  if (W.offmap_tick == 0 || minute < W.offmap_tick - 1) W.offmap_tick = minute + 1;
+  if (minute + 1 == W.offmap_tick) return;
+  if (W.away_left <= 0) W.away_left = 2;
+  if (--W.away_left == 0) W.offmap_tick = minute + 1;
   switch (W.task) {
   case T_COWS: if (!feed_cows()) next_task(); break;
   case T_HENS: if (!feed_hens()) next_task(); break;
@@ -356,12 +375,23 @@ static bool walk(int w)
   if (W.pi >= W.plen) return true;
   int gx = W.path[W.pi][0] * 16 + 8, gy = W.path[W.pi][1] * 16 + 8;
   int dx = gx - W.px, dy = gy - W.py;
-  if (dx) { W.px += dx > 0 ? 1 : -1; W.facing = dx > 0 ? 2 : 3; }
-  else if (dy) { W.py += dy > 0 ? 1 : -1; W.facing = dy > 0 ? 0 : 1; }
+  int ptx = W.pi ? W.path[W.pi - 1][0] : W.px / 16, pty = W.pi ? W.path[W.pi - 1][1] : W.py / 16;
+  if (!W.hop && abs(W.path[W.pi][0] - ptx) + abs(W.path[W.pi][1] - pty) == 2) {   /* the next tile is past a fence */
+    W.hop = true; W.hop_len = abs(dx) + abs(dy);
+    if (W.hop_len < 2) W.hop = false;
+  }
+  int step = W.hop ? 2 : 1;
+  if (dx) { int m = abs(dx) < step ? abs(dx) : step; W.px += dx > 0 ? m : -m; W.facing = dx > 0 ? 2 : 3; }
+  else if (dy) { int m = abs(dy) < step ? abs(dy) : step; W.py += dy > 0 ? m : -m; W.facing = dy > 0 ? 0 : 1; }
   W.moving = true;
-  if (W.px == gx && W.py == gy) W.pi++;
-  pose(w, W.facing, (W.frame / 10) & 1);
-  place(W.px, W.py);
+  int lift = 0;
+  if (W.hop) {                                       /* up and over: an arc 20 pixels high */
+    int done = W.hop_len - (abs(gx - W.px) + abs(gy - W.py));
+    lift = 80 * done * (W.hop_len - done) / (W.hop_len * W.hop_len);
+  }
+  if (W.px == gx && W.py == gy) { W.pi++; W.hop = false; lift = 0; }
+  pose(w, W.facing, W.hop ? true : (W.frame / 10) & 1);
+  place(W.px, W.py - lift);
   return W.pi >= W.plen;
 }
 static void face_tile(int w)
@@ -404,7 +434,7 @@ static void work_here(uint8_t *ram, const HmRegs *regs, int w)
     }
     if (walk(w)) {
       if (!dry(tiles()[W.ty * 64 + W.tx])) { W.plen = 0; return; }   /* the player was quicker */
-      face_tile(w); W.wait = 40;
+      face_tile(w); W.wait = 16;
     }
     return;
   case T_REST:                                       /* done: by the house's door */
@@ -617,7 +647,7 @@ void wife_clean_point(uint8_t *ram, const HmRegs *regs)
 
 /* ── The offer ─────────────────────────────────────────────────────────── */
 bool wife_dialog_wanted(void) { bool b = W.want_dialog; W.want_dialog = false; return b; }
-void wife_dialog_open(void) { W.sel = 0; W.page = 0; }
+void wife_dialog_open(void) { W.sel = 0; W.page = 0; W.shown = 0; W.tick = 0; }
 
 static const int kDays[3] = { 1, 3, 7 };
 static int s_ox;                       /* where the 256 columns start (widescreen) */
@@ -666,16 +696,48 @@ static void game_box(int ox)
       ui_px(x0 + i, y0 + h - 1 - j, c); ui_px(x0 + w - 1 - i, y0 + h - 1 - j, c);
     }
 }
-static void box_line(int ox, int line, const char *t)
+/* the letters come one by one, as the game prints them (one each 4 frames,
+ * each frame while A is held, $84:CF38): `*left` is how many may still be
+ * drawn */
+static void box_text(int x, int y, const char *t, int *left)
 {
-  gamefont_text_box(ox + 16, 159 + 16 * line, t, BOX_WHITE, BOX_DARK);
+  char part[64];
+  size_t n = 0;
+  const char *p = t;
+  while (*p && *left > 0 && n < sizeof part - 4) {
+    const char *q = p;
+    ui_utf8_next(&q);
+    while (p < q) part[n++] = *p++;
+    (*left)--;
+  }
+  part[n] = 0;
+  gamefont_text_box(x, y, part, BOX_WHITE, BOX_DARK);
 }
+static void box_line(int ox, int line, const char *t, int *left) { box_text(ox + 16, 159 + 16 * line, t, left); }
+static const char *const kAnswer[3] = { "Leave the farm to me,", "darling! I'll do half the", "work every morning." };
+static const char *const kAsk[2] = { "Darling, may I help you", "on the farm?" };
 /* the choices, on the third line: a white arrow before the one chosen */
 static const char *const kOpts[4] = { "1 day", "3 days", "1 week", "No" };
 static int opt_x(int i) { static const int at[4] = { 1, 8, 16, 24 }; return 16 + 8 * at[i]; }
 
+static int letters(const char *s) { int n = 0; while (*s) { ui_utf8_next(&s); n++; } return n; }
+static int page_letters(void)
+{
+  int n = 0;
+  if (W.page == 1) for (int i = 0; i < 3; i++) n += letters(kAnswer[i]);
+  else {
+    for (int i = 0; i < 2; i++) n += letters(kAsk[i]);
+    for (int i = 0; i < 4; i++) n += letters(kOpts[i]);
+  }
+  return n;
+}
 bool wife_dialog_update(const UiInput *in)
 {
+  if (W.shown < page_letters()) {                    /* still printing */
+    bool quick = g_cfg.fast_text || (in->held & B_A) || (in->held & B_B);
+    if (quick || ++W.tick >= 4) { W.tick = 0; W.shown++; }
+    return false;
+  }
   if (W.page == 1) return in->accept || in->back || in->click || in->rclick;
   int n = 4;
   if (in->pressed & (B_UP | B_LEFT)) W.sel = (W.sel + n - 1) % n;
@@ -693,6 +755,7 @@ chosen:
   if (W.sel < 3) accept(kDays[W.sel]);
   else W.declined = true;                            /* "No": not again today */
   W.page = W.sel < 3 ? 1 : 2;
+  W.shown = 0; W.tick = 0;
   return W.page == 2;
 }
 void wife_dialog_draw(uint32_t *dst, int w)
@@ -701,17 +764,15 @@ void wife_dialog_draw(uint32_t *dst, int w)
   int ox = (w - 256) / 2;
   s_ox = ox;
   game_box(ox);
+  int left = W.shown;
   if (W.page == 1) {
-    box_line(ox, 0, "Leave the farm to me,");
-    box_line(ox, 1, "darling! I'll do half the");
-    box_line(ox, 2, "work every morning.");
+    for (int i = 0; i < 3; i++) box_line(ox, i, kAnswer[i], &left);
     return;
   }
-  box_line(ox, 0, "Darling, may I help you");
-  box_line(ox, 1, "on the farm?");
+  for (int i = 0; i < 2; i++) box_line(ox, i, kAsk[i], &left);
   for (int i = 0; i < 4; i++) {
-    gamefont_text_box(ox + opt_x(i), 191, kOpts[i], BOX_WHITE, BOX_DARK);
-    if (i == W.sel) {                                  /* the arrow */
+    box_text(ox + opt_x(i), 191, kOpts[i], &left);
+    if (i == W.sel && W.shown >= page_letters()) {     /* the arrow, once all is printed */
       int ax = ox + opt_x(i) - 7, ay = 191 + 6;
       for (int k = 0; k < 4; k++) ui_vline(ax + k, ay + k, 7 - 2 * k, BOX_WHITE);
     }

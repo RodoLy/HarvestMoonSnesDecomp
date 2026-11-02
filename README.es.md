@@ -230,8 +230,9 @@ tu ROM. La música sigue sonando.
   llena comederos del establo y del gallinero y riega las semillas y plantas
   sin regar,
   como máximo la mitad del trabajo, caminando por la granja con sus
-  propios sprites (si le hablas, dice sus frases de siempre); si no estás
-  en la granja, el trabajo igual se hace. A las 11:00 se va a sus
+  propios sprites (si le hablas, dice sus frases de siempre) y brincando
+  las cercas; si no estás en la granja, el trabajo igual se hace, al mismo
+  ritmo (en las casas el reloj se para, y ella también). A las 11:00 se va a sus
   quehaceres del mediodía, como en el juego (María, Nina y Ellen en la
   granja, Ann y Eve en la bodega). Algunos días se viste como cuando era
   soltera. Se guarda en tu diario.
