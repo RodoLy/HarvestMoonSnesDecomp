@@ -72,7 +72,7 @@ static uint16_t animal_number(uint8_t *ram, HmRegs *r, uint8_t base)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Event_UNKChickenRelated ($84:9857, JSR, RTS). A chicken's every frame
+ * Event_ChickenFrame ($84:9857, JSR, RTS). A chicken's every frame
  * (one command byte):
  *   - its record (GetChickenPointer) follows the slot's position;
  *   - being sold (slot +0E = $E0, chicken status bit $08, $7F1F5A bit 3):
@@ -184,7 +184,7 @@ static void sell(uint8_t *ram, HmRegs *r)
   slot_w8(ram, r, 0x01, lda8(r, slot8(ram, r, 0x01) & 0x57));
 }
 
-void hm_Event_UNKChickenRelated(uint8_t *ram, HmRegs *r)
+void hm_Event_ChickenFrame(uint8_t *ram, HmRegs *r)
 {
   uint16_t pc = hm_dp_r16(ram, r, 0xC9);
   r->c = pc == 0xFFFF;
@@ -214,7 +214,7 @@ void hm_Event_UNKChickenRelated(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Event_UNKDogRelated ($84:AF06, JSR, RTS). The dog's every frame (slot
+ * Event_DogFrame ($84:AF06, JSR, RTS). The dog's every frame (slot
  * $16, one command byte):
  *   - its position goes to $7F1F2C / $7F1F2E;
  *   - a hug: the player presses A next to it, free as for picking up a
@@ -386,7 +386,7 @@ static void dog_called(uint8_t *ram, HmRegs *r)
   slot_w8(ram, r, 0x0F, lda8(r, direction));
 }
 
-void hm_Event_UNKDogRelated(uint8_t *ram, HmRegs *r)
+void hm_Event_DogFrame(uint8_t *ram, HmRegs *r)
 {
   uint16_t pc = hm_dp_r16(ram, r, 0xC9);
   r->c = pc == 0xFFFF;
@@ -478,9 +478,9 @@ static void address_arg(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
 }
 
-/* Event_AudioRelated ($84:89BB): $0110 = the argument (a sound request).
+/* Event_SetWantedSong ($84:89BB): $0110 = the argument (a sound request).
  * Two bytes. */
-void hm_Event_AudioRelated(uint8_t *ram, HmRegs *r)
+void hm_Event_SetWantedSong(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   ram[0x00110] = arg8(ram, r);
@@ -514,8 +514,8 @@ void hm_Event_SetHour(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
 }
 
-/* Event_Empty ($84:8A58): nothing; one byte. */
-void hm_Event_Empty(uint8_t *ram, HmRegs *r) { advance(ram, r, 1); }
+/* Event_DoNothing ($84:8A58): nothing; one byte. */
+void hm_Event_DoNothing(uint8_t *ram, HmRegs *r) { advance(ram, r, 1); }
 
 /* Event_SetPlayerPosition ($84:8A65): X, Y words; also the transition's
  * destination ($017D / $017F). */
@@ -549,10 +549,10 @@ void hm_Event_SetPlayerDirection(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
 }
 
-/* Event_UNKChangesGameState ($84:8AE7) / Event_UNKChangesGameState2
+/* Event_DisablePlayerControl ($84:8AE7) / Event_EnablePlayerControl
  * ($84:8CFD): game state bit $4000 off / on; turning it off also clears
  * $08FD / $08FF. */
-void hm_Event_UNKChangesGameState(uint8_t *ram, HmRegs *r)
+void hm_Event_DisablePlayerControl(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->a = hm_dp_r16(ram, r, 0xD2) & 0xBFFF;
@@ -560,18 +560,18 @@ void hm_Event_UNKChangesGameState(uint8_t *ram, HmRegs *r)
   hm_wr16(ram, 0x008FD, 0);
   hm_wr16(ram, 0x008FF, 0);
 }
-void hm_Event_UNKChangesGameState2(uint8_t *ram, HmRegs *r)
+void hm_Event_EnablePlayerControl(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->a = hm_dp_r16(ram, r, 0xD2) | 0x4000;
   hm_dp_w16(ram, r, 0xD2, r->a);
 }
 
-/* Event_NewCCStructure ($84:8B08): start another slot (argument 1) on a
+/* Event_StartOtherSlot ($84:8B08): start another slot (argument 1) on a
  * script of the same bank (word argument 2, the bank taken from this
- * slot's +32): it is reset (ResetsCurrentCCStructureLong) and +3F = its
+ * slot's +32): it is reset (ResetCurrentEventSlotLong) and +3F = its
  * number; then $CC goes back to this slot. Four bytes. */
-void hm_Event_NewCCStructure(uint8_t *ram, HmRegs *r)
+void hm_Event_StartOtherSlot(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->a = hm_dp_r16(ram, r, 0xCC);
@@ -580,14 +580,14 @@ void hm_Event_NewCCStructure(uint8_t *ram, HmRegs *r)
   hm_push8(ram, r, lda8(r, slot8(ram, r, 0x32)));                  /* PHA */
   r->a = arg8_word(ram, r);
   hm_jsl(ram, r, 0x8B36, 0x84);
-  hm_SetCCPoiner(ram, r);
+  hm_SetEventSlotPointer(ram, r);
   hm_rtl(ram, r);
   slot_w8(ram, r, 0x32, lda8(r, hm_pull8(ram, r)));                /* PLA */
   hm_push8(ram, r, arg8(ram, r));
   advance(ram, r, 1);
   slot_w16(ram, r, 0x30, arg16(ram, r));
   hm_push8(ram, r, 0x8B); hm_push8(ram, r, 0x5F);                  /* JSR */
-  hm_ResetsCurrentCCStructureLong(ram, r);
+  hm_ResetCurrentEventSlotLong(ram, r);
   hm_pull8(ram, r); hm_pull8(ram, r);
   slot_w8(ram, r, 0x3F, lda8(r, hm_pull8(ram, r)));
   r->a = hm_dp_r16(ram, r, 0x72);
@@ -596,17 +596,17 @@ void hm_Event_NewCCStructure(uint8_t *ram, HmRegs *r)
   advance(ram, r, 2);
 }
 
-/* Event_UNKset7Aflag ($84:8BAC): $7F1F7A |= bit n. Event_UNKCompare-
+/* Event_SetSceneFlag ($84:8BAC): $7F1F7A |= bit n. Event_UNKCompare-
  * set7Aflag ($84:8BDC): waits until bit n of $7F1F7A is set (otherwise
  * $C9 steps back onto the command and +10 counts a frame). */
-void hm_Event_UNKset7Aflag(uint8_t *ram, HmRegs *r)
+void hm_Event_SetSceneFlag(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->a = flag_bit_arg(ram, r) | hm_rd16(ram, FLAGS_7A);
   hm_wr16(ram, FLAGS_7A, r->a);
   advance(ram, r, 1);
 }
-void hm_Event_UNKCompareset7Aflag(uint8_t *ram, HmRegs *r)
+void hm_Event_WaitForSceneFlag(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->a = flag_bit_arg(ram, r) & hm_rd16(ram, FLAGS_7A);
@@ -615,9 +615,9 @@ void hm_Event_UNKCompareset7Aflag(uint8_t *ram, HmRegs *r)
   count_frame(ram, r);
 }
 
-/* Event_UNKCCchanges2 ($84:8C22): the slot's +03, +04, the low byte of
+/* Event_MoveSlot ($84:8C22): the slot's +03, +04, the low byte of
  * +10, and +05 = +06 from four argument bytes; +01 |= $20. */
-void hm_Event_UNKCCchanges2(uint8_t *ram, HmRegs *r)
+void hm_Event_MoveSlot(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   slot_w8(ram, r, 0x03, arg8(ram, r));
@@ -633,32 +633,32 @@ void hm_Event_UNKCCchanges2(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
 }
 
-/* Event_UNKDisableCCstruct ($84:8CE2): the slot is no longer in use (and
+/* Event_FreeOwnSlot ($84:8CE2): the slot is no longer in use (and
  * $C9 does not move). */
-void hm_Event_UNKDisableCCstruct(uint8_t *ram, HmRegs *r)
+void hm_Event_FreeOwnSlot(uint8_t *ram, HmRegs *r)
 {
   slot_w8(ram, r, 0x00, lda8(r, 0));
   count_frame(ram, r);
 }
 
-/* Event_JumptoInstruction ($84:8D13): goto the word argument. */
-void hm_Event_JumptoInstruction(uint8_t *ram, HmRegs *r)
+/* Event_JumpToInstruction ($84:8D13): goto the word argument. */
+void hm_Event_JumpToInstruction(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   jump(ram, r);
 }
 
-/* Event_UNKSetsCC10 ($84:8D24): the slot's +10 = the word argument. */
-void hm_Event_UNKSetsCC10(uint8_t *ram, HmRegs *r)
+/* Event_WaitFrames ($84:8D24): the slot's +10 = the word argument. */
+void hm_Event_WaitFrames(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   slot_w16(ram, r, 0x10, arg16(ram, r));
   advance(ram, r, 2);
 }
 
-/* Event_JumpifFlagSet ($84:8D44): address (24-bit), bit number, target:
+/* Event_JumpIfFlagSet ($84:8D44): address (24-bit), bit number, target:
  * goto target if that bit of the word at the address is set. */
-void hm_Event_JumpifFlagSet(uint8_t *ram, HmRegs *r)
+void hm_Event_JumpIfFlagSet(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -669,9 +669,9 @@ void hm_Event_JumpifFlagSet(uint8_t *ram, HmRegs *r)
   else advance(ram, r, 2);
 }
 
-/* Event_JumpifEquals ($84:8DA5): address, value, target: goto target if
+/* Event_JumpIfEquals ($84:8DA5): address, value, target: goto target if
  * the byte at the address equals the value. */
-void hm_Event_JumpifEquals(uint8_t *ram, HmRegs *r)
+void hm_Event_JumpIfEquals(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -684,10 +684,10 @@ void hm_Event_JumpifEquals(uint8_t *ram, HmRegs *r)
   else advance(ram, r, 2);
 }
 
-/* Event_JumpifBetween ($84:8DFB): address, low, high, target: goto target
+/* Event_JumpIfBetween ($84:8DFB): address, low, high, target: goto target
  * if low <= byte <= high (the high bound + 1 is kept in 8 bits: $FF means
  * nothing is below it). */
-void hm_Event_JumpifBetween(uint8_t *ram, HmRegs *r)
+void hm_Event_JumpIfBetween(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -735,10 +735,10 @@ void hm_Event_JumpIfEqualsRNG(uint8_t *ram, HmRegs *r)
   }
 }
 
-/* Event_UNKSetAnimation ($84:8EC9): $0901 = the word argument (the
+/* Event_SetPlayerAnimation ($84:8EC9): $0901 = the word argument (the
  * player's animation), $090F = the byte argument * 64, game state bit
  * $2000. */
-void hm_Event_UNKSetAnimation(uint8_t *ram, HmRegs *r)
+void hm_Event_SetPlayerAnimation(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   hm_wr16(ram, 0x00901, arg16(ram, r));
@@ -771,9 +771,9 @@ static uint16_t value16(uint8_t *ram, HmRegs *r) { return hm_bus_rd16(ram, at72(
 
 /* ── Jumps on values ─────────────────────────────────────────────────── */
 
-/* Event_JumpifEqualsValue ($84:B666): address, word, target: goto target
+/* Event_JumpIfEqualsValue ($84:B666): address, word, target: goto target
  * if the word at the address equals it. */
-void hm_Event_JumpifEqualsValue(uint8_t *ram, HmRegs *r)
+void hm_Event_JumpIfEqualsValue(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -785,8 +785,8 @@ void hm_Event_JumpifEqualsValue(uint8_t *ram, HmRegs *r)
   else advance(ram, r, 2);
 }
 
-/* Event_JumpifEqualsValueLong ($84:B6BC): the same with a 24-bit value. */
-void hm_Event_JumpifEqualsValueLong(uint8_t *ram, HmRegs *r)
+/* Event_JumpIfEqualsValueLong ($84:B6BC): the same with a 24-bit value. */
+void hm_Event_JumpIfEqualsValueLong(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -805,9 +805,9 @@ void hm_Event_JumpifEqualsValueLong(uint8_t *ram, HmRegs *r)
   advance(ram, r, 2);
 }
 
-/* Event_JumpifBetweenValue ($84:B72D): address, low, high (words),
+/* Event_JumpIfBetweenValue ($84:B72D): address, low, high (words),
  * target: goto target if low <= word <= high (high + 1 in 16 bits). */
-void hm_Event_JumpifBetweenValue(uint8_t *ram, HmRegs *r)
+void hm_Event_JumpIfBetweenValue(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -826,7 +826,7 @@ void hm_Event_JumpifBetweenValue(uint8_t *ram, HmRegs *r)
   advance(ram, r, 2);
 }
 
-/* Event_JumpifBetweenValueLong ($84:B79A): the same with 24-bit values
+/* Event_JumpIfBetweenValueLong ($84:B79A): the same with 24-bit values
  * (each compare is CMP on the low word, then SBC on the high byte). */
 static bool at_least24(uint8_t *ram, HmRegs *r, unsigned bound)
 {
@@ -839,7 +839,7 @@ static bool at_least24(uint8_t *ram, HmRegs *r, unsigned bound)
   r->a = (uint16_t)((r->a & 0xFF00) | (uint8_t)(high - *hm_dp(ram, r, bound + 2) - borrow));
   return r->c;
 }
-void hm_Event_JumpifBetweenValueLong(uint8_t *ram, HmRegs *r)
+void hm_Event_JumpIfBetweenValueLong(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -862,9 +862,9 @@ void hm_Event_JumpifBetweenValueLong(uint8_t *ram, HmRegs *r)
   advance(ram, r, 2);
 }
 
-/* Event_UNKJumpif018F ($84:919D): value, target: goto target if $018F
+/* Event_JumpIfAnswer ($84:919D): value, target: goto target if $018F
  * equals the value. */
-void hm_Event_UNKJumpif018F(uint8_t *ram, HmRegs *r)
+void hm_Event_JumpIfAnswer(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   *hm_dp(ram, r, 0x92) = arg8(ram, r);
@@ -901,8 +901,8 @@ void hm_Event_StoreValue(uint8_t *ram, HmRegs *r)
   advance(ram, r, 2);
 }
 
-/* Event_SetValueSort ($84:B84C): address, byte: store it. */
-void hm_Event_SetValueSort(uint8_t *ram, HmRegs *r)
+/* Event_SetValueByte ($84:B84C): address, byte: store it. */
+void hm_Event_SetValueByte(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -923,9 +923,9 @@ void hm_Event_SetValueLong(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
 }
 
-/* Event_UNKTextrelated ($84:91D2; not about text): address, signed byte:
+/* Event_AddToByteClamped ($84:91D2; not about text): address, signed byte:
  * add it to the byte at the address, kept in 0..255. */
-void hm_Event_UNKTextrelated(uint8_t *ram, HmRegs *r)
+void hm_Event_AddToByteClamped(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -946,9 +946,9 @@ void hm_Event_UNKTextrelated(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, at72(ram, r, 0), (uint8_t)r->a);
 }
 
-/* Event_UNKCCchanges14 ($84:B5A9): address, signed word: add it to the
+/* Event_AddToWordMax999 ($84:B5A9): address, signed word: add it to the
  * word at the address, kept in 0..999. */
-void hm_Event_UNKCCchanges14(uint8_t *ram, HmRegs *r)
+void hm_Event_AddToWordMax999(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -991,8 +991,8 @@ void hm_Event_ChangeMoney(uint8_t *ram, HmRegs *r)
 
 /* ── The slot ────────────────────────────────────────────────────────── */
 
-/* Event_UNKCCchanges4 ($84:8F9B): +16 = word, +14 = byte * 64, +01 |= 4. */
-void hm_Event_UNKCCchanges4(uint8_t *ram, HmRegs *r)
+/* Event_SetSlotSprite ($84:8F9B): +16 = word, +14 = byte * 64, +01 |= 4. */
+void hm_Event_SetSlotSprite(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   slot_w16(ram, r, 0x16, arg16(ram, r));
@@ -1020,9 +1020,9 @@ static void start_walk(uint8_t *ram, HmRegs *r, uint8_t flags)
   r->a = slot16(ram, r, 0x1C); slot_w16(ram, r, 0x20, r->a);
 }
 
-/* Event_UNKCCchanges6 ($84:923F): +09, +0A, +0B (= +05 = +06), then a
+/* Event_WanderInArea ($84:923F): +09, +0A, +0B (= +05 = +06), then a
  * walk with flags $28. */
-void hm_Event_UNKCCchanges6(uint8_t *ram, HmRegs *r)
+void hm_Event_WanderInArea(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   slot_w8(ram, r, 0x09, arg8(ram, r));
@@ -1035,9 +1035,9 @@ void hm_Event_UNKCCchanges6(uint8_t *ram, HmRegs *r)
   start_walk(ram, r, 0x28);
 }
 
-/* Event_UNKCCchanges10 ($84:9777): +0B (= +05 = +06), then a walk with
+/* Event_WanderFreely ($84:9777): +0B (= +05 = +06), then a walk with
  * flags $A8. */
-void hm_Event_UNKCCchanges10(uint8_t *ram, HmRegs *r)
+void hm_Event_WanderFreely(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   uint8_t v = arg8(ram, r);
@@ -1046,8 +1046,8 @@ void hm_Event_UNKCCchanges10(uint8_t *ram, HmRegs *r)
   start_walk(ram, r, 0xA8);
 }
 
-/* Event_UNKCCchanges16 ($84:BA51): +00 |= 2. */
-void hm_Event_UNKCCchanges16(uint8_t *ram, HmRegs *r)
+/* Event_MakeSlotPassable ($84:BA51): +00 |= 2. */
+void hm_Event_MakeSlotPassable(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   slot_w8(ram, r, 0x00, lda8(r, slot8(ram, r, 0x00) | 0x02));
@@ -1055,7 +1055,7 @@ void hm_Event_UNKCCchanges16(uint8_t *ram, HmRegs *r)
 
 /* ── Waiting for the player ──────────────────────────────────────────── */
 
-/* Event_UNKCCchanges12 ($84:B389) / 13 ($84:B427): a wait. The first
+/* Event_WalkPlayer ($84:B389) / 13 ($84:B427): a wait. The first
  * frame: $08FD |= the allowed input (table $84:B4D2: entry n; 13 also
  * adds entry 4, $8000), $08FF = frames, game state bit $1000, and the
  * script stays on the command. Then each frame $08FF counts down; at 0
@@ -1101,11 +1101,11 @@ static void wait_frames(uint8_t *ram, HmRegs *r, bool also_entry_4)
   r->a = hm_dp_r16(ram, r, 0xD2) | 0x1000;
   hm_dp_w16(ram, r, 0xD2, r->a);
 }
-void hm_Event_UNKCCchanges12(uint8_t *ram, HmRegs *r) { wait_frames(ram, r, false); }
-void hm_Event_UNKCCchanges13(uint8_t *ram, HmRegs *r) { wait_frames(ram, r, true); }
+void hm_Event_WalkPlayer(uint8_t *ram, HmRegs *r) { wait_frames(ram, r, false); }
+void hm_Event_RunPlayer(uint8_t *ram, HmRegs *r) { wait_frames(ram, r, true); }
 
-/* Event_UNK2 ($84:B365): wait until $7F1F5A bit $8000. */
-void hm_Event_UNK2(uint8_t *ram, HmRegs *r)
+/* Event_WaitUntilSkippable ($84:B365): wait until $7F1F5A bit $8000. */
+void hm_Event_WaitUntilSkippable(uint8_t *ram, HmRegs *r)
 {
   if ((r->a = hm_rd16(ram, FLAGS_5A) & 0x8000)) advance(ram, r, 1);
   else count_frame(ram, r);
@@ -1175,10 +1175,10 @@ static const Test FREE_SHORT[] = {
   { T_SLOT_0C, 0 }, { T_BUSY, 0 }, { T_STATE, 0x0004 }, { T_FLAGS_60, 0 }, { T_JOY_A, 0 },
   { T_ITEM, 0 } };
 
-/* Event_UNKPickupMole ($84:A94C): the mole after the hoe finds it. Picked
+/* Event_PickUpMole ($84:A94C): the mole after the hoe finds it. Picked
  * up: item $29. Otherwise every $B4 frames (3 seconds, $093A), half the
  * time ($DE bit 7) it starts script $81 on slot $11. */
-void hm_Event_UNKPickupMole(uint8_t *ram, HmRegs *r)
+void hm_Event_PickUpMole(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   if (free_hands(ram, r, FREE_LONG, 8)) { carry(ram, r, 0x29, true); return; }
@@ -1198,17 +1198,17 @@ void hm_Event_UNKPickupMole(uint8_t *ram, HmRegs *r)
   count_frame(ram, r);
 }
 
-/* Event_UNKFishing ($84:AA5D): picked up: item $07 (a fish). */
-void hm_Event_UNKFishing(uint8_t *ram, HmRegs *r)
+/* Event_PickUpFish ($84:AA5D): picked up: item $07 (a fish). */
+void hm_Event_PickUpFish(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   if (free_hands(ram, r, FREE_SHORT, 6)) { carry(ram, r, 0x07, true); return; }
   count_frame(ram, r);
 }
 
-/* Event_UNK3 ($84:B93C): picked up: item $08 (the slot is not
+/* Event_PickUpPowerBerry ($84:B93C): picked up: item $08 (the slot is not
  * remembered in $0920). */
-void hm_Event_UNK3(uint8_t *ram, HmRegs *r)
+void hm_Event_PickUpPowerBerry(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   if (free_hands(ram, r, FREE_LONG, 8)) { carry(ram, r, 0x08, false); return; }
@@ -1217,10 +1217,10 @@ void hm_Event_UNK3(uint8_t *ram, HmRegs *r)
 
 /* ── The player, places, flags ───────────────────────────────────────── */
 
-/* Event_SetItemonHand ($84:B556): the player carries the item (action 4).
- * Event_ChangeItemonHand ($84:B4DC): the item, and game state bit 2.
+/* Event_SetItemOnHand ($84:B556): the player carries the item (action 4).
+ * Event_ChangeItemOnHand ($84:B4DC): the item, and game state bit 2.
  * Event_DropItemAnimation ($84:B57B): action 5 (put it down). */
-void hm_Event_SetItemonHand(uint8_t *ram, HmRegs *r)
+void hm_Event_SetItemOnHand(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   ram[HM_ITEM_HELD] = arg8(ram, r);
@@ -1228,7 +1228,7 @@ void hm_Event_SetItemonHand(uint8_t *ram, HmRegs *r)
   r->a = 4;
   hm_dp_w16(ram, r, HM_PLAYER_ACTION, 4);
 }
-void hm_Event_ChangeItemonHand(uint8_t *ram, HmRegs *r)
+void hm_Event_ChangeItemOnHand(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   ram[HM_ITEM_HELD] = arg8(ram, r);
@@ -1243,10 +1243,10 @@ void hm_Event_DropItemAnimation(uint8_t *ram, HmRegs *r)
   hm_dp_w16(ram, r, HM_PLAYER_ACTION, 5);
 }
 
-/* Event_TransitiontoX ($84:B52D): go to map n ($098B; $0196 bit $4000
- * starts the transition). Event_TransitiontoHouse ($84:B503): go home
+/* Event_TransitionToMap ($84:B52D): go to map n ($098B; $0196 bit $4000
+ * starts the transition). Event_TransitionToHouse ($84:B503): go home
  * (map $15) and $7F1F60 bit $20. */
-void hm_Event_TransitiontoX(uint8_t *ram, HmRegs *r)
+void hm_Event_TransitionToMap(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   ram[0x0098B] = arg8(ram, r);
@@ -1254,7 +1254,7 @@ void hm_Event_TransitiontoX(uint8_t *ram, HmRegs *r)
   r->a = hm_rd16(ram, 0x00196) | 0x4000;
   hm_wr16(ram, 0x00196, r->a);
 }
-void hm_Event_TransitiontoHouse(uint8_t *ram, HmRegs *r)
+void hm_Event_TransitionToHouse(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   ram[0x0098B] = lda8(r, 0x15);
@@ -1277,28 +1277,28 @@ void hm_Event_MapScrolling(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
 }
 
-/* flags of $7F1F5C / $7F1F60: Event_UNKSet5C ($84:B58F) / Event_UNKReset5C
- * ($84:BB31) bit 3 of $7F1F5C; Event_UNKSet60 ($84:BB4B) bit 15 of
+/* flags of $7F1F5C / $7F1F60: Event_IgnoreTileProperties ($84:B58F) / Event_UseTileProperties
+ * ($84:BB31) bit 3 of $7F1F5C; Event_DisableTools ($84:BB4B) bit 15 of
  * $7F1F60. */
-void hm_Event_UNKSet5C(uint8_t *ram, HmRegs *r)
+void hm_Event_IgnoreTileProperties(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->a = hm_rd16(ram, FLAGS_5C) | 0x0008; hm_wr16(ram, FLAGS_5C, r->a);
 }
-void hm_Event_UNKReset5C(uint8_t *ram, HmRegs *r)
+void hm_Event_UseTileProperties(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->a = hm_rd16(ram, FLAGS_5C) & 0xFFF7; hm_wr16(ram, FLAGS_5C, r->a);
 }
-void hm_Event_UNKSet60(uint8_t *ram, HmRegs *r)
+void hm_Event_DisableTools(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->a = hm_rd16(ram, FLAGS_60_) | 0x8000; hm_wr16(ram, FLAGS_60_, r->a);
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
- * Event_UNKCowRelated ($84:9AD4, JSR, RTS). A cow's every frame (one
- * command byte). The cow's record is [$72] (GetsCowPointer, 16 bytes):
+ * Event_CowFrame ($84:9AD4, JSR, RTS). A cow's every frame (one
+ * command byte). The cow's record is [$72] (GetCowPointer, 16 bytes):
  *   +00 status: $02 calf, $04 young, $08 adult, $10 runs away from the
  *       player, $20 sick, $40 pregnant / in labour
  *   +01 today's flags: $01 brushed, $02 milked, $04 talked to, $08 moving,
@@ -1568,12 +1568,12 @@ static void face_player(uint8_t *ram, HmRegs *r)
   slot_w8(ram, r, 0x0F, lda8(r, direction));
 }
 
-void hm_Event_UNKCowRelated(uint8_t *ram, HmRegs *r)
+void hm_Event_CowFrame(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   animal_number(ram, r, 0x18);
   hm_jsl(ram, r, 0x9AF5, 0x83);
-  hm_GetsCowPointer(ram, r);
+  hm_GetCowPointer(ram, r);
   hm_rtl(ram, r);
   rec_w16(ram, r, 0x08, slot16(ram, r, 0x1A));       /* the record follows the slot */
   rec_w16(ram, r, 0x0A, slot16(ram, r, 0x1C));
@@ -1630,7 +1630,7 @@ void hm_Event_UNKCowRelated(uint8_t *ram, HmRegs *r)
 
 /* ═════════════════════════════════════════════════════════════════════════
  * Commands 50-59 ($84:BBDA-$84:C013). HM-Decomp labels only the first
- * (Event_UNKChickenRelated2); the others are named by their number here.
+ * (Event_PutDownCarried); the others are named by their number here.
  * ═════════════════════════════════════════════════════════════════════════ */
 #define CHICKEN_PLACES  0x83CA10   /* 4 bytes per chicken: x, y in the coop */
 #define FLAG_BITS_84    0x84C014   /* DATA16_84C014: dw 1 << n */
@@ -1702,10 +1702,10 @@ static bool dog_home(uint8_t *ram, HmRegs *r)
   return true;
 }
 
-/* Command 50, Event_UNKChickenRelated2 ($84:BBDA): put down what is carried
+/* Command 50, Event_PutDownCarried ($84:BBDA): put down what is carried
  * when an event starts: a chicken goes back to the coop, any other item
  * disappears, the dog goes back to the farm; the player stands. */
-void hm_Event_UNKChickenRelated2(uint8_t *ram, HmRegs *r)
+void hm_Event_PutDownCarried(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   uint8_t item = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF)));
@@ -1721,7 +1721,7 @@ void hm_Event_UNKChickenRelated2(uint8_t *ram, HmRegs *r)
 }
 /* Command 51 ($84:BC9C): the same without the animation, and only item
  * $29 disappears (other items stay in the hands). */
-void hm_Event_Cmd51(uint8_t *ram, HmRegs *r)
+void hm_Event_Cmd51_PutDownCarriedQuietly(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   uint8_t item = lda8(r, hm_bus_rd8(ram, dbw(r, HM_ITEM_HELD & 0xFFFF)));
@@ -1736,7 +1736,7 @@ void hm_Event_Cmd51(uint8_t *ram, HmRegs *r)
   dog_home(ram, r);
 }
 /* Commands 52 / 53 ($84:BD44 / $84:BE0D): if the player pressed A on this
- * object (CBBBB set its +$0C) with free hands and not busy, the object
+ * object (CollideEventObjects set its +$0C) with free hands and not busy, the object
  * goes away (+0 = 0, +1 bit 6) and $7F1F60 bit 1 (53: bit 2) is set.
  * Either way the slot's frame count +$10 goes up. */
 static void pressed_on(uint8_t *ram, HmRegs *r, uint16_t flag)
@@ -1765,12 +1765,12 @@ static void pressed_on(uint8_t *ram, HmRegs *r, uint16_t flag)
   r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F60) | flag);
   hm_bus_wr16(ram, 0x7F1F60, r->a);
 }
-void hm_Event_Cmd52(uint8_t *ram, HmRegs *r) { pressed_on(ram, r, 0x0002); }
-void hm_Event_Cmd53(uint8_t *ram, HmRegs *r) { pressed_on(ram, r, 0x0004); }
+void hm_Event_Cmd52_PickUpChild1(uint8_t *ram, HmRegs *r) { pressed_on(ram, r, 0x0002); }
+void hm_Event_Cmd53_PickUpChild2(uint8_t *ram, HmRegs *r) { pressed_on(ram, r, 0x0004); }
 
 /* Command 54 ($84:BED6): <text word> <lines byte>: a text box that closes
  * by itself (input mode 6, TextBoxAutoClose: after 120 frames). */
-void hm_Event_Cmd54(uint8_t *ram, HmRegs *r)
+void hm_Event_Cmd54_AutoCloseTextBox(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->x = arg16(ram, r);
@@ -1788,7 +1788,7 @@ void hm_Event_Cmd54(uint8_t *ram, HmRegs *r)
 }
 /* Command 55 ($84:BF20): <address 24> <bit byte> <target word>: if that bit
  * of the word at the address is clear, jump to the target; else go on. */
-void hm_Event_Cmd55(uint8_t *ram, HmRegs *r)
+void hm_Event_Cmd55_JumpIfBitClear(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   address_arg(ram, r);
@@ -1803,7 +1803,7 @@ void hm_Event_Cmd55(uint8_t *ram, HmRegs *r)
   advance(ram, r, 2);
 }
 /* Command 56 ($84:BF81): use the tool in hand, if any. */
-void hm_Event_Cmd56(uint8_t *ram, HmRegs *r)
+void hm_Event_Cmd56_UseToolInHand(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   if (!lda8(r, hm_bus_rd8(ram, dbw(r, HM_TOOL & 0xFFFF)))) return;
@@ -1814,7 +1814,7 @@ void hm_Event_Cmd56(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
 }
 /* Command 57 ($84:BFA0): <byte>: change the stamina by it (ChangeStamina). */
-void hm_Event_Cmd57(uint8_t *ram, HmRegs *r)
+void hm_Event_Cmd57_ChangeStamina(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->n = arg8(ram, r) >> 7;                                /* ChangeStamina reads N */
@@ -1824,8 +1824,8 @@ void hm_Event_Cmd57(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
 }
 /* Command 58 ($84:BFBF): <tile byte> <x word> <y word>: set that tile type
- * on the farm (EditTileonMapandsets0181). */
-void hm_Event_Cmd58(uint8_t *ram, HmRegs *r)
+ * on the farm (EditFarmTile). */
+void hm_Event_Cmd58_SetFarmTile(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   hm_push8(ram, r, arg8(ram, r));
@@ -1838,11 +1838,11 @@ void hm_Event_Cmd58(uint8_t *ram, HmRegs *r)
   r->x = pull16b(ram, r);
   lda8(r, hm_pull8(ram, r));
   hm_jsl(ram, r, 0xBFFE, 0x82);
-  hm_EditTileonMapandsets0181(ram, r);
+  hm_EditFarmTile(ram, r);
   hm_rtl(ram, r);
 }
 /* Command 59 ($84:C000): the player's action $1C. */
-void hm_Event_Cmd59(uint8_t *ram, HmRegs *r)
+void hm_Event_Cmd59_SwapTools(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->a = 0x001C;
@@ -1850,7 +1850,7 @@ void hm_Event_Cmd59(uint8_t *ram, HmRegs *r)
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
- * Event_UNKPlayerPos ($84:AB27, command 37), every frame, for an object of
+ * Event_HorseFrame ($84:AB27, command 37), every frame, for an object of
  * group $17 that the player can carry (probably the child: putting it down
  * starts script $17/$14). $7F1F5C holds its requests: bit 4 "the player
  * touches it", 6 face the way of +2, 10 walk towards the player, 11 / 5
@@ -1928,7 +1928,7 @@ static void towards_player(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t re
   slot_w8(ram, r, 0x0F, dir);
 }
 
-void hm_Event_UNKPlayerPos(uint8_t *ram, HmRegs *r)
+void hm_Event_HorseFrame(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   request(ram, r, 0xFFEF, 0);                              /* not touched (yet) */
@@ -1988,7 +1988,7 @@ void hm_Event_UNKPlayerPos(uint8_t *ram, HmRegs *r)
       hm_dp_w16(ram, r, 0xE7, 0);
       r->a = hm_bus_rd16(ram, dbw(r, 0x0913));
       hm_jsl(ram, r, 0xAC84, 0x83);
-      hm_CEEEE(ram, r);
+      hm_CollideMap(ram, r);
       hm_rtl(ram, r);
       ok = r->a == 0;
       for (unsigned at = 0xE9; ok && at <= 0xEB; at += 2) {
@@ -2002,7 +2002,7 @@ void hm_Event_UNKPlayerPos(uint8_t *ram, HmRegs *r)
       hm_dp_w16(ram, r, 0xE3, r->a = 0x0020);
       r->a = hm_bus_rd16(ram, dbw(r, 0x0913));
       hm_jsl(ram, r, 0xACB5, 0x83);
-      hm_CBBBB(ram, r);
+      hm_CollideEventObjects(ram, r);
       hm_rtl(ram, r);
       r->c = 1;                                            /* CMP #0 */
       ok = r->a == 0;
@@ -2069,9 +2069,9 @@ void hm_Event_ResetFlag(uint8_t *ram, HmRegs *r)
   advance(ram, r, 1);
 }
 
-/* Event_EditTileonMap ($84:BA10, command 75): <tile> <x word> <y word>:
+/* Event_EditTileOnMap ($84:BA10, command 75): <tile> <x word> <y word>:
  * set that tile type on the current map (command 58 does it on the farm). */
-void hm_Event_EditTileonMap(uint8_t *ram, HmRegs *r)
+void hm_Event_EditTileOnMap(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   hm_push8(ram, r, arg8(ram, r));
@@ -2084,7 +2084,7 @@ void hm_Event_EditTileonMap(uint8_t *ram, HmRegs *r)
   r->x = pull16b(ram, r);
   lda8(r, hm_pull8(ram, r));
   hm_jsl(ram, r, 0xBA4F, 0x82);
-  hm_EditTileonMap(ram, r);
+  hm_EditTileOnMap(ram, r);
   hm_rtl(ram, r);
 }
 
@@ -2108,7 +2108,7 @@ static void start_text(uint8_t *ram, HmRegs *r, uint16_t ret)
 void hm_Event_StartTextBox(uint8_t *ram, HmRegs *r)     { start_text(ram, r, 0x901B); }
 void hm_Event_StartTextBoxCopy(uint8_t *ram, HmRegs *r) { start_text(ram, r, 0x9060); }
 
-/* Event_UNKTools ($84:BB65, not in the command table: nothing runs it):
+/* Event_ReturnToolsToShed ($84:BB65, not in the command table: nothing runs it):
  * put the tool in hand and the one in the backpack back in the shed (its
  * bit in $7F1F00 + byte +6 of the item's entry). */
 static void to_shed(uint8_t *ram, HmRegs *r, uint16_t at)
@@ -2132,7 +2132,7 @@ static void to_shed(uint8_t *ram, HmRegs *r, uint16_t at)
   hm_bus_wr8(ram, SHED_ITEMS + r->x, v);
   hm_bus_wr8(ram, dbw(r, at), 0);
 }
-void hm_Event_UNKTools(uint8_t *ram, HmRegs *r)
+void hm_Event_ReturnToolsToShed(uint8_t *ram, HmRegs *r)
 {
   to_shed(ram, r, 0x0921);
   to_shed(ram, r, 0x0923);
@@ -2140,14 +2140,14 @@ void hm_Event_UNKTools(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Destroying objects from a script.
- * Event_UNK1 ($84:B34B): the slot's own game object (+12).
- * Event_UNKCCchanges7 ($84:9375): <slot>: frees that slot and destroys
+ * Event_DestroyOwnObject ($84:B34B): the slot's own game object (+12).
+ * Event_FreeOtherSlot ($84:9375): <slot>: frees that slot and destroys
  * its object, then goes back to its own slot ($72-$74 keep it meanwhile).
- * Event_UNKCCchanges11 ($84:9810): <word>: +33 = the word, then the
+ * Event_SetStandingAnimation ($84:9810): <word>: +33 = the word, then the
  * animation from the table at $B3:<word> (SetSlotAnimation), and +01 bit 2.
  * (JSR, RTS each, like every command.)
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_Event_UNK1(uint8_t *ram, HmRegs *r)
+void hm_Event_DestroyOwnObject(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->y = 0x12;
@@ -2158,14 +2158,14 @@ void hm_Event_UNK1(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
 }
 
-void hm_Event_UNKCCchanges7(uint8_t *ram, HmRegs *r)
+void hm_Event_FreeOtherSlot(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   hm_dp_w16(ram, r, 0x72, hm_dp_r16(ram, r, 0xCC));      /* keep our slot */
   *hm_dp(ram, r, 0x74) = *hm_dp(ram, r, 0xCE);
   arg8_word(ram, r);                                       /* the other slot */
   hm_jsl(ram, r, 0x9397, 0x84);
-  hm_SetCCPoiner(ram, r);
+  hm_SetEventSlotPointer(ram, r);
   hm_rtl(ram, r);
   advance(ram, r, 1);
   r->y = 0;
@@ -2183,7 +2183,7 @@ void hm_Event_UNKCCchanges7(uint8_t *ram, HmRegs *r)
   *hm_dp(ram, r, 0xCE) = (uint8_t)r->a;
 }
 
-void hm_Event_UNKCCchanges11(uint8_t *ram, HmRegs *r)
+void hm_Event_SetStandingAnimation(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   uint16_t word = arg16(ram, r);
@@ -2205,7 +2205,7 @@ void hm_Event_UNKCCchanges11(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Choosing a slot's animation.
- * Event_UNKCCchanges8 ($84:957D): <table word> <entry>; Event_UNKCCchanges15
+ * Event_SetSlotAnimation ($84:957D): <table word> <entry>; Event_SetSlotAnimationPlayerDir
  * ($84:B8D9): <table word>, the entry being the player's direction ($DA).
  * Both: +33 = the table ($B3:<word>), +02 = the entry, +01 bits 0-1 set,
  * the animation read (SetSlotAnimation), and the slot's frame counter +10 one up.
@@ -2232,7 +2232,7 @@ static void set_animation(uint8_t *ram, HmRegs *r, uint16_t ret)
   hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x10), r->a);
 }
 
-void hm_Event_UNKCCchanges8(uint8_t *ram, HmRegs *r)
+void hm_Event_SetSlotAnimation(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->y = 0x33;
@@ -2245,7 +2245,7 @@ void hm_Event_UNKCCchanges8(uint8_t *ram, HmRegs *r)
   set_animation(ram, r, 0x95D9);
 }
 
-void hm_Event_UNKCCchanges15(uint8_t *ram, HmRegs *r)
+void hm_Event_SetSlotAnimationPlayerDir(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->y = 0x33;
@@ -2257,9 +2257,9 @@ void hm_Event_UNKCCchanges15(uint8_t *ram, HmRegs *r)
   set_animation(ram, r, 0xB92D);
 }
 
-/* Event_UNKCCchanges3 ($84:8F0A): <x word> <y word> <table word> <entry>:
+/* Event_PlaceSlot ($84:8F0A): <x word> <y word> <table word> <entry>:
  * puts the slot at (x, y) (+1A / +1C) with that animation (as command 8). */
-void hm_Event_UNKCCchanges3(uint8_t *ram, HmRegs *r)
+void hm_Event_PlaceSlot(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t at[3] = { 0x1A, 0x1C, 0x33 };
   for (int i = 0; i < 3; i++) {
@@ -2306,13 +2306,13 @@ static void turn_to_player(uint8_t *ram, HmRegs *r, uint16_t ret)
   hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x01), flags);
 }
 
-/* Event_UNKCCchanges17 ($84:BA72): <address>: if the player talked to the
+/* Event_FacePlayerIfSpokenTo ($84:BA72): <address>: if the player talked to the
  * slot (+0C, see PressAOnTile), is not in action $0A and $7F1F5E bit 6 is set,
  * the slot turns to face the player (+02 = the player's direction with bit 0
  * flipped: the opposite one), stops (+03 / +04 / +0C = 0, +08 = +07), gets
  * +01 bits 2 and 4, a frame (+10 one up), and the script jumps to the
  * address. Otherwise the address is skipped. */
-void hm_Event_UNKCCchanges17(uint8_t *ram, HmRegs *r)
+void hm_Event_FacePlayerIfSpokenTo(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   r->y = 0x0C;
@@ -2338,9 +2338,9 @@ void hm_Event_UNKCCchanges17(uint8_t *ram, HmRegs *r)
   hm_bus_wr16(ram, hm_dp_long(ram, r, 0xCC, 0x10), r->a);
 }
 
-/* Event_AudioRelated2 ($84:8CA8): <byte, unused>: the music changes to the
+/* Event_ChangeToWantedSong ($84:8CA8): <byte, unused>: the music changes to the
  * one asked for in $0110, if it is not the one playing (FadeOutSongSlowly). */
-void hm_Event_AudioRelated2(uint8_t *ram, HmRegs *r)
+void hm_Event_ChangeToWantedSong(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 2);
   hm_jsl(ram, r, 0x8CB7, 0x83);
@@ -2348,9 +2348,9 @@ void hm_Event_AudioRelated2(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
 }
 
-/* Event_UNKCFD1 ($84:9553): <word>: starts the map animation of that
+/* Event_StartMapAnimation ($84:9553): <word>: starts the map animation of that
  * number (StartMapAnimation), one frame. */
-void hm_Event_UNKCFD1(uint8_t *ram, HmRegs *r)
+void hm_Event_StartMapAnimation(uint8_t *ram, HmRegs *r)
 {
   advance(ram, r, 1);
   arg16(ram, r);
@@ -2361,8 +2361,8 @@ void hm_Event_UNKCFD1(uint8_t *ram, HmRegs *r)
   count_frame(ram, r);
 }
 
-/* Event_UNKCCchanges5 ($84:9079, commands $1E and $1F) and
- * Event_UNKCCchanges9 ($84:9633, command $2D): talking to someone. If the
+/* Event_TalkIfSpokenTo ($84:9079, commands $1E and $1F) and
+ * Event_TalkOrTakeShownItem ($84:9633, command $2D): talking to someone. If the
  * player talked to the slot (+0C), is not using or showing a tool nor
  * whistling (actions $0A, $0C, $0D, $1B), carries nothing ($D2 bit 2),
  * $7F1F60 bits 1-2 are clear and A was just pressed: the slot faces the
@@ -2418,14 +2418,14 @@ static void talk_to_slot(uint8_t *ram, HmRegs *r, unsigned addresses, uint16_t r
   hm_dp_w16(ram, r, 0xD4, 0);
   count_frame(ram, r);
 }
-void hm_Event_UNKCCchanges5(uint8_t *ram, HmRegs *r) { talk_to_slot(ram, r, 1, 0x9145); }
-void hm_Event_UNKCCchanges9(uint8_t *ram, HmRegs *r) { talk_to_slot(ram, r, 2, 0x971F); }
+void hm_Event_TalkIfSpokenTo(uint8_t *ram, HmRegs *r) { talk_to_slot(ram, r, 1, 0x9145); }
+void hm_Event_TalkOrTakeShownItem(uint8_t *ram, HmRegs *r) { talk_to_slot(ram, r, 2, 0x971F); }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Event_ScreenFadein ($84:8B83) and Event_ScreenFadeout ($84:8CB9) (JSR,
+ * Event_ScreenFadeIn ($84:8B83) and Event_ScreenFadeOut ($84:8CB9) (JSR,
  * RTS): skip the command's 2 bytes and fade the screen in (from 3 to 15)
- * or out (from 15 to 0), 3 frames a level (ScreenFadein / ScreenFadeout).
- * The fades save the flags (PHP in SetsBrightness and WaitForNMI), so
+ * or out (from 15 to 0), 3 frames a level (ScreenFadeIn / ScreenFadeOut).
+ * The fades save the flags (PHP in SetBrightness and WaitForNMI), so
  * they are followed: 8-bit A, 16-bit indexes, N clear, Z from the last
  * load (the target: set only for the fade-out's 0), V and C of the second
  * ADC, D and I of the entry.
@@ -2449,11 +2449,11 @@ static void event_fade(uint8_t *ram, HmRegs *r, uint8_t from, uint8_t to, uint16
   hm_rtl(ram, r);
   r->p = entry;
 }
-void hm_Event_ScreenFadein(uint8_t *ram, HmRegs *r) { event_fade(ram, r, 0x03, 0x0F, 0x8BAA, hm_ScreenFadein); }
-void hm_Event_ScreenFadeout(uint8_t *ram, HmRegs *r) { event_fade(ram, r, 0x0F, 0x00, 0x8CE0, hm_ScreenFadeout); }
+void hm_Event_ScreenFadeIn(uint8_t *ram, HmRegs *r) { event_fade(ram, r, 0x03, 0x0F, 0x8BAA, hm_ScreenFadeIn); }
+void hm_Event_ScreenFadeOut(uint8_t *ram, HmRegs *r) { event_fade(ram, r, 0x0F, 0x00, 0x8CE0, hm_ScreenFadeOut); }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Event_AudioRelated3 ($84:95E8, JSR, RTS; HM-Decomp's comment gives bank
+ * Event_PlayEffectAndWait ($84:95E8, JSR, RTS; HM-Decomp's comment gives bank
  * $80): command [effect] [bank, word] [frames, word]: plays the sound
  * effect and waits the frames (PlayEffectWithSongInstrument), then reloads the noises of
  * the item in hand ($0119 = 0 forgets the last one, ToolUsedSound2).
@@ -2461,7 +2461,7 @@ void hm_Event_ScreenFadeout(uint8_t *ram, HmRegs *r) { event_fade(ram, r, 0x0F, 
  * Leftovers: A = $C9 (past the command), C from that ADC, X and Y from
  * ToolUsedSound2 / PlayEffectWithSongInstrument.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_Event_AudioRelated3(uint8_t *ram, HmRegs *r)
+void hm_Event_PlayEffectAndWait(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
   advance(ram, r, 1);

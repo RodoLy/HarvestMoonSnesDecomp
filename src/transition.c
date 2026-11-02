@@ -61,8 +61,8 @@ static void state_off(uint8_t *ram, HmRegs *r, uint16_t bits)  /* LDA #b; EOR #$
  *    (StartColourAnimation, $80:B9D7-$80:B9E2); snow (bit 2) before 17:00:
  *    picture $58; bit 3: picture $59 and its cycles ($80:B9EA-$80:B9F5).
  *  - Then the text box's graphics, the map itself (LoadMap,
- *    BackgroundsManager), its colours (ChangePalettebyTime,
- *    PrepareSpritePalette, CallIndexedSubrutines, PrepareNightPalette,
+ *    BackgroundsManager), its colours (ChangePaletteByTime,
+ *    PrepareSpritePalette, StartMapColourAnimations, PrepareNightPalette,
  *    RunColourAnimations) sent at once to CGRAM ($7F:0900, $200 bytes).
  *  - BG2 starts at the camera ($0140 / $0142; the tool shed at $0100
  *    down), and a long list of things is reset: the BG2 drift, the step
@@ -75,9 +75,9 @@ static void state_off(uint8_t *ram, HmRegs *r, uint16_t bits)  /* LDA #b; EOR #$
  *    animals (PlaceAnimalsOnMap, unless $7F1F5E bit 1), the music
  *    (FadeOutSong, 20, 22: the new song becomes the one playing), the
  *    item's noises; then two frames of objects and scripts are prepared
- *    (BAAAA, IterateCCStructures, the sprites), each sent by the NMI, and
- *    the screen is lit and faded in from 3 (ScreenFadein).
- * Leftovers: those of ScreenFadein.
+ *    (RunItemsOnMap, RunEventSlots, the sprites), each sent by the NMI, and
+ *    the screen is lit and faded in from 3 (ScreenFadeIn).
+ * Leftovers: those of ScreenFadeIn.
  * ───────────────────────────────────────────────────────────────────────── */
 static void colour_cycle(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t table, uint8_t n, uint8_t slot)
 {
@@ -99,8 +99,8 @@ static void objects_frame(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t entry)
 {
   r->a = 0x1800;                                           /* REP #$20 */
   hm_dp_w16(ram, r, 0xC7, 0x1800);
-  jsl(ram, r, at, 0x81, hm_BAAAA);
-  jsl(ram, r, (uint16_t)(at + 4), 0x84, hm_IterateCCStructures);
+  jsl(ram, r, at, 0x81, hm_RunItemsOnMap);
+  jsl(ram, r, (uint16_t)(at + 4), 0x84, hm_RunEventSlots);
   jsl(ram, r, (uint16_t)(at + 8), 0x85, hm_AnimateGameObjects);
   jsl(ram, r, (uint16_t)(at + 12), 0x85, hm_LoadQueuedSpritePieces);
   jsl(ram, r, (uint16_t)(at + 16), 0x85, hm_PrepareOAMData);
@@ -172,9 +172,9 @@ void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r)
   *hm_dp(ram, r, 0x22) = map;
   jsl(ram, r, 0x98B1, 0x82, hm_LoadMap);
   jsl(ram, r, 0x98B5, 0x80, hm_BackgroundsManager);
-  jsl(ram, r, 0x98B9, 0x80, hm_ChangePalettebyTime);
+  jsl(ram, r, 0x98B9, 0x80, hm_ChangePaletteByTime);
   jsl(ram, r, 0x98BD, 0x80, hm_PrepareSpritePalette);
-  jsl(ram, r, 0x98C1, 0x80, hm_CallIndexedSubrutines);
+  jsl(ram, r, 0x98C1, 0x80, hm_StartMapColourAnimations);
   jsl(ram, r, 0x98C5, 0x80, hm_PrepareNightPalette);
   jsl(ram, r, 0x98C9, 0x80, hm_RunColourAnimations);
   set_a8(r, 0);                                            /* the colours, to CGRAM */
@@ -276,16 +276,16 @@ void hm_LoadAndShowMap(uint8_t *ram, HmRegs *r)
   *hm_dp(ram, r, 0x93) = 3;
   *hm_dp(ram, r, 0x94) = 0x0F;
   r->a = (uint16_t)((r->a & 0xFF00) | 0x0F);
-  jsl_flags(ram, r, 0x9A5F, 0x80, hm_ScreenFadein, entry, 0);
+  jsl_flags(ram, r, 0x9A5F, 0x80, hm_ScreenFadeIn, entry, 0);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
  * EnterMap ($80:96D3, JSL, RTL): enters map $098B: $0196
  * bits 0, 5, 14 and 15 and $7F1F5C bits 0-3 cleared, $D2 bit 14 set; the
  * old map's things cleared (ZeroesPartialVRAM from $7000,
- * Zeroes42Pointers, ClearsTimeofDayPalette, ClearSpriteDataTables,
- * InitializeOBJs, ClearItemRecords, ClearsofAllCCStructs); then the
- * new map's people (RunsFunctionbyIndex, IterateCCStructures) and the map
+ * StopAllColourAnimations, ClearTimeOfDayPalette, ClearSpriteDataTables,
+ * InitializeOBJs, ClearItemRecords, ClearAllEventSlots); then the
+ * new map's people (StartMapEvents, RunEventSlots) and the map
  * itself (LoadAndShowMap).
  * Leftovers: those of LoadAndShowMap.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -299,17 +299,17 @@ void hm_EnterMap(uint8_t *ram, HmRegs *r)
   set_dp16(ram, r, 0xD2, r->a);
   r->a = 0x7000;
   jsl(ram, r, 0x96F7, 0x80, hm_ZeroesPartialVRAM);
-  jsl(ram, r, 0x96FB, 0x80, hm_Zeroes42Pointers);
-  jsl(ram, r, 0x96FF, 0x80, hm_ClearsTimeofDayPalette);
+  jsl(ram, r, 0x96FB, 0x80, hm_StopAllColourAnimations);
+  jsl(ram, r, 0x96FF, 0x80, hm_ClearTimeOfDayPalette);
   jsl(ram, r, 0x9703, 0x85, hm_ClearSpriteDataTables);
   jsl(ram, r, 0x9707, 0x85, hm_InitializeOBJs);
   jsl(ram, r, 0x970B, 0x81, hm_ClearItemRecords);
-  jsl(ram, r, 0x970F, 0x84, hm_ClearsofAllCCStructs);
+  jsl(ram, r, 0x970F, 0x84, hm_ClearAllEventSlots);
   uint8_t map = rd8(ram, r, 0x098B);                       /* SEP #$20 */
   set_a8(r, map);
   *hm_dp(ram, r, 0x22) = map;
-  jsl(ram, r, 0x971A, 0x83, hm_RunsFunctionbyIndex);
-  jsl(ram, r, 0x971E, 0x84, hm_IterateCCStructures);
+  jsl(ram, r, 0x971A, 0x83, hm_StartMapEvents);
+  jsl(ram, r, 0x971E, 0x84, hm_RunEventSlots);
   set_a8(r, rd8(ram, r, 0x098B));                          /* SEP #$20 */
   jsl(ram, r, 0x9727, 0x80, hm_LoadAndShowMap);
 }
@@ -345,7 +345,7 @@ void hm_SetScreenTransition(uint8_t *ram, HmRegs *r)
   set_a8(r, 0x0F); *hm_dp(ram, r, 0x92) = 0x0F;            /* SEP #$20 */
   set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
   set_a8(r, 0x01); *hm_dp(ram, r, 0x94) = 0x01;
-  jsl(ram, r, 0x96CB, 0x80, hm_ScreenFadeout);
+  jsl(ram, r, 0x96CB, 0x80, hm_ScreenFadeOut);
   jsl(ram, r, 0x96CF, 0x80, hm_ForceBlank);
   hm_EnterMap(ram, r);                         /* runs on into it */
 }

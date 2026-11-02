@@ -183,7 +183,7 @@ void hm_CheckToolSuccess(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * The tile a tool acts on.
  *
- * CalculateTileinFront ($81:D14E, JSL, RTL). A = how many tiles ahead,
+ * CalculateTileInFront ($81:D14E, JSL, RTL). A = how many tiles ahead,
  * X / Y = extra pixels sideways / ahead. $0985/$0987 = the player's
  * position ($D6/$D8) moved by 16 A + the extra in the direction the player
  * faces ($DA: 0 down = +Y, 1 up = -Y, 2 = +X, anything else = -X).
@@ -217,7 +217,7 @@ static uint16_t sub2(uint16_t a, uint16_t b, uint16_t c, uint8_t *carry)
   return (uint16_t)d;
 }
 
-void hm_CalculateTileinFront(uint8_t *ram, HmRegs *r)
+void hm_CalculateTileInFront(uint8_t *ram, HmRegs *r)
 {
   uint16_t ahead = (uint16_t)(r->a << 4);
   hm_dp_w16(ram, r, 0x7E, ahead);
@@ -270,7 +270,7 @@ static void tile_ahead_then_check(uint8_t *ram, HmRegs *r, uint16_t tiles,
 {
   r->a = tiles; r->x = 0; r->y = 0;
   hm_jsl(ram, r, ret_front, 0x81);
-  hm_CalculateTileinFront(ram, r);
+  hm_CalculateTileInFront(ram, r);
   hm_rtl(ram, r);
   check_tile_in_front(ram, r, ret_check);
 }

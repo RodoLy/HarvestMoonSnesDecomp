@@ -11,8 +11,8 @@
  * Every map has five palettes, one per part of the day (Time_Palette_Table,
  * $80:BB5C, 6 bytes per map: before 7:00, 7-14, 15-16, 17, 18 and later;
  * $FF = keep the one there is). When the hour changes part,
- * SetTimeofDayPalette points $04-$06 at the new palette and
- * TransitionTimeofDayPalettes moves each colour one step (of 32) towards it
+ * SetTimeOfDayPalette points $04-$06 at the new palette and
+ * TransitionTimeOfDayPalettes moves each colour one step (of 32) towards it
  * every 32 frames, until all are equal.
  *
  * A colour is 15 bits: red in bits 0-4, green 5-9, blue 10-14.
@@ -102,11 +102,11 @@ static uint8_t time_palette(uint8_t *ram, HmRegs *r, uint16_t part)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SetTimeofDayPalette ($80:8FC7): start moving to palette A (8 bits).
+ * SetTimeOfDayPalette ($80:8FC7): start moving to palette A (8 bits).
  * From 18:00 the target is not a palette of the table but $7F:0B00 (the
  * night colours prepared there).
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SetTimeofDayPalette(uint8_t *ram, HmRegs *r)
+void hm_SetTimeOfDayPalette(uint8_t *ram, HmRegs *r)
 {
   uint8_t n = (uint8_t)r->a;
   hm_bus_wr8(ram, db_addr(r, NEXT), n);
@@ -125,7 +125,7 @@ void hm_SetTimeofDayPalette(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * TransitionTimeofDayPalettes ($80:900C), every frame while time runs.
+ * TransitionTimeOfDayPalettes ($80:900C), every frame while time runs.
  * Every 32 frames each colour moves one step in red, green and blue towards
  * the target palette [$04]. Only colour 0 and the colours from 12 on (from
  * 16 on when bit 2 of $0196 is clear) are moved: colours 1-11 are left
@@ -146,7 +146,7 @@ static uint16_t step(uint8_t *ram, HmRegs *r, uint16_t now, uint16_t target, uns
   return now;
 }
 
-void hm_ClearsTimeofDayPaletteIndexandSetsNext(uint8_t *ram, HmRegs *r)
+void hm_FinishTimeOfDayPalette(uint8_t *ram, HmRegs *r)
 {
   set16(ram, r, 0x04, 0);
   *hm_dp(ram, r, 0x06) = 0;
@@ -154,7 +154,7 @@ void hm_ClearsTimeofDayPaletteIndexandSetsNext(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, db_addr(r, LOADED), next);
 }
 
-void hm_TransitionTimeofDayPalettes(uint8_t *ram, HmRegs *r)
+void hm_TransitionTimeOfDayPalettes(uint8_t *ram, HmRegs *r)
 {
   if (!(lda8(r, hm_bus_rd8(ram, db_addr(r, 0x0973))) & 1)) {   /* time stopped */
     lda8(r, 0);
@@ -201,7 +201,7 @@ void hm_TransitionTimeofDayPalettes(uint8_t *ram, HmRegs *r)
   r->y = y;
 
   if (lda8(r, *hm_dp(ram, r, 0x92)) == 0) {               /* all equal: done */
-    hm_ClearsTimeofDayPaletteIndexandSetsNext(ram, r);
+    hm_FinishTimeOfDayPalette(ram, r);
     return;
   }
   /* send the colours: channel 6, to $2122 (CGRAM), from $7F:0900 */
@@ -217,8 +217,8 @@ void hm_TransitionTimeofDayPalettes(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
 }
 
-/* ClearsTimeofDayPalette ($80:9166): drop the target palette. */
-void hm_ClearsTimeofDayPalette(uint8_t *ram, HmRegs *r)
+/* ClearTimeOfDayPalette ($80:9166): drop the target palette. */
+void hm_ClearTimeOfDayPalette(uint8_t *ram, HmRegs *r)
 {
   set16(ram, r, 0x04, 0);
   *hm_dp(ram, r, 0x06) = 0;
@@ -411,9 +411,9 @@ void hm_PrepareNightPalette(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
 }
 
-/* ChangePalettebyTime ($80:92E2): load the map's palette for this part of
+/* ChangePaletteByTime ($80:92E2): load the map's palette for this part of
  * the day (backgrounds) and note it as loaded. */
-void hm_ChangePalettebyTime(uint8_t *ram, HmRegs *r)
+void hm_ChangePaletteByTime(uint8_t *ram, HmRegs *r)
 {
   uint8_t n = time_palette(ram, r, part_of_day(ram, r));
   hm_bus_wr8(ram, db_addr(r, LOADED), n);
@@ -470,22 +470,22 @@ void hm_SetPaletteToLoad(uint8_t *ram, HmRegs *r)
   if (n == 0xFF) return;
   hm_push8(ram, r, n);                                    /* PHA */
   hm_jsl(ram, r, 0x954B, 0x80);
-  hm_SetTimeofDayPalette(ram, r);
+  hm_SetTimeOfDayPalette(ram, r);
   hm_rtl(ram, r);
   lda8(r, hm_pull8(ram, r));
   hm_bus_wr8(ram, db_addr(r, LOADED), (uint8_t)r->a);
 }
 
-/* Event_TimeofDayPalette ($84:9356, JSR): script command "move to palette
+/* Event_TimeOfDayPalette ($84:9356, JSR): script command "move to palette
  * <byte>". */
-void hm_Event_TimeofDayPalette(uint8_t *ram, HmRegs *r)
+void hm_Event_TimeOfDayPalette(uint8_t *ram, HmRegs *r)
 {
   uint16_t pc = (uint16_t)(dp16(ram, r, 0xC9) + 1);
   set16(ram, r, 0xC9, pc);
   r->a = pc;
   lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, 0xC9, 0)));
   hm_jsl(ram, r, 0x9369, 0x80);
-  hm_SetTimeofDayPalette(ram, r);
+  hm_SetTimeOfDayPalette(ram, r);
   hm_rtl(ram, r);
   uint16_t after = dp16(ram, r, 0xC9);
   r->c = after == 0xFFFF;

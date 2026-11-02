@@ -46,7 +46,7 @@
 #define CHICKENS_N         0x11F0B
 #define MAX_STAMINA        0x00917
 
-#define RET_COW_POINTER    0xF46D    /* JSL GetsCowPointer at $83:F46A */
+#define RET_COW_POINTER    0xF46D    /* JSL GetCowPointer at $83:F46A */
 #define RET_NEXT_SCRIPT    0xF4C0    /* JSL StartEventScriptLong at $83:F4BD */
 
 static uint16_t score(uint8_t *ram) { return hm_rd16(ram, RANCH_MASTERY); }
@@ -113,7 +113,7 @@ void hm_RanchMasteryCalculator(uint8_t *ram, HmRegs *r)
     hm_push8(ram, r, (uint8_t)(cow >> 8)); hm_push8(ram, r, (uint8_t)cow);   /* PHX */
     r->a = cow;
     hm_jsl(ram, r, RET_COW_POINTER, 0x83);
-    hm_GetsCowPointer(ram, r);
+    hm_GetCowPointer(ram, r);
     hm_rtl(ram, r);
     uint32_t record = hm_dp_long(ram, r, 0x72, 0);
     uint8_t status = hm_bus_rd8(ram, record);

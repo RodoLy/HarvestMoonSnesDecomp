@@ -99,7 +99,7 @@ static void tile_end(uint8_t *ram, HmRegs *r)
     for (uint16_t x = 0; x != 0x400; x = (uint16_t)(x + 16))
 
 /* ─────────────────────────────────────────────────────────────────────────
- * LoadsDamageProbabilities ($82:8270, JSR, RTS). A = weather row; returns
+ * LoadDamageProbabilities ($82:8270, JSR, RTS). A = weather row; returns
  * "1 chance in n" for each kind of damage, 0 = never:
  *   A = fences, X = grass, Y = crops / tilled soil.
  * (Each row has a fourth byte, always 0, that nothing reads.) The values go
@@ -115,7 +115,7 @@ static const uint8_t kDamageChance[5][4] = {   /* $82:8298 */
   { 0x00, 0x40, 0x20, 0 },   /* 4 new year: grass 1/64, crops 1/32 */
 };
 
-void hm_LoadsDamageProbabilities(uint8_t *ram, HmRegs *r)
+void hm_LoadDamageProbabilities(uint8_t *ram, HmRegs *r)
 {
   unsigned row = r->a;                           /* the game passes 0..4 */
   r->c = (row >> 14) & 1;
@@ -210,7 +210,7 @@ void hm_ClimateFarmDamageCheck(uint8_t *ram, HmRegs *r)
  *   rain -> row 0, snow -> row 1, hurricane -> row 2,
  *   first-year summer storm (0100) -> no damage,
  *   first-year winter storm (0200) -> row 3.
- * Then LoadsDamageProbabilities + ClimateFarmDamageCheck.
+ * Then LoadDamageProbabilities + ClimateFarmDamageCheck.
  * With no damage, A = the last flag test (0 or $0100) and X, Y, C are
  * untouched.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -233,7 +233,7 @@ void hm_ClimateFarmDamagePrep(uint8_t *ram, HmRegs *r)
       return;
     r->a = (uint16_t)kDamageByWeather[i].row;
     jsr(ram, r, kDamageByWeather[i].ret_jsr);
-    hm_LoadsDamageProbabilities(ram, r);
+    hm_LoadDamageProbabilities(ram, r);
     rts(ram, r);
     hm_jsl(ram, r, kDamageByWeather[i].ret_jsl, 0x82);
     hm_ClimateFarmDamageCheck(ram, r);
@@ -408,7 +408,7 @@ void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Sub_82A9A0 ($82:A9A0, JSL, RTL; no compiled body: it runs in the
+ * CowEatsGrass ($82:A9A0, JSL, RTL; no compiled body: it runs in the
  * recompiler's interpreter). A cow grazing on the farm eats grass: the
  * first grass tile at stage 76..79 (scanning row by row) becomes 7A, and
  * $092E = 1. With no such tile $092E = 0 (the cow goes hungry).
@@ -417,7 +417,7 @@ void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_GRAZE_TILE  0xA9BC   /* JSR GetTileIndex at $82:A9BA */
 
-void hm_Sub_82A9A0(uint8_t *ram, HmRegs *r)
+void hm_CowEatsGrass(uint8_t *ram, HmRegs *r)
 {
   ram[HM_MAP_WIDTH_CODE] = 4;
   hm_wr16(ram, HM_GROWN_GRASS_N, 0);
@@ -444,7 +444,7 @@ void hm_Sub_82A9A0(uint8_t *ram, HmRegs *r)
  * works on the current map ($7E:09B6, 4096 bytes); the farm is kept apart in
  * HM_FARM_MAP so it survives going elsewhere.
  *
- * CopyCurrentMaptoFarmMap ($82:A682, JSL, RTL): current map -> farm map
+ * CopyCurrentMapToFarmMap ($82:A682, JSL, RTL): current map -> farm map
  * (read through $80:09B6, the bank $80 mirror of low WRAM).
  * LoadDefaultFarmMap ($82:A65A, JSL, RTL): the field of a new game, from
  * the first pointer of MapPointerTable ($82:B174 -> $A7:8000) -> farm map.
@@ -465,7 +465,7 @@ static void copy_to_farm_map(uint8_t *ram, HmRegs *r)
   r->c = 1;
 }
 
-void hm_CopyCurrentMaptoFarmMap(uint8_t *ram, HmRegs *r)
+void hm_CopyCurrentMapToFarmMap(uint8_t *ram, HmRegs *r)
 {
   hm_dp_w16(ram, r, 0x72, 0x09B6);
   *hm_dp(ram, r, 0x74) = 0x80;

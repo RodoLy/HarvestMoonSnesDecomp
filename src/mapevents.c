@@ -1,7 +1,7 @@
 /*
  * mapevents.c — who appears when a map is entered.
  *
- * RunsFunctionbyIndex ($83:CA98) calls, for the map being entered ($22),
+ * StartMapEvents ($83:CA98) calls, for the map being entered ($22),
  * its routine from UNK_TableFunctionSelect ($83:CAA9, one word per map).
  * Each routine starts the event scripts of the people and things of that
  * map, depending on the date, the time and the story flags, with
@@ -90,20 +90,20 @@ static bool winter_10_morning(uint8_t *ram, HmRegs *r)
 }
 
 /* ── one script, always ─────────────────────────────────────────────── */
-void hm_MapEvent_E5A2(uint8_t *ram, HmRegs *r) { spawn(ram, r, 0x0000, 0x0014, 0x0002, 0xE5AF); }
-void hm_MapEvent_E5CD(uint8_t *ram, HmRegs *r) { spawn(ram, r, 0x0000, 0x001E, 0x0000, 0xE5DA); }
-void hm_MapEvent_E5DF(uint8_t *ram, HmRegs *r) { spawn(ram, r, 0x0000, 0x000E, 0x0001, 0xE5EC); }
-void hm_MapEvent_E5F1(uint8_t *ram, HmRegs *r) { spawn(ram, r, 0x0000, 0x0026, 0x0001, 0xE5FE); }
-void hm_MapEvent_E6B2(uint8_t *ram, HmRegs *r) { spawn(ram, r, 0x0000, 0x0028, 0x0003, 0xE6BF); }
+void hm_MapEvent_E5A2_Map2C(uint8_t *ram, HmRegs *r) { spawn(ram, r, 0x0000, 0x0014, 0x0002, 0xE5AF); }
+void hm_MapEvent_E5CD_Maps2Dto30(uint8_t *ram, HmRegs *r) { spawn(ram, r, 0x0000, 0x001E, 0x0000, 0xE5DA); }
+void hm_MapEvent_FlowerFestival(uint8_t *ram, HmRegs *r) { spawn(ram, r, 0x0000, 0x000E, 0x0001, 0xE5EC); }
+void hm_MapEvent_HarvestFestival(uint8_t *ram, HmRegs *r) { spawn(ram, r, 0x0000, 0x0026, 0x0001, 0xE5FE); }
+void hm_MapEvent_E6B2_Festival0B(uint8_t *ram, HmRegs *r) { spawn(ram, r, 0x0000, 0x0028, 0x0003, 0xE6BF); }
 /* E74C: nothing (most of the maps from $3B on) */
-void hm_MapEvent_E74C(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
+void hm_MapEvent_Nothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
 
 /* ── one script, if a flag is set ───────────────────────────────────── */
-void hm_MapEvent_E586(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_Beanstalk(uint8_t *ram, HmRegs *r)
 {
   if (flag(ram, r, 0x7F1F68, 0x0200)) spawn(ram, r, 0x0000, 0x0014, 0x0001, 0xE59C);
 }
-void hm_MapEvent_E5B4(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_Coop(uint8_t *ram, HmRegs *r)
 {
   if (flag(ram, r, 0x7F1F6A, 0x4000)) spawn(ram, r, 0x0015, 0x0000, 0x007F, 0xE5C8);
 }
@@ -115,12 +115,12 @@ static void winter_24(uint8_t *ram, HmRegs *r, uint16_t mask, uint16_t y, uint16
   if (!byte_is(ram, r, DAY, 0x18)) return;
   if (flag(ram, r, 0x7F1F74, mask)) spawn(ram, r, 0x0000, 0x000F, y, at);
 }
-void hm_MapEvent_E603(uint8_t *ram, HmRegs *r) { winter_24(ram, r, 0x0001, 0x0001, 0xE62D); }
-void hm_MapEvent_E632(uint8_t *ram, HmRegs *r) { winter_24(ram, r, 0x0008, 0x0004, 0xE65C); }
-void hm_MapEvent_E661(uint8_t *ram, HmRegs *r) { winter_24(ram, r, 0x0010, 0x0005, 0xE68B); }
+void hm_MapEvent_StarryNightMap0A(uint8_t *ram, HmRegs *r) { winter_24(ram, r, 0x0001, 0x0001, 0xE62D); }
+void hm_MapEvent_StarryNightMap39(uint8_t *ram, HmRegs *r) { winter_24(ram, r, 0x0008, 0x0004, 0xE65C); }
+void hm_MapEvent_StarryNightMap14(uint8_t *ram, HmRegs *r) { winter_24(ram, r, 0x0010, 0x0005, 0xE68B); }
 
 /* E690: spring 1 (the new year) */
-void hm_MapEvent_E690(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_NewYear(uint8_t *ram, HmRegs *r)
 {
   uint8_t season = hm_bus_rd8(ram, SEASON);
   r->a = (uint16_t)((r->a & 0xFF00) | season);
@@ -129,7 +129,7 @@ void hm_MapEvent_E690(uint8_t *ram, HmRegs *r)
 }
 
 /* ── the family at home: the wife (by who she is) and the children ──── */
-void hm_MapEvent_E6C4(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_ToolShedFamily(uint8_t *ram, HmRegs *r)
 {
   if (!flag(ram, r, 0x7F1F6E, 0x0002)) {
     if (flag(ram, r, 0x7F1F66, 0x0002))      spawn(ram, r, 0x0013, 0x0044, 0x0001, 0xE6EE);
@@ -166,12 +166,12 @@ static void house_D4FF(uint8_t *ram, HmRegs *r)
   if (byte_is(ram, r, WEEKDAY, 6)) { spawn(ram, r, 0, 2, 1, 0xD5A2); return; }
   spawn(ram, r, 0, 1, 1, 0xD592);
 }
-void hm_MapEvent_D4D7(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_MariaHouse1(uint8_t *ram, HmRegs *r)
 {
   if (married_here(ram, r, 0x0001)) spawn(ram, r, 0, 0x22, 3, 0xD4FA);
   else house_D4FF(ram, r);
 }
-void hm_MapEvent_D5E7(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_MariaHouse2(uint8_t *ram, HmRegs *r)
 {
   if (married_here(ram, r, 0x0001)) spawn(ram, r, 0, 0x22, 4, 0xD60E);
   else house_D4FF(ram, r);
@@ -180,7 +180,7 @@ void hm_MapEvent_D5E7(uint8_t *ram, HmRegs *r)
 /* D613: winter 10, winter 24, then as the others (script 2, or 1 / 12),
  * Sunday too (group 3). It tests $7F1F68 bit 0 a second time (nobody if
  * clear), which can never fail: without it the first test returned. */
-void hm_MapEvent_D613(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_Church(uint8_t *ram, HmRegs *r)
 {
   if (winter_10_morning(ram, r)) { spawn(ram, r, 0, 0x27, 2, 0xD63A); return; }
   if (byte_is(ram, r, SEASON, 3) && byte_is(ram, r, DAY, 0x18) && flag(ram, r, 0x7F1F74, 0x0002)) {
@@ -227,12 +227,12 @@ static void house_D776(uint8_t *ram, HmRegs *r)
   static const Day d = { 3, 2, 3, 2, 2, 2, 0xD78C, 0xD7F3, 0xD7D3, 0xD803, 0xD813, 0xD7E3 };
   usual_day(ram, r, &d);
 }
-void hm_MapEvent_D74E(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_NinaFlowerShop(uint8_t *ram, HmRegs *r)
 {
   if (married_here(ram, r, 0x0004)) spawn(ram, r, 0, 0x22, 7, 0xD771);
   else house_D776(ram, r);
 }
-void hm_MapEvent_D818(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_NinaHouse(uint8_t *ram, HmRegs *r)
 {
   if (married_here(ram, r, 0x0004)) spawn(ram, r, 0, 0x22, 8, 0xD83F);
   else house_D776(ram, r);
@@ -245,12 +245,12 @@ static void house_D86C(uint8_t *ram, HmRegs *r)
   if (flag(ram, r, 0x7F1F5E, 0x0010)) { spawn(ram, r, 0, 0x1A, 1, 0xD882); return; }
   usual_day(ram, r, &d);
 }
-void hm_MapEvent_D844(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_AnnGeneralStore(uint8_t *ram, HmRegs *r)
 {
   if (married_here(ram, r, 0x0002)) spawn(ram, r, 0, 0x22, 5, 0xD867);
   else house_D86C(ram, r);
 }
-void hm_MapEvent_D929(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_AnnHouse(uint8_t *ram, HmRegs *r)
 {
   if (married_here(ram, r, 0x0002)) spawn(ram, r, 0, 0x22, 6, 0xD950);
   else house_D86C(ram, r);
@@ -262,24 +262,24 @@ static void house_D97D(uint8_t *ram, HmRegs *r)
   static const Day d = { 4, 4, 5, 4, 4, 4, 0xD993, 0xD9FA, 0xD9DA, 0xDA0A, 0xDA1A, 0xD9EA };
   usual_day(ram, r, &d);
 }
-void hm_MapEvent_D955(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_EllenHouse1(uint8_t *ram, HmRegs *r)
 {
   if (married_here(ram, r, 0x0008)) spawn(ram, r, 0, 0x22, 9, 0xD978);
   else house_D97D(ram, r);
 }
-void hm_MapEvent_DA1F(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_EllenHouse2(uint8_t *ram, HmRegs *r)
 {
   if (married_here(ram, r, 0x0008)) spawn(ram, r, 0, 0x22, 0x0A, 0xDA46);
   else house_D97D(ram, r);
 }
 
 /* DA4B, DAED: two more people with a usual day */
-void hm_MapEvent_DA4B(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_DA4B_Map25Person(uint8_t *ram, HmRegs *r)
 {
   static const Day d = { 5, 5, 6, 5, 5, 5, 0xDA61, 0xDAC8, 0xDAA8, 0xDAD8, 0xDAE8, 0xDAB8 };
   usual_day(ram, r, &d);
 }
-void hm_MapEvent_DAED(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_AnimalShop(uint8_t *ram, HmRegs *r)
 {
   static const Day d = { 6, 6, 7, 6, 6, 6, 0xDB03, 0xDB6A, 0xDB4A, 0xDB7A, 0xDB8A, 0xDB5A };
   usual_day(ram, r, &d);
@@ -307,12 +307,12 @@ static void house_DBB7(uint8_t *ram, HmRegs *r)
   }
   spawn(ram, r, 0, 5, 0, 0xDC19);
 }
-void hm_MapEvent_DB8F(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_EveHouse1(uint8_t *ram, HmRegs *r)
 {
   if (married_here(ram, r, 0x0010)) spawn(ram, r, 0, 0x22, 0x0B, 0xDBB2);
   else house_DBB7(ram, r);
 }
-void hm_MapEvent_DC1E(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_EveHouse2(uint8_t *ram, HmRegs *r)
 {
   if (married_here(ram, r, 0x0010)) spawn(ram, r, 0, 0x22, 0x0C, 0xDC45);
   else house_DBB7(ram, r);
@@ -325,7 +325,7 @@ void hm_MapEvent_DC1E(uint8_t *ram, HmRegs *r)
  * 25-28) of an ordinary weekday the slot-9 person of group $21; then the
  * usual one (none on the special days of $0196 bits 1 / 3 / 9; Sunday
  * group 3, Saturday group 2, else group 1). */
-void hm_MapEvent_DC4A(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_Mountain(uint8_t *ram, HmRegs *r)
 {
   if (!flag(ram, r, 0x7F1F68, 0x0004)) {
     spawn(ram, r, 0, 0x0B, 9, 0xDC60);
@@ -371,7 +371,7 @@ void hm_MapEvent_DC4A(uint8_t *ram, HmRegs *r)
 /* DD95: with $7F1F6A bit 12 but not 13, only group $19; the first visit
  * (group $0B, only in the first spring and summer before the 26th; the
  * visit is marked as seen anyway); then the usual day of script 9 / 7 */
-void hm_MapEvent_DD95(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_DD95_Map2BPerson(uint8_t *ram, HmRegs *r)
 {
   if (!flag(ram, r, 0x7F1F6A, 0x2000) && flag(ram, r, 0x7F1F6A, 0x1000)) {
     spawn(ram, r, 0, 0x19, 1, 0xDDB4);
@@ -402,7 +402,7 @@ void hm_MapEvent_DD95(uint8_t *ram, HmRegs *r)
 }
 
 /* DE64: group $15 until $7F1F68 bit 13; then with $7F1F64 bit 1 group 1 */
-void hm_MapEvent_DE64(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_ElfTunnel(uint8_t *ram, HmRegs *r)
 {
   if (!flag(ram, r, 0x7F1F68, 0x2000)) { spawn(ram, r, 0, 0x15, 0, 0xDE7A); return; }
   if (flag(ram, r, 0x7F1F64, 0x0002)) spawn(ram, r, 0, 1, 0x0A, 0xDE95);
@@ -410,7 +410,7 @@ void hm_MapEvent_DE64(uint8_t *ram, HmRegs *r)
 
 /* DE9B: with $7F1F64 bit 3, a scene (slot $15, script $25 of group 0)
  * that stops the player: $096E = $45, $D2 |= $40, action 0. */
-void hm_MapEvent_DE9B(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_Barn(uint8_t *ram, HmRegs *r)
 {
   if (!flag(ram, r, 0x7F1F64, 0x0008)) return;
   spawn(ram, r, 0x15, 0, 0x25, 0xDEB1);
@@ -429,7 +429,7 @@ void hm_MapEvent_DE9B(uint8_t *ram, HmRegs *r)
  * clear, group $0B after that); from the first winter (or year 2) on, a
  * visit of group $0D (first script 0, $7F1F68 bit 6 and $099F = 4; then
  * script 1, until $7F1F68 bit 8, which also clears $7F1F31). */
-void hm_MapEvent_E407(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_Crossroads(uint8_t *ram, HmRegs *r)
 {
   r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5C) & 0xFF7F);
   hm_bus_wr16(ram, 0x7F1F5C, r->a);
@@ -460,7 +460,7 @@ void hm_MapEvent_E407(uint8_t *ram, HmRegs *r)
  * dog placed on this season's farm at (120, 424), the player's animation
  * = his direction. Then group $1D with $7F1F6C bit 4, group $1B with bit
  * 0, or on Saturday group 2. */
-void hm_MapEvent_E4CB(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_MountainCave(uint8_t *ram, HmRegs *r)
 {
   if (!flag(ram, r, 0x7F1F6A, 0x0040)) {
     hm_bus_wr16(ram, db(r, 0x0985), 0x00E0);
@@ -552,7 +552,7 @@ static bool date_before(uint8_t *ram, HmRegs *r, uint8_t season, uint8_t day, ui
   return byte_is(ram, r, DAY, day) && byte_below(ram, r, HOUR, hour);
 }
 
-void hm_MapEvent_D2E0(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_Town(uint8_t *ram, HmRegs *r)
 {
   if (flag(ram, r, 0x7F1F60, 0x0400)) {
     r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F60) & 0xFBFF);
@@ -618,7 +618,7 @@ static void wake_up(uint8_t *ram, HmRegs *r, uint8_t hour)
   hm_dp_w16(ram, r, 0xD2, r->a);
 }
 
-void hm_MapEvent_E76D(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_IntroDays(uint8_t *ram, HmRegs *r)
 {
   wake_up(ram, r, 7);
 
@@ -691,7 +691,7 @@ static void flags_5e(uint8_t *ram, HmRegs *r, bool on)
 static bool no_wife(uint8_t *ram, HmRegs *r) { return !flag(ram, r, 0x7F1F66, 0x001F); }
 static bool shipped(uint8_t *ram, HmRegs *r, uint32_t addr) { return word_at_least(ram, r, addr, 200); }
 
-void hm_MapEvent_EBA6(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_EndingSlideShow(uint8_t *ram, HmRegs *r)
 {
   wake_up(ram, r, 6);
   uint8_t step = byte_of(ram, r, ENDING_STEP);
@@ -950,7 +950,7 @@ static bool girls_visit(uint8_t *ram, HmRegs *r)
   return false;
 }
 
-void hm_MapEvent_CB69(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_Farm(uint8_t *ram, HmRegs *r)
 {
   if (!flag(ram, r, 0x7F1F6E, 0x0002)) {
     if (flag(ram, r, 0x7F1F66, 0x0001))      spawn(ram, r, 0x13, 0x44, 0, 0xCB9C);
@@ -1068,7 +1068,7 @@ void hm_MapEvent_CB69(uint8_t *ram, HmRegs *r)
  *     144) (StartScriptAtTileInFront: slot $10, script $1F);
  *   - things the night left to do, each one flag of $7F1F6E cleared:
  *     bit 7, song $19 (ChangeMusic) and the nine tiles from (576, 704)
- *     to (608, 736) set to 2 (EditTileonMapandsets0181); bit 8, song $15;
+ *     to (608, 736) set to 2 (EditFarmTile); bit 8, song $15;
  *     bit 9, noise $22 of bank 7 twice (after 20 and 30 frames,
  *     PlayEffectWithSongInstrument); bit 5, noise $20 and 60 frames;
  *   - then one scene, the first that fits:
@@ -1076,7 +1076,7 @@ void hm_MapEvent_CB69(uint8_t *ram, HmRegs *r)
  *              with bit 13, and $099F = 5 if the first child is 60 days
  *              old, 6 if not; else script 0);
  *       bit 6 (cleared): a cow's scene: the name of cow $0937 (bytes
- *              $0C-$0F of its record, GetsCowPointer) at $0889-$088F,
+ *              $0C-$0F of its record, GetCowPointer) at $0889-$088F,
  *              one letter per word, and group $20;
  *       the wife (first bit of $7F1F66): with her heart below 200 at
  *              6:00:00, unless a child or bit 0 of $7F1F6E, group $22
@@ -1133,7 +1133,7 @@ static void house_tiles(uint8_t *ram, HmRegs *r)
       r->a = (uint16_t)((r->a & 0xFF00) | 0x02);
       r->x = x; r->y = y;
       hm_jsl(ram, r, (uint16_t)(at + 3), 0x82);
-      hm_EditTileonMapandsets0181(ram, r);
+      hm_EditFarmTile(ram, r);
       hm_rtl(ram, r);
     }
 }
@@ -1142,7 +1142,7 @@ static void cow_scene(uint8_t *ram, HmRegs *r)
 {
   r->a = hm_bus_rd8(ram, db(r, 0x0937));                     /* LDA #0; XBA; LDA */
   hm_jsl(ram, r, 0xE100, 0x83);
-  hm_GetsCowPointer(ram, r);
+  hm_GetCowPointer(ram, r);
   hm_rtl(ram, r);
   for (uint16_t i = 0; i < 4; i++) {
     r->y = (uint16_t)(0x0C + i);
@@ -1182,7 +1182,7 @@ static bool morning_of(uint8_t *ram, HmRegs *r, uint8_t year, uint8_t season, ui
          six_sharp(ram, r);
 }
 
-void hm_MapEvent_DED3(uint8_t *ram, HmRegs *r)
+void hm_MapEvent_PlayerHouse(uint8_t *ram, HmRegs *r)
 {
   if (byte_is(ram, r, YEAR, 2) && byte_is(ram, r, SEASON, 1) && byte_is(ram, r, DAY, 0x1E) && !g_hm_no_ending) {
     hm_StartEnding(ram, r);                                  /* JMP */
@@ -1251,38 +1251,38 @@ void hm_MapEvent_DED3(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * RunsFunctionbyIndex ($83:CA98, JSL, RTL): the routine of map $22 from
+ * StartMapEvents ($83:CA98, JSL, RTL): the routine of map $22 from
  * UNK_TableFunctionSelect ($83:CAA9), with A = X = $22 x 2. The table has
  * $60 words (the maps go to $56; the rest, and $3B, $3E-$4A, $4C-$5F, are
  * the empty E74C).
  * ───────────────────────────────────────────────────────────────────────── */
 static void (*const MAP_EVENTS[0x60])(uint8_t *, HmRegs *) = {
-  hm_MapEvent_CB69, hm_MapEvent_CB69, hm_MapEvent_CB69, hm_MapEvent_CB69,     /* $00 the farm */
-  hm_MapEvent_D2E0, hm_MapEvent_D2E0, hm_MapEvent_D2E0, hm_MapEvent_D2E0,     /* $04 the town */
-  hm_MapEvent_E5DF, hm_MapEvent_E5F1, hm_MapEvent_E603, hm_MapEvent_E6B2,
-  hm_MapEvent_E407, hm_MapEvent_E407, hm_MapEvent_E407, hm_MapEvent_E407,     /* $0C the crossroads */
-  hm_MapEvent_DC4A, hm_MapEvent_DC4A, hm_MapEvent_DC4A, hm_MapEvent_DC4A,
-  hm_MapEvent_E661, hm_MapEvent_DED3, hm_MapEvent_DED3, hm_MapEvent_DED3,     /* $15 the house */
-  hm_MapEvent_D4D7, hm_MapEvent_D4D7, hm_MapEvent_D5E7, hm_MapEvent_D613,
-  hm_MapEvent_D74E, hm_MapEvent_D818, hm_MapEvent_DB8F, hm_MapEvent_DC1E,
-  hm_MapEvent_D955, hm_MapEvent_DA1F, hm_MapEvent_D844, hm_MapEvent_D929,
-  hm_MapEvent_DAED, hm_MapEvent_DA4B, hm_MapEvent_E6C4, hm_MapEvent_DE9B,
-  hm_MapEvent_E5B4, hm_MapEvent_E4CB, hm_MapEvent_DE64, hm_MapEvent_DD95,
-  hm_MapEvent_E5A2, hm_MapEvent_E5CD, hm_MapEvent_E5CD, hm_MapEvent_E5CD,
-  hm_MapEvent_E5CD, hm_MapEvent_E586, hm_MapEvent_E586, hm_MapEvent_E586,
-  hm_MapEvent_E586, hm_MapEvent_E586, hm_MapEvent_E586, hm_MapEvent_E586,
-  hm_MapEvent_E586, hm_MapEvent_E632, hm_MapEvent_E690, hm_MapEvent_E74C,
-  hm_MapEvent_E76D, hm_MapEvent_EBA6, hm_MapEvent_E74C, hm_MapEvent_E74C,
-  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
-  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
-  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_EBA6,
-  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
-  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
-  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
-  hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C, hm_MapEvent_E74C,
+  hm_MapEvent_Farm, hm_MapEvent_Farm, hm_MapEvent_Farm, hm_MapEvent_Farm,     /* $00 the farm */
+  hm_MapEvent_Town, hm_MapEvent_Town, hm_MapEvent_Town, hm_MapEvent_Town,     /* $04 the town */
+  hm_MapEvent_FlowerFestival, hm_MapEvent_HarvestFestival, hm_MapEvent_StarryNightMap0A, hm_MapEvent_E6B2_Festival0B,
+  hm_MapEvent_Crossroads, hm_MapEvent_Crossroads, hm_MapEvent_Crossroads, hm_MapEvent_Crossroads,     /* $0C the crossroads */
+  hm_MapEvent_Mountain, hm_MapEvent_Mountain, hm_MapEvent_Mountain, hm_MapEvent_Mountain,
+  hm_MapEvent_StarryNightMap14, hm_MapEvent_PlayerHouse, hm_MapEvent_PlayerHouse, hm_MapEvent_PlayerHouse,     /* $15 the house */
+  hm_MapEvent_MariaHouse1, hm_MapEvent_MariaHouse1, hm_MapEvent_MariaHouse2, hm_MapEvent_Church,
+  hm_MapEvent_NinaFlowerShop, hm_MapEvent_NinaHouse, hm_MapEvent_EveHouse1, hm_MapEvent_EveHouse2,
+  hm_MapEvent_EllenHouse1, hm_MapEvent_EllenHouse2, hm_MapEvent_AnnGeneralStore, hm_MapEvent_AnnHouse,
+  hm_MapEvent_AnimalShop, hm_MapEvent_DA4B_Map25Person, hm_MapEvent_ToolShedFamily, hm_MapEvent_Barn,
+  hm_MapEvent_Coop, hm_MapEvent_MountainCave, hm_MapEvent_ElfTunnel, hm_MapEvent_DD95_Map2BPerson,
+  hm_MapEvent_E5A2_Map2C, hm_MapEvent_E5CD_Maps2Dto30, hm_MapEvent_E5CD_Maps2Dto30, hm_MapEvent_E5CD_Maps2Dto30,
+  hm_MapEvent_E5CD_Maps2Dto30, hm_MapEvent_Beanstalk, hm_MapEvent_Beanstalk, hm_MapEvent_Beanstalk,
+  hm_MapEvent_Beanstalk, hm_MapEvent_Beanstalk, hm_MapEvent_Beanstalk, hm_MapEvent_Beanstalk,
+  hm_MapEvent_Beanstalk, hm_MapEvent_StarryNightMap39, hm_MapEvent_NewYear, hm_MapEvent_Nothing,
+  hm_MapEvent_IntroDays, hm_MapEvent_EndingSlideShow, hm_MapEvent_Nothing, hm_MapEvent_Nothing,
+  hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing,
+  hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing,
+  hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_EndingSlideShow,
+  hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing,
+  hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing,
+  hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing,
+  hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing, hm_MapEvent_Nothing,
 };
 
-void hm_RunsFunctionbyIndex(uint8_t *ram, HmRegs *r)
+void hm_StartMapEvents(uint8_t *ram, HmRegs *r)
 {
   uint8_t map = *hm_dp(ram, r, 0x22);                        /* SEP #$20; LDA #0; XBA; LDA $22 */
   r->a = (uint16_t)(map << 1);                               /* REP #$20; ASL; TAX */

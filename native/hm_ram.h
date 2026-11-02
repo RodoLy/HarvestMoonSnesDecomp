@@ -96,7 +96,7 @@ enum {
                                      * (its branch labels in HM-Decomp are
                                      * swapped). Tested thresholds: 200
                                      * heart event, 450/650 children. */
-#define HM_COW_DATA         0x0C1C6 /* 16 bytes per cow (GetsCowPointer) */
+#define HM_COW_DATA         0x0C1C6 /* 16 bytes per cow (GetCowPointer) */
 #define HM_CHICKEN_DATA     0x0C286 /* 8 bytes per chicken (GetChickenPointer) */
 #define HM_HAPPINESS        0x11F33 /* 16b, AddPlayerHappiness caps at 999 */
 #define HM_DOG_HUGS         0x11F52 /* 16b */

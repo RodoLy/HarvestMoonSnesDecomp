@@ -19,7 +19,7 @@
  *            do nothing; if byte +1 bit 7, pick the thing up: item
  *            DATA8_82CFB4[type * 4 + season] in hand ($091D), the tile's
  *            byte +0 in $091F, action 4 (holding it). Otherwise, unless
- *            byte +2 bit 0, look for an event object in front (CBBBB marks
+ *            byte +2 bit 0, look for an event object in front (CollideEventObjects marks
  *            it: that is how the player talks to people and animals).
  */
 #include "hm_decomp.h"
@@ -179,7 +179,7 @@ void hm_PressAOnTile(uint8_t *ram, HmRegs *r)
   set16(ram, r, 0xE3, 0x0010);
   r->a = dp16(ram, r, 0xDA);
   hm_jsl(ram, r, 0xAEFE, 0x83);
-  hm_CBBBB(ram, r);
+  hm_CollideEventObjects(ram, r);
   hm_rtl(ram, r);
 }
 

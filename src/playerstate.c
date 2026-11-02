@@ -6,20 +6,20 @@
  * (PlayerInteractionSelector, actions.c); otherwise it jumps (table
  * DATA16_81C027) by the player's action ($D4) to its step:
  *
- *   0, 1, 2, 6, 7, $0E  on foot (PlayerState_00: walking, running, ...)
+ *   0, 1, 2, 6, 7, $0E  on foot (PlayerState_00_StandWalkRun: walking, running, ...)
  *   3 jumping, 4 picking up, 5 throwing, 8 eating, 9 an idle animation,
  *   $0A using a tool, $0B, $0C (the watch), $0D, $0F-$1B other animations,
  *   $1C swapping the tools.
  *
  * Most steps set the player's animation ($0901, often + his facing) and
  * play it (UpdatePlayerObject); when it ends ($0915 = $FFFF) the action changes.
- * They all end in the frame's end (ResetIdleAnimatioTimer, $81:C002):
+ * They all end in the frame's end (ResetIdleAnimationTimer, $81:C002):
  * standing still (action 0) goes to the standing step PlayerStandStill; the
  * others clear the idle timer ($0925) and then MoveSecondBackground (the camera),
  * $1E = 0 and the facing back from $0911.
  *
  * MovePlayer moves the player $1E pixels in his facing: the event objects
- * (CBBBB) and the map (CEEEE) can stop him or make him slide round a
+ * (CollideEventObjects) and the map (CollideMap) can stop him or make him slide round a
  * corner; then the camera follows, and every 8 steps a footprint.
  *
  * As everywhere, the bodies keep A, X, Y and C as the original leaves them.
@@ -136,8 +136,8 @@ static void event_long(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t
  * MovePlayer ($81:CB77, JSR, RTS): move the player. Plays his animation,
  * then by his facing (0 down, 1 up, 2 right, 3 left): unless he is
  * jumping (actions 3, $17, $18) or walked by a script ($D2 bit 7), the
- * event objects ahead (CBBBB with the step in $E7 / $E5) or a solid tile
- * (CEEEE) stop him ($1E = 0). When only one of the front corners is
+ * event objects ahead (CollideEventObjects with the step in $E7 / $E5) or a solid tile
+ * (CollideMap) stop him ($1E = 0). When only one of the front corners is
  * blocked he slides sideways ($1E = 1, facing the free side) if the tile
  * allows it (types 0 and $A0-$AF always; otherwise by which half of the
  * tile he is in); when the front is blocked, $0878 / $087A = the tiles hit
@@ -147,7 +147,7 @@ static void event_long(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t
  * Leftovers: those of the last routine called and the stores after it.
  * ───────────────────────────────────────────────────────────────────────── */
 typedef struct Dir {
-  uint16_t at_objects, at_map;     /* JSL CBBBB, JSL CEEEE */
+  uint16_t at_objects, at_map;     /* JSL CollideEventObjects, JSL CollideMap */
   uint16_t at_camera, at_scroll;   /* JSL PlaceCameraOnMapEntry, the scroll */
   Fn *scroll;
   bool y_axis;                     /* moves on Y ($D8; step in $E7, Y = depth) */
@@ -220,11 +220,11 @@ void hm_MovePlayer(uint8_t *ram, HmRegs *r)
       }
       set_dp16(ram, r, 0xE3, 0);
       r->a = dp16(ram, r, FACING);
-      jsl(ram, r, dir->at_objects, 0x83, hm_CBBBB);
+      jsl(ram, r, dir->at_objects, 0x83, hm_CollideEventObjects);
       r->c = 1;                                              /* CMP #0 */
       if (r->a != 0) { stop_moving(ram, r); return; }
       r->a = dp16(ram, r, FACING);
-      jsl(ram, r, dir->at_map, 0x83, hm_CEEEE);
+      jsl(ram, r, dir->at_map, 0x83, hm_CollideMap);
       uint16_t depth_reg = dir->y_axis ? r->y : r->x;
       set_dp16(ram, r, 0x7E, depth_reg);
       int which = 0;
@@ -284,7 +284,7 @@ void hm_MovePlayer(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * The frame's end. ResetIdleAnimatioTimer ($81:C002): standing still goes
+ * The frame's end. ResetIdleAnimationTimer ($81:C002): standing still goes
  * to PlayerStandStill; otherwise CODE_81C00E clears the idle timer and
  * CODE_81C013 runs the camera (MoveSecondBackground), $1E = 0, and the facing ($DA,
  * $0913) back from $0911. RTL.
@@ -303,14 +303,14 @@ static void not_idle(uint8_t *ram, HmRegs *r)                  /* CODE_81C00E */
   wr8(ram, r, IDLE_TIMER, 0);
   frame_end(ram, r);
 }
-void hm_ResetIdleAnimatioTimer(uint8_t *ram, HmRegs *r)
+void hm_ResetIdleAnimationTimer(uint8_t *ram, HmRegs *r)
 {
   r->a = dp16(ram, r, ACTION);
   r->c = 1;                                                /* CMP #0 */
   if (r->a == 0) { hm_PlayerStandStill(ram, r); return; }
   not_idle(ram, r);
 }
-#define END hm_ResetIdleAnimatioTimer
+#define END hm_ResetIdleAnimationTimer
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Standing still (PlayerStandStill): $D2 bit 15 off. With $D2 bit 13 only the
@@ -462,9 +462,9 @@ void hm_PlayerPushed(uint8_t *ram, HmRegs *r)
   after_move(ram, r);
 }
 
-/* PlayerState_00 ($81:BFDC; actions 0, 1, 2, 6, 7, $0E): $D2 bit 2 goes to
+/* PlayerState_00_StandWalkRun ($81:BFDC; actions 0, 1, 2, 6, 7, $0E): $D2 bit 2 goes to
  * PlayerEatAnimation; then by the action: running, walking, pushed, or the end. */
-void hm_PlayerState_00(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_00_StandWalkRun(uint8_t *ram, HmRegs *r)
 {
   r->a = (uint16_t)(dp16(ram, r, GAME_STATE) & 0x0004);
   if (r->a) { hm_PlayerEatAnimation(ram, r); return; }
@@ -515,7 +515,7 @@ static bool play(uint8_t *ram, HmRegs *r, uint16_t at)
 
 /* $1A ($81:C0B5): animation $F2 + facing; then action 0 and event $14 / $45
  * (script 0, or $15 / script 3 with $7F1F60 bit 2); $7F1F60 bits 1-2 off. */
-void hm_PlayerState_1A(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_1A_PutChildBack(uint8_t *ram, HmRegs *r)
 {
   animation_facing(ram, r, 0x00F2);
   if (play(ram, r, 0xC0C2)) {
@@ -531,7 +531,7 @@ void hm_PlayerState_1A(uint8_t *ram, HmRegs *r)
 
 /* $17 ($81:C111): facing back from $0913, animation $DC + facing, a step of
  * 1 (MovePlayer); then action 0 and $7F1F5C bit 5. */
-void hm_PlayerState_17(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_17_PickUpFoal(uint8_t *ram, HmRegs *r)
 {
   r->a = rd16(ram, r, 0x0913);
   set_dp16(ram, r, FACING, r->a);
@@ -548,7 +548,7 @@ void hm_PlayerState_17(uint8_t *ram, HmRegs *r)
 
 /* $18 ($81:C153): animation $E0 + $0911, facing from $0911, a step of 1;
  * then action 0, $D2 bit 4 off and $7F1F5C bit 11. */
-void hm_PlayerState_18(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_18_PutDownFoal(uint8_t *ram, HmRegs *r)
 {
   uint32_t sum = 0x00E0u + rd16(ram, r, 0x0911);
   r->c = sum > 0xFFFF;
@@ -568,7 +568,7 @@ void hm_PlayerState_18(uint8_t *ram, HmRegs *r)
 
 /* $16 ($81:C1A1): animation $D8 + facing; then action 0, event $16 / $12
  * at $7F1F2C / $7F1F2E (StartScriptAtTileInFront), $7F1F58 = 1, $0938 = 0. */
-void hm_PlayerState_16(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_16_ReleaseDog(uint8_t *ram, HmRegs *r)
 {
   animation_facing(ram, r, 0x00D8);
   if (play(ram, r, 0xC1AE)) {
@@ -593,11 +593,11 @@ static void fixed(uint8_t *ram, HmRegs *r, uint16_t anim, uint16_t at, int next)
   if (play(ram, r, at) && next >= 0) set_action(ram, r, (uint16_t)next);
   END(ram, r);
 }
-void hm_PlayerState_15(uint8_t *ram, HmRegs *r) { fixed(ram, r, 0x00CC, 0xC1FA, 0x14); }
-void hm_PlayerState_14(uint8_t *ram, HmRegs *r) { fixed(ram, r, 0x008F, 0xC21B, 0x00); }
-void hm_PlayerState_10(uint8_t *ram, HmRegs *r) { fixed(ram, r, 0x0089, 0xC24C, 0x11); }
-void hm_PlayerState_12(uint8_t *ram, HmRegs *r) { fixed(ram, r, 0x008A, 0xC298, 0x11); }
-void hm_PlayerState_0F(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_15_BeforeFeelSick(uint8_t *ram, HmRegs *r) { fixed(ram, r, 0x00CC, 0xC1FA, 0x14); }
+void hm_PlayerState_14_FeelSick(uint8_t *ram, HmRegs *r) { fixed(ram, r, 0x008F, 0xC21B, 0x00); }
+void hm_PlayerState_10_CastLine(uint8_t *ram, HmRegs *r) { fixed(ram, r, 0x0089, 0xC24C, 0x11); }
+void hm_PlayerState_12_FishBites(uint8_t *ram, HmRegs *r) { fixed(ram, r, 0x008A, 0xC298, 0x11); }
+void hm_PlayerState_0F_HoldRod(uint8_t *ram, HmRegs *r)
 {
   animation(ram, r, 0x0088);
   animate(ram, r, 0xC23C);
@@ -605,7 +605,7 @@ void hm_PlayerState_0F(uint8_t *ram, HmRegs *r)
 }
 
 /* $11 ($81:C263): one chance in 256 x 5 to go on to action $12 */
-void hm_PlayerState_11(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_11_WaitForBite(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 0xFF);
   jsl(ram, r, 0xC269, 0x80, hm_RNGReturn0toA);
@@ -622,12 +622,12 @@ void hm_PlayerState_11(uint8_t *ram, HmRegs *r)
 /* $13 ($81:C2AF): to the animation's end; then action $0F and the event in
  * slot $14 (freed if in use): script $35 for animation $8B (+2 happiness),
  * $34 for $8C, $33 otherwise. */
-void hm_PlayerState_13(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_13_ReelInCatch(uint8_t *ram, HmRegs *r)
 {
   if (play(ram, r, 0xC2B1)) {
     set_action(ram, r, 0x000F);
     r->a = 0x0014;
-    jsl(ram, r, 0xC2CA, 0x84, hm_SetCCPoiner);
+    jsl(ram, r, 0xC2CA, 0x84, hm_SetEventSlotPointer);
     r->y = 0;
     set_a8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 0)));
     if (r->a & 0xFF) {
@@ -658,15 +658,15 @@ static void flag_and_bow(uint8_t *ram, HmRegs *r, uint32_t at_flag, uint16_t bit
   if (play(ram, r, at)) set_action(ram, r, 0);
   END(ram, r);
 }
-void hm_PlayerState_1B(uint8_t *ram, HmRegs *r) { flag_and_bow(ram, r, 0x7F1F60, 0x0010, 0xC34D); }
-void hm_PlayerState_0D(uint8_t *ram, HmRegs *r) { flag_and_bow(ram, r, 0x7F1F5C, 0x0400, 0xC37E); }
+void hm_PlayerState_1B_WhistleDog(uint8_t *ram, HmRegs *r) { flag_and_bow(ram, r, 0x7F1F60, 0x0010, 0xC34D); }
+void hm_PlayerState_0D_WhistleHorse(uint8_t *ram, HmRegs *r) { flag_and_bow(ram, r, 0x7F1F5C, 0x0400, 0xC37E); }
 
 /* $0C ($81:C395): looking at the watch: animation $90 + the tool's number
  * (the tool in hand), and the time's text: $046A unless $7F1F6E bit 14 and
  * not $7F1F60 bit 9; then by the hour, 6 to 18: $046B-$0475, at 17 $0476
  * ($0478 with one of $7F1F66 bits 0-4), at 18 $0477, others $046B. At the
  * animation's end action 0, unless $7F1F5A bit 14. */
-void hm_PlayerState_0C(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_0C_ShowToolAndTime(uint8_t *ram, HmRegs *r)
 {
   if (first_frame(ram, r)) {
     uint16_t sum = (uint16_t)(rd8(ram, r, 0x0921) + 0x90);
@@ -713,7 +713,7 @@ void hm_PlayerState_0C(uint8_t *ram, HmRegs *r)
 }
 
 /* $0B ($81:C4EC): the animation as set; action 0 at its end. */
-void hm_PlayerState_0B(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_0B_Tired(uint8_t *ram, HmRegs *r)
 {
   first_frame(ram, r);
   if (play(ram, r, 0xC503)) set_action(ram, r, 0);
@@ -722,7 +722,7 @@ void hm_PlayerState_0B(uint8_t *ram, HmRegs *r)
 
 /* $0A ($81:C51A): using a tool: at the animation's end the tool acts
  * (UseToolInHand); at frame $18 of the use ($091B) its sound (ToolUsedSound1). */
-void hm_PlayerState_0A(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_0A_UseTool(uint8_t *ram, HmRegs *r)
 {
   first_frame(ram, r);
   if (play(ram, r, 0xC531)) jsl(ram, r, 0xC53E, 0x82, hm_UseToolInHand);
@@ -738,7 +738,7 @@ void hm_PlayerState_0A(uint8_t *ram, HmRegs *r)
  * carrying, $B8 in snow, $C8 with $D2 bit 5; + facing) and sound effect 6;
  * the step is 1 (2 with bit 5, or every other frame with $D2 bit 9); at
  * the end action 0, $D2 bit 9 off, and facing left also bit 5. */
-void hm_PlayerState_03(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_03_Jump(uint8_t *ram, HmRegs *r)
 {
   bool big = false;
   if (first_frame(ram, r)) {
@@ -787,7 +787,7 @@ void hm_PlayerState_03(uint8_t *ram, HmRegs *r)
 /* $04 ($81:C991): picking up: animation $10 + facing and the item down
  * (PutItemDown) the first frame; at the end action 0, holding ($D2 bit 1)
  * and $091E = the item. */
-void hm_PlayerState_04(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_04_PickUp(uint8_t *ram, HmRegs *r)
 {
   if (first_frame(ram, r)) {
     animation_facing(ram, r, 0x0010);
@@ -804,7 +804,7 @@ void hm_PlayerState_04(uint8_t *ram, HmRegs *r)
 
 /* $05 ($81:C9DF): throwing: animation $1C + facing and sound effect 7; at
  * the end action 0 and the hands free ($D2 bit 1 off). */
-void hm_PlayerState_05(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_05_Throw(uint8_t *ram, HmRegs *r)
 {
   if (first_frame(ram, r)) {
     animation_facing(ram, r, 0x001C);
@@ -822,7 +822,7 @@ void hm_PlayerState_05(uint8_t *ram, HmRegs *r)
  * 8 (the power berry?) also counts in $7F1F36, gives +10 happiness and 10
  * more maximum stamina ($0917), and marks where it was eaten ($7F1F6C bit
  * 14 in the houses $15-$17, $7F1F6A bit 6 on map $29). */
-void hm_PlayerState_08(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_08_Eat(uint8_t *ram, HmRegs *r)
 {
   if (first_frame(ram, r)) {
     uint32_t sum = (uint32_t)rd8(ram, r, 0x0984) + 0x33;
@@ -1105,7 +1105,7 @@ void hm_CheckDoors(uint8_t *ram, HmRegs *r)
   uint8_t map = rd8(ram, r, 0x0022);                      /* LDA $0022 (absolute) */
   set_a8(r, map);
   r->c = map >= 0x04;
-  if (!r->c) jsl(ram, r, 0x9CDC, 0x82, hm_CopyCurrentMaptoFarmMap);
+  if (!r->c) jsl(ram, r, 0x9CDC, 0x82, hm_CopyCurrentMapToFarmMap);
   map = *hm_dp(ram, r, 0x22);
   set_a8(r, map);
   r->c = map >= 0x0C;
@@ -1129,7 +1129,7 @@ void hm_CheckDoors(uint8_t *ram, HmRegs *r)
  * $0923) and the new tool's noises are loaded (ToolUsedSound2, which waits
  * a frame when it changes instruments).
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_PlayerState_1C(uint8_t *ram, HmRegs *r)
+void hm_PlayerState_1C_SwapTools(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
   r->a = (uint16_t)(dp16(ram, r, GAME_STATE) & 0x8000);
@@ -1166,12 +1166,12 @@ void hm_PlayerState_1C(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 static void not_idle_step(uint8_t *ram, HmRegs *r) { not_idle(ram, r); }
 static Fn *const PLAYER_STEPS[29] = {
-  hm_PlayerState_00, hm_PlayerState_00, hm_PlayerState_00, hm_PlayerState_03, hm_PlayerState_04,
-  hm_PlayerState_05, hm_PlayerState_00, hm_PlayerState_00, hm_PlayerState_08, hm_PlayerIdleAnimation,
-  hm_PlayerState_0A, hm_PlayerState_0B, hm_PlayerState_0C, hm_PlayerState_0D, hm_PlayerState_00,
-  hm_PlayerState_0F, hm_PlayerState_10, hm_PlayerState_11, hm_PlayerState_12, hm_PlayerState_13,
-  hm_PlayerState_14, hm_PlayerState_15, hm_PlayerState_16, hm_PlayerState_17, hm_PlayerState_18,
-  not_idle_step, hm_PlayerState_1A, hm_PlayerState_1B, hm_PlayerState_1C };
+  hm_PlayerState_00_StandWalkRun, hm_PlayerState_00_StandWalkRun, hm_PlayerState_00_StandWalkRun, hm_PlayerState_03_Jump, hm_PlayerState_04_PickUp,
+  hm_PlayerState_05_Throw, hm_PlayerState_00_StandWalkRun, hm_PlayerState_00_StandWalkRun, hm_PlayerState_08_Eat, hm_PlayerIdleAnimation,
+  hm_PlayerState_0A_UseTool, hm_PlayerState_0B_Tired, hm_PlayerState_0C_ShowToolAndTime, hm_PlayerState_0D_WhistleHorse, hm_PlayerState_00_StandWalkRun,
+  hm_PlayerState_0F_HoldRod, hm_PlayerState_10_CastLine, hm_PlayerState_11_WaitForBite, hm_PlayerState_12_FishBites, hm_PlayerState_13_ReelInCatch,
+  hm_PlayerState_14_FeelSick, hm_PlayerState_15_BeforeFeelSick, hm_PlayerState_16_ReleaseDog, hm_PlayerState_17_PickUpFoal, hm_PlayerState_18_PutDownFoal,
+  not_idle_step, hm_PlayerState_1A_PutChildBack, hm_PlayerState_1B_WhistleDog, hm_PlayerState_1C_SwapTools };
 
 static void step_of_action(uint8_t *ram, HmRegs *r)        /* CODE_81BFD3 */
 {
@@ -1185,7 +1185,7 @@ static void step_of_action(uint8_t *ram, HmRegs *r)        /* CODE_81BFD3 */
 void hm_PlayerFrame(uint8_t *ram, HmRegs *r)
 {
   r->a = (uint16_t)(dp16(ram, r, GAME_STATE) & 0x0001);
-  if (!r->a) { hm_ResetIdleAnimatioTimer(ram, r); return; }
+  if (!r->a) { hm_ResetIdleAnimationTimer(ram, r); return; }
   r->a = (uint16_t)(dp16(ram, r, GAME_STATE) & 0x0040);
   if (r->a) { hm_PlayerInteractionSelector(ram, r); return; }
   step_of_action(ram, r);

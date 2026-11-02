@@ -47,7 +47,7 @@ void hm_FindMostLovedName(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * WifePregnanacyandChilds ($82:8790, JSL, RTL; no compiled body). Once
+ * WifePregnancyAndChildren ($82:8790, JSL, RTL; no compiled body). Once
  * married, every night:
  *  - $7F1F3B (days married) + 1; every 120th day sets $7F1F6C bit $0080
  *    (the wedding anniversary).
@@ -112,7 +112,7 @@ static bool child_day(uint8_t *ram, HmRegs *r, uint32_t age_at, int16_t joy,
   return false;
 }
 
-void hm_WifePregnanacyandChilds(uint8_t *ram, HmRegs *r)
+void hm_WifePregnancyAndChildren(uint8_t *ram, HmRegs *r)
 {
   hm_wr16(ram, FLAGS_6C, hm_rd16(ram, FLAGS_6C) & 0xFC7F);
   uint16_t wife = hm_rd16(ram, WIFE_FLAGS);

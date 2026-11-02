@@ -456,7 +456,7 @@ static void prep_doors(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   }
 }
 
-/* video.c: StartProgramedDMA. Channels waiting ($28), their VMAIN ($2A+)
+/* video.c: StartProgrammedDMA. Channels waiting ($28), their VMAIN ($2A+)
  * and destinations ($32+), and the channels set up as the game does: to
  * VRAM ($18), CGRAM ($22), OAM ($04), now and then the other way (into
  * WRAM); short copies from WRAM or ROM. */
@@ -518,7 +518,7 @@ static void prep_last_dma(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   prep_prog_dma(ram, r, rnd);
   ram[0x27] = (uint8_t)(rnd() % 8);
 }
-/* video.c: LoadsFromVRAMwithOffset: X = the VRAM address, Y = the size,
+/* video.c: CopyMapPictureToVRAM: X = the VRAM address, Y = the size,
  * $7E = the offset in $7E:2000 */
 static void prep_vram_load(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -655,7 +655,7 @@ static void prep_event_fade(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x11F5A, (uint16_t)rnd());
   ram[0x28] = 0;
 }
-/* eventcmds.c: Event_AudioRelated3: a real noise (as for PlayEffectWithSongInstrument) and
+/* eventcmds.c: Event_PlayEffectAndWait: a real noise (as for PlayEffectWithSongInstrument) and
  * 1-3 frames in the command's arguments, the item in hand 0-$1B */
 static void prep_effect_wait(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
 static void prep_event_sound_wait(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -713,7 +713,7 @@ static void prep_items_dispatch(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_io_quiet();
   hm_wr16(ram, 0x11F5E, (uint16_t)rnd());
 }
-/* items.c: BAAAA: the ten records of items left on the map, about three
+/* items.c: RunItemsOnMap: the ten records of items left on the map, about three
  * in use, all with the item prepared (prep_items_dispatch) or no routine,
  * real sprites, positions near it */
 static void prep_sprite(uint8_t *ram, uint16_t sprite, uint32_t (*rnd)(void));
@@ -767,7 +767,7 @@ static void prep_one_command(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   uint16_t slot = hm_rd16(ram, 0xCC);
   ram[slot + 0x30] = (uint8_t)pc; ram[slot + 0x31] = (uint8_t)(pc >> 8); ram[slot + 0x32] = bank;
 }
-/* events.c: IterateCCStructures: the game's own scripts as they are, the
+/* events.c: RunEventSlots: the game's own scripts as they are, the
  * waits about to end, the text box and the action sometimes stopping it */
 static void prep_scripts(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -1272,7 +1272,7 @@ TOOL_PREP(feather, 0x18)
 /* watering: dry tilled soil (07) and some crops */
 TOOL_PREP(watering_can, 0x10, 0x07, 0x1D, 0x21, 0x40)
 TOOL_PREP(sprinkler, 0x15, 0x07, 0x1D, 0x21, 0x40)
-/* mapedit.c: EditTileonMap. A position anywhere, any map width. */
+/* mapedit.c: EditTileOnMap. A position anywhere, any map width. */
 static void prep_edit_tile(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   static const uint8_t widths[] = { 1, 2, 4, 3 };
@@ -1698,7 +1698,7 @@ static void palette_inputs(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void), bool 
   /* A (a palette, or a colour) comes from the registry's range */
   r->x = (uint16_t)((rnd() % 4) ? rnd() % 0x10 : rnd() % 0x100);
   r->y = (uint16_t)((rnd() % 4) ? rnd() % 0x10 : rnd() % 0x100);
-  /* Event_TimeofDayPalette: a script with the palette byte */
+  /* Event_TimeOfDayPalette: a script with the palette byte */
   uint16_t at = (uint16_t)((rnd() % 16) ? 0xF000 + (rnd() & 0x3FF) : 0xFFFE);
   hm_wr16(ram, 0xC9, at); ram[0xCB] = 0x7F;
   ram[0x10000 + at + 1] = (uint8_t)(rnd() % 0x75);
@@ -1742,7 +1742,7 @@ static void prep_collision(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
     hm_wr16(ram, s + 0x1A, (uint16_t)((rnd() % 3) ? x - 0x20 + rnd() % 0x40 : rnd()));
     hm_wr16(ram, s + 0x1C, (uint16_t)((rnd() % 3) ? y - 0x20 + rnd() % 0x40 : rnd()));
   }
-  /* a point of a tile for CFFFF */
+  /* a point of a tile for CollideTileCorner */
   if (rnd() % 2) { r->x = (uint16_t)(x + rnd() % 0x20); r->y = (uint16_t)(y + rnd() % 0x20); }
 }
 
@@ -1843,7 +1843,7 @@ static void prep_player_input(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 2) ? rnd() & 0x7FF9 : rnd()));
   hm_wr16(ram, 0x11F68, (uint16_t)rnd());
   hm_wr16(ram, 0x0911, (uint16_t)(rnd() % 4));
-  /* the facing is always 0-3 in the game: CEEEE / CBBBB jump through a
+  /* the facing is always 0-3 in the game: CollideMap / CollideEventObjects jump through a
    * 4-entry table with it */
   hm_wr16(ram, 0xDA, (uint16_t)(rnd() % 4));
   if (rnd() % 2) ram[0x00921] = (uint8_t)(rnd() % 0x1C);
@@ -1953,7 +1953,7 @@ static void prep_event_tool(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 4 == 0) ram[0x00921] = 0;
 }
 
-/* eventcmds.c: Event_UNKPlayerPos. The script and slot (prep_event_cmd),
+/* eventcmds.c: Event_HorseFrame. The script and slot (prep_event_cmd),
  * the requests in $7F1F5C, $7F1F32 = $15 or not, the idle timer near 120,
  * the random byte, and for "pressed A on it" what prep_collision gives
  * (room in front, objects around). */
@@ -1980,7 +1980,7 @@ static void prep_player_pos(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0xD2, (uint16_t)((rnd() % 2) ? 0 : rnd()));
   hm_wr16(ram, 0x11F60, (uint16_t)((rnd() % 2) ? rnd() & ~0x0006u : rnd()));
   hm_wr16(ram, 0x0128, (uint16_t)((rnd() % 2) ? 0x0080 : rnd()));
-  hm_wr16(ram, 0x0913, (uint16_t)(rnd() % 4));            /* a direction: CEEEE's table */
+  hm_wr16(ram, 0x0913, (uint16_t)(rnd() % 4));            /* a direction: CollideMap's table */
   if (rnd() % 3 == 0) {                 /* a free floor of type $C0-$CF, hands empty */
     uint8_t ty = (uint8_t)(0xC0 + rnd() % 0x10);
     for (unsigned i = 0; i < 1024; i++) ram[0x1F000 + i] = (uint8_t)rnd();
@@ -2051,14 +2051,14 @@ static void prep_camera(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   hm_wr16(ram, 0x0140, (uint16_t)rnd()); hm_wr16(ram, 0x0142, (uint16_t)rnd());
 }
 
-/* Event_EditTileonMap: positions on the map ($0181: 1, 2 or 4 screens) */
+/* Event_EditTileOnMap: positions on the map ($0181: 1, 2 or 4 screens) */
 static void prep_event_tile(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_event_58(ram, r, rnd);
   static const uint8_t widths[] = { 1, 2, 4 };
   ram[0x00181] = widths[rnd() % 3];
 }
-/* Event_UNKTools: tools in the hand and the backpack */
+/* Event_ReturnToolsToShed: tools in the hand and the backpack */
 static void prep_event_shed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_event_cmd(ram, r, rnd);
@@ -2070,7 +2070,7 @@ static void prep_event_shed(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 /* coloranim.c: the colour animations. 16 channels with lists of our own
  * in WRAM ($7F:E000: colours, delays, a jump back, sometimes the end), the
  * frames left, the colours and rows; rain or not; the map and the hour for
- * CallIndexedSubrutines; arguments for StartColourAnimation (colour, row and a
+ * StartMapColourAnimations; arguments for StartColourAnimation (colour, row and a
  * channel below 16) and the Zeroes routines (a channel below 16). */
 static void prep_colour_anim(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -2385,8 +2385,8 @@ static void prep_destroy_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   uint16_t slot = hm_rd16(ram, 0xCC);
   hm_wr16(ram, slot + 0x12, (uint16_t)(rnd() % 40));
   uint16_t at = hm_rd16(ram, 0xC9);
-  ram[0x10000 + at + 1] = (uint8_t)(rnd() % 0x31);          /* Event_UNKCCchanges7 */
-  ram[0x10000 + at + 2] |= 0x80;     /* Event_UNKCCchanges11: <word> is a table in the ROM ($B3:8000-) */
+  ram[0x10000 + at + 1] = (uint8_t)(rnd() % 0x31);          /* Event_FreeOtherSlot */
+  ram[0x10000 + at + 2] |= 0x80;     /* Event_SetStandingAnimation: <word> is a table in the ROM ($B3:8000-) */
   hm_wr16(ram, 0x72, (uint16_t)(0x8000 + (rnd() & 0x7FFF))); ram[0x74] = 0xB3;   /* SetSlotAnimation */
 }
 
@@ -2439,7 +2439,7 @@ static void prep_slot_wander(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   for (unsigned i = 0; i < 64; i++) ram[slot + i] = (uint8_t)rnd();
   ram[slot + 0x01] = (uint8_t)((rnd() % 8) ? ram[slot + 0x01] | 0x08 : ram[slot + 0x01]);
   ram[slot + 0x02] = (uint8_t)((rnd() % 8) ? rnd() % 4 : rnd());
-  if (ram[slot + 0x01] & 0x80) ram[slot + 0x02] &= 3;      /* CEEEE: 0-3 */
+  if (ram[slot + 0x01] & 0x80) ram[slot + 0x02] &= 3;      /* CollideMap: 0-3 */
   static const int8_t steps[] = { 0, 0, 1, -1, 2, -2, 0x7F, -0x80 };
   /* the big steps only away from the top and left edges: a corner
    * looked at below 0 would read the tile table's open bus in the
@@ -2448,7 +2448,7 @@ static void prep_slot_wander(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[slot + 0x03] = (uint8_t)steps[rnd() % kinds];
   ram[slot + 0x04] = (uint8_t)steps[rnd() % kinds];
   /* a direction past 3 (the area check takes it as "down") only without a
-   * step: CDDDD would get it too, and it was checked for 0-3 */
+   * step: CollidePlayer would get it too, and it was checked for 0-3 */
   if (ram[slot + 0x02] >= 4) ram[slot + 0x03] = ram[slot + 0x04] = 0;
   if (rnd() % 4) ram[slot + 0x05] = ram[slot + 0x06];
   ram[slot + 0x07] = (uint8_t)((rnd() % 2) ? rnd() % 8 : rnd());
@@ -2518,7 +2518,7 @@ static void prep_slot_sprite(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
  * with the player's action (often 5, holding something up, or a busy
  * one), carrying ($D2 bit 2), $7F1F60, A just pressed ($0128 bit 7) and
  * an item in hand ($091D) sometimes; StartMapAnimation's number for
- * Event_UNKCFD1; the music for Event_AudioRelated2. */
+ * Event_StartMapAnimation; the music for Event_ChangeToWantedSong. */
 static void prep_talk_cmd(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   prep_anim_cmd(ram, r, rnd);
@@ -2598,7 +2598,7 @@ static void prep_draw_order(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   for (unsigned i = 0; i < 40; i++)
     hm_wr16(ram, 0x019C + 0x24 * i + 0x0A, (uint16_t)((rnd() % 4) ? y - 8 + rnd() % 17 : rnd()));
 }
-/* PresetsWRAMCopyofOAM / InitializeOBJs: what they clear holds anything */
+/* ClearOAMCopy / InitializeOBJs: what they clear holds anything */
 static void prep_oam_copy(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
   (void)r;
@@ -2737,7 +2737,7 @@ static void prep_map_event(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x0917] = (uint8_t)rnd();
 }
 
-/* MapEvent_EBA6, the ending: its step, and every number its parts test,
+/* MapEvent_EndingSlideShow, the ending: its step, and every number its parts test,
  * often around the bounds */
 static void prep_map_event_ending(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -2780,7 +2780,7 @@ static void prep_map_event_ending(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void)
   }
 }
 
-/* MapEvent_DED3, the house: the night's leftovers ($7F1F6E bits 5-9,
+/* MapEvent_PlayerHouse, the house: the night's leftovers ($7F1F6E bits 5-9,
  * each now and then: songs and noises that wait frames, with the chip as
  * the game left it), the scenes' flags, the wife's heart around 200 at
  * 6:00:00, the children around 60 days, the dates it tests */
@@ -2818,7 +2818,7 @@ static void prep_map_event_house(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x28] = 0;
 }
 
-/* MapEvent_CB69, the farm: often 6:00:00 sharp (or a second off), the
+/* MapEvent_Farm, the farm: often 6:00:00 sharp (or a second off), the
  * girls' hearts around 200, money around 30,000 G, 5-6 chickens, single */
 static void prep_map_event_farm(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -3111,13 +3111,13 @@ static void prep_player_state_as(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void),
   for (unsigned g = 0; g < 0x40; g++)
     if (hm_rd16(ram, 0x0A320 + 4 * g) < 40) hm_wr16(ram, 0x0A320 + 4 * g, (uint16_t)(40 + rnd() % 200));
   prep_audio(ram, r, rnd);
-  /* inside the map, as prep_collision wants it (CEEEE reads tiles around) */
+  /* inside the map, as prep_collision wants it (CollideMap reads tiles around) */
   hm_wr16(ram, 0xD6, (uint16_t)(0x40 + rnd() % 0x380));
   hm_wr16(ram, 0xD8, (uint16_t)(0x40 + rnd() % 0x380));
   static const uint16_t actions[] = { 0, 0, 1, 2, 3, 9, 0x0E, 0x17, 0x18, 0x0A, 0x08 };
   uint16_t act = (uint16_t)((rnd() % 4) ? actions[rnd() % sizeof actions] : rnd() % 0x1C);
   static const uint16_t on_foot[] = { 0, 1, 2, 6, 7, 0x0E };
-  if (action == -2) act = on_foot[rnd() % 6];               /* PlayerState_00, PlayerEatAnimation */
+  if (action == -2) act = on_foot[rnd() % 6];               /* PlayerState_00_StandWalkRun, PlayerEatAnimation */
   else if (action >= 0) act = (uint16_t)action;             /* the step's own action */
   hm_wr16(ram, 0xD4, act);
   static const uint16_t bits[] = { 0x0002, 0x0004, 0x0010, 0x0020, 0x0080, 0x0100, 0x0200, 0x0800,
@@ -3245,7 +3245,7 @@ static void prep_map_load(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   if (rnd() % 2) ram[0x11F5C] &= (uint8_t)~0x03;
   ram[0x28] = 0;
 }
-/* mapevents.c: RunsFunctionbyIndex: the house's inputs and any map, the
+/* mapevents.c: StartMapEvents: the house's inputs and any map, the
  * house often */
 static void prep_map_event_house(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void));
 static void prep_map_events(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
@@ -3477,7 +3477,7 @@ static void prep_ps_swap(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
   ram[0x0923] = (uint8_t)(rnd() % 0x1C);
 }
 
-/* MapEvent_DC4A: mostly on the way to its visitor's days (year 2 on, fall
+/* MapEvent_Mountain: mostly on the way to its visitor's days (year 2 on, fall
  * or winter, an ordinary weekday) */
 static void prep_map_event_dc4a(uint8_t *ram, HmRegs *r, uint32_t (*rnd)(void))
 {
@@ -3586,7 +3586,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     0x81D061, 1, 0, 0, 0xFF,
     { B8(HM_MAX_STAMINA, 0, 255), B8(HM_CURRENT_STAMINA, 0, 255), B8(HM_EXHAUSTION, 0, 3),
       W16(HM_GAME_STATE, 0, 0xFFFF), B8(0x11F60, 0, 255) } },
-  { "GetsCowPointer", hm_GetsCowPointer, HM_OUT_A, "src/animals.c",
+  { "GetsCowPointer", hm_GetCowPointer, HM_OUT_A, "src/animals.c",
     0x83C9A7, 0, 0, 0, 0xFFFF, { { 0 } } },
   { "GetChickenPointer", hm_GetChickenPointer, HM_OUT_A, "src/animals.c",
     0x83C995, 0, 0, 0, 0xFFFF, { { 0 } } },
@@ -3607,7 +3607,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
       W16(0x11F64, 0, 3), W16(0x11F6C, 0x0FFF, 0x1000), B8(HM_RNG_STATE, 0, 255) } },
   { "GetTileIndex", hm_GetTileIndex, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/farm.c",
     0x82B13C, 0, 0, 0, 0xFFFF, { B8(0x00181, 0, 5) } },
-  { "LoadsDamageProbabilities", hm_LoadsDamageProbabilities,
+  { "LoadsDamageProbabilities", hm_LoadDamageProbabilities,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/farm.c",
     0x828270, 0, 0, 0, 4, { { 0 } } },
   { "ClimateFarmDamageCheck", hm_ClimateFarmDamageCheck, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
@@ -3628,97 +3628,97 @@ const HmDecompFn g_hm_decomp_fns[] = {
     40, prep_random_farm_and_date },
   { "CalculateFarmDevelopment", hm_CalculateFarmDevelopment, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/farm.c", 0x82AA0C, 0, 0, 0, 0xFFFF, { W16(0x11F56, 0, 0xFFFF) }, 40, prep_random_farm },
-  { "MapEvent_E586", hm_MapEvent_E586, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E586", hm_MapEvent_Beanstalk, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E586, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E5A2", hm_MapEvent_E5A2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E5A2", hm_MapEvent_E5A2_Map2C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E5A2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E5B4", hm_MapEvent_E5B4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E5B4", hm_MapEvent_Coop, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E5B4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E5CD", hm_MapEvent_E5CD, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E5CD", hm_MapEvent_E5CD_Maps2Dto30, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E5CD, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E5DF", hm_MapEvent_E5DF, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E5DF", hm_MapEvent_FlowerFestival, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E5DF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E5F1", hm_MapEvent_E5F1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E5F1", hm_MapEvent_HarvestFestival, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E5F1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E603", hm_MapEvent_E603, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E603", hm_MapEvent_StarryNightMap0A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E603, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E632", hm_MapEvent_E632, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E632", hm_MapEvent_StarryNightMap39, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E632, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E661", hm_MapEvent_E661, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E661", hm_MapEvent_StarryNightMap14, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E661, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E690", hm_MapEvent_E690, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E690", hm_MapEvent_NewYear, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E690, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E6B2", hm_MapEvent_E6B2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E6B2", hm_MapEvent_E6B2_Festival0B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E6B2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E6C4", hm_MapEvent_E6C4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E6C4", hm_MapEvent_ToolShedFamily, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E6C4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E74C", hm_MapEvent_E74C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E74C", hm_MapEvent_Nothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E74C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_D4D7", hm_MapEvent_D4D7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_D4D7", hm_MapEvent_MariaHouse1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83D4D7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_D5E7", hm_MapEvent_D5E7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_D5E7", hm_MapEvent_MariaHouse2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83D5E7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_D613", hm_MapEvent_D613, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_D613", hm_MapEvent_Church, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83D613, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_D74E", hm_MapEvent_D74E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_D74E", hm_MapEvent_NinaFlowerShop, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83D74E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_D818", hm_MapEvent_D818, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_D818", hm_MapEvent_NinaHouse, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83D818, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_D844", hm_MapEvent_D844, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_D844", hm_MapEvent_AnnGeneralStore, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83D844, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_D929", hm_MapEvent_D929, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_D929", hm_MapEvent_AnnHouse, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83D929, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_D955", hm_MapEvent_D955, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_D955", hm_MapEvent_EllenHouse1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83D955, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_DA1F", hm_MapEvent_DA1F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_DA1F", hm_MapEvent_EllenHouse2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83DA1F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_DA4B", hm_MapEvent_DA4B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_DA4B", hm_MapEvent_DA4B_Map25Person, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83DA4B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_DAED", hm_MapEvent_DAED, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_DAED", hm_MapEvent_AnimalShop, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83DAED, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_DB8F", hm_MapEvent_DB8F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_DB8F", hm_MapEvent_EveHouse1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83DB8F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_DC1E", hm_MapEvent_DC1E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_DC1E", hm_MapEvent_EveHouse2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83DC1E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_DC4A", hm_MapEvent_DC4A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_DC4A", hm_MapEvent_Mountain, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83DC4A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event_dc4a },
-  { "MapEvent_DD95", hm_MapEvent_DD95, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_DD95", hm_MapEvent_DD95_Map2BPerson, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83DD95, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_DE64", hm_MapEvent_DE64, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_DE64", hm_MapEvent_ElfTunnel, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83DE64, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_DE9B", hm_MapEvent_DE9B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_DE9B", hm_MapEvent_Barn, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83DE9B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E407", hm_MapEvent_E407, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E407", hm_MapEvent_Crossroads, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E407, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E4CB", hm_MapEvent_E4CB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E4CB", hm_MapEvent_MountainCave, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E4CB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_D2E0", hm_MapEvent_D2E0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_D2E0", hm_MapEvent_Town, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83D2E0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_E76D", hm_MapEvent_E76D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_E76D", hm_MapEvent_IntroDays, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83E76D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event },
-  { "MapEvent_EBA6", hm_MapEvent_EBA6, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_EBA6", hm_MapEvent_EndingSlideShow, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83EBA6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event_ending },
-  { "MapEvent_DED3", hm_MapEvent_DED3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
+  { "MapEvent_DED3", hm_MapEvent_PlayerHouse, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
     "src/mapevents.c", 0x83DED3, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_map_event_house },
-  { "MapEvent_CB69", hm_MapEvent_CB69, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "MapEvent_CB69", hm_MapEvent_Farm, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/mapevents.c", 0x83CB69, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_event_farm },
   { "CODE_83F4D8", hm_StartEnding, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/animals.c", 0x83F4D8, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_cow_festival },
-  { "Sub_82A9A0", hm_Sub_82A9A0, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "Sub_82A9A0", hm_CowEatsGrass, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/farm.c", 0x82A9A0, 0, 0, 0, 0xFFFF, { W16(0x0092E, 0, 0xFFFF) }, 40, prep_random_farm },
   { "AddCowHappiness", hm_AddCowHappiness, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/animals.c", 0x84A5D4, 0, 0, 0, 0xFFFF,
     { B8(0x0C1C6 + 4, 0, 255), B8(0x0C1D6 + 4, 0, 255), B8(0x0C1E6 + 4, 0, 255) },
     0, prep_cow_pointer },
-  { "SetCCPoiner", hm_SetCCPoiner, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/events.c",
+  { "SetCCPoiner", hm_SetEventSlotPointer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/events.c",
     0x84887C, 0, 0, 0, 0xFFFF, { { 0 } } },
-  { "ResetsCurrentCCStructureLong", hm_ResetsCurrentCCStructureLong,
+  { "ResetsCurrentCCStructureLong", hm_ResetCurrentEventSlotLong,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/events.c",
     0x8488D4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_cc_pointer },
   { "SUB_8480F8", hm_StartScriptAtTileInFront, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/events.c",
     0x8480F8, 0, 0, 0, 0xFFFF, { W16(0x00985, 0, 0xFFFF), W16(0x00987, 0, 0xFFFF) },
     0, prep_event_start },
-  { "CowFeedingandStatus", hm_CowFeedingandStatus, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "CowFeedingandStatus", hm_CowFeedingAndStatus, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/animals.c", 0x83BC5A, 0, 0, 0, 0xFFFF,
     { B8(HM_RNG_STATE, 0, 255), B8(HM_RNG_STATE + 1, 0, 255), W16(0x11F6E, 0, 0xFFFF),
       W16(0x11F64, 0, 0xFFFF), W16(0x11F45, 0, 0xFFFF), W16(0x11F33, 0, 1100) },
@@ -3727,10 +3727,10 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/people.c", 0x828EC6, 0, 0, 0, 0xFFFF,
     { W16(0x11F1F, 0, 999), W16(0x11F21, 0, 999), W16(0x11F23, 0, 999), W16(0x11F25, 0, 999),
       W16(0x11F27, 0, 999) } },
-  { "WifePregnanacyandChilds", hm_WifePregnanacyandChilds,
+  { "WifePregnanacyandChilds", hm_WifePregnancyAndChildren,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP, "src/people.c", 0x828790, 0, 0, 0, 0xFFFF,
     { W16(0x11F6C, 0, 0xFFFF), W16(0x11F33, 0, 1100) }, 0, prep_family },
-  { "LoadsDateNames", hm_LoadsDateNames, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/calendar.c",
+  { "LoadsDateNames", hm_LoadDateNames, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/calendar.c",
     0x8289D6, 1, 0, 0, 0xFF, { B8(HM_SEASON, 0, 3), B8(HM_WEEKDAY, 0, 6), B8(HM_DAY, 0, 31) } },
   { "AddMoney", hm_AddMoney, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C, "src/stock.c",
     0x83B1C9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_money },
@@ -3745,14 +3745,14 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/tools.c", 0x82AC61, 0, 0, 0, 3, { B8(HM_SEASON, 0, 3) }, 0, prep_tile_in_front },
   { "CheckToolSuccess", hm_CheckToolSuccess, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/tools.c", 0x82AA71, 0, 0, 0, 0xFFFF, { B8(HM_SEASON, 0, 3) }, 0, prep_tile_in_front },
-  { "ResetsCurrentCCStructureShort", hm_ResetsCurrentCCStructureShort,
+  { "ResetsCurrentCCStructureShort", hm_ResetCurrentEventSlotShort,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR, "src/events.c",
     0x848961, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_cc_pointer },
   { "UNK_LoadCCDataLong", hm_StartEventScriptLong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/events.c", 0x848097, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_start },
   { "UNK_LoadCCDataShort", hm_StartEventScript, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/events.c", 0x84803F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_start },
-  { "CalculateTileinFront", hm_CalculateTileinFront, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "CalculateTileinFront", hm_CalculateTileInFront, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/tools.c", 0x81D14E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_tool },
   { "TileAtOffsetFromPlayer", hm_TileAtOffsetFromPlayer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/tools.c", 0x81D1A4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_tool },
@@ -3833,127 +3833,127 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/items.c", 0x81968F, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
   { "CODE_819695", hm_ItemWaitMapAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/items.c", 0x819695, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_01", hm_ItemObject_01, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_01", hm_ItemObject_01_Mushroom, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8180FE, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
-  { "ItemObject_02", hm_ItemObject_02, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_02", hm_ItemObject_02_PoisonMushroom, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818102, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
-  { "ItemObject_03", hm_ItemObject_03, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_03", hm_ItemObject_03_WildGrapes, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818106, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
-  { "ItemObject_04", hm_ItemObject_04, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_04", hm_ItemObject_04_TropicalFruit, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81810A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
-  { "ItemObject_05", hm_ItemObject_05, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_05", hm_ItemObject_05_FullmoonBerry, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81810E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
-  { "ItemObject_06", hm_ItemObject_06, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_06", hm_ItemObject_06_Cake, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818112, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
-  { "ItemObject_07", hm_ItemObject_07, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_07", hm_ItemObject_07_Fish, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818116, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
-  { "ItemObject_08", hm_ItemObject_08, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_08", hm_ItemObject_08_PowerBerry, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81811A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_food },
-  { "ItemObject_09", hm_ItemObject_09, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_09", hm_ItemObject_09_Weed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81811E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_0A", hm_ItemObject_0A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_0A", hm_ItemObject_0A_FallWeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818122, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_0D", hm_ItemObject_0D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_0D", hm_ItemObject_0D_Stone, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818126, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_0E", hm_ItemObject_0E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_0E", hm_ItemObject_0E_SnowyStone, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81812A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_0F", hm_ItemObject_0F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_0F", hm_ItemObject_0F_Fence, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81812E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_10", hm_ItemObject_10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_10", hm_ItemObject_10_Corn, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818132, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_11", hm_ItemObject_11, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_11", hm_ItemObject_11_Tomato, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81814A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_12", hm_ItemObject_12, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_12", hm_ItemObject_12_Potato, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818162, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_13", hm_ItemObject_13, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_13", hm_ItemObject_13_Turnip, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81817A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_14", hm_ItemObject_14, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_14", hm_ItemObject_14_Egg, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818192, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_15", hm_ItemObject_15, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_15", hm_ItemObject_15_SmallMilk, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818196, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_16", hm_ItemObject_16, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_16", hm_ItemObject_16_MediumMilk, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81819A, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_17", hm_ItemObject_17, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_17", hm_ItemObject_17_LargeMilk, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81819E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_18", hm_ItemObject_18, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_18", hm_ItemObject_18_Herb, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8181A2, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_19", hm_ItemObject_19, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_19", hm_ItemObject_19_Flower, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8181A6, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_1A", hm_ItemObject_1A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_1A", hm_ItemObject_1A_Fodder, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8181AA, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_1B", hm_ItemObject_1B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_1B", hm_ItemObject_1B_ShopLilacPerfume, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8181AE, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_1C", hm_ItemObject_1C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_1C", hm_ItemObject_1C_ShopRosePerfume, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8181C8, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_1D", hm_ItemObject_1D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_1D", hm_ItemObject_1D_ShopVioletPerfume, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8181E2, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_1E", hm_ItemObject_1E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_1E", hm_ItemObject_1E_FestivalEgg1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8181FC, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_1F", hm_ItemObject_1F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_1F", hm_ItemObject_1F_FestivalEgg2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81823E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_20", hm_ItemObject_20, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_20", hm_ItemObject_20_FestivalEgg3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818280, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_21", hm_ItemObject_21, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_21", hm_ItemObject_21_FestivalEgg4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8182C2, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_22", hm_ItemObject_22, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_22", hm_ItemObject_22_FestivalEgg5, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8182FE, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_23", hm_ItemObject_23, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_23", hm_ItemObject_23_Nothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8183B6, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_24", hm_ItemObject_24, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_24", hm_ItemObject_24_WeatherVane, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8183B7, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_25", hm_ItemObject_25, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_25", hm_ItemObject_25_Hen, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8183BB, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_26", hm_ItemObject_26, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_26", hm_ItemObject_26_Chick, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8183BF, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_27", hm_ItemObject_27, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_27", hm_ItemObject_27_Nothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8183C3, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_28", hm_ItemObject_28, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_28", hm_ItemObject_28_Nothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8183C4, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_29", hm_ItemObject_29, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_29", hm_ItemObject_29_Mole, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8183C5, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_44", hm_ItemObject_44, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_44", hm_ItemObject_44_ShopGrassSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818499, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_45", hm_ItemObject_45, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_45", hm_ItemObject_45_ShopCornSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8184D5, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_46", hm_ItemObject_46, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_46", hm_ItemObject_46_ShopTomatoSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818511, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_47", hm_ItemObject_47, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_47", hm_ItemObject_47_ShopPotatoSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81854D, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_48", hm_ItemObject_48, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_48", hm_ItemObject_48_ShopTurnipSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818589, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_49", hm_ItemObject_49, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_49", hm_ItemObject_49_ShopFlower, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8185C5, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_4A", hm_ItemObject_4A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_4A", hm_ItemObject_4A_ShopPaint, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8185DF, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_4B", hm_ItemObject_4B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_4B", hm_ItemObject_4B_ShopMilker, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8185F6, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_4C", hm_ItemObject_4C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_4C", hm_ItemObject_4C_ShopBrush, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81860D, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_4D", hm_ItemObject_4D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_4D", hm_ItemObject_4D_ShopGoldSickle, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818624, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_4E", hm_ItemObject_4E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_4E", hm_ItemObject_4E_ShopGoldHoe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81865B, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_4F", hm_ItemObject_4F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_4F", hm_ItemObject_4F_ShopGoldHammer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818692, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_50", hm_ItemObject_50, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_50", hm_ItemObject_50_ShopGoldAxe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8186C9, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_51", hm_ItemObject_51, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_51", hm_ItemObject_51_ShopSprinkler, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818700, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_52", hm_ItemObject_52, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_52", hm_ItemObject_52_ShopCowMedicine, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818737, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_53", hm_ItemObject_53, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_53", hm_ItemObject_53_ShopMiraclePotion, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81874E, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_54", hm_ItemObject_54, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_54", hm_ItemObject_54_ShopChickenFeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818765, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_55", hm_ItemObject_55, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_55", hm_ItemObject_55_ShopCowFeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x818781, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_56", hm_ItemObject_56, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_56", hm_ItemObject_56_ShopCake, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x81879D, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item_shop },
-  { "ItemObject_58", hm_ItemObject_58, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_58", hm_ItemObject_58_LilacPerfume, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8187B7, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_59", hm_ItemObject_59, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_59", hm_ItemObject_59_RosePerfume, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8187BB, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
-  { "ItemObject_5A", hm_ItemObject_5A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ItemObject_5A", hm_ItemObject_5A_VioletPerfume, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/items.c", 0x8187BF, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_item },
   { "CODE_81D716", hm_PlayerAction_0F_Tv, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/actions.c", 0x81D716, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_action },
@@ -4107,9 +4107,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/playerstate.c", 0x809A64, 0, 0, 0, 0xFFFF, { { 0 } }, 400, prep_doors },
   { "SUB_809D0B", hm_CheckMountainFinds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x809D0B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_mountain },
-  { "PlayerState_00", hm_PlayerState_00, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+  { "PlayerState_00", hm_PlayerState_00_StandWalkRun, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
     "src/playerstate.c", 0x81BFDC, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_foot },
-  { "ResetIdleAnimatioTimer", hm_ResetIdleAnimatioTimer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "ResetIdleAnimatioTimer", hm_ResetIdleAnimationTimer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C002, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_any },
   { "SetPlayerName", hm_SetPlayerName, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
     "src/names.c", 0x8080ED, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_set_name },
@@ -4135,11 +4135,11 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/demo.c", 0x82D3C7, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_demo },
   { "IntroScreen", hm_IntroScreen, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
     "src/intro.c", 0x82D75E, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_intro },
-  { "IntroScreen_D80D", hm_IntroScreen_D80D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+  { "IntroScreen_D80D", hm_IntroFrame, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
     "src/intro.c", 0x82D80D, 1, 0, 0, 0xFFFF, { { 0 } }, 60, prep_intro },
-  { "IntroScreen_D93F", hm_IntroScreen_D93F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+  { "IntroScreen_D93F", hm_ParentsSceneFrame, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
     "src/intro.c", 0x82D93F, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_intro },
-  { "IntroScreen_E0EB", hm_IntroScreen_E0EB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
+  { "IntroScreen_E0EB", hm_NewFileScreenFrame, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
     "src/intro.c", 0x82E0EB, 1, 0, 0, 0xFFFF, { { 0 } }, 30, prep_intro },
   { "SUB_82E1F1", hm_ContinueFileScreen, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_TOLOOP | HM_INTERP,
     "src/intro.c", 0x82E1F1, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_intro },
@@ -4169,7 +4169,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/transition.c", 0x8096D3, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_enter_map },
   { "SetScreenTransition", hm_SetScreenTransition, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
     "src/transition.c", 0x809671, 1, 0, 0, 0xFFFF, { { 0 } }, 6, prep_go_to_map },
-  { "RunsFunctionbyIndex", hm_RunsFunctionbyIndex, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
+  { "RunsFunctionbyIndex", hm_StartMapEvents, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
     "src/mapevents.c", 0x83CA98, 0, 0, 0, 0xFFFF, { { 0 } }, 60, prep_map_events },
   { "SUB_80972C", hm_LoadAndShowMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT | HM_LOOSE | HM_INTERP,
     "src/transition.c", 0x80972C, 1, 0, 0, 0xFFFF, { { 0 } }, 4, prep_map_load },
@@ -4177,39 +4177,39 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/playerstate.c", 0x81BFB7, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_player_frame },
   { "PlayerInteractionSelector", hm_PlayerInteractionSelector, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/playerstate.c", 0x81D570, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_player_frame },
-  { "PlayerState_1C", hm_PlayerState_1C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "PlayerState_1C", hm_PlayerState_1C_SwapTools, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/playerstate.c", 0x81C061, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_ps_swap },
-  { "PlayerState_1A", hm_PlayerState_1A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_1A", hm_PlayerState_1A_PutChildBack, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C0B5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_1A },
-  { "PlayerState_17", hm_PlayerState_17, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_17", hm_PlayerState_17_PickUpFoal, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C111, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_17 },
-  { "PlayerState_18", hm_PlayerState_18, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_18", hm_PlayerState_18_PutDownFoal, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C153, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_18 },
-  { "PlayerState_16", hm_PlayerState_16, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_16", hm_PlayerState_16_ReleaseDog, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C1A1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_16 },
-  { "PlayerState_15", hm_PlayerState_15, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_15", hm_PlayerState_15_BeforeFeelSick, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C1F0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_15 },
-  { "PlayerState_14", hm_PlayerState_14, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_14", hm_PlayerState_14_FeelSick, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C211, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_14 },
-  { "PlayerState_0F", hm_PlayerState_0F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_0F", hm_PlayerState_0F_HoldRod, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C232, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_0F },
-  { "PlayerState_10", hm_PlayerState_10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_10", hm_PlayerState_10_CastLine, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C242, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_10 },
-  { "PlayerState_11", hm_PlayerState_11, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_11", hm_PlayerState_11_WaitForBite, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C263, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_11 },
-  { "PlayerState_12", hm_PlayerState_12, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_12", hm_PlayerState_12_FishBites, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C28E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_12 },
-  { "PlayerState_13", hm_PlayerState_13, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_13", hm_PlayerState_13_ReelInCatch, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C2AF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_13 },
-  { "PlayerState_1B", hm_PlayerState_1B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_1B", hm_PlayerState_1B_WhistleDog, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C333, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_1B },
-  { "PlayerState_0D", hm_PlayerState_0D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_0D", hm_PlayerState_0D_WhistleHorse, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C364, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_0D },
-  { "PlayerState_0C", hm_PlayerState_0C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_0C", hm_PlayerState_0C_ShowToolAndTime, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C395, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_0C },
-  { "PlayerState_0B", hm_PlayerState_0B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_0B", hm_PlayerState_0B_Tired, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C4EC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_0B },
-  { "PlayerState_0A", hm_PlayerState_0A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+  { "PlayerState_0A", hm_PlayerState_0A_UseTool, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
     "src/playerstate.c", 0x81C51A, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_0A },
   { "CODE_81C556", hm_PlayerStandStill, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C556, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_00 },
@@ -4219,13 +4219,13 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/playerstate.c", 0x81C736, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_02 },
   { "CODE_81C83B", hm_PlayerPushed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81C83B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_0E },
-  { "PlayerState_03", hm_PlayerState_03, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+  { "PlayerState_03", hm_PlayerState_03_Jump, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
     "src/playerstate.c", 0x81C86B, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_03 },
-  { "PlayerState_04", hm_PlayerState_04, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+  { "PlayerState_04", hm_PlayerState_04_PickUp, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
     "src/playerstate.c", 0x81C991, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_04 },
-  { "PlayerState_05", hm_PlayerState_05, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
+  { "PlayerState_05", hm_PlayerState_05_Throw, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU,
     "src/playerstate.c", 0x81C9DF, 0, 0, 0, 0xFFFF, { { 0 } }, 150, prep_ps_05 },
-  { "PlayerState_08", hm_PlayerState_08, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "PlayerState_08", hm_PlayerState_08_Eat, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81CA36, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_08 },
   { "CODE_81CB14", hm_PlayerEatAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/playerstate.c", 0x81CB14, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_ps_foot },
@@ -4285,7 +4285,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/toolused.c", 0x82A414, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_chicken_feed },
   { "ToolUsedCowFeed", hm_ToolUsedCowFeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/toolused.c", 0x82A4C2, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_cow_feed },
-  { "ToolUsedUNK", hm_ToolUsedUNK, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ToolUsedUNK", hm_ToolUsedUnusedTool, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/toolused.c", 0x82A570, 1, 0, 0, 0xFF, { { 0 } }, 0, prep_tool_unk },
   { "StartMapAnimation", hm_StartMapAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/mapedit.c", 0x81A5E1, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_animation },
@@ -4298,13 +4298,13 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/animals.c", 0x83C8DC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_new_animal },
   { "PlaceAnimalsOnMap", hm_PlaceAnimalsOnMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/animals.c", 0x83C296, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_place_animals },
-  { "Event_UNKChickenRelated", hm_Event_UNKChickenRelated,
+  { "Event_UNKChickenRelated", hm_Event_ChickenFrame,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849857, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_chicken_slot },
-  { "Event_UNKDogRelated", hm_Event_UNKDogRelated,
+  { "Event_UNKDogRelated", hm_Event_DogFrame,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84AF06, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_dog_slot },
-  { "Event_AudioRelated", hm_Event_AudioRelated, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_AudioRelated", hm_Event_SetWantedSong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x8489BB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
   { "Event_TimeRunning", hm_Event_TimeRunning, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x8489E3, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
@@ -4312,7 +4312,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x848A0D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
   { "Event_SetHour", hm_Event_SetHour, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848A39, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_Empty", hm_Event_Empty, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_Empty", hm_Event_DoNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848A58, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
   { "Event_SetPlayerPosition", hm_Event_SetPlayerPosition, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848A65, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
@@ -4320,65 +4320,65 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x848A94, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
   { "Event_SetPlayerDirection", hm_Event_SetPlayerDirection, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848ABF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_UNKChangesGameState", hm_Event_UNKChangesGameState, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKChangesGameState", hm_Event_DisablePlayerControl, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848AE7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_NewCCStructure", hm_Event_NewCCStructure, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_NewCCStructure", hm_Event_StartOtherSlot, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848B08, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_UNKset7Aflag", hm_Event_UNKset7Aflag, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKset7Aflag", hm_Event_SetSceneFlag, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848BAC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_UNKCompareset7Aflag", hm_Event_UNKCompareset7Aflag, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCompareset7Aflag", hm_Event_WaitForSceneFlag, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848BDC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_UNKCCchanges2", hm_Event_UNKCCchanges2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges2", hm_Event_MoveSlot, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848C22, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_UNKDisableCCstruct", hm_Event_UNKDisableCCstruct, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKDisableCCstruct", hm_Event_FreeOwnSlot, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848CE2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_UNKChangesGameState2", hm_Event_UNKChangesGameState2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKChangesGameState2", hm_Event_EnablePlayerControl, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848CFD, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_JumptoInstruction", hm_Event_JumptoInstruction, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_JumptoInstruction", hm_Event_JumpToInstruction, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848D13, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_UNKSetsCC10", hm_Event_UNKSetsCC10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKSetsCC10", hm_Event_WaitFrames, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848D24, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_JumpifFlagSet", hm_Event_JumpifFlagSet, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_JumpifFlagSet", hm_Event_JumpIfFlagSet, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848D44, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_JumpifEquals", hm_Event_JumpifEquals, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_JumpifEquals", hm_Event_JumpIfEquals, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848DA5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_JumpifBetween", hm_Event_JumpifBetween, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_JumpifBetween", hm_Event_JumpIfBetween, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848DFB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
   { "Event_GetRNG", hm_Event_GetRNG, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848E68, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
   { "Event_JumpIfEqualsRNG", hm_Event_JumpIfEqualsRNG, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848E90, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_UNKSetAnimation", hm_Event_UNKSetAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKSetAnimation", hm_Event_SetPlayerAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848EC9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd },
-  { "Event_UNKPickupMole", hm_Event_UNKPickupMole, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKPickupMole", hm_Event_PickUpMole, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84A94C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKCCchanges6", hm_Event_UNKCCchanges6, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges6", hm_Event_WanderInArea, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84923F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNK3", hm_Event_UNK3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNK3", hm_Event_PickUpPowerBerry, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B93C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_JumpifBetweenValueLong", hm_Event_JumpifBetweenValueLong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_JumpifBetweenValueLong", hm_Event_JumpIfBetweenValueLong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B79A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKFishing", hm_Event_UNKFishing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKFishing", hm_Event_PickUpFish, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84AA5D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKCCchanges13", hm_Event_UNKCCchanges13, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges13", hm_Event_RunPlayer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B427, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKCCchanges12", hm_Event_UNKCCchanges12, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges12", hm_Event_WalkPlayer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B389, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKCCchanges10", hm_Event_UNKCCchanges10, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges10", hm_Event_WanderFreely, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849777, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKTextrelated", hm_Event_UNKTextrelated, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKTextrelated", hm_Event_AddToByteClamped, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x8491D2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_JumpifEqualsValueLong", hm_Event_JumpifEqualsValueLong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_JumpifEqualsValueLong", hm_Event_JumpIfEqualsValueLong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B6BC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_JumpifBetweenValue", hm_Event_JumpifBetweenValue, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_JumpifBetweenValue", hm_Event_JumpIfBetweenValue, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B72D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
   { "Event_ChangeMoney", hm_Event_ChangeMoney, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B602, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKCCchanges4", hm_Event_UNKCCchanges4, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges4", hm_Event_SetSlotSprite, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848F9B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKCCchanges14", hm_Event_UNKCCchanges14, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges14", hm_Event_AddToWordMax999, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B5A9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_JumpifEqualsValue", hm_Event_JumpifEqualsValue, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_JumpifEqualsValue", hm_Event_JumpIfEqualsValue, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B666, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
   { "Event_SetFlag", hm_Event_SetFlag, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849306, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
@@ -4388,27 +4388,27 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/eventcmds.c", 0x849513, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
   { "Event_StoreValue", hm_Event_StoreValue, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84A90F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_SetValueSort", hm_Event_SetValueSort, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_SetValueSort", hm_Event_SetValueByte, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B84C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKJumpif018F", hm_Event_UNKJumpif018F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKJumpif018F", hm_Event_JumpIfAnswer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84919D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_TransitiontoX", hm_Event_TransitiontoX, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_TransitiontoX", hm_Event_TransitionToMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B52D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_ChangeItemonHand", hm_Event_ChangeItemonHand, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_ChangeItemonHand", hm_Event_ChangeItemOnHand, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B4DC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_SetItemonHand", hm_Event_SetItemonHand, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_SetItemonHand", hm_Event_SetItemOnHand, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B556, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNK2", hm_Event_UNK2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNK2", hm_Event_WaitUntilSkippable, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B365, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_TransitiontoHouse", hm_Event_TransitiontoHouse, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_TransitiontoHouse", hm_Event_TransitionToHouse, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B503, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKCCchanges16", hm_Event_UNKCCchanges16, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges16", hm_Event_MakeSlotPassable, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BA51, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKSet5C", hm_Event_UNKSet5C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKSet5C", hm_Event_IgnoreTileProperties, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B58F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKReset5C", hm_Event_UNKReset5C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKReset5C", hm_Event_UseTileProperties, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BB31, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
-  { "Event_UNKSet60", hm_Event_UNKSet60, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKSet60", hm_Event_DisableTools, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BB4B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
   { "Event_DropItemAnimation", hm_Event_DropItemAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B57B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_cmd_ptr },
@@ -4456,9 +4456,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/audio.c", 0x838E7F, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
   { "UNK_Audio2", hm_SoundCommand0B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/audio.c", 0x838E32, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_audio },
-  { "EditTileonMap", hm_EditTileonMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "EditTileonMap", hm_EditTileOnMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/mapedit.c", 0x82B03A, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_edit_tile },
-  { "EditTileonMapandsets0181", hm_EditTileonMapandsets0181, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "EditTileonMapandsets0181", hm_EditFarmTile, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/mapedit.c", 0x82B049, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_edit_tile },
   { "ToolUsedWateringCan", hm_ToolUsedWateringCan,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_JSR,
@@ -4473,7 +4473,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
   { "PrintTextFrame", hm_PrintTextFrame,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP,
     "src/text.c", 0x83951C, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_printer },
-  { "Event_UNKCowRelated", hm_Event_UNKCowRelated,
+  { "Event_UNKCowRelated", hm_Event_CowFrame,
     HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849AD4, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_cow_slot },
   { "SaveGameSlot", hm_SaveGameSlot, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
@@ -4514,13 +4514,13 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/scroll.c", 0x80A11C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
   { "SUB_80A152", hm_ScrollCameraLeft, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/scroll.c", 0x80A152, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_scroll },
-  { "SetTimeofDayPalette", hm_SetTimeofDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "SetTimeofDayPalette", hm_SetTimeOfDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/palette.c", 0x808FC7, 1, 0, 0, 0x0074, { { 0 } }, 0, prep_palette_any },
-  { "TransitionTimeofDayPalettes", hm_TransitionTimeofDayPalettes, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "TransitionTimeofDayPalettes", hm_TransitionTimeOfDayPalettes, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/palette.c", 0x80900C, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
-  { "ClearsTimeofDayPaletteIndexandSetsNext", hm_ClearsTimeofDayPaletteIndexandSetsNext, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "ClearsTimeofDayPaletteIndexandSetsNext", hm_FinishTimeOfDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/palette.c", 0x809157, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
-  { "ClearsTimeofDayPalette", hm_ClearsTimeofDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "ClearsTimeofDayPalette", hm_ClearTimeOfDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/palette.c", 0x809166, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
   { "SUB_80916F", hm_SetPaletteColour, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/palette.c", 0x80916F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
@@ -4534,21 +4534,21 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/palette.c", 0x8093A4, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
   { "UNK_CustomisePalette", hm_PrepareNightPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/palette.c", 0x809241, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette },
-  { "ChangePalettebyTime", hm_ChangePalettebyTime, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "ChangePalettebyTime", hm_ChangePaletteByTime, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/palette.c", 0x8092E2, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette },
   { "PrepareSpritePalette", hm_PrepareSpritePalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/palette.c", 0x809329, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette },
   { "SetPaletteToLoad", hm_SetPaletteToLoad, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/palette.c", 0x809501, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
-  { "Event_TimeofDayPalette", hm_Event_TimeofDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_TimeofDayPalette", hm_Event_TimeOfDayPalette, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/palette.c", 0x849356, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_palette_any },
-  { "CFFFF", hm_CFFFF, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "CFFFF", hm_CollideTileCorner, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/collision.c", 0x83B0F6, 0, 0, 0, 1, { { 0 } }, 0, prep_collision },
-  { "CEEEE", hm_CEEEE, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "CEEEE", hm_CollideMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/collision.c", 0x83AF37, 0, 0, 0, 3, { { 0 } }, 0, prep_collision },
-  { "CBBBB", hm_CBBBB, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "CBBBB", hm_CollideEventObjects, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/collision.c", 0x83AD91, 0, 0, 0, 3, { { 0 } }, 0, prep_collision },
-  { "CDDDD", hm_CDDDD, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "CDDDD", hm_CollidePlayer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/collision.c", 0x83AEC3, 0, 0, 0, 3, { { 0 } }, 0, prep_collision },
   { "UNK_ToolUsed", hm_StartToolAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/toolanim.c", 0x8290A8, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
@@ -4606,7 +4606,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/toolanim.c", 0x82923F, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
   { "ToolAnimationCowFeed", hm_ToolAnimationCowFeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/toolanim.c", 0x82924B, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
-  { "ToolAnimationUNK", hm_ToolAnimationUNK, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ToolAnimationUNK", hm_ToolAnimationUnusedTool, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/toolanim.c", 0x829257, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_tool_animation },
   { "SUB_82AD0E", hm_PressAOnTile, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/interact.c", 0x82AD0E, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_interact },
@@ -4614,7 +4614,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/playerinput.c", 0x84C6B7, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_input },
   { "CODE_84C7D6", hm_ReadEventPad, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/playerinput.c", 0x84C7D6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_input },
-  { "NameCursorPharse", hm_NameCursorPharse, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "NameCursorPharse", hm_ReadNameCursorCell, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/menus.c", 0x82EBAC, 0, 0, 0, 5, { { 0 } }, 0, prep_inputs },
   { "SUB_82EB57", hm_NameCursorPosition, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/menus.c", 0x82EB57, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_name_cursor },
@@ -4646,27 +4646,27 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/menus.c", 0x84C034, 1, 0, 0, 0xFFFF, { { 0 } }, 150, prep_inputs },
   { "UNK_PartialMap", hm_DrawWholeMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/mapedit.c", 0x82AF00, 1, 0, 0, 0xFFFF, { { 0 } }, 20, prep_partial_map },
-  { "Event_UNKChickenRelated2", hm_Event_UNKChickenRelated2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKChickenRelated2", hm_Event_PutDownCarried, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BBDA, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
-  { "Event_Cmd51", hm_Event_Cmd51, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_Cmd51", hm_Event_Cmd51_PutDownCarriedQuietly, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BC9C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
-  { "Event_Cmd52", hm_Event_Cmd52, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_Cmd52", hm_Event_Cmd52_PickUpChild1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BD44, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
-  { "Event_Cmd53", hm_Event_Cmd53, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_Cmd53", hm_Event_Cmd53_PickUpChild2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BE0D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
-  { "Event_Cmd54", hm_Event_Cmd54, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_Cmd54", hm_Event_Cmd54_AutoCloseTextBox, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BED6, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
-  { "Event_Cmd55", hm_Event_Cmd55, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_Cmd55", hm_Event_Cmd55_JumpIfBitClear, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BF20, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_55 },
-  { "Event_Cmd56", hm_Event_Cmd56, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_Cmd56", hm_Event_Cmd56_UseToolInHand, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BF81, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_tool },
-  { "Event_Cmd57", hm_Event_Cmd57, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_Cmd57", hm_Event_Cmd57_ChangeStamina, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BFA0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
-  { "Event_Cmd58", hm_Event_Cmd58, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_Cmd58", hm_Event_Cmd58_SetFarmTile, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BFBF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_58 },
-  { "Event_Cmd59", hm_Event_Cmd59, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_Cmd59", hm_Event_Cmd59_SwapTools, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84C000, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
-  { "Event_UNKPlayerPos", hm_Event_UNKPlayerPos, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKPlayerPos", hm_Event_HorseFrame, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84AB27, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_pos },
   { "DivisionSigned", hm_DivisionSigned, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/math.c", 0x8380D0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_division_signed },
@@ -4678,25 +4678,25 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/scroll.c", 0x809F61, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_camera },
   { "Event_ResetFlag", hm_Event_ResetFlag, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x8493C9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_55 },
-  { "Event_EditTileonMap", hm_Event_EditTileonMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_EditTileonMap", hm_Event_EditTileOnMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BA10, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_tile },
   { "Event_StartTextBox", hm_Event_StartTextBox, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848FEF, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
   { "Event_StartTextBoxCopy", hm_Event_StartTextBoxCopy, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849034, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_50s },
-  { "Event_UNKTools", hm_Event_UNKTools, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+  { "Event_UNKTools", hm_Event_ReturnToolsToShed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/eventcmds.c", 0x84BB65, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_event_shed },
   { "UNK_SetPointer42", hm_StartColourAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/coloranim.c", 0x808E48, 1, 1, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
   { "UNK_BigLoop", hm_RunColourAnimations, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/coloranim.c", 0x808E69, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
-  { "Zeroes42Pointers", hm_Zeroes42Pointers, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "Zeroes42Pointers", hm_StopAllColourAnimations, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/coloranim.c", 0x808FAB, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
-  { "ZeroesPartial42Pointers", hm_ZeroesPartial42Pointers, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "ZeroesPartial42Pointers", hm_StopColourAnimationsFrom, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/coloranim.c", 0x808F92, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
-  { "ZeroesOne42Pointer", hm_ZeroesOne42Pointer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "ZeroesOne42Pointer", hm_StopColourAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/coloranim.c", 0x808F82, 0, 0, 0, 0x000F, { { 0 } }, 0, prep_colour_anim },
-  { "CallIndexedSubrutines", hm_CallIndexedSubrutines, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "CallIndexedSubrutines", hm_StartMapColourAnimations, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/coloranim.c", 0x809553, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
   { "SUB_80C36C", hm_Colours_FarmSpringSummer_Day, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/coloranim.c", 0x80C36C, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_colour_anim },
@@ -4808,13 +4808,13 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/animals.c", 0x83C9E5, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_animals },
   { "ToolUsedSound1", hm_ToolUsedSound1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU,
     "src/toolsound.c", 0x828FB1, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_tool_sound },
-  { "CopyCurrentMaptoFarmMap", hm_CopyCurrentMaptoFarmMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "CopyCurrentMaptoFarmMap", hm_CopyCurrentMapToFarmMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/farm.c", 0x82A682, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_map_copy },
   { "LoadMap", hm_LoadMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/farm.c", 0x82A5FB, 1, 1, 0, 0xFFFF, { { 0 } }, 0, prep_load_map },
   { "LoadDefaultFarmMap", hm_LoadDefaultFarmMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/farm.c", 0x82A65A, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_map_copy },
-  { "ClearsofAllCCStructs", hm_ClearsofAllCCStructs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
+  { "ClearsofAllCCStructs", hm_ClearAllEventSlots, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/events.c", 0x848000, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_copy },
   { "MultiplicationUnsigned", hm_MultiplicationUnsigned, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_IO,
     "src/math.c", 0x838067, 1, 0, 0, 0xFFFF, { B8(0x011A, 0, 255), B8(0x011B, 0, 255) }, 0, NULL },
@@ -4828,7 +4828,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/maptiles.c", 0x81A9E5, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_map_tiles },
   { "ReplaceTilesFarm", hm_ReplaceTilesFarm, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/maptiles.c", 0x81AAB6, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
-  { "ReplaceTilesMoutain", hm_ReplaceTilesMoutain, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ReplaceTilesMoutain", hm_ReplaceTilesMountain, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/maptiles.c", 0x81AC80, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
   { "ReplaceTilesHouse1", hm_ReplaceTilesHouse1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/maptiles.c", 0x81ACCC, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
@@ -4842,7 +4842,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/maptiles.c", 0x81AE6F, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
   { "ReplaceTilesAnimalShop", hm_ReplaceTilesAnimalShop, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/maptiles.c", 0x81AFC0, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
-  { "ReplaceTilesToolshed", hm_ReplaceTilesToolshed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "ReplaceTilesToolshed", hm_ReplaceTilesToolShed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/maptiles.c", 0x81B064, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_map_tiles },
   { "ReplaceTilesBarn", hm_ReplaceTilesBarn, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/maptiles.c", 0x81B0A8, 0, 0, 0, 0xFFFF, { { 0 } }, 200, prep_map_tiles },
@@ -4924,9 +4924,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/audio.c", 0x838598, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_upload },
   /* the routines that are only a return (other routines jump or branch
    * to them, or nothing calls them) */
-  { "StartProgramedDMA", hm_StartProgramedDMA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
+  { "StartProgramedDMA", hm_StartProgrammedDMA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
     "src/video.c", 0x808AF0, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_prog_dma },
-  { "InitialzieScreenStatusVar", hm_InitialzieScreenStatusVar, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+  { "InitialzieScreenStatusVar", hm_InitializeScreenStatusVars, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x808C4C, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_screen },
   { "ManageGraphicPresets", hm_ManageGraphicPresets, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
     "src/video.c", 0x808C59, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_screen },
@@ -4934,13 +4934,13 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/video.c", 0x808E0F, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_screen },
   { "ResetForceBlank", hm_ResetForceBlank, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x808E1E, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_screen },
-  { "SetsBrightness", hm_SetsBrightness, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
+  { "SetsBrightness", hm_SetBrightness, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
     "src/video.c", 0x808E2D, 1, 1, 0, 0xFFFF, { { 0 } }, 300, prep_screen },
   { "ZeroesVRAM", hm_ZeroesVRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x808846, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
   { "ZeroesOAM", hm_ZeroesOAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x808887, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
-  { "UNUSED1", hm_UNUSED1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+  { "UNUSED1", hm_UnusedHideSprites, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x8088C3, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
   { "ZeroesCGRAM", hm_ZeroesCGRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x808980, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
@@ -4948,9 +4948,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/video.c", 0x8089BC, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_clear },
   { "StartLastPreparedDMA", hm_StartLastPreparedDMA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO,
     "src/video.c", 0x808AB2, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_last_dma },
-  { "LoadsFromVRAMwithOffset", hm_LoadsFromVRAMwithOffset, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR,
+  { "LoadsFromVRAMwithOffset", hm_CopyMapPictureToVRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_JSR,
     "src/video.c", 0x80AA38, 0, 0, 0, 0xFFFF, { { 0 } }, 300, prep_vram_load },
-  { "CopiesWRAMtoOBJVGRAM", hm_CopiesWRAMtoOBJVGRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
+  { "CopiesWRAMtoOBJVGRAM", hm_CopySpritePiecesToVRAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x858E57, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_piece_copies },
   { "UpdateGraphics", hm_UpdateGraphics, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP | HM_JSR,
     "src/video.c", 0x8086B1, 1, 0, 0, 0xFFFF, { { 0 } }, 200, prep_update_graphics },
@@ -4977,9 +4977,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/nmi.c", 0x808645, 1, 0, 0, 0xFFFF, { { 0 } }, 300, prep_wait_frame },
   { "WaitForNMIATimes", hm_WaitForNMIATimes, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
     "src/nmi.c", 0x80865D, 0, 0, 1, 3, { { 0 } }, 200, prep_wait_times },
-  { "ScreenFadein", hm_ScreenFadein, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
+  { "ScreenFadein", hm_ScreenFadeIn, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
     "src/nmi.c", 0x8087CE, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_fade_in },
-  { "ScreenFadeout", hm_ScreenFadeout, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
+  { "ScreenFadeout", hm_ScreenFadeOut, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_WAIT,
     "src/nmi.c", 0x80880A, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_fade_out },
   { "UNK_Audio18", hm_PrepareSoundEffect, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
     "src/audio.c", 0x83833E, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_sound_wait },
@@ -4991,75 +4991,75 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/audio.c", 0x8382C6, 1, 0, 0, 0xFFFF, { { 0 } }, 10, prep_new_song_wait },
   { "ToolUsedSound2", hm_ToolUsedSound2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
     "src/toolsound.c", 0x828FF3, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_tool_noise_wait },
-  { "Event_ScreenFadein", hm_Event_ScreenFadein, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_IO | HM_WAIT,
+  { "Event_ScreenFadein", hm_Event_ScreenFadeIn, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_IO | HM_WAIT,
     "src/eventcmds.c", 0x848B83, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_event_fade },
-  { "Event_ScreenFadeout", hm_Event_ScreenFadeout, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_IO | HM_WAIT,
+  { "Event_ScreenFadeout", hm_Event_ScreenFadeOut, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_IO | HM_WAIT,
     "src/eventcmds.c", 0x848CB9, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_event_fade },
-  { "Event_AudioRelated3", hm_Event_AudioRelated3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "Event_AudioRelated3", hm_Event_PlayEffectAndWait, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/eventcmds.c", 0x8495E8, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_event_sound_wait },
   { "CODE_81D670", hm_PlayerAction_04_Jingle, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/interact.c", 0x81D670, 0, 0, 0, 0xFFFF, { { 0 } }, 40, prep_action_sound },
   { "EventInstructionInterpreter", hm_EventInstructionInterpreter, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_APU | HM_IO | HM_WAIT,
     "src/events.c", 0x848249, 0, 0, 0, 0xFFFF, { { 0 } }, 60, prep_one_command },
-  { "IterateCCStructures", hm_IterateCCStructures, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
+  { "IterateCCStructures", hm_RunEventSlots, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_IO | HM_WAIT,
     "src/events.c", 0x84816F, 0, 0, 0, 0xFFFF, { { 0 } }, 30, prep_scripts },
-  { "BAAAA", hm_BAAAA, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "BAAAA", hm_RunItemsOnMap, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x81A383, 1, 0, 0, 0xFFFF, { { 0 } }, 30, prep_item_records },
   { "SUB_81809A", hm_RunItemRoutine, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x81809A, 1, 0, 0, 0xFFFF, { { 0 } }, 40, prep_items_dispatch },
   { "CODE_8187C3", hm_TakeToolFromShelf, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x8187C3, 1, 0, 0, 0xFF, { { 0 } }, 30, prep_tool_item },
-  { "ItemObject_2A", hm_ItemObject_2A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_2A", hm_ItemObject_2A_Sickle, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x8183C9, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_2B", hm_ItemObject_2B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_2B", hm_ItemObject_2B_Hoe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x8183D1, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_2C", hm_ItemObject_2C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_2C", hm_ItemObject_2C_Hammer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x8183D9, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_2D", hm_ItemObject_2D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_2D", hm_ItemObject_2D_Axe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x8183E1, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_2E", hm_ItemObject_2E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_2E", hm_ItemObject_2E_CornSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x8183E9, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_2F", hm_ItemObject_2F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_2F", hm_ItemObject_2F_TomatoSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x8183F1, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_30", hm_ItemObject_30, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_30", hm_ItemObject_30_PotatoSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x8183F9, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_31", hm_ItemObject_31, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_31", hm_ItemObject_31_TurnipSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818401, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_32", hm_ItemObject_32, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_32", hm_ItemObject_32_CowMedicine, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818409, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_33", hm_ItemObject_33, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_33", hm_ItemObject_33_MiraclePotion, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818411, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_34", hm_ItemObject_34, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_34", hm_ItemObject_34_Bell, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818419, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_35", hm_ItemObject_35, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_35", hm_ItemObject_35_GrassSeeds, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818421, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_36", hm_ItemObject_36, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_36", hm_ItemObject_36_Paint, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818429, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_37", hm_ItemObject_37, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_37", hm_ItemObject_37_Milker, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818431, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_38", hm_ItemObject_38, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_38", hm_ItemObject_38_Brush, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818439, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_39", hm_ItemObject_39, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_39", hm_ItemObject_39_WateringCan, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818441, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_3A", hm_ItemObject_3A, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_3A", hm_ItemObject_3A_GoldSickle, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818449, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_3B", hm_ItemObject_3B, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_3B", hm_ItemObject_3B_GoldHoe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818451, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_3C", hm_ItemObject_3C, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_3C", hm_ItemObject_3C_GoldHammer, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818459, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_3D", hm_ItemObject_3D, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_3D", hm_ItemObject_3D_GoldAxe, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818461, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_3E", hm_ItemObject_3E, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_3E", hm_ItemObject_3E_Sprinkler, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818469, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_3F", hm_ItemObject_3F, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_3F", hm_ItemObject_3F_MagicBeans, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818471, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_40", hm_ItemObject_40, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_40", hm_ItemObject_40_GemSeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818479, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_41", hm_ItemObject_41, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_41", hm_ItemObject_41_BlueFeather, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818481, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_42", hm_ItemObject_42, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_42", hm_ItemObject_42_ChickenFeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818489, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
-  { "ItemObject_43", hm_ItemObject_43, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
+  { "ItemObject_43", hm_ItemObject_43_CowFeed, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP | HM_APU | HM_IO | HM_WAIT,
     "src/items.c", 0x818491, 1, 0, 0, 0xFF, { { 0 } }, 6, prep_tool_item },
   { "BackgroundsManager", hm_BackgroundsManager, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_IO | HM_INTERP,
     "src/video.c", 0x80A7C6, 1, 0, 0, 0xFFFF, { { 0 } }, 100, prep_backgrounds },
@@ -5075,7 +5075,7 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/interact.c", 0x8281BF, 0, 0, 0, 0xFFFF, { { 0 } }, 50, NULL },
   { "CODE_83F4D7", hm_ActionNothing, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/interact.c", 0x83F4D7, 0, 0, 0, 0xFFFF, { { 0 } }, 50, NULL },
-  { "UNUSED2", hm_UNUSED2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
+  { "UNUSED2", hm_UnusedCountInstrument, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_INTERP,
     "src/audio.c", 0x838376, 1, 0, 0, 0xFFFF, { W16(0x0103, 0, 0xFFFF) }, 0, NULL },
   { "UNK_Audio1", hm_UploadSoundProgram, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_APU | HM_INTERP | HM_LIVE,
     "src/audio.c", 0x83843D, 0, 0, 0, 0xFFFF, { { 0 } }, 1, prep_boot_upload },
@@ -5131,27 +5131,27 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/events.c", 0x848895, 1, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy_cmd },
   { "SUB_848020", hm_FreeEventSlot, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/events.c", 0x848020, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy },
-  { "Event_UNK1", hm_Event_UNK1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNK1", hm_Event_DestroyOwnObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B34B, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy_cmd },
-  { "Event_UNKCCchanges7", hm_Event_UNKCCchanges7, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges7", hm_Event_FreeOtherSlot, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849375, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy_cmd },
-  { "Event_UNKCCchanges11", hm_Event_UNKCCchanges11, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges11", hm_Event_SetStandingAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849810, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_destroy_cmd },
-  { "Event_UNKCCchanges8", hm_Event_UNKCCchanges8, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges8", hm_Event_SetSlotAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84957D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
-  { "Event_UNKCCchanges15", hm_Event_UNKCCchanges15, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges15", hm_Event_SetSlotAnimationPlayerDir, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84B8D9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
-  { "Event_UNKCCchanges3", hm_Event_UNKCCchanges3, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges3", hm_Event_PlaceSlot, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x848F0A, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
-  { "Event_UNKCCchanges17", hm_Event_UNKCCchanges17, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges17", hm_Event_FacePlayerIfSpokenTo, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x84BA72, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_anim_cmd },
-  { "Event_UNKCCchanges5", hm_Event_UNKCCchanges5, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges5", hm_Event_TalkIfSpokenTo, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849079, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_talk_cmd },
-  { "Event_UNKCCchanges9", hm_Event_UNKCCchanges9, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCCchanges9", hm_Event_TalkOrTakeShownItem, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849633, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_talk_cmd },
-  { "Event_UNKCFD1", hm_Event_UNKCFD1, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "Event_UNKCFD1", hm_Event_StartMapAnimation, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/eventcmds.c", 0x849553, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_map_animation_cmd },
-  { "Event_AudioRelated2", hm_Event_AudioRelated2, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_APU,
+  { "Event_AudioRelated2", hm_Event_ChangeToWantedSong, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_APU,
     "src/eventcmds.c", 0x848CA8, 0, 0, 0, 0xFFFF, { { 0 } }, 100, prep_music_cmd },
   { "CODE_8580B9", hm_MoveGameObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x8580B9, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
@@ -5171,9 +5171,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/objects.c", 0x81D03D, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_player_object },
   { "GetOBJOrderToDraw", hm_GetOBJOrderToDraw, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/objects.c", 0x858377, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_draw_order },
-  { "PresetsWRAMCopyofOAM", hm_PresetsWRAMCopyofOAM, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
+  { "PresetsWRAMCopyofOAM", hm_ClearOAMCopy, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR,
     "src/objects.c", 0x858647, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_oam_copy },
-  { "PresetsWRAMCopyOAMCopy", hm_PresetsWRAMCopyOAMCopy, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+  { "PresetsWRAMCopyOAMCopy", hm_ClearOAMCopyAgain, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/objects.c", 0x858896, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_oam_copy },
   { "InitializeOBJs", hm_InitializeOBJs, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x85820F, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_init_objs },
@@ -5181,9 +5181,9 @@ const HmDecompFn g_hm_decomp_fns[] = {
     "src/objects.c", 0x8582C7, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_animate_gobjs },
   { "CODE_8581CB", hm_ReadGameObject, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x8581CB, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_change_gobj },
-  { "InvertIfFlipedX", hm_InvertIfFlipedX, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+  { "InvertIfFlipedX", hm_InvertIfFlippedX, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/objects.c", 0x858BB0, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_flip },
-  { "InvertIfFlipedY", hm_InvertIfFlipedY, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
+  { "InvertIfFlipedY", hm_InvertIfFlippedY, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C | HM_JSR | HM_INTERP,
     "src/objects.c", 0x858BBC, 0, 0, 0, 0xFFFF, { { 0 } }, 0, prep_flip },
   { "ClearSpriteDataTables", hm_ClearSpriteDataTables, HM_OUT_A | HM_OUT_X | HM_OUT_Y | HM_OUT_C,
     "src/objects.c", 0x858ED7, 1, 0, 0, 0xFFFF, { { 0 } }, 200, NULL },
@@ -5486,7 +5486,7 @@ static void fuzz_at(unsigned frame)
   if (!s_stats) { s_stats = calloc((size_t)g_hm_decomp_count, sizeof *s_stats); atexit(report); }
   g_hm_decomp_check = 1;
   s_fuzzing = 1;
-  /* Long interpreted routines (CowFeedingandStatus) would otherwise pause at
+  /* Long interpreted routines (CowFeedingAndStatus) would otherwise pause at
    * the frame's deadline half-way, as they do in the game, and not be
    * comparable. The frame driver sets the deadline again every frame. */
   interp_bridge_set_master_deadline(0);

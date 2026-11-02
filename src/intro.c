@@ -30,7 +30,7 @@
  *
  * Nothing here returns: each check stops at the end of one frame (the
  * jump back to the frame's start) or where it goes on to another of these
- * routines (HM_TOLOOP). IntroScreen_D80D, _D93F, _E0EB and ContinueFileScreenFrame
+ * routines (HM_TOLOOP). IntroFrame, _D93F, _E0EB and ContinueFileScreenFrame
  * check one frame of each loop on its own.
  */
 #include "hm_decomp.h"
@@ -80,8 +80,8 @@ static void fade(uint8_t *ram, HmRegs *r, uint8_t from, uint8_t frames, uint8_t 
   set_a8(r, to); set_dp8(ram, r, 0x94, to);
   jsl(ram, r, at, 0x80, fn);
 }
-static void fade_out(uint8_t *ram, HmRegs *r, uint8_t frames, uint16_t at) { fade(ram, r, 0x0F, frames, 0x01, at, hm_ScreenFadeout); }
-static void fade_in(uint8_t *ram, HmRegs *r, uint8_t from, uint8_t frames, uint16_t at) { fade(ram, r, from, frames, 0x0F, at, hm_ScreenFadein); }
+static void fade_out(uint8_t *ram, HmRegs *r, uint8_t frames, uint16_t at) { fade(ram, r, 0x0F, frames, 0x01, at, hm_ScreenFadeOut); }
+static void fade_in(uint8_t *ram, HmRegs *r, uint8_t from, uint8_t frames, uint16_t at) { fade(ram, r, from, frames, 0x0F, at, hm_ScreenFadeIn); }
 /* SEP #$20; LDA #map; STA $22 (and the routine at `at`) */
 static void map_is(uint8_t *ram, HmRegs *r, uint8_t map)
 {
@@ -118,14 +118,14 @@ static void lit(uint8_t *ram, HmRegs *r, uint16_t at)
   jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_WaitForNMI);
 }
 /* everything of the old picture cleared, from `at` (JSLs 4 bytes apart):
- * ZeroesVRAM, ZeroesCGRAM, Zeroes42Pointers, ClearSpriteDataTables,
- * InitializeOBJs, ClearItemRecords, ClearsofAllCCStructs */
+ * ZeroesVRAM, ZeroesCGRAM, StopAllColourAnimations, ClearSpriteDataTables,
+ * InitializeOBJs, ClearItemRecords, ClearAllEventSlots */
 static void clear_all(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   static const struct { uint8_t bank; Fn *fn; } ALL[7] = {
-    { 0x80, hm_ZeroesVRAM }, { 0x80, hm_ZeroesCGRAM }, { 0x80, hm_Zeroes42Pointers },
+    { 0x80, hm_ZeroesVRAM }, { 0x80, hm_ZeroesCGRAM }, { 0x80, hm_StopAllColourAnimations },
     { 0x85, hm_ClearSpriteDataTables }, { 0x85, hm_InitializeOBJs }, { 0x81, hm_ClearItemRecords },
-    { 0x84, hm_ClearsofAllCCStructs },
+    { 0x84, hm_ClearAllEventSlots },
   };
   for (int i = 0; i < 7; i++) jsl(ram, r, (uint16_t)(at + 4 * i), ALL[i].bank, ALL[i].fn);
 }
@@ -311,7 +311,7 @@ static void parents(uint8_t *ram, HmRegs *r, uint8_t entry)
   wr16(ram, r, 0x0146, 0x0100);
   r->a = 0; r->x = 0x0009; r->y = 0;                       /* REP #$30 */
   jsl(ram, r, 0xD90A, 0x84, hm_StartEventScriptLong);
-  jsl(ram, r, 0xD90E, 0x84, hm_IterateCCStructures);
+  jsl(ram, r, 0xD90E, 0x84, hm_RunEventSlots);
   map_is(ram, r, rd8(ram, r, 0x098B));                     /* SEP #$20 */
   jsl(ram, r, 0xD919, 0x80, hm_PickMapMusic);
   new_music(ram, r, 0xD91D);
@@ -415,7 +415,7 @@ static void menu_in(uint8_t *ram, HmRegs *r)
   set_a8(r, n);
   r->c = n >= 0x3C;
   if (n != 0x3C) { count_up(ram, r); democheck(ram, r); return; }
-  jsl(ram, r, 0xDC32, 0x80, hm_Zeroes42Pointers);
+  jsl(ram, r, 0xDC32, 0x80, hm_StopAllColourAnimations);
   cycle(ram, r, 0xF2A4, 0x0A, 4, 7, 0xDC4D);
   cycle(ram, r, 0xF2B5, 0x0B, 5, 7, 0xDC68);
   static const uint16_t AT[3] = { 0xDC98, 0xDCED, 0xDD42 };
@@ -491,7 +491,7 @@ static void file_screen_start(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t kin
     r->a = f; r->y = kind;
     jsr(ram, r, (uint16_t)(at + 0x71 + 0x0B * f), hm_DrawSaveFileLine);
   }
-  jsl(ram, r, (uint16_t)(at + 0x7D), 0x80, hm_Zeroes42Pointers);
+  jsl(ram, r, (uint16_t)(at + 0x7D), 0x80, hm_StopAllColourAnimations);
 }
 /* a file screen's end of start: the scrolls at 0 (`scrolls` first, the
  * new game's), the music, the screen lit and faded in, $94 / $96 / $97 = 0 */
@@ -631,13 +631,13 @@ void hm_IntroScreen(uint8_t *ram, HmRegs *r)
 }
 /* the frames on their own: $82:D80D (the intro's), $82:D93F (the parents'
  * scene's), $82:E0EB (the new game's file screen's) */
-void hm_IntroScreen_D80D(uint8_t *ram, HmRegs *r) { intro_frame(ram, r, r->p); }
-void hm_IntroScreen_D93F(uint8_t *ram, HmRegs *r)
+void hm_IntroFrame(uint8_t *ram, HmRegs *r) { intro_frame(ram, r, r->p); }
+void hm_ParentsSceneFrame(uint8_t *ram, HmRegs *r)
 {
   if (parents_frame(ram, r, r->p)) parents_end(ram, r);
 }
-void hm_IntroScreen_E0EB(uint8_t *ram, HmRegs *r) { new_file_frame(ram, r, r->p); }
-void hm_IntroScreen_D871(uint8_t *ram, HmRegs *r) { democheck(ram, r); }
+void hm_NewFileScreenFrame(uint8_t *ram, HmRegs *r) { new_file_frame(ram, r, r->p); }
+void hm_IntroDemoCheck(uint8_t *ram, HmRegs *r) { democheck(ram, r); }
 
 /* ─────────────────────────────────────────────────────────────────────────
  * ContinueFileScreen ($82:E1F1, stage 8, JML): the saved game's file screen: as

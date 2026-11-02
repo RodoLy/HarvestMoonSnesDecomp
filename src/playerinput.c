@@ -132,13 +132,13 @@ static void key_y(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * B: run; or jump, when the tile in front has property bit $20 (a short
  * jump, 28 pixels) or $40 (a long one, 33 pixels, $D2 bit $200) and there
- * is room to land (CEEEE: the map; CBBBB: objects).
+ * is room to land (CollideMap: the map; CollideEventObjects: objects).
  * ───────────────────────────────────────────────────────────────────────── */
 static void tile_in_front(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t y,
                           uint16_t ret_front, uint16_t prop, uint16_t ret_prop)
 {
   r->a = a; r->x = x; r->y = y;
-  jsl(ram, r, ret_front, 0x81, hm_CalculateTileinFront);
+  jsl(ram, r, ret_front, 0x81, hm_CalculateTileInFront);
   r->x = rdw(ram, r, FRONT_X);
   r->y = rdw(ram, r, FRONT_Y);
   r->a = prop;
@@ -171,11 +171,11 @@ static void key_b(uint8_t *ram, HmRegs *r)
       }
       from_player(ram, r, far);
       r->a = dp16(ram, r, FACING);
-      jsl(ram, r, 0xCA7B, 0x83, hm_CEEEE);
+      jsl(ram, r, 0xCA7B, 0x83, hm_CollideMap);
       if (r->a == 0) {
         set16(ram, r, 0xE3, 0x0020);
         r->a = dp16(ram, r, FACING);
-        jsl(ram, r, 0xCA8C, 0x83, hm_CBBBB);
+        jsl(ram, r, 0xCA8C, 0x83, hm_CollideEventObjects);
         if (is(r, 0)) { act(ram, r, 0x0003); return; }    /* jump */
       }
     }
@@ -187,13 +187,13 @@ static void key_b(uint8_t *ram, HmRegs *r)
  * A.
  * ───────────────────────────────────────────────────────────────────────── */
 /* CODE_84CD16 (JSL, RTL): is the way in direction $0911 blocked? The map
- * (CEEEE), a tile $C0-$CF at either corner, or an object (CBBBB).
+ * (CollideMap), a tile $C0-$CF at either corner, or an object (CollideEventObjects).
  * A = 1 blocked, 0 free. */
 static void way_blocked(uint8_t *ram, HmRegs *r)
 {
   from_player(ram, r, 0x0010);
   r->a = rdw(ram, r, TURN);
-  jsl(ram, r, 0xCD2F, 0x83, hm_CEEEE);
+  jsl(ram, r, 0xCD2F, 0x83, hm_CollideMap);
   bool blocked = r->a != 0;
   if (!blocked) {
     for (unsigned at = 0xE9; at <= 0xEB && !blocked; at += 2) {
@@ -207,7 +207,7 @@ static void way_blocked(uint8_t *ram, HmRegs *r)
   if (!blocked) {
     set16(ram, r, 0xE3, 0x0010);
     r->a = rdw(ram, r, TURN);
-    jsl(ram, r, 0xCD60, 0x83, hm_CBBBB);
+    jsl(ram, r, 0xCD60, 0x83, hm_CollideEventObjects);
     blocked = !is(r, 0);
   }
   r->a = blocked ? 1 : 0;
@@ -249,7 +249,7 @@ static void put_down(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, db_addr(r, 0x0939), 0);
 }
 /* carrying the dog ($D2 bit $800): let it go in front, if no object is in
- * the way and three points ahead (CalculateTileinFront with three offsets)
+ * the way and three points ahead (CalculateTileInFront with three offsets)
  * have no solid property bits and are not tile $FF (the last one, also not
  * $E1 nor $C0-$CF) */
 static void let_dog_go(uint8_t *ram, HmRegs *r)
@@ -259,7 +259,7 @@ static void let_dog_go(uint8_t *ram, HmRegs *r)
   };
   from_player(ram, r, 0x0010);
   r->a = dp16(ram, r, FACING);
-  jsl(ram, r, 0xCB43, 0x83, hm_CBBBB);
+  jsl(ram, r, 0xCB43, 0x83, hm_CollideEventObjects);
   if (!is(r, 0)) return;
   for (unsigned i = 0; i < 3; i++) {
     tile_in_front(ram, r, T[i].a, T[i].xy, T[i].xy, T[i].ret_front, 2, T[i].ret_prop);

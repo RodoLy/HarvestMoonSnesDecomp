@@ -1,7 +1,7 @@
 /*
  * calendar.c — the date shown on screen.
  *
- * LoadsDateNames ($82:89D6, JSL, RTL). Copies the names for today into the
+ * LoadDateNames ($82:89D6, JSL, RTL). Copies the names for today into the
  * text buffers the diary and the calendar print (16-bit text codes, see
  * people.c): the season ($08B3, 6 codes, from the ROM table $82:8AD9, 16
  * bytes per season), the weekday ($08BF, 9 codes, $82:8B19, 32 bytes per
@@ -34,7 +34,7 @@ static void copy_text(uint8_t *ram, HmRegs *r, uint32_t table, uint16_t x, uint3
   r->x = x;
 }
 
-void hm_LoadsDateNames(uint8_t *ram, HmRegs *r)
+void hm_LoadDateNames(uint8_t *ram, HmRegs *r)
 {
   copy_text(ram, r, SEASON_NAMES, (uint16_t)(ram[HM_SEASON] << 4), SEASON_TEXT, 6);
   copy_text(ram, r, WEEKDAY_NAMES, (uint16_t)(ram[HM_WEEKDAY] << 5), WEEKDAY_TEXT, 9);

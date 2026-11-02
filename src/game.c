@@ -50,7 +50,7 @@ void hm_SpawnAfterLoad(uint8_t *ram, HmRegs *r)
   set_a8(r, 0x0F); *hm_dp(ram, r, 0x92) = 0x0F;            /* SEP #$20 */
   set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
   set_a8(r, 0x01); *hm_dp(ram, r, 0x94) = 0x01;
-  jsl(ram, r, 0x801E, 0x80, hm_ScreenFadeout);
+  jsl(ram, r, 0x801E, 0x80, hm_ScreenFadeOut);
   jsl(ram, r, 0x8022, 0x80, hm_ForceBlank);
   jsl(ram, r, 0x8026, 0x80, hm_ZeroesVRAM);
   jsl(ram, r, 0x802A, 0x80, hm_ZeroesCGRAM);
@@ -85,9 +85,9 @@ void hm_game_frame(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   static const struct { uint8_t bank; Fn *fn; } WORK[15] = {
     { 0x80, hm_SetScreenTransition }, { 0x80, hm_CheckDoors }, { 0x82, hm_UpdateTime },
-    { 0x83, hm_PrintTextFrame }, { 0x80, hm_TransitionTimeofDayPalettes }, { 0x80, hm_RunColourAnimations },
-    { 0x84, hm_InputTypeSelector }, { 0x81, hm_BAAAA }, { 0x81, hm_PlayerFrame },
-    { 0x80, hm_AutoMapScrolling }, { 0x84, hm_IterateCCStructures }, { 0x81, hm_RunMapAnimation },
+    { 0x83, hm_PrintTextFrame }, { 0x80, hm_TransitionTimeOfDayPalettes }, { 0x80, hm_RunColourAnimations },
+    { 0x84, hm_InputTypeSelector }, { 0x81, hm_RunItemsOnMap }, { 0x81, hm_PlayerFrame },
+    { 0x80, hm_AutoMapScrolling }, { 0x84, hm_RunEventSlots }, { 0x81, hm_RunMapAnimation },
     { 0x85, hm_AnimateGameObjects }, { 0x85, hm_LoadQueuedSpritePieces }, { 0x85, hm_PrepareOAMData },
   };
   for (int i = 0; i < 15; i++) jsl(ram, r, (uint16_t)(at + 4 * i), WORK[i].bank, WORK[i].fn);
@@ -99,11 +99,11 @@ void hm_game_frame(uint8_t *ram, HmRegs *r, uint16_t at)
  * to be written ($0196 bit 13: the bit off, and on to the names screen,
  * NamesScreen, JML $82:E80C), runs the frame's work:
  *   SetScreenTransition (a map to go to), CheckDoors, UpdateTime (the
- *   clock), PrintTextFrame (the text box), TransitionTimeofDayPalettes,
+ *   clock), PrintTextFrame (the text box), TransitionTimeOfDayPalettes,
  *   RunColourAnimations,
- *   InputTypeSelector (the joypad and what it does), BAAAA (the items),
+ *   InputTypeSelector (the joypad and what it does), RunItemsOnMap (the items),
  *   PlayerFrame (the player's frame), AutoMapScrolling,
- *   IterateCCStructures (the event scripts), RunMapAnimation, AnimateGameObjects,
+ *   RunEventSlots (the event scripts), RunMapAnimation, AnimateGameObjects,
  *   LoadQueuedSpritePieces, PrepareOAMData (the sprites),
  * clears $00 and goes round (JMP $8083). The check stops there, after one
  * frame, or at the JML (HM_TOLOOP).

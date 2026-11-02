@@ -144,11 +144,11 @@ static void pose(uint8_t *ram, HmRegs *r, uint16_t action, uint16_t sprite, uint
   wr16(ram, r, 0x0901, sprite);
   jsr(ram, r, at, hm_UpdatePlayerObject);
 }
-/* CalculateTileinFront (A, X, Y given; JSL at a) */
+/* CalculateTileInFront (A, X, Y given; JSL at a) */
 static void tile_ahead(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t y, uint16_t at)
 {
   r->a = a; r->x = x; r->y = y;
-  jsl(ram, r, at, 0x81, hm_CalculateTileinFront);
+  jsl(ram, r, at, 0x81, hm_CalculateTileInFront);
 }
 /* LDA $0973; ORA #bits; STA $0973 (8 bits) */
 static void time_flag(uint8_t *ram, HmRegs *r, uint8_t bits)
@@ -462,7 +462,7 @@ TAKE(3D, 0x7B) TAKE(3E, 0x7C)
  * (ChangeMapTile at $09AD / $09AF, the place's spot); if the place holds
  * a piece ($09A4 + its number) not yet put up ($7F1F78 has a bit per
  * piece, DATA8_81FAB4), the player takes it (item $1D + piece);
- * otherwise the tile is redrawn as $A1 (EditTileonMap).
+ * otherwise the tile is redrawn as $A1 (EditTileOnMap).
  * ───────────────────────────────────────────────────────────────────────── */
 #define PIECE_BITS 0x81FAB4
 
@@ -495,7 +495,7 @@ static void fence_place(uint8_t *ram, HmRegs *r, uint16_t x, uint16_t y, uint16_
   r->a = 0x00A1;
   r->x = rd16(ram, r, 0x09AD);
   r->y = rd16(ram, r, 0x09AF);
-  jsl(ram, r, 0xF59F, 0x82, hm_EditTileonMap);
+  jsl(ram, r, 0xF59F, 0x82, hm_EditTileOnMap);
   done(ram, r);
 }
 void hm_PlayerAction_1D(uint8_t *ram, HmRegs *r) { fence_place(ram, r, 0x02E0, 0x01A0, 0, 0xDBE4); }
@@ -787,7 +787,7 @@ void hm_PlayerAction_42(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * $43 ($81:E79E): the cow dealer, about the cow in event slot $09A0 (cow
- * $09A0 - $18; its record from GetsCowPointer, byte +0: bits 1-2 sick or
+ * $09A0 - $18; its record from GetCowPointer, byte +0: bits 1-2 sick or
  * pregnant, bits 4-6 its age). Steps:
  *   0  from year 2, with a healthy grown cow and once ($7F1F66 bit 15):
  *      event 8 / $7C (the cow festival entry) and step 7; otherwise event
@@ -853,7 +853,7 @@ static void leaves(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t y, uint16_t at_
 }
 /* the animal leaves too (its slot runs event y), its record goes, one less */
 typedef struct Animal { uint16_t slot; uint8_t first; uint16_t event; Step *record; uint32_t count; } Animal;
-static const Animal k_cow = { DEALER_SLOT, 0x18, 0x0022, hm_GetsCowPointer, COWS };
+static const Animal k_cow = { DEALER_SLOT, 0x18, 0x0022, hm_GetCowPointer, COWS };
 static const Animal k_chicken = { 0x09A1, 0x24, 0x0024, hm_GetChickenPointer, CHICKENS };
 
 static void animal_record(uint8_t *ram, HmRegs *r, const Animal *an, uint16_t at)
@@ -882,18 +882,18 @@ static void cow_leaves(uint8_t *ram, HmRegs *r, uint16_t at_event, uint16_t at_c
 {
   animal_leaves(ram, r, &k_cow, at_event, at_cow);
 }
-/* its event record (SetCCPoiner) gets bits $A8 in byte +1 */
+/* its event record (SetEventSlotPointer) gets bits $A8 in byte +1 */
 static void animal_stays(uint8_t *ram, HmRegs *r, uint16_t slot, uint16_t at)
 {
   r->a = rd8(ram, r, slot);
-  jsl(ram, r, at, 0x84, hm_SetCCPoiner);
+  jsl(ram, r, at, 0x84, hm_SetEventSlotPointer);
   r->y = 1;
   uint8_t v = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0xCC, 1)) | 0xA8);
   set_a8(r, v);
   hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 1), v);
 }
 
-/* SEP; LDA #0; XBA; LDA $09A0; SEC; SBC #$18; REP; JSL GetsCowPointer */
+/* SEP; LDA #0; XBA; LDA $09A0; SEC; SBC #$18; REP; JSL GetCowPointer */
 static void dealer_cow(uint8_t *ram, HmRegs *r, uint16_t at) { animal_record(ram, r, &k_cow, at); }
 
 void hm_PlayerAction_43(uint8_t *ram, HmRegs *r)

@@ -8,11 +8,11 @@
  * constants swap left and right: on the SNES pad $0100 is Right, $0200
  * Left, so its PlayerActionLeft is really "right".)
  *
- *   CEEEE  the map: tests the two corners of the side that moves (6 pixels
+ *   CollideMap  the map: tests the two corners of the side that moves (6 pixels
  *          each way from the middle) against the tile properties.
- *   CFFFF  one corner: is that point of the tile solid?
- *   CBBBB  the objects of the event slots: is one of them in the way?
- *   CDDDD  the player: is the player in the way?
+ *   CollideTileCorner  one corner: is that point of the tile solid?
+ *   CollideEventObjects  the objects of the event slots: is one of them in the way?
+ *   CollidePlayer  the player: is the player in the way?
  *
  * They answer A = 0 (free) or not 0 (blocked) and, for the map, how far one
  * can still go.
@@ -73,19 +73,19 @@ static bool crop_for_player(uint8_t *ram, const HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CFFFF ($83:B0F6, JSR, RTS). X, Y = a point; A = 0 for the first corner,
+ * CollideTileCorner ($83:B0F6, JSR, RTS). X, Y = a point; A = 0 for the first corner,
  * 1 for the second. Reads the tile's property (GetTileProperty):
  *   bit 0       the whole tile is solid;
  *   bits 1 / 2  only the half with x & 8 clear / set is solid;
  *   bits 3 / 4  only the half with y & 8 clear / set is solid;
  *   none        free, except that carrying something ($D2 bit 4) the tile
  *               types $C0-$CF block.
- * Returns A = 1 blocked, 0 free. Leaves for CEEEE: $86 / $88 the point,
+ * Returns A = 1 blocked, 0 free. Leaves for CollideMap: $86 / $88 the point,
  * $8A / $8C the tile's corner, $8E / $90 = 16 / 0 (8 when a half blocks and
  * the step on that axis is 0); the tile type in $E9 (first corner) or $EB
  * (second).
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_CFFFF(uint8_t *ram, HmRegs *r)
+void hm_CollideTileCorner(uint8_t *ram, HmRegs *r)
 {
   uint16_t which = r->a;
   push16(ram, r, which);                                   /* PHA */
@@ -135,7 +135,7 @@ void hm_CFFFF(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CEEEE ($83:AF37, JSL, RTL): the map. A = direction. The two corners are
+ * CollideMap ($83:AF37, JSL, RTL): the map. A = direction. The two corners are
  * the front side's ends, 6 pixels to each side; the front is $E3 + the step
  * + 6 pixels ahead. A = (first blocked) << 1 | (second blocked), and when
  * blocked, Y (for y moves) or X (for x moves) = how far into the tile the
@@ -146,9 +146,9 @@ typedef struct Corner { uint16_t ret1, ret2; } Corner;
 static void corner(uint8_t *ram, HmRegs *r, uint16_t which, uint16_t ret)
 {
   r->a = which;
-  hm_push8(ram, r, (uint8_t)(ret >> 8));                   /* JSR CFFFF */
+  hm_push8(ram, r, (uint8_t)(ret >> 8));                   /* JSR CollideTileCorner */
   hm_push8(ram, r, (uint8_t)ret);
-  hm_CFFFF(ram, r);
+  hm_CollideTileCorner(ram, r);
   hm_pull8(ram, r); hm_pull8(ram, r);
 }
 /* the two calls: the first corner at (x1, y1); then the second, after
@@ -178,7 +178,7 @@ static uint16_t two_corners(uint8_t *ram, HmRegs *r, bool along_y, uint16_t firs
   return r->a;
 }
 
-void hm_CEEEE(uint8_t *ram, HmRegs *r)
+void hm_CollideMap(uint8_t *ram, HmRegs *r)
 {
   static const Corner C[4] = { { 0xAF5E, 0xAF72 }, { 0xAFC6, 0xAFDA },
                                { 0xB02E, 0xB042 }, { 0xB094, 0xB0A8 } };
@@ -234,7 +234,7 @@ void hm_CEEEE(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CBBBB ($83:AD91, JSL, RTL): the event objects. A = direction. The point
+ * CollideEventObjects ($83:AD91, JSL, RTL): the event objects. A = direction. The point
  * looked at is 12 pixels plus the step and $E3 ahead; an object is in the
  * way when its position (+$1A, +$1C of its slot) is within 12 pixels of it
  * on both axes. Every slot's byte +$0C is cleared, and set to 1 on the
@@ -243,7 +243,7 @@ void hm_CEEEE(uint8_t *ram, HmRegs *r)
  * nothing blocks.
  * Returns A = 1, X = Y = 0 if blocked; else A = 0, X = $E5, Y = $E7.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_CBBBB(uint8_t *ram, HmRegs *r)
+void hm_CollideEventObjects(uint8_t *ram, HmRegs *r)
 {
   uint16_t dir = r->a;
   r->x = dir;                                              /* TAX */
@@ -303,12 +303,12 @@ void hm_CBBBB(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CDDDD ($83:AEC3, JSL, RTL): the player. A = direction. The point is the
+ * CollidePlayer ($83:AEC3, JSL, RTL): the player. A = direction. The point is the
  * position plus the step (no $E3 here); the player is in the way when
  * within 12 pixels of it on both axes.
  * Returns A = 1, X = Y = 0 if so; else A = 0, X = $E5, Y = $E7.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_CDDDD(uint8_t *ram, HmRegs *r)
+void hm_CollidePlayer(uint8_t *ram, HmRegs *r)
 {
   uint16_t dir = r->a;
   r->c = (dir & 0x8000) != 0;

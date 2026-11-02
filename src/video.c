@@ -8,7 +8,7 @@
  *   $28        one bit per channel that waits to be started;
  *   $2A + ch   for a copy to VRAM, the VMAIN value (how the address moves);
  *   $32 + 2ch  the destination: the VRAM word address, or the CGRAM colour.
- * StartProgramedDMA starts them all (during the NMI, when video memory can
+ * StartProgrammedDMA starts them all (during the NMI, when video memory can
  * be written).
  */
 #include "hm_decomp.h"
@@ -22,7 +22,7 @@ static uint32_t db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 |
 static void set_a8(HmRegs *r, uint8_t v) { r->a = (uint16_t)((r->a & 0xFF00) | v); }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * StartProgramedDMA ($80:8AF0, JSL, RTL): for each channel 0-7 waiting in
+ * StartProgrammedDMA ($80:8AF0, JSL, RTL): for each channel 0-7 waiting in
  * $28: when its B address ($43x1) is $18 (VRAM) VMAIN = $2A + ch and the
  * VRAM address = $32 + 2ch (16 bits); otherwise the CGRAM address = the
  * low byte of $32 + 2ch. Then the channel is started ($420B = its bit: the
@@ -32,7 +32,7 @@ static void set_a8(HmRegs *r, uint8_t v) { r->a = (uint16_t)((r->a & 0xFF00) | v
  * last VRAM address used (16-bit load), or as it was. The stack keeps the
  * last channel PHX'd.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_StartProgramedDMA(uint8_t *ram, HmRegs *r)
+void hm_StartProgrammedDMA(uint8_t *ram, HmRegs *r)
 {
   for (uint8_t ch = 0; ch < 8; ch++) {
     /* $28 is read again for each channel: a copy into WRAM ($2180) can
@@ -66,9 +66,9 @@ void hm_StartProgramedDMA(uint8_t *ram, HmRegs *r)
  * changes the copy and writes it to the chip.
  *   ForceBlank ($80:8E0F, JSL, RTL): sets bit 7.
  *   ResetForceBlank ($80:8E1E): keeps only the brightness.
- *   SetsBrightness ($80:8E2D): brightness = A & $0F, keeping the blank
+ *   SetBrightness ($80:8E2D): brightness = A & $0F, keeping the blank
  *     bit; brightness 0 means blank instead ($80; $7E keeps the value).
- *   InitialzieScreenStatusVar ($80:8C4C): $24 = 0, then ForceBlank.
+ *   InitializeScreenStatusVars ($80:8C4C): $24 = 0, then ForceBlank.
  * Leftovers: A's low byte = the value written (high byte untouched); the
  * flags as they were (PHP / PLP); the stack keeps the PHP'd byte.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -96,7 +96,7 @@ void hm_ResetForceBlank(uint8_t *ram, HmRegs *r)
   set_inidisp(ram, r, (uint8_t)(*hm_dp(ram, r, INIDISP_COPY) & 0x0F));
   plp(ram, r);
 }
-void hm_SetsBrightness(uint8_t *ram, HmRegs *r)
+void hm_SetBrightness(uint8_t *ram, HmRegs *r)
 {
   php(ram, r);
   uint8_t bright = (uint8_t)(r->a & 0x0F);
@@ -105,7 +105,7 @@ void hm_SetsBrightness(uint8_t *ram, HmRegs *r)
   set_inidisp(ram, r, (uint8_t)((*hm_dp(ram, r, INIDISP_COPY) & 0x80) | *hm_dp(ram, r, 0x7E)));
   plp(ram, r);
 }
-void hm_InitialzieScreenStatusVar(uint8_t *ram, HmRegs *r)
+void hm_InitializeScreenStatusVars(uint8_t *ram, HmRegs *r)
 {
   php(ram, r);
   *hm_dp(ram, r, INIDISP_COPY) = 0;
@@ -188,7 +188,7 @@ void hm_ManageGraphicPresets(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Clearing video memory, each with one DMA on channel 0 from a word of 0
- * in the ROM ($80:8424, the source fixed). All but UNUSED1 first force
+ * in the ROM ($80:8424, the source fixed). All but UnusedHideSprites first force
  * blank (INIDISP = $80) and switch the interrupts off (NMITIMEN = 0).
  *   ZeroesVRAM ($80:8846, JSL, RTL): VMAIN $80, address 0, $10000 bytes
  *     (size 0): all of VRAM.
@@ -196,12 +196,12 @@ void hm_ManageGraphicPresets(uint8_t *ram, HmRegs *r)
  *   ZeroesCGRAM ($80:8980): CGRAM address 0, $3FF bytes, twice the CGRAM
  *     (less one byte: the last colour keeps its high byte).
  *   ZeroesPartialVRAM ($80:89BC): from the VRAM address in A, $FFF bytes.
- *   UNUSED1 ($80:88C3; nothing calls it): the sprites off screen: OAM from
+ *   UnusedHideSprites ($80:88C3; nothing calls it): the sprites off screen: OAM from
  *     the word $00F0 at $80:8426 ($200 bytes, 8-bit mode) and the high
  *     table from 0 ($20 bytes); then on channel 4 the game's WRAM copy of
  *     the OAM ($7E:A000, $AF bytes) and of the high table ($7E:A200).
  * Leftovers: A = the last 16-bit load with the low byte of the last MDMAEN
- * value; UNUSED1 also X = $20, C = 0; the rest untouched.
+ * value; UnusedHideSprites also X = $20, C = 0; the rest untouched.
  * ───────────────────────────────────────────────────────────────────────── */
 static void wr16(uint8_t *ram, const HmRegs *r, uint16_t a, uint16_t v) { hm_bus_wr16(ram, db(r, a), v); }
 static void wr8(uint8_t *ram, const HmRegs *r, uint16_t a, uint8_t v) { hm_bus_wr8(ram, db(r, a), v); }
@@ -255,7 +255,7 @@ void hm_ZeroesPartialVRAM(uint8_t *ram, HmRegs *r)
   wr8(ram, r, 0x2115, 0x80);
   dma_go(ram, r, 0, 0x09, 0x18, ZERO_WORD, 0x0FFF);
 }
-void hm_UNUSED1(uint8_t *ram, HmRegs *r)
+void hm_UnusedHideSprites(uint8_t *ram, HmRegs *r)
 {
   wr16(ram, r, 0x2102, 0);
   dma_go(ram, r, 0, 0x08, 0x04, OFF_SCREEN, 0x0200);
@@ -282,7 +282,7 @@ void hm_UNUSED1(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * StartLastPreparedDMA ($80:8AB2, JSL, RTL): StartProgramedDMA for one
+ * StartLastPreparedDMA ($80:8AB2, JSL, RTL): StartProgrammedDMA for one
  * channel only, the one in $27 (the last one prepared), right away; then
  * $28 = 0, forgetting any other waiting channel.
  * Leftovers: X = the channel, C = 0 (the last LSR); A's low byte = the
@@ -317,7 +317,7 @@ void hm_StartLastPreparedDMA(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * LoadsFromVRAMwithOffset ($80:AA38, JSR, RTS; despite its name it writes
+ * CopyMapPictureToVRAM ($80:AA38, JSR, RTS; despite its name it writes
  * VRAM): Y bytes from $7E:2000 + $7E to the VRAM address X (VMAIN $80),
  * prepared on channel 0 with AddProgrammedDMA and started at once
  * (StartLastPreparedDMA).
@@ -333,7 +333,7 @@ static void jsl(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bank, void (*fn)(u
 static void push16(uint8_t *ram, HmRegs *r, uint16_t v) { hm_push8(ram, r, (uint8_t)(v >> 8)); hm_push8(ram, r, (uint8_t)v); }
 static uint16_t pull16(uint8_t *ram, HmRegs *r) { uint8_t lo = hm_pull8(ram, r); return (uint16_t)(lo | hm_pull8(ram, r) << 8); }
 
-void hm_LoadsFromVRAMwithOffset(uint8_t *ram, HmRegs *r)
+void hm_CopyMapPictureToVRAM(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = r->x, y = r->y;
   push16(ram, r, x);
@@ -352,7 +352,7 @@ void hm_LoadsFromVRAMwithOffset(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CopiesWRAMtoOBJVGRAM ($85:8E57, JSL, RTL): the sprite pieces the loader
+ * CopySpritePiecesToVRAM ($85:8E57, JSL, RTL): the sprite pieces the loader
  * (LoadQueuedSpritePieces) queued at $7E:A420 (6 bytes each: source, bank, VRAM
  * address; $FFFF ends the list) go to VRAM, each as two DMAs of $40 bytes
  * on channel 0: the top half of the 16 x 16 piece from the source to the
@@ -361,7 +361,7 @@ void hm_LoadsFromVRAMwithOffset(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 #define LOAD_COPIES 0x7EA420
 
-void hm_CopiesWRAMtoOBJVGRAM(uint8_t *ram, HmRegs *r)
+void hm_CopySpritePiecesToVRAM(uint8_t *ram, HmRegs *r)
 {
   wr8(ram, r, 0x2115, 0x80);
   wr8(ram, r, 0x4300, 0x01);
@@ -389,16 +389,16 @@ void hm_CopiesWRAMtoOBJVGRAM(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * UpdateGraphics ($80:86B1, JSR, RTS; from the NMI). Unless the frame's
- * work is done already ($00 != 0): the prepared DMAs (StartProgramedDMA),
+ * work is done already ($00 != 0): the prepared DMAs (StartProgrammedDMA),
  * the sprite table (channel 4, if $9A says so), the sprite pieces
- * (CopiesWRAMtoOBJVGRAM). Then always: the pads (ReadJoypad), one random
+ * (CopySpritePiecesToVRAM). Then always: the pads (ReadJoypad), one random
  * number (GetRNG), the scroll of BG1-BG3 from $013C-$0147, and $00 = 1.
  * Quirk: after the sprite pieces the A register is 16-bit (left so by
- * CopiesWRAMtoOBJVGRAM), so the last "STZ $9A; STZ $420B" also clear $9B
+ * CopySpritePiecesToVRAM), so the last "STZ $9A; STZ $420B" also clear $9B
  * and HDMAEN.
  * Leftovers: A = $0001 (GetRNG's high byte 0), X and Y those of the calls,
- * the flags as they were (PHP / PLP). (StartProgramedDMA makes X and Y
- * 8-bit and CopiesWRAMtoOBJVGRAM 16-bit again: the console would clear
+ * the flags as they were (PHP / PLP). (StartProgrammedDMA makes X and Y
+ * 8-bit and CopySpritePiecesToVRAM 16-bit again: the console would clear
  * Y's high byte there, the recompiled game, our reference, keeps it.)
  * ───────────────────────────────────────────────────────────────────────── */
 #define NMI_STATUS  0x00   /* DP */
@@ -418,13 +418,13 @@ void hm_UpdateGraphics(uint8_t *ram, HmRegs *r)
   php(ram, r);
   set_a8(r, *hm_dp(ram, r, NMI_STATUS));
   if (!*hm_dp(ram, r, NMI_STATUS)) {
-    jsl(ram, r, 0x86B8, 0x80, hm_StartProgramedDMA);
+    jsl(ram, r, 0x86B8, 0x80, hm_StartProgrammedDMA);
     set_a8(r, *hm_dp(ram, r, OAM_CHANNEL));
     wr8(ram, r, 0x420B, (uint8_t)r->a);
     *hm_dp(ram, r, OAM_CHANNEL) = 0;
     wr8(ram, r, 0x420B, 0);
-    jsl(ram, r, 0x86C8, 0x85, hm_CopiesWRAMtoOBJVGRAM);
-    /* CopiesWRAMtoOBJVGRAM returns with a 16-bit A, so these two STZ are
+    jsl(ram, r, 0x86C8, 0x85, hm_CopySpritePiecesToVRAM);
+    /* CopySpritePiecesToVRAM returns with a 16-bit A, so these two STZ are
      * 16-bit: $9B goes too, and $420C (HDMAEN): HDMA is switched off */
     hm_dp_w16(ram, r, OAM_CHANNEL, 0);
     wr16(ram, r, 0x420B, 0);
@@ -527,7 +527,7 @@ void hm_DrawTileBlock3x2(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * DrawNameEntryBlanks ($82:EA80, JSL, RTL; the name screen): four letters $A8 drawn
  * (DrawLetter, X = 1) at the positions $82:EB4D, + $10 each ($0185 = the
- * position), each sent at once (StartProgramedDMA).
+ * position), each sent at once (StartProgrammedDMA).
  * Leftovers: X = 4, C = 1 (CPX #4), A = $82 = the last position + $10, Y
  * that of the calls.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -540,7 +540,7 @@ void hm_DrawNameEntryBlanks(uint8_t *ram, HmRegs *r)
     r->a = 0x00A8;
     r->x = 0x0001;
     jsl(ram, r, 0xEA9A, 0x83, hm_DrawLetter);
-    jsl(ram, r, 0xEA9E, 0x80, hm_StartProgramedDMA);
+    jsl(ram, r, 0xEA9E, 0x80, hm_StartProgrammedDMA);
     r->a = (uint16_t)(hm_dp_r16(ram, r, 0x82) + 0x10);
     hm_dp_w16(ram, r, 0x82, r->a);
     r->x = (uint16_t)(pull16(ram, r) + 1);                 /* PLX; INX */
@@ -560,7 +560,7 @@ void hm_DrawNameEntryBlanks(uint8_t *ram, HmRegs *r)
  *   DrawScreenBars ($82:E742, JSR, RTS): eight bars, from the tables at
  *     $82:F268 (tiles), $82:F258 (addresses), $82:F288 (columns).
  * Leftovers: A = Y = $88 = the bar's columns, C = 1 (CPY); X = 8 (from
- * StartProgramedDMA) or, for the eight bars, $10.
+ * StartProgrammedDMA) or, for the eight bars, $10.
  * ───────────────────────────────────────────────────────────────────────── */
 static void bar_start(uint8_t *ram, HmRegs *r, uint16_t tile, uint16_t vram)
 {
@@ -570,7 +570,7 @@ static void bar_start(uint8_t *ram, HmRegs *r, uint16_t tile, uint16_t vram)
   hm_dp_w16(ram, r, 0x84, (uint16_t)(tile + 0x11));
   hm_dp_w16(ram, r, 0x86, vram);
 }
-/* one column; the AddProgrammedDMA / StartProgramedDMA calls at `at` */
+/* one column; the AddProgrammedDMA / StartProgrammedDMA calls at `at` */
 static void bar_column(uint8_t *ram, HmRegs *r, const uint16_t at[3])
 {
   for (int half = 0; half < 2; half++) {
@@ -583,7 +583,7 @@ static void bar_column(uint8_t *ram, HmRegs *r, const uint16_t at[3])
     r->a = 0x0080;
     jsl(ram, r, at[half], 0x80, hm_AddProgrammedDMA);
   }
-  jsl(ram, r, at[2], 0x80, hm_StartProgramedDMA);
+  jsl(ram, r, at[2], 0x80, hm_StartProgrammedDMA);
   for (unsigned v = 0x7E; v <= 0x86; v += 2)
     hm_dp_w16(ram, r, v, (uint16_t)(hm_dp_r16(ram, r, v) + 2));
 }
@@ -636,9 +636,9 @@ void hm_DrawScreenBars(uint8_t *ram, HmRegs *r)
  *   +0 the player's name, 4 letters ($0881-$0884);
  *   +2 the year (+ 1, PrintDigit) and its two-letter suffix ($82:F298);
  *   +4 the day, two digits (PrintDigit with $018C = 1, then 0, + 8);
- *   +6 the season's name (LoadsDateNames) and its 6 letters ($08B3-$08BD).
- * Every letter or digit is sent at once (StartProgramedDMA).
- * Leftovers: those of the last StartProgramedDMA; the stack keeps the
+ *   +6 the season's name (LoadDateNames) and its 6 letters ($08B3-$08BD).
+ * Every letter or digit is sent at once (StartProgrammedDMA).
+ * Leftovers: those of the last StartProgrammedDMA; the stack keeps the
  * pushed entry offsets.
  * ───────────────────────────────────────────────────────────────────────── */
 #define TEXT_AT 0x800185   /* the text position (long) */
@@ -648,7 +648,7 @@ static void letter_now(uint8_t *ram, HmRegs *r, uint16_t letter, uint16_t at)
   r->a = letter;
   r->x = 0;
   jsl(ram, r, at, 0x83, hm_DrawLetter);
-  jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_StartProgramedDMA);
+  jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_StartProgrammedDMA);
 }
 static void next_letter(uint8_t *ram)
 {
@@ -664,7 +664,7 @@ static void digit_now(uint8_t *ram, HmRegs *r, uint8_t which, uint16_t at)
   wr8(ram, r, 0x019B, flags);
   r->a = (uint16_t)((hm_bus_rd16(ram, TEXT_AT) & 0xFF00) | flags);
   jsl(ram, r, at, 0x83, hm_PrintDigit);
-  jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_StartProgramedDMA);
+  jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_StartProgrammedDMA);
 }
 
 void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r)
@@ -720,8 +720,8 @@ void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r)
   r->a = (uint16_t)(at8 & 0xFF00);                         /* SEP; LDA #0 */
   wr8(ram, r, 0x018C, 0);
   jsl(ram, r, 0xE531, 0x83, hm_PrintDigit);
-  jsl(ram, r, 0xE535, 0x80, hm_StartProgramedDMA);
-  jsl(ram, r, 0xE53B, 0x82, hm_LoadsDateNames);
+  jsl(ram, r, 0xE535, 0x80, hm_StartProgrammedDMA);
+  jsl(ram, r, 0xE53B, 0x82, hm_LoadDateNames);
   pull16(ram, r);
   entry = (uint16_t)(entry + 2);
   hm_bus_wr16(ram, TEXT_AT, hm_bus_rd16(ram, 0x82F278u + entry));
@@ -753,7 +753,7 @@ void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r)
  *     drawn on it (DrawWholeMap); a map with one picture also gets its
  *     extras (RunMapExtras) unless bit 1 of $7F1F5E is set.
  *     Then, with the position, the scroll and the subpixels cleared, it
- *     goes to VRAM as 2 x 32 x 2 rows of $40 bytes (LoadsFromVRAMwithOffset);
+ *     goes to VRAM as 2 x 32 x 2 rows of $40 bytes (CopyMapPictureToVRAM);
  *     $1A / $1C come from the tables $80:AA68 / $80:AA72 (by $0181), and
  *     $80 = $1A - $40 is the step between the row pairs. For the maps below
  *     $5B whose picture goes to $7000 the second row of each pair, and the
@@ -761,7 +761,7 @@ void hm_DrawSaveFileLine(uint8_t *ram, HmRegs *r)
  * Last, for maps below $57, the camera is walked to where it should be
  * ($017D, $017F) 8 pixels at a time (by the word at $1E, its low byte just
  * set to 8), each step drawing the new column (ScrollCameraRight) or
- * row (UpdateBGOffset) and sending it (StartProgramedDMA).
+ * row (UpdateBGOffset) and sending it (StartProgrammedDMA).
  * Leftovers: C = 1; A, X and Y those of the last step.
  * ───────────────────────────────────────────────────────────────────────── */
 #define MAPS_GRAPHICS_TABLE 0x80AA7C
@@ -803,7 +803,7 @@ static void walk_camera(uint8_t *ram, HmRegs *r, uint8_t at, uint16_t target, ui
     hm_dp_w16(ram, r, at, r->a);
     jsl(ram, r, call, 0x80, hm_PlaceCameraOnMapEntry);
     jsl(ram, r, (uint16_t)(call + 4), 0x80, draw);
-    jsl(ram, r, (uint16_t)(call + 8), 0x80, hm_StartProgramedDMA);
+    jsl(ram, r, (uint16_t)(call + 8), 0x80, hm_StartProgrammedDMA);
   }
 }
 
@@ -942,7 +942,7 @@ void hm_BackgroundsManager(uint8_t *ram, HmRegs *r)
       for (uint16_t row = 0; row < 0x20; row++) {
         r->a = row;
         push16(ram, r, row);
-        jsr(ram, r, 0xA97A, hm_LoadsFromVRAMwithOffset);
+        jsr(ram, r, 0xA97A, hm_CopyMapPictureToVRAM);
         uint32_t s = (uint32_t)hm_dp_r16(ram, r, 0x7E) + 0x40;
         hm_dp_w16(ram, r, 0x7E, (uint16_t)s);
         s = (uint32_t)r->x + 0x400;
@@ -958,7 +958,7 @@ void hm_BackgroundsManager(uint8_t *ram, HmRegs *r)
         }
         if (!skip) {
           r->y = 0x0040;
-          jsr(ram, r, 0xA99F, hm_LoadsFromVRAMwithOffset);
+          jsr(ram, r, 0xA99F, hm_CopyMapPictureToVRAM);
         }
         s = (uint32_t)hm_dp_r16(ram, r, 0x7E) + hm_dp_r16(ram, r, 0x80);
         hm_dp_w16(ram, r, 0x7E, (uint16_t)s);

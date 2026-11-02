@@ -233,12 +233,12 @@ static void gold_step(uint8_t *ram, HmRegs *r, uint8_t tiles, uint16_t ret)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * ToolUsedNoAction ($82:931E) and ToolUsedMilker ($82:9CC0): only back to
- * idle (milking happens elsewhere). ToolUsedUNK ($82:A570): nothing at
+ * idle (milking happens elsewhere). ToolUsedUnusedTool ($82:A570): nothing at
  * all (an RTS). Leftover A = 0.
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_ToolUsedNoAction(uint8_t *ram, HmRegs *r) { idle(ram, r); }
 void hm_ToolUsedMilker(uint8_t *ram, HmRegs *r)   { idle(ram, r); }
-void hm_ToolUsedUNK(uint8_t *ram, HmRegs *r)      { (void)ram; (void)r; }
+void hm_ToolUsedUnusedTool(uint8_t *ram, HmRegs *r)      { (void)ram; (void)r; }
 
 /* ToolUsedBell ($82:9B51), ToolUsedBrush ($82:9CC8): idle, 1 stamina. */
 void hm_ToolUsedBell(uint8_t *ram, HmRegs *r)  { tool_finished(ram, r, 0xFF, 0x9B5F); }
@@ -740,7 +740,7 @@ void hm_ToolUsedGemSeed(uint8_t *ram, HmRegs *r)
 {
   if (below(r, load8(r, ram[HM_HOUR]), 0x11) && is(r, load8(r, map_id(ram, r)), 0x34)) {
     r->a = 1; r->x = 0; r->y = 0;
-    jsl(ram, r, 0xA3CA, 0x81, hm_CalculateTileinFront);
+    jsl(ram, r, 0xA3CA, 0x81, hm_CalculateTileInFront);
     r->x = tile_x(ram); r->y = tile_y(ram); r->a = 0;
     jsl(ram, r, 0xA3D9, 0x82, hm_GetTileProperty);
     if (is(r, r->x, 0x00F6)) {
@@ -754,7 +754,7 @@ void hm_ToolUsedGemSeed(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Feeding (chicken feed in the coop, map $28; cow feed in the barn, map
- * $27). The trough is the tile 6 pixels ahead (CalculateTileinFront with
+ * $27). The trough is the tile 6 pixels ahead (CalculateTileInFront with
  * X = Y = 6); troughs are tiles E2-EE: trough n = tile - E2 gets its bit
  * in $0934 / $0932, one more fed today ($0931 / $0930) and change $99
  * (food in it). Anywhere else the feed is spilled (effect $C4). One
@@ -773,7 +773,7 @@ static void feed(uint8_t *ram, HmRegs *r, const Feeding *f)
 {
   if (is(r, load8(r, map_id(ram, r)), f->map)) {
     r->a = 1; r->x = 6; r->y = 6;
-    jsl(ram, r, f->ret_front, 0x81, hm_CalculateTileinFront);
+    jsl(ram, r, f->ret_front, 0x81, hm_CalculateTileInFront);
     r->x = tile_x(ram); r->y = tile_y(ram); r->a = 0;
     jsl(ram, r, f->ret_property, 0x82, hm_GetTileProperty);
     if (!below(r, r->x, 0x00E2) && below(r, r->x, 0x00EF)) {
@@ -814,7 +814,7 @@ void hm_ToolUsedCowFeed(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * The watering can and the sprinkler. Both first make their sound (effect
  * 0, 7, $0A: PlaySoundEffect0A). A tile that can be watered (PreCheckToolSuccess
- * leaves its type in X) becomes type + 1 in the map (EditTileonMap) and
+ * leaves its type in X) becomes type + 1 in the map (EditTileOnMap) and
  * gets the picture of entry 4 (type + 1) of the tile table [$0D] (the
  * byte there is the ChangeMapTile change).
  * ───────────────────────────────────────────────────────────────────────── */
@@ -833,7 +833,7 @@ static void water_tile(uint8_t *ram, HmRegs *r, uint16_t ret_edit, uint16_t ret_
   push16(ram, r, watered);
   r->a = watered;
   r->x = tile_x(ram); r->y = tile_y(ram);
-  jsl(ram, r, ret_edit, 0x82, hm_EditTileonMap);
+  jsl(ram, r, ret_edit, 0x82, hm_EditTileOnMap);
   hm_pull8(ram, r); hm_pull8(ram, r);                    /* PLA */
   r->y = (uint16_t)(watered << 2);
   r->c = (watered << 1) & 0x8000 ? 1 : 0;                /* ASL; ASL */
@@ -886,7 +886,7 @@ void hm_UseToolInHand(uint8_t *ram, HmRegs *r)
     hm_ToolUsedGrassSeeds, hm_ToolUsedPaint, hm_ToolUsedMilker, hm_ToolUsedBrush,
     hm_ToolUsedWateringCan, hm_ToolUsedGoldSickle, hm_ToolUsedGoldHoe, hm_ToolUsedGoldHammer,
     hm_ToolUsedGoldAxe, hm_ToolUsedSprinkler, hm_ToolUsedMagicBeans, hm_ToolUsedGemSeed,
-    hm_ToolUsedBlueFeather, hm_ToolUsedChickenFeed, hm_ToolUsedCowFeed, hm_ToolUsedUNK,
+    hm_ToolUsedBlueFeather, hm_ToolUsedChickenFeed, hm_ToolUsedCowFeed, hm_ToolUsedUnusedTool,
   };
   uint8_t item = ram[HM_TOOL_SELECTED];
   r->c = item >> 7;

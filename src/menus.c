@@ -380,7 +380,7 @@ void hm_ImmobileInputs(uint8_t *ram, HmRegs *r)
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
- * The name screen (input mode 5). The letters are a grid; NameCursorPharse
+ * The name screen (input mode 5). The letters are a grid; ReadNameCursorCell
  * reads the cell under the cursor ($0991) in the grid of the page shown
  * ($0993: 0 $82:EBF8, 1 $82:EE30, else $82:F0D0). Each cell has 8 bytes:
  * x, y, the cell reached with each arrow (down, up, and the two others),
@@ -392,9 +392,9 @@ void hm_ImmobileInputs(uint8_t *ram, HmRegs *r)
 #define NAME_COUNT  0x0994
 #define NAME        0x0885
 
-/* NameCursorPharse ($82:EBAC, JSL, RTL): A = which byte of the cell (0-5:
+/* ReadNameCursorCell ($82:EBAC, JSL, RTL): A = which byte of the cell (0-5:
  * the arrows, the letter, the code) -> A = that byte. */
-void hm_NameCursorPharse(uint8_t *ram, HmRegs *r)
+void hm_ReadNameCursorCell(uint8_t *ram, HmRegs *r)
 {
   uint16_t which = r->a;
   hm_push8(ram, r, (uint8_t)(which >> 8));                 /* PHA */
@@ -463,7 +463,7 @@ static void name_move(uint8_t *ram, HmRegs *r, uint16_t which, uint16_t ret1, ui
 {
   r->a = which;
   hm_jsl(ram, r, ret1, 0x82);
-  hm_NameCursorPharse(ram, r);
+  hm_ReadNameCursorCell(ram, r);
   hm_rtl(ram, r);
   hm_bus_wr16(ram, db_addr(r, NAME_CELL), r->a);
   beep(ram, r, 3, ret2);
@@ -508,7 +508,7 @@ void hm_NameMenuKeyA(uint8_t *ram, HmRegs *r)
   };
   r->a = 5;
   hm_jsl(ram, r, 0xC0F6, 0x82);
-  hm_NameCursorPharse(ram, r);
+  hm_ReadNameCursorCell(ram, r);
   hm_rtl(ram, r);
   uint16_t code = r->a;
   for (uint16_t k = 1; k <= 4; k++) {
@@ -539,7 +539,7 @@ void hm_NameMenuKeyA(uint8_t *ram, HmRegs *r)
   if (n != 4) {                                            /* add the letter */
     r->a = 4;
     hm_jsl(ram, r, 0xC124, 0x82);
-    hm_NameCursorPharse(ram, r);
+    hm_ReadNameCursorCell(ram, r);
     hm_rtl(ram, r);
     uint8_t letter = (uint8_t)r->a;
     hm_push8(ram, r, letter);                              /* PHA */

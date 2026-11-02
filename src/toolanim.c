@@ -105,7 +105,7 @@ void hm_ToolAnimationGem(uint8_t *ram, HmRegs *r)           { facing(ram, r, 0xA
 void hm_ToolAnimationBlueFeather(uint8_t *ram, HmRegs *r)   { animation(ram, r, 0xA8); }
 void hm_ToolAnimationChickenFeed(uint8_t *ram, HmRegs *r)   { facing(ram, r, 0x74); }
 void hm_ToolAnimationCowFeed(uint8_t *ram, HmRegs *r)       { facing(ram, r, 0x74); }
-void hm_ToolAnimationUNK(uint8_t *ram, HmRegs *r)           { animation(ram, r, 0x88); }
+void hm_ToolAnimationUnusedTool(uint8_t *ram, HmRegs *r)           { animation(ram, r, 0x88); }
 
 /* ─────────────────────────────────────────────────────────────────────────
  * StartToolAnimation ($82:90A8, JSL, RTL).
@@ -122,7 +122,7 @@ void hm_StartToolAnimation(uint8_t *ram, HmRegs *r)
     hm_ToolAnimationGoldHoe, hm_ToolAnimationGoldHammer, hm_ToolAnimationGoldAxe,
     hm_ToolAnimationSprinkler, hm_ToolAnimationBeans, hm_ToolAnimationGem,
     hm_ToolAnimationBlueFeather, hm_ToolAnimationChickenFeed, hm_ToolAnimationCowFeed,
-    hm_ToolAnimationUNK,
+    hm_ToolAnimationUnusedTool,
   };
   r->a = hm_dp_r16(ram, r, 0xD2) & 0x0008;
   if (r->a) {                                              /* no stamina */

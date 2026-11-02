@@ -98,7 +98,7 @@ void hm_RESET(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0x8604, 0x83, hm_SoundCommand0B);
   jsl(ram, r, 0x8608, 0x83, hm_LoadDefaultInstruments);
   jsl(ram, r, 0x860C, 0x83, hm_SendSoundData);
-  jsl(ram, r, 0x8610, 0x80, hm_InitialzieScreenStatusVar);
+  jsl(ram, r, 0x8610, 0x80, hm_InitializeScreenStatusVars);
   jsl(ram, r, 0x8614, 0x80, hm_ZeroesVRAM);
   jsl(ram, r, 0x8618, 0x80, hm_ZeroesOAM);
   jsl(ram, r, 0x861C, 0x80, hm_ZeroesCGRAM);

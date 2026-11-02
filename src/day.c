@@ -77,16 +77,16 @@ static bool count8(uint8_t *ram, HmRegs *r, uint32_t addr, uint8_t n)
  * is set, the player went to bed): the new day.
  *  - The calendar: the weekday (0-6), the day (1-30), the season (0-3)
  *    and the year; on a new year, the damage odds of 4 (winter's, with
- *    LoadsDamageProbabilities) and ClimateFarmDamageCheck.
+ *    LoadDamageProbabilities) and ClimateFarmDamageCheck.
  *  - The music stops (FadeOutSongSlowly with $0117 = $FF), the screen fades out
  *    (from 15, 3 frames a level, to 1) and is blanked; map $0F for the
  *    music of the day.
  *  - Today's special days: $7F1F64 bits 4-5 and $7F1F70 bit 1 from
  *    $0196 bits 4, 9 and 8, around SetWeatherFlags (which makes the new
  *    $0196); the new day's music (PickMapMusic past its 6 pm test).
- *  - 6:00:00, and the night's work: LoadsDateNames,
- *    NightlyFarmTilesCheck, ClimateFarmDamagePrep, CowFeedingandStatus,
- *    WeatherTomorrow, FindMostLovedName, WifePregnanacyandChilds.
+ *  - 6:00:00, and the night's work: LoadDateNames,
+ *    NightlyFarmTilesCheck, ClimateFarmDamagePrep, CowFeedingAndStatus,
+ *    WeatherTomorrow, FindMostLovedName, WifePregnancyAndChildren.
  *  - The player rested: the state ($D2 = 1, action 0, facing down), the
  *    stamina full ($0918 = $0917), the shipped goods' money paid
  *    (AddMoney, $7F1F07-$7F1F09 then 0), the animals not fed, the day's
@@ -141,7 +141,7 @@ static void new_date(uint8_t *ram, HmRegs *r)
       hm_bus_wr8(ram, YEAR, year);
       r->a = 0x0004;                                       /* REP #$20 */
       hm_push8(ram, r, 0x82); hm_push8(ram, r, 0xE5);      /* JSR */
-      hm_LoadsDamageProbabilities(ram, r);
+      hm_LoadDamageProbabilities(ram, r);
       hm_pull8(ram, r); hm_pull8(ram, r);
       jsl(ram, r, 0x82E6, 0x82, hm_ClimateFarmDamageCheck);
       season = 0;
@@ -219,7 +219,7 @@ void hm_NightReset(uint8_t *ram, HmRegs *r)
   set_a8(r, 0x0F); *hm_dp(ram, r, 0x92) = 0x0F;
   set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
   set_a8(r, 0x01); *hm_dp(ram, r, 0x94) = 0x01;
-  jsl(ram, r, 0x8313, 0x80, hm_ScreenFadeout);
+  jsl(ram, r, 0x8313, 0x80, hm_ScreenFadeOut);
   jsl(ram, r, 0x8317, 0x80, hm_ForceBlank);
   set_a8(r, 0x0F);
   *hm_dp(ram, r, 0x22) = 0x0F;
@@ -240,13 +240,13 @@ void hm_NightReset(uint8_t *ram, HmRegs *r)
   set_a8(r, 0);
   hm_bus_wr8(ram, MINUTES, 0);
   hm_bus_wr8(ram, SECONDS, 0);
-  jsl(ram, r, 0x8394, 0x82, hm_LoadsDateNames);
+  jsl(ram, r, 0x8394, 0x82, hm_LoadDateNames);
   jsl(ram, r, 0x8398, 0x82, hm_NightlyFarmTilesCheck);
   jsl(ram, r, 0x839C, 0x82, hm_ClimateFarmDamagePrep);
-  jsl(ram, r, 0x83A0, 0x83, hm_CowFeedingandStatus);
+  jsl(ram, r, 0x83A0, 0x83, hm_CowFeedingAndStatus);
   jsl(ram, r, 0x83A4, 0x82, hm_WeatherTomorrow);
   jsl(ram, r, 0x83A8, 0x82, hm_FindMostLovedName);
-  jsl(ram, r, 0x83AC, 0x82, hm_WifePregnanacyandChilds);
+  jsl(ram, r, 0x83AC, 0x82, hm_WifePregnancyAndChildren);
 
   wr16(ram, r, 0x0915, 0);                                 /* REP #$20 */
   hm_dp_w16(ram, r, 0xD2, 0);
@@ -327,8 +327,8 @@ void hm_NightReset(uint8_t *ram, HmRegs *r)
  *    18:00, unless $7F1F5E bit 15, the music stops (FadeOutSongSlowly with
  *    $0117 = $FF, then $0110 = $FF).
  *  - Then the palette of the hour (SetPaletteToLoad); if it changed, the
- *    colour cycles go (ZeroesPartial42Pointers from 4) and the new ones
- *    start (CallIndexedSubrutines).
+ *    colour cycles go (StopColourAnimationsFrom from 4) and the new ones
+ *    start (StartMapColourAnimations).
  * Leftovers: those of the routines called, or of the tests.
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_UpdateTime(uint8_t *ram, HmRegs *r)
@@ -380,14 +380,14 @@ void hm_UpdateTime(uint8_t *ram, HmRegs *r)
   r->c = palette >= now;
   if (palette == now) return;
   r->y = 0x0004;
-  jsl(ram, r, 0x80A1, 0x80, hm_ZeroesPartial42Pointers);
-  jsl(ram, r, 0x80A5, 0x80, hm_CallIndexedSubrutines);
+  jsl(ram, r, 0x80A1, 0x80, hm_StopColourAnimationsFrom);
+  jsl(ram, r, 0x80A5, 0x80, hm_StartMapColourAnimations);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
  * FirstNightReset ($83:ABF0, JSL, RTL; when a game starts, new or loaded):
  * the day's state from zero: the scroll and DMA bytes, the money shipped,
- * the date's names (LoadsDateNames), the player's state and position
+ * the date's names (LoadDateNames), the player's state and position
  * ($D2 = 1, action 0, facing down, stamina full), what he holds, the
  * sounds ($0110-$0118), the animals fed, the map ($098B = 0), the day's
  * flags ($7F1F5A-$7F1F62, $7F1F74-$7F1F7A), 6:00:00; the wood the next
@@ -426,7 +426,7 @@ void hm_FirstNightReset(uint8_t *ram, HmRegs *r)
   r->a = 0;
   hm_bus_wr16(ram, 0x7F1F07, 0);
   hm_bus_wr8(ram, 0x7F1F09, 0);
-  jsl(ram, r, 0xAC2E, 0x82, hm_LoadsDateNames);
+  jsl(ram, r, 0xAC2E, 0x82, hm_LoadDateNames);
 
   static const uint16_t b2[] = { 0x096D, 0x098A, 0x0972, 0x0919, 0x0993, 0x0994, 0x018B };
   static const uint16_t w2[] = { 0x0878, 0x087A, 0x0973, 0x0907, 0x0909, 0x0991 };
@@ -473,7 +473,7 @@ void hm_FirstNightReset(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * UnusedEndlessLoop ($82:878E): BRA to itself, for ever. Nothing calls it (a
- * leftover between NightReset and WifePregnanacyandChilds). Its check
+ * leftover between NightReset and WifePregnancyAndChildren). Its check
  * stops after one turn, when it comes back to its start (HM_TOLOOP): it
  * changes nothing.
  * ───────────────────────────────────────────────────────────────────────── */

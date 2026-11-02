@@ -208,7 +208,7 @@ Algunos trucos que fueron necesarios:
   pone el haz al día con el reloj de la CPU, un DMA cobra su tiempo), así
   que la prueba al azar apaga el HDMA y las IRQ por línea y empieza cada
   llamada en el mismo punto del cuadro: ya no pone el reloj de la CPU a 0,
-  que hacía saltar el haz. En vivo, en el juego, StartProgramedDMA pasó
+  que hacía saltar el haz. En vivo, en el juego, StartProgrammedDMA pasó
   1.037 de 1.039 llamadas (2 saltadas, cortadas por el cuadro).
 - **El chip de sonido, resuelto grabando.** Sus respuestas vienen de otro
   procesador y no se pueden calcular. Entonces, mientras corre el
@@ -335,7 +335,7 @@ que se llama desde fuera de su bloque cuenta como rutina aparte, y las
 instrucciones se le acreditan a la que corresponde (20,45 % → 20,33 %).
 Una tercera el 23 de octubre: cuatro comandos de guion tienen en HM-Decomp
 la dirección anotada con el banco equivocado ($80 en vez de $84), y uno de
-ellos caía sobre una rutina real del banco $80 (`CallIndexedSubrutines`,
+ellos caía sobre una rutina real del banco $80 (`StartMapColourAnimations`,
 $80:9553), cuya cuenta lo incluía (56,14 % → 56,10 %).
 
 ---
@@ -491,7 +491,7 @@ código en `$098C`:
   la de más cariño (+04; la última si hay empate), cuyo nombre va a
   $0889-$088F (en blanco si no hay vacas).
 - **La granja se guarda aparte.** En la granja el juego trabaja sobre el
-  mapa actual (`$7E:09B6`); `CopyCurrentMaptoFarmMap` lo guarda en la copia
+  mapa actual (`$7E:09B6`); `CopyCurrentMapToFarmMap` lo guarda en la copia
   propia de la granja (`$7E:A4E6`), para que sobreviva al ir a otro sitio.
   Una partida nueva empieza con el campo del cartucho (`LoadDefaultFarmMap`,
   desde `$A7:8000`, el primer puntero de `MapPointerTable`, que está en
@@ -656,7 +656,7 @@ usan otros guiones.
   tirada al azar decide qué hace.
 - Cuando lo **llaman**, corre hacia ti por el eje en que está más lejos.
 
-**La vaca, cada cuadro** (`Event_UNKCowRelated`, la rutina más grande
+**La vaca, cada cuadro** (`Event_CowFrame`, la rutina más grande
 descompilada hasta ahora: 1.567 instrucciones). Cada vaca tiene una ficha
 de 16 bytes: estado (ternera, joven, adulta, enferma, preñada, "huye de
 ti"), banderas del día (cepillada, ordeñada, le hablaste, caminando,
@@ -721,7 +721,7 @@ estructuras de 64 bytes desde `$7E:B586`:
 | +3F | su propio número |
 
 **Números de slot:** perro $16, caballo $17, vacas $18 + n, gallinas $24 +
-n. Hay 49 ($31); `ClearsofAllCCStructs` ($84:8000) los libera todos (primer
+n. Hay 49 ($31); `ClearAllEventSlots` ($84:8000) los libera todos (primer
 byte a 0), por ejemplo al entrar en un mapa.
 
 **El guion es un mini lenguaje.** Cada byte es un **comando** (hay 90, en
@@ -773,7 +773,7 @@ revisa las condiciones en un orden un poco distinto:
 | `UNK3` | el objeto $08 |
 
 **Los comandos 50-59** ($84:BBDA-$84:C013). HM-Decomp solo le pone nombre
-al primero; aquí son `Event_Cmd51`...`Event_Cmd59`:
+al primero; aquí son `Event_Cmd51_PutDownCarriedQuietly`...`Event_Cmd59_SwapTools`:
 
 | Comando | Qué hace |
 |---|---|
@@ -790,8 +790,8 @@ al primero; aquí son `Event_Cmd51`...`Event_Cmd59`:
 **Más comandos:** `StartTextBox` y `StartTextBoxCopy` (28 y 29, el mismo
 código) abren un cuadro de texto con `<texto> <líneas>`; `ResetFlag` (38;
 el 39 y el 40 apuntan al mismo código, ver el error 13) apaga un bit de una
-palabra en cualquier lugar; `EditTileonMap` (75, $84:BA10) pone un tipo de
-baldosa en el mapa actual, como el 58 en la granja. `Event_UNKTools`
+palabra en cualquier lugar; `EditTileOnMap` (75, $84:BA10) pone un tipo de
+baldosa en el mapa actual, como el 58 en la granja. `Event_ReturnToolsToShed`
 devuelve al cobertizo las herramientas de la mano y de la mochila (un bit
 por herramienta en $7F1F00), pero ningún número de comando llega a él.
 
@@ -808,7 +808,7 @@ $7F1F5C:
 - A sobre él con las manos libres y lugar enfrente: el jugador lo levanta
   (acción $17); el bit 4 dice "tocado en este cuadro".
 
-- **Correr los guiones** (`IterateCCStructures`, en cada cuadro): salvo
+- **Correr los guiones** (`RunEventSlots`, en cada cuadro): salvo
   que espere una caja de texto o el jugador esté en la acción 3, un número
   al azar va a `$DE` y cada uno de los 49 slots en uso corre su guion:
   mientras su espera (+10) sea 0, un comando tras otro
@@ -905,14 +905,14 @@ a otro guion. Las judías mágicas creciendo son una.
   devuelve los huecos de sus piezas y libera el registro. Pero si alguna
   de sus piezas aún espera en la cola, no se libera nada: $0740 cuenta un
   rechazo más y el objeto simplemente se queda. Los guiones destruyen
-  objetos con los comandos `Event_UNK1` (el suyo) y `Event_UNKCCchanges7`
+  objetos con los comandos `Event_DestroyOwnObject` (el suyo) y `Event_FreeOtherSlot`
   (el de otro slot).
 - **Moverlo y cambiarlo:** `MoveGameObject` mueve un objeto (volteo, X, Y);
   `ChangeGameObjectSprite` le pone otro sprite: se liberan las piezas viejas (con el
   mismo rechazo de arriba) y se cargan las nuevas. `ReadGameObject` vuelve a
   leer un objeto en esas variables.
 - **Sprites volteados:** la distancia de una pieza pasa a ser -distancia -
-  16 cuando el objeto está volteado en ese sentido (`InvertIfFlipedX` /
+  16 cuando el objeto está volteado en ese sentido (`InvertIfFlippedX` /
   `Y`): el sitio reflejado de una pieza de 16 píxeles.
   `ClearSpriteDataTables` vacía la cola y libera todos los huecos de
   gráficos (al cargar un mapa).
@@ -934,8 +934,8 @@ a otro guion. Las judías mágicas creciendo son una.
   orden, después el jugador, y los que están más arriba (Y menor) llenan
   la lista desde el final hacia atrás. Solo cuenta de qué lado del
   jugador están; no es un orden completo.
-- **Vaciar la tabla de sprites** (`PresetsWRAMCopyofOAM` y una copia
-  exacta, `PresetsWRAMCopyOAMCopy`): la copia en WRAM de los 128 sprites
+- **Vaciar la tabla de sprites** (`ClearOAMCopy` y una copia
+  exacta, `ClearOAMCopyAgain`): la copia en WRAM de los 128 sprites
   del hardware ($7E:A000) toda en X = Y = $F0, fuera de la pantalla, y la
   tabla alta ($7E:A200) a 0. `InitializeOBJs` libera los 40 objetos (y
   $DC = 0) y vacía la tabla; los huecos de gráficos quedan como estaban.
@@ -964,9 +964,9 @@ a otro guion. Las judías mágicas creciendo son una.
   - Al empezar a andar: dirección +02, paso (+03, +04) = (0, 1), (0, -1),
     (1, 0) o (-1, 0), la pausa +0B en +05/+06 y la animación de andar de la
     tabla de +36; en los dos casos +01 |= 4 (cambió la animación).
-  - Luego mira adelante (CEEEE con el mapa, solo con el bit 7; el tipo de
+  - Luego mira adelante (CollideMap con el mapa, solo con el bit 7; el tipo de
     la primera esquina queda en +0E): se para si choca, si delante hay un
-    tile $FF o $C0-$CF, o si el jugador está en medio (CDDDD). El tile
+    tile $FF o $C0-$CF, o si el jugador está en medio (CollidePlayer). El tile
     $E1 solo deja pasar a los slots $18-$23 (+3F). Pararse: sin paso,
     +05/+06 = +0B y se borra la dirección impuesta.
   - Rareza: sin el bit 7 igual mira el tile de la segunda esquina ($EB),
@@ -1002,7 +1002,7 @@ del rancho** (`RanchMasteryCalculator`, de 0 a 999). Suma:
 | Desarrollo de la granja | /2 |
 | Felicidad de cada vaca | /8, máximo 25 |
 
-**La presentación** (`MapEvent_EBA6`, mapas $3D y $4B). Cada mañana del
+**La presentación** (`MapEvent_EndingSlideShow`, mapas $3D y $4B). Cada mañana del
 final el jugador se despierta a las 6:00 y el paso `$7F1F47` dice qué
 parte sigue; una parte que no corresponde se salta:
 
@@ -1158,7 +1158,7 @@ ocupado (al revés que las demás). Después de los instrumentos de una canción
 `LoadSongInstruments` manda siempre también el instrumento 6: lo hace cuando la
 lista termina en huecos vacíos, y las listas de las 26 canciones terminan
 así. Y otra vez una dirección de HM-Decomp va un byte antes:
-`SoundCommand08` empieza en $83:8D39, no en 8D38. `UNUSED2` ($83:8376), que nadie llama, solo
+`SoundCommand08` empieza en $83:8D39, no en 8D38. `UnusedCountInstrument` ($83:8376), que nadie llama, solo
 suma uno a la cuenta de instrumentos ($0103).
 
 ### 5.16 Las partidas guardadas
@@ -1338,10 +1338,10 @@ cambia).
 **El cambio es lento**:
 
 1. Cuando la hora entra en otra parte del día, `SetPaletteToLoad` ve que el
-   mapa tiene otra paleta y llama a `SetTimeofDayPalette`, que apunta
+   mapa tiene otra paleta y llama a `SetTimeOfDayPalette`, que apunta
    `$04-$06` a ella. Desde las 18:00 el destino es la paleta de noche ya
    preparada en `$7F:0B00`.
-2. `TransitionTimeofDayPalettes` corre cada cuadro mientras el tiempo
+2. `TransitionTimeOfDayPalettes` corre cada cuadro mientras el tiempo
    corre. Cada **32 cuadros** mueve cada color **un paso** en rojo, en verde
    y en azul hacia el destino, y manda la paleta a la consola por DMA.
    Como un componente puede estar a 31 pasos, un cambio completo puede
@@ -1386,9 +1386,9 @@ mirar hacia adelante, $E5 / $E7 el paso, y A la dirección (0 abajo, 1 arriba, 2
 cambiadas: en el control del SNES el bit $0100 es Derecha y $0200
 Izquierda, así que su `PlayerActionLeft` en realidad es "derecha".
 
-- **El mapa** (`CEEEE`): prueba las dos esquinas del lado que avanza, a 6
+- **El mapa** (`CollideMap`): prueba las dos esquinas del lado que avanza, a 6
   píxeles a cada lado del centro y $E3 + el paso + 6 píxeles adelante. Cada
-  esquina (`CFFFF`) lee la propiedad de la baldosa:
+  esquina (`CollideTileCorner`) lee la propiedad de la baldosa:
 
   | Bit | Qué es sólido |
   |---|---|
@@ -1400,12 +1400,12 @@ Izquierda, así que su `PlayerActionLeft` en realidad es "derecha".
   La respuesta es (primera esquina) × 2 + (segunda esquina). Cuando algo
   bloquea, la rutina también dice cuánto se mete la esquina en la baldosa,
   para que quien llama se detenga justo en el borde o se deslice por él.
-- **Los objetos** (`CBBBB`): los 49 espacios de evento ($7E:B586). Uno
+- **Los objetos** (`CollideEventObjects`): los 49 espacios de evento ($7E:B586). Uno
   estorba si su posición está a menos de 12 píxeles del punto mirado, en
   los dos ejes. Los primeros que encuentra quedan marcados (byte +$0C = 1).
   Los objetos con el bit 1 de su byte +0 no bloquean. Con $7F1F60 bit
   $4000 nada bloquea.
-- **El jugador** (`CDDDD`): la misma prueba de 12 píxeles contra la
+- **El jugador** (`CollidePlayer`): la misma prueba de 12 píxeles contra la
   posición del jugador; es la que usan los animales y las personas.
 
 ### 5.21 Apretar A
@@ -1444,7 +1444,7 @@ cada estación), el byte +0 de la baldosa va a $091F y la acción del jugador
 pasa a 4 (cargándolo). En otoño e invierno las baldosas $38, $39, $52, $53,
 $60, $61, $6E y $6F no dan nada.
 
-**Hablar:** si no es nada de eso, la rutina le pregunta a `CBBBB` (5.20) si
+**Hablar:** si no es nada de eso, la rutina le pregunta a `CollideEventObjects` (5.20) si
 hay un objeto de evento 16 píxeles adelante; el objeto encontrado queda con
 su byte +$0C = 1, y su propio guion (una persona, un animal) reacciona.
 
@@ -1514,7 +1514,7 @@ de la paleta, paso a paso (ciclo de paleta, `src/coloranim.c`).
   manda la paleta a la consola por DMA. Los canales 0-3 solo corren
   mientras llueve o nieva. Desde el canal 4, el primer canal vacío termina
   el recorrido, así que siempre se usan en orden.
-- `CallIndexedSubrutines` arranca las animaciones del mapa según la parte
+- `StartMapColourAnimations` arranca las animaciones del mapa según la parte
   del día, con `Subrutines_Table` ($80:BEEC): 6 palabras por mapa (5 partes
   del día, y una palabra que, si no es $FFFF, significa "solo en otoño e
   invierno"). Cada palabra es una de 51 rutinas pequeñas, y cada una
@@ -1593,20 +1593,20 @@ Tres piezas hacen el trabajo:
 del túnel ($81:B21E) y, como etiqueta con sangría, la del mapa $37
 ($81:B26D). Se desensamblaron desde la ROM. Las tres primeras están
 verificadas pero no cuentan en el porcentaje, que mide el código propio de
-HM-Decomp. Además, `ReplaceTilesMoutain` empieza en $81:AC80, no en
+HM-Decomp. Además, `ReplaceTilesMountain` empieza en $81:AC80, no en
 $81:AC7F (ese byte es el RTS de `ReplaceTilesForkWinter`), y
 `MapPointerTable` está en $82:B174.
 
 ### 5.26 Quién aparece en cada mapa
 
-Al entrar a un mapa, `RunsFunctionbyIndex` ($83:CA98) llama a su rutina de
+Al entrar a un mapa, `StartMapEvents` ($83:CA98) llama a su rutina de
 `UNK_TableFunctionSelect` ($83:CAA9, una palabra por mapa). Cada una
 arranca los guiones de evento de la gente y las cosas de ese lugar, según
 la fecha, la hora y las banderas de la historia, con `StartEventScriptLong`
 (slot, grupo de guiones, guion). HM-Decomp las tiene todas como un solo
 bloque; acá cada una es `MapEvent_xxxx` (su dirección). Están todas salvo
 `DED3` (la casa del jugador, mapas $15-$17), que llama a rutinas de sonido
-que esperan al cuadro siguiente; por eso `RunsFunctionbyIndex` también
+que esperan al cuadro siguiente; por eso `StartMapEvents` también
 queda en el original.
 
 | Rutina | Qué arranca |
@@ -1735,7 +1735,7 @@ acción del jugador (`$D4`, tabla `DATA16_81C027`) a su paso, en
 `playerstate.c`. Casi todos ponen la animación del jugador (`$0901`, a
 menudo + su dirección) y la reproducen (`UpdatePlayerObject`); cuando termina
 (`$0915 = $FFFF`) cambia la acción. Todos terminan por
-`ResetIdleAnimatioTimer`:
+`ResetIdleAnimationTimer`:
 
 | Acción | Paso |
 |---|---|
@@ -1751,7 +1751,7 @@ menudo + su dirección) y la reproducen (`UpdatePlayerObject`); cuando termina
 | $1C | cambiar de herramienta: animación $90 + la herramienta de la bolsa; después se cambian de lugar y se cargan los ruidos de la nueva (ToolUsedSound2) |
 
 `MovePlayer` mueve al jugador `$1E` píxeles hacia donde mira: los objetos
-de evento (`CBBBB`) o una casilla sólida (`CEEEE`) lo paran; cuando solo
+de evento (`CollideEventObjects`) o una casilla sólida (`CollideMap`) lo paran; cuando solo
 una de las esquinas del frente está bloqueada se desliza de lado para
 rodearla (siempre en los tipos 0 y $A0-$AF; si no, según en qué mitad de
 la casilla está); una puerta ($C0-$CF) lo para enseguida; luego la cámara
@@ -1779,7 +1779,7 @@ lo sigue y cada 8 movimientos deja una huella (`SnowFootprints`).
   `$017D` / `$017F` y empieza la animación del mapa.
 - El cuadro 1 espera mientras `$00CF`; luego, hasta $0D, sigue caminando
   (acción 1) hacia donde mira. En $0D: al salir de un mapa de la granja
-  (menor que 4) se guarda la granja (`CopyCurrentMaptoFarmMap`); al salir
+  (menor que 4) se guarda la granja (`CopyCurrentMapToFarmMap`); al salir
   de los mapas $0C-$0F pasa una hora (no más allá de las 18:00, con
   `HaveLunch`); después el bit 14 de `$0196` arranca la transición.
 
@@ -1801,15 +1801,15 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
 - **Los DMA preparados.** Una rutina que quiere copiar algo a la memoria
   de video prepara un canal de DMA y deja una nota: `$28` tiene un bit por
   canal en espera, `$2A` + canal el valor de VMAIN, `$32` + 2 x canal el
-  destino. `StartProgramedDMA` (en el NMI) los lanza: un canal cuya
+  destino. `StartProgrammedDMA` (en el NMI) los lanza: un canal cuya
   dirección B es $18 va a la VRAM (VMAIN y luego la dirección de 16 bits),
   cualquier otro a la CGRAM (el byte bajo como número de color). Vuelve a
   leer `$28` en cada canal, así que una copia a la WRAM por $2180 puede
   cambiar qué canales siguen.
 - **Pantalla en negro y brillo.** `$24` es la copia del juego de INIDISP
   ($2100). `ForceBlank` pone el bit 7, `ResetForceBlank` deja solo el
-  brillo, `SetsBrightness` pone el brillo (A & $0F; 0 significa negro) y
-  conserva el bit de negro; `InitialzieScreenStatusVar` borra la copia y
+  brillo, `SetBrightness` pone el brillo (A & $0F; 0 significa negro) y
+  conserva el bit de negro; `InitializeScreenStatusVars` borra la copia y
   pone la pantalla en negro.
 - **Los 11 modos gráficos** (`ManageGraphicPresets`, A = el modo, guardado
   en `$19B6`): unos veinte registros del PPU (tamaño de sprites, modo de
@@ -1822,14 +1822,14 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   `ZeroesPartialVRAM` (desde la dirección en A, $FFF bytes) ponen la
   pantalla en negro, apagan las interrupciones y copian con un DMA una
   palabra fija de 0 de la ROM ($80:8424). Los tamaños son generosos: el
-  doble de la OAM, y la CGRAM un byte menos que el doble. `UNUSED1`, que
+  doble de la OAM, y la CGRAM un byte menos que el doble. `UnusedHideSprites`, que
   nadie llama, sacaría todos los sprites de la pantalla.
 - **Un DMA preparado de inmediato** (`StartLastPreparedDMA`): lo mismo
   solo para el canal de `$27`, lanzado en el acto; `$28` se borra y se
-  olvida cualquier otro canal en espera. `LoadsFromVRAMwithOffset` la usa
+  olvida cualquier otro canal en espera. `CopyMapPictureToVRAM` la usa
   para copiar Y bytes de `$7E:2000` + `$7E` a la dirección de VRAM X (pese
   a su nombre escribe en la VRAM).
-- **Las piezas de sprite** (`CopiesWRAMtoOBJVGRAM`): la lista que deja el
+- **Las piezas de sprite** (`CopySpritePiecesToVRAM`): la lista que deja el
   cargador en `$7E:A420` (5.12) va a la VRAM, cada pieza con dos DMA de
   $40 bytes: la mitad de arriba, y la de abajo desde origen + $200 a
   dirección + $100.
@@ -1904,11 +1904,11 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
 - **Esperar** (`WaitForNMI`): enciende el NMI, borra `$00` y da vueltas
   hasta que el NMI lo pone; A y los flags vuelven como estaban.
   `WaitForNMIATimes` lo hace A veces (A = 0 serían 65.536 cuadros).
-- **Fundidos** (`ScreenFadein` / `ScreenFadeout`): un nivel de brillo
+- **Fundidos** (`ScreenFadeIn` / `ScreenFadeOut`): un nivel de brillo
   cada `$93` cuadros desde `$92` (o, con `$FF`, desde donde esté, `$25`)
   hasta `$94`; después el bit 15 de `$7F1F5A` dice si la pantalla está
-  encendida. Los comandos de guion `Event_ScreenFadein` /
-  `Event_ScreenFadeout` funden de 3 a 15 y de 15 a 0, 3 cuadros por nivel.
+  encendida. Los comandos de guion `Event_ScreenFadeIn` /
+  `Event_ScreenFadeOut` funden de 3 a 15 y de 15 a 0, 3 cuadros por nivel.
 - **Sonidos que esperan** (5.15): `PrepareSoundEffect` hace sitio para el
   instrumento de un efecto (quita los de después con `DropInstrumentsFrom` y espera
   un cuadro) y lo manda; `PlayEffectWithSongInstrument` toca el efecto A del banco X y
@@ -1917,10 +1917,10 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   manda los de la canción); `ChangeMusic` apaga la canción vieja, pone la
   nueva, espera 180 cuadros y elige la música del mapa; `ToolUsedSound2`
   carga los ruidos del objeto en la mano cuando cambia. El comando de
-  guion `Event_AudioRelated3` toca un efecto y espera, y luego recarga los
+  guion `Event_PlayEffectAndWait` toca un efecto y espera, y luego recarga los
   ruidos del objeto; la acción 4 (`PlayerAction_04_Jingle`) toca el efecto $19 y
   arranca la animación de mapa $44, y 32 cuadros después termina.
-- **Los objetos en el mapa** (5.27): en cada cuadro `BAAAA` recorre los
+- **Los objetos en el mapa** (5.27): en cada cuadro `RunItemsOnMap` recorre los
   diez registros de `$7E:B4E6`: coloca el objeto de cada uno
   (`ReadGameObject`), lo destruye si se salió del mapa y corre su rutina
   (`RunItemRoutine`: la del objeto, tabla `$81:97C0`); las 26 herramientas
@@ -1964,8 +1964,8 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
   esperar el NMI; `$C7` = `$1800`; salvo que haya que escribir un nombre
   (bit 13 de `$0196`: la pantalla de los nombres); `SetScreenTransition`,
   `CheckDoors`, `UpdateTime`, `PrintTextFrame`,
-  `TransitionTimeofDayPalettes`, `RunColourAnimations`, `InputTypeSelector`,
-  `BAAAA`, `PlayerFrame`, `AutoMapScrolling`, `IterateCCStructures`,
+  `TransitionTimeOfDayPalettes`, `RunColourAnimations`, `InputTypeSelector`,
+  `RunItemsOnMap`, `PlayerFrame`, `AutoMapScrolling`, `RunEventSlots`,
   `RunMapAnimation`, `AnimateGameObjects`, `LoadQueuedSpritePieces`, `PrepareOAMData`; `$00`
   borrado.
 - **El reloj** (`UpdateTime`): un segundo por cuadro, 60 segundos por
@@ -1983,10 +1983,10 @@ $10-$13, no los días con los bits 1, 3, 4 de `$0196`):
 - **Ir a otro mapa** (`SetScreenTransition`, cada cuadro): con el bit 14 de
   `$0196`, la música del mapa nuevo, el fundido de salida, la pantalla en
   blanco; `EnterMap` borra lo del mapa viejo, pone la gente
-  del nuevo (`RunsFunctionbyIndex`, 5.26) y lo carga (`LoadAndShowMap`: el
+  del nuevo (`StartMapEvents`, 5.26) y lo carga (`LoadAndShowMap`: el
   dibujo, los colores, el jugador y lo que lleva, los animales, la música,
   el fundido de entrada).
-- **La casa** (`MapEvent_DED3`, mapas $15-$17): el final en el verano 30
+- **La casa** (`MapEvent_PlayerHouse`, mapas $15-$17): el final en el verano 30
   del tercer año; la música de la casa tras las ampliaciones; lo que dejó
   la noche (canciones, ruidos, las casillas nuevas de una ampliación); y
   luego la primera escena que encaja: una del grupo $1F, la de una vaca
@@ -2045,7 +2045,7 @@ Con todas las rutinas reescritas, el juego corre sin el código recompilado
   sigue tocando. `mods.c` son las mejoras de la recompilación; tocan la
   WRAM entre cuadros y solo con valores que el juego mismo pone, y tres
   ganchos en el C (`g_hm_oam_right/left` en PrepareOAMData para la
-  pantalla ancha, `g_hm_no_ending` en MapEvent_DED3 para el juego sin fin,
+  pantalla ancha, `g_hm_no_ending` en MapEvent_PlayerHouse para el juego sin fin,
   `g_hm_year_suffix` en DrawSaveFileLine para "4th", "5th"...) que por defecto
   valen lo de la ROM, así que el comprobador no ve diferencia.
 - **El punto limpio.** Al empezar cada cuadro de GameLoop (`main` está por
@@ -2091,7 +2091,7 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     negativo, deja el dinero en 0 en vez de rechazar la operación.
 13. **Comandos que no se usan:** la tabla de comandos apunta tres veces a
     `ResetFlag`, así que `ResetFlagD` y `ResetFlagDD` no se alcanzan nunca;
-    `Event_UNKTools` (guarda las herramientas en la bodega) tampoco está en
+    `Event_ReturnToolsToShed` (guarda las herramientas en la bodega) tampoco está en
     la tabla.
 14. **`RemoveProgrammedDMA` usa todo A como índice.** En modo de 8 bits,
     `TAX` también copia el byte alto escondido de A, así que la tabla de
@@ -2138,7 +2138,7 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     para siempre; no pasa porque un hueco que se devuelve siempre está en
     uso.
 24. **Una bandera que nunca se borra.** Al entrar al pueblo con el bit 10
-    de `$7F1F60`, `MapEvent_D2E0` arranca un guion y quiere borrar el bit:
+    de `$7F1F60`, `MapEvent_Town` arranca un guion y quiere borrar el bit:
     `LDA.L $7F1F60; AND #$FBFF; STA.B $60`. La escritura va a la página
     directa ($60) en vez de a $7F1F60, así que el bit sigue puesto y el
     guion arranca cada vez que se entra al pueblo (hasta que otra cosa lo
@@ -2162,7 +2162,7 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
     callejones sin salida de los que el propio juego se mantiene lejos: el
     presupuesto deja pasar menos piezas por cuadro.
 29. **El HDMA apagado en cada cuadro.** En el NMI, después de las piezas de
-    sprite (`CopiesWRAMtoOBJVGRAM` vuelve con A de 16 bits), `UpdateGraphics`
+    sprite (`CopySpritePiecesToVRAM` vuelve con A de 16 bits), `UpdateGraphics`
     borra `$9A` y `$420B` con escrituras de 16 bits: borran también `$9B` y
     `$420C`, HDMAEN, así que cada cuadro con trabajo termina con el HDMA
     apagado.
@@ -2320,6 +2320,6 @@ Cosas que el juego hace mal o de forma curiosa, encontradas al descompilar:
 | 28-oct-2026 | 88,12 % | las pantallas de título y de partidas (barras de casillas, la línea de una partida), herramientas de vuelta al estante, la tabla de sprites |
 | 28-oct-2026 | 88,80 % | el dibujo de un mapa (BackgroundsManager: tilemaps, dibujos de capa y el paseo de la cámara); dos preparaciones del fuzz más realistas (el año de una partida, los pasos y la dirección de un slot que pasea) |
 | 28-oct-2026 | 88,94 % | las interrupciones (NMI, IRQ por línea) y las esperas al cuadro siguiente, con el NMI adelantado por la prueba al azar (HM_WAIT) |
-| 28-oct-2026 | 90,73 % | lo que espera cuadros: los fundidos, los sonidos que esperan (PrepareSoundEffect/20/24/26, ToolUsedSound2), dos comandos de guion, la acción 4, los objetos en el mapa (BAAAA, RunItemRoutine) y las 26 herramientas del cobertizo, el intérprete de guiones y su bucle, el cambio de herramienta (estado $1C del jugador), el cuadro del jugador (PlayerFrame, PlayerInteractionSelector) y la acción $35; la prueba al azar ahora repone la máquina entera antes de cada llamada de una rutina de sonido |
+| 28-oct-2026 | 90,73 % | lo que espera cuadros: los fundidos, los sonidos que esperan (PrepareSoundEffect/20/24/26, ToolUsedSound2), dos comandos de guion, la acción 4, los objetos en el mapa (RunItemsOnMap, RunItemRoutine) y las 26 herramientas del cobertizo, el intérprete de guiones y su bucle, el cambio de herramienta (estado $1C del jugador), el cuadro del jugador (PlayerFrame, PlayerInteractionSelector) y la acción $35; la prueba al azar ahora repone la máquina entera antes de cada llamada de una rutina de sonido |
 | 29-oct-2026 | 100,00 % | todo lo demás: del encendido a la granja (RESET, la pantalla de título y su menú, las pantallas de partidas, las demos, la primera mañana, el bucle del juego), el reloj y la noche, ir a otro mapa y cargarlo, la casa (quién aparece ahí), la pantalla de los nombres y adónde va cada nombre; la prueba al azar para las rutinas que nunca vuelven donde entran a su bucle (HM_TOLOOP) |
 | 29-oct-2026 | 100,00 % | la versión nativa: el juego se juega solo con el C reescrito (`native/`), con los chips de imagen y de sonido de la consola alrededor |

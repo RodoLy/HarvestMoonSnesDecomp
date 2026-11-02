@@ -12,7 +12,7 @@
  *   RunColourAnimations        every frame: advance every channel and, if one ran,
  *                      send the palette ($7F:0900) to the console
  *   Zeroes...          stop channels
- *   CallIndexedSubrutines  starts the animations of the map for this part
+ *   StartMapColourAnimations  starts the animations of the map for this part
  *                      of the day: Subrutines_Table ($80:BEEC) has 6 words
  *                      per map (5 parts of the day, then a word that, when
  *                      not $FFFF, means "only in autumn and winter")
@@ -178,9 +178,9 @@ void hm_RunColourAnimations(uint8_t *ram, HmRegs *r)
   hm_rtl(ram, r);
 }
 
-/* Zeroes42Pointers ($80:8FAB): stop all 16 channels; ZeroesPartial42Pointers
+/* StopAllColourAnimations ($80:8FAB): stop all 16 channels; StopColourAnimationsFrom
  * ($80:8F92): from channel Y on (Y must be below 16, or it goes round
- * 65536 times); ZeroesOne42Pointer ($80:8F82): channel A. */
+ * 65536 times); StopColourAnimation ($80:8F82): channel A. */
 static void stop_from(uint8_t *ram, HmRegs *r, uint16_t y)
 {
   do {
@@ -192,9 +192,9 @@ static void stop_from(uint8_t *ram, HmRegs *r, uint16_t y)
   } while (y != 0x10);
   r->y = y;
 }
-void hm_Zeroes42Pointers(uint8_t *ram, HmRegs *r) { stop_from(ram, r, 0); }
-void hm_ZeroesPartial42Pointers(uint8_t *ram, HmRegs *r) { stop_from(ram, r, r->y); }
-void hm_ZeroesOne42Pointer(uint8_t *ram, HmRegs *r)
+void hm_StopAllColourAnimations(uint8_t *ram, HmRegs *r) { stop_from(ram, r, 0); }
+void hm_StopColourAnimationsFrom(uint8_t *ram, HmRegs *r) { stop_from(ram, r, r->y); }
+void hm_StopColourAnimation(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = times3(ram, r, r->a);
   set16(ram, r, 0x42 + x, 0);
@@ -526,7 +526,7 @@ STARTS(Colours_Map21,
   { 0xEF1C, 0x80, 0x0E, 0x06, 0x02, 0xDD59 })
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CallIndexedSubrutines ($80:9553, JSL, RTL)
+ * StartMapColourAnimations ($80:9553, JSL, RTL)
  * ───────────────────────────────────────────────────────────────────────── */
 #define SUB_TABLE 0xBEEC   /* Subrutines_Table, read with the data bank */
 
@@ -589,7 +589,7 @@ static void (*sub_at(uint16_t pc))(uint8_t *, HmRegs *)
   return 0;
 }
 
-void hm_CallIndexedSubrutines(uint8_t *ram, HmRegs *r)
+void hm_StartMapColourAnimations(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t starts[4] = { 7, 15, 17, 18 };
   uint8_t h = (uint8_t)hm_bus_rd8(ram, 0x7F1F1C);

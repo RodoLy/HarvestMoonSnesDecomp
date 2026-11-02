@@ -44,7 +44,7 @@ static void dark(uint8_t *ram, HmRegs *r, uint16_t at)
   set_a8(r, 0x0F); *hm_dp(ram, r, 0x92) = 0x0F;           /* SEP #$20; REP #$10 */
   set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
   set_a8(r, 0x01); *hm_dp(ram, r, 0x94) = 0x01;
-  jsl(ram, r, at, 0x80, hm_ScreenFadeout);
+  jsl(ram, r, at, 0x80, hm_ScreenFadeOut);
   jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_ForceBlank);
   jsl(ram, r, (uint16_t)(at + 8), 0x80, hm_ZeroesVRAM);
   jsl(ram, r, (uint16_t)(at + 12), 0x80, hm_ZeroesCGRAM);
@@ -160,7 +160,7 @@ void hm_SetKid2Name(uint8_t *ram, HmRegs *r)
  *  - The setup: the music of map $5F (PickMapMusic, FadeOutSongSlowly), the
  *    screen faded out (from 15, 3 frames a level, to 1) and blanked, VRAM
  *    cleared, the colour cycles, sprites and objects stopped
- *    (Zeroes42Pointers, ClearSpriteDataTables, InitializeOBJs); $0196 kept
+ *    (StopAllColourAnimations, ClearSpriteDataTables, InitializeOBJs); $0196 kept
  *    in $0198 and cleared, no player object ($0905 = 0), the controls to
  *    the names screen ($019A = 5); its graphics (preset 4,
  *    BackgroundsManager), its colours (palette $6F), two blocks of $100
@@ -307,10 +307,10 @@ void hm_NamesScreen(uint8_t *ram, HmRegs *r)
   set_a8(r, 0x0F); *hm_dp(ram, r, 0x92) = 0x0F;            /* SEP #$20 */
   set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
   set_a8(r, 0x01); *hm_dp(ram, r, 0x94) = 0x01;
-  jsl(ram, r, 0xE828, 0x80, hm_ScreenFadeout);
+  jsl(ram, r, 0xE828, 0x80, hm_ScreenFadeOut);
   jsl(ram, r, 0xE82C, 0x80, hm_ForceBlank);
   jsl(ram, r, 0xE830, 0x80, hm_ZeroesVRAM);
-  jsl(ram, r, 0xE834, 0x80, hm_Zeroes42Pointers);
+  jsl(ram, r, 0xE834, 0x80, hm_StopAllColourAnimations);
   jsl(ram, r, 0xE838, 0x85, hm_ClearSpriteDataTables);
   jsl(ram, r, 0xE83C, 0x85, hm_InitializeOBJs);
   r->a = rd16(ram, r, 0x0196);                             /* REP #$20 */
@@ -326,7 +326,7 @@ void hm_NamesScreen(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0xE866, 0x80, hm_LoadFirstHalfPaletteToWRAM);
   colours(ram, r, 0, 0x0000, 0x8C00, 0xE889);
   colours(ram, r, 1, 0x0080, 0xDE00, 0xE8AC);
-  jsl(ram, r, 0xE8B0, 0x80, hm_StartProgramedDMA);
+  jsl(ram, r, 0xE8B0, 0x80, hm_StartProgrammedDMA);
   jsl(ram, r, 0xE8B4, 0x81, hm_ClearItemRecords);
   static const uint16_t start[4] = { 0x0219, 0x0000, 0x0028, 0x0044 };
   for (int i = 0; i < 4; i++) {                            /* REP #$20 */
@@ -354,7 +354,7 @@ void hm_NamesScreen(uint8_t *ram, HmRegs *r)
   set_a8(r, 0x03); *hm_dp(ram, r, 0x92) = 0x03;            /* SEP #$20 */
   set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
   set_a8(r, 0x0F); *hm_dp(ram, r, 0x94) = 0x0F;
-  jsl(ram, r, 0xE92D, 0x80, hm_ScreenFadein);
+  jsl(ram, r, 0xE92D, 0x80, hm_ScreenFadeIn);
   wr16(ram, r, 0x0991, 0);                                 /* REP #$20 */
   set_a8(r, 0x00);                                         /* SEP #$20 */
   wr8(ram, r, 0x0993, 0);

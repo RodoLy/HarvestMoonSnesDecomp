@@ -93,12 +93,12 @@ void hm_ChangeMapTileNoVram(uint8_t *ram, HmRegs *r)
 /* ─────────────────────────────────────────────────────────────────────────
  * SetTileTypesFromChange ($82:B0A7, JSL, RTL). A = tile change, X / Y = position. For
  * every tile of the block, its type from the sheet at $A7:F500 into the map
- * (EditTileonMap). The graphics offset of the change ($7E, 4 bytes per
+ * (EditTileOnMap). The graphics offset of the change ($7E, 4 bytes per
  * tile, $80 per row of the graphics sheet) gives where it starts in the
  * type sheet: (offset mod $80) / 4 + (offset / $80) * 16.
  * Leftovers: $8E / $90 = the position, $72-$74 = $A7:F500, $86 = one past
  * the last type read, $82 / $84 = columns / rows; X / Y = the same, C = 1,
- * A from the last EditTileonMap.
+ * A from the last EditTileOnMap.
  * ───────────────────────────────────────────────────────────────────────── */
 #define TILE_TYPE_SHEET 0xA7F500
 #define RET_0A7_ENTRY   0xB0B0
@@ -132,7 +132,7 @@ void hm_SetTileTypesFromChange(uint8_t *ram, HmRegs *r)
       r->y = (uint16_t)py;
       r->c = py > 0xFFFF;
       r->a = (uint16_t)((py & 0xFF00) | hm_pull8(ram, r));  /* SEP; PLA */
-      jsl(ram, r, RET_0A7_EDIT, 0x82, hm_EditTileonMap);
+      jsl(ram, r, RET_0A7_EDIT, 0x82, hm_EditTileOnMap);
       pull16(ram, r);                                     /* PLY; PLX */
       col = (uint16_t)(pull16(ram, r) + 1);
     } while (col != hm_dp_r16(ram, r, 0x82));
@@ -305,11 +305,11 @@ void hm_ReplaceTilesFarm(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * ReplaceTilesMoutain ($81:AC80, maps $10-$13; HM-Decomp says $81:AC7F,
+ * ReplaceTilesMountain ($81:AC80, maps $10-$13; HM-Decomp says $81:AC7F,
  * which is the RTS of ReplaceTilesForkWinter): with rain or snow, $E2 at
  * ($180, $20); then, if $7F1F64 bit 1, $E1 at ($170, $270) with its types.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_ReplaceTilesMoutain(uint8_t *ram, HmRegs *r)
+void hm_ReplaceTilesMountain(uint8_t *ram, HmRegs *r)
 {
   if (flag(ram, r, db_(r, WEATHER), 0x0002) || flag(ram, r, db_(r, WEATHER), 0x0008))
     stamp(ram, r, 0xE2, 0x0180, 0x0020, 0xACC5);
@@ -330,7 +330,7 @@ static void house(uint8_t *ram, HmRegs *r, const House *h)
   if (flag(ram, r, FLAGS_6C, 0x1000)) {
     stamp(ram, r, 0xFD, h->shell_x, h->shell_y, h->ret[1]);
     r->a = 0xD7; r->x = h->shell_x; r->y = (uint16_t)(h->shell_y + 0x10);
-    jsl(ram, r, h->ret[2], 0x82, hm_EditTileonMap);
+    jsl(ram, r, h->ret[2], 0x82, hm_EditTileOnMap);
   }
   if (flag(ram, r, FLAGS_6E, 0x4000)) stamp(ram, r, 0xFE, h->clock_x, h->clock_y, h->ret[3]);
 }
@@ -434,11 +434,11 @@ void hm_ReplaceTilesAnimalShop(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * ReplaceTilesToolshed ($81:B064, map $26): the 24 items of list 0 you
+ * ReplaceTilesToolShed ($81:B064, map $26): the 24 items of list 0 you
  * own, on the wall; and, if $7F1F68 bit 13, $F0 at ($70, $20) with its
  * types.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_ReplaceTilesToolshed(uint8_t *ram, HmRegs *r)
+void hm_ReplaceTilesToolShed(uint8_t *ram, HmRegs *r)
 {
   for (uint16_t y = 0; y != 0x18; y++) {
     push16(ram, r, y);                                    /* PHY */
@@ -543,14 +543,14 @@ void hm_RunMapExtras(uint8_t *ram, HmRegs *r)
   void (*fn)(uint8_t *, HmRegs *);
   switch (target) {
     case 0xAAB6: fn = hm_ReplaceTilesFarm; break;
-    case 0xAC80: fn = hm_ReplaceTilesMoutain; break;
+    case 0xAC80: fn = hm_ReplaceTilesMountain; break;
     case 0xACCC: fn = hm_ReplaceTilesHouse1; break;
     case 0xAD23: fn = hm_ReplaceTilesHouse2; break;
     case 0xAD7A: fn = hm_ReplaceTilesHouse3; break;
     case 0xADD5: fn = hm_ReplaceTilesFlowerShop; break;
     case 0xAE6F: fn = hm_ReplaceTilesGeneralStore; break;
     case 0xAFC0: fn = hm_ReplaceTilesAnimalShop; break;
-    case 0xB064: fn = hm_ReplaceTilesToolshed; break;
+    case 0xB064: fn = hm_ReplaceTilesToolShed; break;
     case 0xB0A8: fn = hm_ReplaceTilesBarn; break;
     case 0xB121: fn = hm_ReplaceTilesCoop; break;
     case 0xB1CF: fn = hm_ReplaceTilesMountainCave; break;

@@ -3,7 +3,7 @@
  * objects).
  *
  * An item that leaves the player's hands becomes a map object (see
- * objects.c, BAAAA): its record keeps the item ($0984 while it is worked
+ * objects.c, RunItemsOnMap): its record keeps the item ($0984 while it is worked
  * on), a state ($0976) and its sprite. PutItemDown puts it down; then, each
  * frame, RunItemRoutine runs the item's own routine (table DATA8_8197C0, one
  * per item), which acts by the state: lands, breaks, is eaten...
@@ -88,7 +88,7 @@ void hm_PutItemDown(uint8_t *ram, HmRegs *r)
    * looked. */
   if (g_hm_crops_passable) { r->a = 0; r->x = 7; r->y = 7; }
   hm_jsl(ram, r, 0x8046, 0x81);
-  hm_CalculateTileinFront(ram, r);
+  hm_CalculateTileInFront(ram, r);
   hm_rtl(ram, r);
   if (g_hm_bag_take) { g_hm_bag_take = 0; return; }   /* the native build's bag: out of it */
 
@@ -254,11 +254,11 @@ static void sprite(uint8_t *ram, HmRegs *r, uint16_t y, uint16_t at)
   r->y = y;
   jsl(ram, r, at, 0x81, hm_GetItemSprite);
 }
-/* CalculateTileinFront (A, X, Y given; at a) */
+/* CalculateTileInFront (A, X, Y given; at a) */
 static void tile_ahead(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint16_t y, uint16_t at)
 {
   r->a = a; r->x = x; r->y = y;
-  jsl(ram, r, at, 0x81, hm_CalculateTileinFront);
+  jsl(ram, r, at, 0x81, hm_CalculateTileInFront);
 }
 /* GetTileProperty of the tile in front (A = which byte; at a):
  * X = its type, A = the property */
@@ -577,7 +577,7 @@ void hm_ItemWaitMapAnimation(uint8_t *ram, HmRegs *r)
  * with the sprite in hand (case 1); while he jumps (action 3) the sprite of
  * the jump (case $0B, $0974 bit 2) until its animation ends ($A7 = $FFFF
  * from ReadGameObject). When he throws it (action 5), if nothing is in the way
- * (CBBBB) it flies (case 6 + his facing, state 3).
+ * (CollideEventObjects) it flies (case 6 + his facing, state 3).
  * ───────────────────────────────────────────────────────────────────────── */
 static void carried(uint8_t *ram, HmRegs *r, uint16_t at_hand, uint16_t at_jump, uint16_t at_anim)
 {
@@ -613,7 +613,7 @@ static bool throwing(uint8_t *ram, HmRegs *r)
   r->c = r->a >= 5;
   return r->a == 5;
 }
-/* CBBBB from the player's place, 16 pixels ahead (at a): A != 0 when
+/* CollideEventObjects from the player's place, 16 pixels ahead (at a): A != 0 when
  * something is in the way; then CMP #0 (C = 1) */
 static bool in_the_way(uint8_t *ram, HmRegs *r, uint16_t at)
 {
@@ -623,7 +623,7 @@ static bool in_the_way(uint8_t *ram, HmRegs *r, uint16_t at)
   hm_dp_w16(ram, r, 0xE7, 0);
   hm_dp_w16(ram, r, 0xE3, 0x0010);
   r->a = hm_dp_r16(ram, r, 0xDA);
-  jsl(ram, r, at, 0x83, hm_CBBBB);
+  jsl(ram, r, at, 0x83, hm_CollideEventObjects);
   r->c = 1;
   return r->a != 0;
 }
@@ -892,7 +892,7 @@ static bool before_5pm(uint8_t *ram, HmRegs *r)
 
 /* ItemCarried (state 2): carried. Thrown on a Sunday before 5 pm in town
  * (maps 4-7, $0196 bit 1 clear) at a stall tile ($F0) with a sellable item:
- * it is put there and offered (state 5). Thrown at an object (CBBBB): put
+ * it is put there and offered (state 5). Thrown at an object (CollideEventObjects): put
  * at the tile in front and, with $7F1F5C bit 4 and a price before 5 pm,
  * shipped ($7F1F5C bit 6 too); state 8. Otherwise it flies. */
 void hm_ItemCarried(uint8_t *ram, HmRegs *r)
@@ -1069,7 +1069,7 @@ static void special_place(uint8_t *ram, HmRegs *r)          /* Droped_on_special
   r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F6E) | 0x2000);
   hm_bus_wr16(ram, 0x7F1F6E, r->a);
   r->a = 0x00A1; r->x = 0x00E0; r->y = 0x00B0;
-  jsl(ram, r, 0x951B, 0x82, hm_EditTileonMap);
+  jsl(ram, r, 0x951B, 0x82, hm_EditTileOnMap);
   remove_object(ram, r, 0x9526, 0x952A);
   wr8(ram, r, IN_HAND, 0);
   r->a = 5;
@@ -1140,38 +1140,38 @@ void hm_ItemLands(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 #define ITEM_JSR(name, at, machine_fn) \
   void hm_##name(uint8_t *ram, HmRegs *r) { jsr(ram, r, at, machine_fn); }
-ITEM_JSR(ItemObject_01, 0x80FE, hm_ItemFoodSteps)
-ITEM_JSR(ItemObject_02, 0x8102, hm_ItemFoodSteps)
-ITEM_JSR(ItemObject_03, 0x8106, hm_ItemFoodSteps)
-ITEM_JSR(ItemObject_04, 0x810A, hm_ItemFoodSteps)
-ITEM_JSR(ItemObject_05, 0x810E, hm_ItemFoodSteps)
-ITEM_JSR(ItemObject_06, 0x8112, hm_ItemFoodSteps)
-ITEM_JSR(ItemObject_07, 0x8116, hm_ItemFoodSteps)
-ITEM_JSR(ItemObject_08, 0x811A, hm_ItemFoodSteps)
-ITEM_JSR(ItemObject_09, 0x811E, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_0A, 0x8122, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_0D, 0x8126, hm_ItemPlaceableSteps)
-ITEM_JSR(ItemObject_0E, 0x812A, hm_ItemPlaceableSteps)
-ITEM_JSR(ItemObject_0F, 0x812E, hm_ItemPlaceableSteps)
-ITEM_JSR(ItemObject_14, 0x8192, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_15, 0x8196, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_16, 0x819A, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_17, 0x819E, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_18, 0x81A2, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_19, 0x81A6, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_1A, 0x81AA, hm_ItemFodderSteps)
-ITEM_JSR(ItemObject_24, 0x83B7, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_25, 0x83BB, hm_ItemAnimalSteps)
-ITEM_JSR(ItemObject_26, 0x83BF, hm_ItemAnimalSteps)
-ITEM_JSR(ItemObject_29, 0x83C5, hm_ItemAnimalSteps)
-ITEM_JSR(ItemObject_58, 0x87B7, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_59, 0x87BB, hm_ItemCommonSteps)
-ITEM_JSR(ItemObject_5A, 0x87BF, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_01_Mushroom, 0x80FE, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_02_PoisonMushroom, 0x8102, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_03_WildGrapes, 0x8106, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_04_TropicalFruit, 0x810A, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_05_FullmoonBerry, 0x810E, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_06_Cake, 0x8112, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_07_Fish, 0x8116, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_08_PowerBerry, 0x811A, hm_ItemFoodSteps)
+ITEM_JSR(ItemObject_09_Weed, 0x811E, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_0A_FallWeed, 0x8122, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_0D_Stone, 0x8126, hm_ItemPlaceableSteps)
+ITEM_JSR(ItemObject_0E_SnowyStone, 0x812A, hm_ItemPlaceableSteps)
+ITEM_JSR(ItemObject_0F_Fence, 0x812E, hm_ItemPlaceableSteps)
+ITEM_JSR(ItemObject_14_Egg, 0x8192, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_15_SmallMilk, 0x8196, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_16_MediumMilk, 0x819A, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_17_LargeMilk, 0x819E, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_18_Herb, 0x81A2, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_19_Flower, 0x81A6, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_1A_Fodder, 0x81AA, hm_ItemFodderSteps)
+ITEM_JSR(ItemObject_24_WeatherVane, 0x83B7, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_25_Hen, 0x83BB, hm_ItemAnimalSteps)
+ITEM_JSR(ItemObject_26_Chick, 0x83BF, hm_ItemAnimalSteps)
+ITEM_JSR(ItemObject_29_Mole, 0x83C5, hm_ItemAnimalSteps)
+ITEM_JSR(ItemObject_58_LilacPerfume, 0x87B7, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_59_RosePerfume, 0x87BB, hm_ItemCommonSteps)
+ITEM_JSR(ItemObject_5A_VioletPerfume, 0x87BF, hm_ItemCommonSteps)
 
 /* $23, $27, $28: nothing (RTS) */
-void hm_ItemObject_23(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
-void hm_ItemObject_27(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
-void hm_ItemObject_28(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
+void hm_ItemObject_23_Nothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
+void hm_ItemObject_27_Nothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
+void hm_ItemObject_28_Nothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
 
 static void crop(uint8_t *ram, HmRegs *r, uint16_t at, uint32_t counter)
 {
@@ -1181,10 +1181,10 @@ static void crop(uint8_t *ram, HmRegs *r, uint16_t at, uint32_t counter)
   r->a = (uint16_t)(hm_bus_rd16(ram, counter) + 1);
   hm_bus_wr16(ram, counter, r->a);
 }
-void hm_ItemObject_10(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x8132, 0x7F1F4A); }  /* corn */
-void hm_ItemObject_11(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x814A, 0x7F1F4C); }  /* tomatoes */
-void hm_ItemObject_12(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x8162, 0x7F1F50); }  /* potatoes */
-void hm_ItemObject_13(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x817A, 0x7F1F4E); }  /* turnips */
+void hm_ItemObject_10_Corn(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x8132, 0x7F1F4A); }  /* corn */
+void hm_ItemObject_11_Tomato(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x814A, 0x7F1F4C); }  /* tomatoes */
+void hm_ItemObject_12_Potato(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x8162, 0x7F1F50); }  /* potatoes */
+void hm_ItemObject_13_Turnip(uint8_t *ram, HmRegs *r) { crop(ram, r, 0x817A, 0x7F1F4E); }  /* turnips */
 
 /* LDA $0976; CMP #$FF: bought? */
 static bool bought(uint8_t *ram, HmRegs *r, uint16_t at)
@@ -1204,11 +1204,11 @@ static void becomes(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t item)
   wr8(ram, r, ITEM, item);
   wr8(ram, r, IN_HAND, item);
 }
-void hm_ItemObject_1B(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x81AE, 0x58); }
-void hm_ItemObject_1C(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x81C8, 0x59); }
-void hm_ItemObject_1D(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x81E2, 0x5A); }
-void hm_ItemObject_49(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x85C5, 0x19); }
-void hm_ItemObject_56(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x879D, 0x06); }
+void hm_ItemObject_1B_ShopLilacPerfume(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x81AE, 0x58); }
+void hm_ItemObject_1C_ShopRosePerfume(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x81C8, 0x59); }
+void hm_ItemObject_1D_ShopVioletPerfume(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x81E2, 0x5A); }
+void hm_ItemObject_49_ShopFlower(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x85C5, 0x19); }
+void hm_ItemObject_56_ShopCake(uint8_t *ram, HmRegs *r) { becomes(ram, r, 0x879D, 0x06); }
 
 /* LDA.L row; ORA #bit; STA.L row (8 bits) */
 static void shed_add(HmRegs *r, uint8_t *ram, uint32_t row, uint8_t bit)
@@ -1242,22 +1242,22 @@ static void seed_bag(uint8_t *ram, HmRegs *r, uint16_t at, uint32_t row, uint8_t
   set_a8(r, (uint8_t)(n + 1));
   wr8(ram, r, count, (uint8_t)(n + 1));
 }
-void hm_ItemObject_44(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8499, 0x7F1F01, 0x08, 0x0C, 0x0927); }
-void hm_ItemObject_45(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x84D5, 0x7F1F00, 0x10, 0x05, 0x0928); }
-void hm_ItemObject_46(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8511, 0x7F1F00, 0x20, 0x06, 0x0929); }
-void hm_ItemObject_47(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x854D, 0x7F1F00, 0x40, 0x07, 0x092A); }
-void hm_ItemObject_48(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8589, 0x7F1F00, 0x80, 0x08, 0x092B); }
+void hm_ItemObject_44_ShopGrassSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8499, 0x7F1F01, 0x08, 0x0C, 0x0927); }
+void hm_ItemObject_45_ShopCornSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x84D5, 0x7F1F00, 0x10, 0x05, 0x0928); }
+void hm_ItemObject_46_ShopTomatoSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8511, 0x7F1F00, 0x20, 0x06, 0x0929); }
+void hm_ItemObject_47_ShopPotatoSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x854D, 0x7F1F00, 0x40, 0x07, 0x092A); }
+void hm_ItemObject_48_ShopTurnipSeeds(uint8_t *ram, HmRegs *r) { seed_bag(ram, r, 0x8589, 0x7F1F00, 0x80, 0x08, 0x092B); }
 
 /* something for the shed only */
 static void to_shed(uint8_t *ram, HmRegs *r, uint16_t at, uint32_t row, uint8_t bit)
 {
   if (bought(ram, r, at)) shed_add(r, ram, row, bit);
 }
-void hm_ItemObject_4A(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x85DF, 0x7F1F01, 0x10); }
-void hm_ItemObject_4B(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x85F6, 0x7F1F01, 0x20); }
-void hm_ItemObject_4C(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x860D, 0x7F1F01, 0x40); }
-void hm_ItemObject_52(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x8737, 0x7F1F01, 0x01); }
-void hm_ItemObject_53(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x874E, 0x7F1F01, 0x02); }
+void hm_ItemObject_4A_ShopPaint(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x85DF, 0x7F1F01, 0x10); }
+void hm_ItemObject_4B_ShopMilker(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x85F6, 0x7F1F01, 0x20); }
+void hm_ItemObject_4C_ShopBrush(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x860D, 0x7F1F01, 0x40); }
+void hm_ItemObject_52_ShopCowMedicine(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x8737, 0x7F1F01, 0x01); }
+void hm_ItemObject_53_ShopMiraclePotion(uint8_t *ram, HmRegs *r) { to_shed(ram, r, 0x874E, 0x7F1F01, 0x02); }
 
 /* a gold tool: to the shed in place of the plain one, out of the slots */
 static void gold_tool(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bit,
@@ -1270,11 +1270,11 @@ static void gold_tool(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bit,
   hm_bus_wr8(ram, old_row, v);
   out_of_slots(ram, r, tool);
 }
-void hm_ItemObject_4D(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8624, 0x01, 0x7F1F00, 0xFE, 0x01); }
-void hm_ItemObject_4E(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x865B, 0x02, 0x7F1F00, 0xFD, 0x02); }
-void hm_ItemObject_4F(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8692, 0x04, 0x7F1F00, 0xFB, 0x03); }
-void hm_ItemObject_50(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x86C9, 0x08, 0x7F1F00, 0xF7, 0x04); }
-void hm_ItemObject_51(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8700, 0x10, 0x7F1F01, 0x7F, 0x10); }
+void hm_ItemObject_4D_ShopGoldSickle(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8624, 0x01, 0x7F1F00, 0xFE, 0x01); }
+void hm_ItemObject_4E_ShopGoldHoe(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x865B, 0x02, 0x7F1F00, 0xFD, 0x02); }
+void hm_ItemObject_4F_ShopGoldHammer(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8692, 0x04, 0x7F1F00, 0xFB, 0x03); }
+void hm_ItemObject_50_ShopGoldAxe(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x86C9, 0x08, 0x7F1F00, 0xF7, 0x04); }
+void hm_ItemObject_51_ShopSprinkler(uint8_t *ram, HmRegs *r) { gold_tool(ram, r, 0x8700, 0x10, 0x7F1F01, 0x7F, 0x10); }
 
 /* fodder: its shed bit, and its counter full (12) */
 static void fodder(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bit, uint16_t count)
@@ -1284,8 +1284,8 @@ static void fodder(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t bit, uint16_t c
   set_a8(r, 0x0C);
   wr8(ram, r, count, 0x0C);
 }
-void hm_ItemObject_54(uint8_t *ram, HmRegs *r) { fodder(ram, r, 0x8765, 0x01, 0x092D); }
-void hm_ItemObject_55(uint8_t *ram, HmRegs *r) { fodder(ram, r, 0x8781, 0x02, 0x092C); }
+void hm_ItemObject_54_ShopChickenFeed(uint8_t *ram, HmRegs *r) { fodder(ram, r, 0x8765, 0x01, 0x092D); }
+void hm_ItemObject_55_ShopCowFeed(uint8_t *ram, HmRegs *r) { fodder(ram, r, 0x8781, 0x02, 0x092C); }
 
 /* items $1E-$22 */
 static void vanish(uint8_t *ram, HmRegs *r)                  /* CODE_818337 */
@@ -1326,7 +1326,7 @@ static void piece(uint8_t *ram, HmRegs *r, uint8_t n, uint16_t at_edit, uint16_t
     r->a = 0x00A1;
     r->x = rd16(ram, r, 0x09AD);
     r->y = rd16(ram, r, 0x09AF);
-    jsl(ram, r, at_edit, 0x82, hm_EditTileonMap);
+    jsl(ram, r, at_edit, 0x82, hm_EditTileOnMap);
   }
   jsr(ram, r, at_jsr, hm_ItemCommonSteps);
   s = rd8(ram, r, STATE);
@@ -1334,11 +1334,11 @@ static void piece(uint8_t *ram, HmRegs *r, uint8_t n, uint16_t at_edit, uint16_t
   r->c = s >= 3;
   if (s == 3) placed(ram, r);
 }
-void hm_ItemObject_1E(uint8_t *ram, HmRegs *r) { piece(ram, r, 1, 0x8228, 0x822C); }
-void hm_ItemObject_1F(uint8_t *ram, HmRegs *r) { piece(ram, r, 2, 0x826A, 0x826E); }
-void hm_ItemObject_20(uint8_t *ram, HmRegs *r) { piece(ram, r, 3, 0x82AC, 0x82B0); }
-void hm_ItemObject_21(uint8_t *ram, HmRegs *r) { piece(ram, r, 4, 0x82EB, 0x82EF); }
-void hm_ItemObject_22(uint8_t *ram, HmRegs *r) { piece(ram, r, 5, 0x8324, 0x8328); }
+void hm_ItemObject_1E_FestivalEgg1(uint8_t *ram, HmRegs *r) { piece(ram, r, 1, 0x8228, 0x822C); }
+void hm_ItemObject_1F_FestivalEgg2(uint8_t *ram, HmRegs *r) { piece(ram, r, 2, 0x826A, 0x826E); }
+void hm_ItemObject_20_FestivalEgg3(uint8_t *ram, HmRegs *r) { piece(ram, r, 3, 0x82AC, 0x82B0); }
+void hm_ItemObject_21_FestivalEgg4(uint8_t *ram, HmRegs *r) { piece(ram, r, 4, 0x82EB, 0x82EF); }
+void hm_ItemObject_22_FestivalEgg5(uint8_t *ram, HmRegs *r) { piece(ram, r, 5, 0x8324, 0x8328); }
 
 /* ─────────────────────────────────────────────────────────────────────────
  * PutToolOnShelf ($81:A94A, JSL, RTL): a tool goes back on its shelf. Only
@@ -1347,7 +1347,7 @@ void hm_ItemObject_22(uint8_t *ram, HmRegs *r) { piece(ram, r, 5, 0x8324, 0x8328
  * arguments), +6 a row of the shed's flags ($7F:1F00 + it), +7 its bit.
  * If the shop it belongs to is the map shown (tools 1-$18: map $26, tool
  * $19: map $28, from $1A: map $27), its place on the shelf is redrawn and
- * sent at once (StartProgramedDMA). Then, wherever the player is (and for
+ * sent at once (StartProgrammedDMA). Then, wherever the player is (and for
  * tool 0 too), its bit is set in the shed's row.
  * Leftovers: A = the row's new value (high byte 0), X = Y = the row, C = 0;
  * with the bag empty, A's low byte 0 and the rest untouched.
@@ -1375,7 +1375,7 @@ void hm_PutToolOnShelf(uint8_t *ram, HmRegs *r)
       r->x = tx;
       r->y = ty;
       jsl(ram, r, 0xA9A6, 0x81, hm_ChangeMapTile);
-      jsl(ram, r, 0xA9AA, 0x80, hm_StartProgramedDMA);
+      jsl(ram, r, 0xA9AA, 0x80, hm_StartProgrammedDMA);
     }
   }
   uint16_t x = (uint16_t)(tool * 8 + 6);
@@ -1445,15 +1445,15 @@ void hm_TakeToolFromShelf(uint8_t *ram, HmRegs *r)
     jsl(ram, r, at, 0x81, hm_PutToolOnShelf);                    \
     jsr(ram, r, (uint16_t)((at) + 4), hm_TakeToolFromShelf);        \
   }
-TOOL_ITEM(ItemObject_2A, 0x83C9) TOOL_ITEM(ItemObject_2B, 0x83D1) TOOL_ITEM(ItemObject_2C, 0x83D9)
-TOOL_ITEM(ItemObject_2D, 0x83E1) TOOL_ITEM(ItemObject_2E, 0x83E9) TOOL_ITEM(ItemObject_2F, 0x83F1)
-TOOL_ITEM(ItemObject_30, 0x83F9) TOOL_ITEM(ItemObject_31, 0x8401) TOOL_ITEM(ItemObject_32, 0x8409)
-TOOL_ITEM(ItemObject_33, 0x8411) TOOL_ITEM(ItemObject_34, 0x8419) TOOL_ITEM(ItemObject_35, 0x8421)
-TOOL_ITEM(ItemObject_36, 0x8429) TOOL_ITEM(ItemObject_37, 0x8431) TOOL_ITEM(ItemObject_38, 0x8439)
-TOOL_ITEM(ItemObject_39, 0x8441) TOOL_ITEM(ItemObject_3A, 0x8449) TOOL_ITEM(ItemObject_3B, 0x8451)
-TOOL_ITEM(ItemObject_3C, 0x8459) TOOL_ITEM(ItemObject_3D, 0x8461) TOOL_ITEM(ItemObject_3E, 0x8469)
-TOOL_ITEM(ItemObject_3F, 0x8471) TOOL_ITEM(ItemObject_40, 0x8479) TOOL_ITEM(ItemObject_41, 0x8481)
-TOOL_ITEM(ItemObject_42, 0x8489) TOOL_ITEM(ItemObject_43, 0x8491)
+TOOL_ITEM(ItemObject_2A_Sickle, 0x83C9) TOOL_ITEM(ItemObject_2B_Hoe, 0x83D1) TOOL_ITEM(ItemObject_2C_Hammer, 0x83D9)
+TOOL_ITEM(ItemObject_2D_Axe, 0x83E1) TOOL_ITEM(ItemObject_2E_CornSeeds, 0x83E9) TOOL_ITEM(ItemObject_2F_TomatoSeeds, 0x83F1)
+TOOL_ITEM(ItemObject_30_PotatoSeeds, 0x83F9) TOOL_ITEM(ItemObject_31_TurnipSeeds, 0x8401) TOOL_ITEM(ItemObject_32_CowMedicine, 0x8409)
+TOOL_ITEM(ItemObject_33_MiraclePotion, 0x8411) TOOL_ITEM(ItemObject_34_Bell, 0x8419) TOOL_ITEM(ItemObject_35_GrassSeeds, 0x8421)
+TOOL_ITEM(ItemObject_36_Paint, 0x8429) TOOL_ITEM(ItemObject_37_Milker, 0x8431) TOOL_ITEM(ItemObject_38_Brush, 0x8439)
+TOOL_ITEM(ItemObject_39_WateringCan, 0x8441) TOOL_ITEM(ItemObject_3A_GoldSickle, 0x8449) TOOL_ITEM(ItemObject_3B_GoldHoe, 0x8451)
+TOOL_ITEM(ItemObject_3C_GoldHammer, 0x8459) TOOL_ITEM(ItemObject_3D_GoldAxe, 0x8461) TOOL_ITEM(ItemObject_3E_Sprinkler, 0x8469)
+TOOL_ITEM(ItemObject_3F_MagicBeans, 0x8471) TOOL_ITEM(ItemObject_40_GemSeed, 0x8479) TOOL_ITEM(ItemObject_41_BlueFeather, 0x8481)
+TOOL_ITEM(ItemObject_42_ChickenFeed, 0x8489) TOOL_ITEM(ItemObject_43_CowFeed, 0x8491)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * RunItemRoutine ($81:809A, JSR, RTS): each frame, the routine of the item
@@ -1464,29 +1464,29 @@ TOOL_ITEM(ItemObject_42, 0x8489) TOOL_ITEM(ItemObject_43, 0x8491)
  * Leftovers: A = the new $7F1F5E, X and Y those of the item's routine.
  * ───────────────────────────────────────────────────────────────────────── */
 static Step *const ITEM_ROUTINES[0x5A] = {
-  hm_ItemObject_01, hm_ItemObject_02, hm_ItemObject_03, hm_ItemObject_04,
-  hm_ItemObject_05, hm_ItemObject_06, hm_ItemObject_07, hm_ItemObject_08,
-  hm_ItemObject_09, hm_ItemObject_0A, hm_ItemObject_09, hm_ItemObject_09,
-  hm_ItemObject_0D, hm_ItemObject_0E, hm_ItemObject_0F, hm_ItemObject_10,
-  hm_ItemObject_11, hm_ItemObject_12, hm_ItemObject_13, hm_ItemObject_14,
-  hm_ItemObject_15, hm_ItemObject_16, hm_ItemObject_17, hm_ItemObject_18,
-  hm_ItemObject_19, hm_ItemObject_1A, hm_ItemObject_1B, hm_ItemObject_1C,
-  hm_ItemObject_1D, hm_ItemObject_1E, hm_ItemObject_1F, hm_ItemObject_20,
-  hm_ItemObject_21, hm_ItemObject_22, hm_ItemObject_23, hm_ItemObject_24,
-  hm_ItemObject_25, hm_ItemObject_26, hm_ItemObject_27, hm_ItemObject_28,
-  hm_ItemObject_29, hm_ItemObject_2A, hm_ItemObject_2B, hm_ItemObject_2C,
-  hm_ItemObject_2D, hm_ItemObject_2E, hm_ItemObject_2F, hm_ItemObject_30,
-  hm_ItemObject_31, hm_ItemObject_32, hm_ItemObject_33, hm_ItemObject_34,
-  hm_ItemObject_35, hm_ItemObject_36, hm_ItemObject_37, hm_ItemObject_38,
-  hm_ItemObject_39, hm_ItemObject_3A, hm_ItemObject_3B, hm_ItemObject_3C,
-  hm_ItemObject_3D, hm_ItemObject_3E, hm_ItemObject_3F, hm_ItemObject_40,
-  hm_ItemObject_41, hm_ItemObject_42, hm_ItemObject_43, hm_ItemObject_44,
-  hm_ItemObject_45, hm_ItemObject_46, hm_ItemObject_47, hm_ItemObject_48,
-  hm_ItemObject_49, hm_ItemObject_4A, hm_ItemObject_4B, hm_ItemObject_4C,
-  hm_ItemObject_4D, hm_ItemObject_4E, hm_ItemObject_4F, hm_ItemObject_50,
-  hm_ItemObject_51, hm_ItemObject_52, hm_ItemObject_53, hm_ItemObject_54,
-  hm_ItemObject_55, hm_ItemObject_56, hm_ItemObject_0F, hm_ItemObject_58,
-  hm_ItemObject_59, hm_ItemObject_5A,
+  hm_ItemObject_01_Mushroom, hm_ItemObject_02_PoisonMushroom, hm_ItemObject_03_WildGrapes, hm_ItemObject_04_TropicalFruit,
+  hm_ItemObject_05_FullmoonBerry, hm_ItemObject_06_Cake, hm_ItemObject_07_Fish, hm_ItemObject_08_PowerBerry,
+  hm_ItemObject_09_Weed, hm_ItemObject_0A_FallWeed, hm_ItemObject_09_Weed, hm_ItemObject_09_Weed,
+  hm_ItemObject_0D_Stone, hm_ItemObject_0E_SnowyStone, hm_ItemObject_0F_Fence, hm_ItemObject_10_Corn,
+  hm_ItemObject_11_Tomato, hm_ItemObject_12_Potato, hm_ItemObject_13_Turnip, hm_ItemObject_14_Egg,
+  hm_ItemObject_15_SmallMilk, hm_ItemObject_16_MediumMilk, hm_ItemObject_17_LargeMilk, hm_ItemObject_18_Herb,
+  hm_ItemObject_19_Flower, hm_ItemObject_1A_Fodder, hm_ItemObject_1B_ShopLilacPerfume, hm_ItemObject_1C_ShopRosePerfume,
+  hm_ItemObject_1D_ShopVioletPerfume, hm_ItemObject_1E_FestivalEgg1, hm_ItemObject_1F_FestivalEgg2, hm_ItemObject_20_FestivalEgg3,
+  hm_ItemObject_21_FestivalEgg4, hm_ItemObject_22_FestivalEgg5, hm_ItemObject_23_Nothing, hm_ItemObject_24_WeatherVane,
+  hm_ItemObject_25_Hen, hm_ItemObject_26_Chick, hm_ItemObject_27_Nothing, hm_ItemObject_28_Nothing,
+  hm_ItemObject_29_Mole, hm_ItemObject_2A_Sickle, hm_ItemObject_2B_Hoe, hm_ItemObject_2C_Hammer,
+  hm_ItemObject_2D_Axe, hm_ItemObject_2E_CornSeeds, hm_ItemObject_2F_TomatoSeeds, hm_ItemObject_30_PotatoSeeds,
+  hm_ItemObject_31_TurnipSeeds, hm_ItemObject_32_CowMedicine, hm_ItemObject_33_MiraclePotion, hm_ItemObject_34_Bell,
+  hm_ItemObject_35_GrassSeeds, hm_ItemObject_36_Paint, hm_ItemObject_37_Milker, hm_ItemObject_38_Brush,
+  hm_ItemObject_39_WateringCan, hm_ItemObject_3A_GoldSickle, hm_ItemObject_3B_GoldHoe, hm_ItemObject_3C_GoldHammer,
+  hm_ItemObject_3D_GoldAxe, hm_ItemObject_3E_Sprinkler, hm_ItemObject_3F_MagicBeans, hm_ItemObject_40_GemSeed,
+  hm_ItemObject_41_BlueFeather, hm_ItemObject_42_ChickenFeed, hm_ItemObject_43_CowFeed, hm_ItemObject_44_ShopGrassSeeds,
+  hm_ItemObject_45_ShopCornSeeds, hm_ItemObject_46_ShopTomatoSeeds, hm_ItemObject_47_ShopPotatoSeeds, hm_ItemObject_48_ShopTurnipSeeds,
+  hm_ItemObject_49_ShopFlower, hm_ItemObject_4A_ShopPaint, hm_ItemObject_4B_ShopMilker, hm_ItemObject_4C_ShopBrush,
+  hm_ItemObject_4D_ShopGoldSickle, hm_ItemObject_4E_ShopGoldHoe, hm_ItemObject_4F_ShopGoldHammer, hm_ItemObject_50_ShopGoldAxe,
+  hm_ItemObject_51_ShopSprinkler, hm_ItemObject_52_ShopCowMedicine, hm_ItemObject_53_ShopMiraclePotion, hm_ItemObject_54_ShopChickenFeed,
+  hm_ItemObject_55_ShopCowFeed, hm_ItemObject_56_ShopCake, hm_ItemObject_0F_Fence, hm_ItemObject_58_LilacPerfume,
+  hm_ItemObject_59_RosePerfume, hm_ItemObject_5A_VioletPerfume,
 };
 
 void hm_RunItemRoutine(uint8_t *ram, HmRegs *r)
@@ -1501,7 +1501,7 @@ void hm_RunItemRoutine(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * BAAAA ($81:A383, JSL, RTL; HM-Decomp's name): the items left on the map,
+ * RunItemsOnMap ($81:A383, JSL, RTL; HM-Decomp's name): the items left on the map,
  * every frame. Ten records of 16 bytes at $7E:B4E6 ($07-$09 points at the
  * one worked on): +0 flags (bit 0 in use, bit 1 drawn on the map, bit 2
  * kept off screen), +1 the routine (1 = RunItemRoutine, through the table
@@ -1522,7 +1522,7 @@ void hm_RunItemRoutine(uint8_t *ram, HmRegs *r)
 
 static uint32_t rec_at(uint8_t *ram, HmRegs *r, uint16_t y) { r->y = y; return hm_dp_long(ram, r, 0x07, y); }
 
-void hm_BAAAA(uint8_t *ram, HmRegs *r)
+void hm_RunItemsOnMap(uint8_t *ram, HmRegs *r)
 {
   static const uint16_t bytes[4] = { 0x0974, 0x0975, 0x0976, ITEM };
   static const uint16_t words[6] = { OBJECT, 0x097A, 0x097C, 0x097E, 0x0980, 0x0982 };

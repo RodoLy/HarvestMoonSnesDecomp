@@ -22,40 +22,40 @@ en el README (`tools/progress.py`).
 | AddGrass | $83:B253 | src/stock.c |
 | AddPlayerHappiness | $83:B282 | src/stock.c |
 | ChangeStamina | $81:D061 | src/stamina.c |
-| GetsCowPointer | $83:C9A7 | src/animals.c |
+| GetCowPointer | $83:C9A7 | src/animals.c |
 | GetChickenPointer | $83:C995 | src/animals.c |
 | DivisionUnsigned | $83:8082 | src/math.c |
 | RNGReturn0toA | $80:89F9 | src/rng.c |
 | SetWeatherFlags | $82:8C09 | src/weather.c |
 | WeatherTomorrow | $82:8CF9 | src/weather.c |
 | GetTileIndex | $82:B13C | src/farm.c |
-| LoadsDamageProbabilities | $82:8270 | src/farm.c |
+| LoadDamageProbabilities | $82:8270 | src/farm.c |
 | ClimateFarmDamageCheck | $82:A713 | src/farm.c |
 | ClimateFarmDamagePrep | $82:8209 | src/farm.c |
 | MonthlyFarmTilesCheck | $82:A6A2 | src/farm.c |
 | NightlyFarmTilesCheck | $82:A811 | src/farm.c |
 | CalculateFarmDevelopment | $82:AA0C | src/farm.c |
-| Sub_82A9A0 (pastar) | $82:A9A0 | src/farm.c |
+| CowEatsGrass (pastar) | $82:A9A0 | src/farm.c |
 | AddCowHappiness | $84:A5D4 | src/animals.c |
-| CowFeedingandStatus | $83:BC5A | src/animals.c |
-| SetCCPoiner | $84:887C | src/events.c |
-| ResetsCurrentCCStructureLong | $84:88D4 | src/events.c |
+| CowFeedingAndStatus | $83:BC5A | src/animals.c |
+| SetEventSlotPointer | $84:887C | src/events.c |
+| ResetCurrentEventSlotLong | $84:88D4 | src/events.c |
 | StartScriptAtTileInFront | $84:80F8 | src/events.c |
 | FindMostLovedName | $82:8EC6 | src/people.c |
-| WifePregnanacyandChilds | $82:8790 | src/people.c |
-| LoadsDateNames | $82:89D6 | src/calendar.c |
+| WifePregnancyAndChildren | $82:8790 | src/people.c |
+| LoadDateNames | $82:89D6 | src/calendar.c |
 | AddMoney | $83:B1C9 | src/stock.c |
 | TvWeatherForecast (pronóstico de la tele) | $82:81C0 | src/weather.c |
 | HaveLunch | $82:80AA | src/stamina.c |
 | GetTileContent | $82:B124 | src/tools.c |
 | GetTileProperty | $82:AC61 | src/tools.c |
 | CheckToolSuccess | $82:AA71 | src/tools.c |
-| CalculateTileinFront | $81:D14E | src/tools.c |
+| CalculateTileInFront | $81:D14E | src/tools.c |
 | TileAtOffsetFromPlayer (CODE_81D1A4) | $81:D1A4 | src/tools.c |
 | PreCheckToolSuccess / Line / Square | $82:92A0, 92BC, 92D6 | src/tools.c |
 | ReadTileChange, DrawTileChange | $81:A801, $81:A83A | src/mapedit.c |
 | SetTileTypeBlock | $82:B060 | src/mapedit.c |
-| ResetsCurrentCCStructureShort | $84:8961 | src/events.c |
+| ResetCurrentEventSlotShort | $84:8961 | src/events.c |
 | StartEventScriptLong | $84:8097 | src/events.c |
 | StartEventScript | $84:803F | src/events.c |
 | AddProgrammedDMA | $80:8A33 | src/dma.c |
@@ -70,87 +70,87 @@ en el README (`tools/progress.py`).
 | RanchMasteryCalculator | $83:F26D | src/ending.c |
 | AddNewChicken, AddNewCow | $83:C807, $83:C8DC | src/animals.c |
 | PlaceAnimalsOnMap (CODE_83C296) | $83:C296 | src/animals.c |
-| 57 comandos de evento (Event_*, con Event_UNKCowRelated) | $84:89BB-$84:BB4B | src/eventcmds.c |
+| 57 comandos de evento (Event_*, con Event_CowFrame) | $84:89BB-$84:BB4B | src/eventcmds.c |
 | RemoveProgrammedDMA, DrawTilemapBlock2x2 | $80:8AA0, $83:81B7 | src/dma.c |
 | StartTextBox, ClearTextBox, CloseTextBox (CODE_8393F9) | $83:935F, $83:932D, $83:93F9 | src/text.c |
 | DrawTextBoxArrow, BlinkTextBoxArrow, TextBoxArrow | $83:94D7, $83:9495, $83:9447 | src/text.c |
 | CopyLetterToVram | $83:8166 | src/dma.c |
-| EditTileonMap, EditTileonMapandsets0181 | $82:B03A, $82:B049 | src/mapedit.c |
+| EditTileOnMap, EditFarmTile | $82:B03A, $82:B049 | src/mapedit.c |
 | SaveSlotMenuInputs, LoadSlotMenuInputs, StartMenuInputs, TitleMenuInputs, ListInputs | $84:C2FE-$84:C6B6 | src/menus.c |
 | ImmobileInputs | $84:CF05 | src/menus.c |
 | LoadMapRowBelow, LoadMapRowAbove, LoadMapColumnRight, LoadMapColumnLeft (fila/columna nueva) | $80:A18D-$80:A617 | src/scroll.c |
 | UpdateBGOffset, ScrollCameraUp, ScrollCameraRight, ScrollCameraLeft (la cámara) | $80:A0AB-$80:A152 | src/scroll.c |
-| SetTimeofDayPalette, TransitionTimeofDayPalettes (+ ClearsTimeofDayPaletteIndexandSetsNext), ClearsTimeofDayPalette | $80:8FC7-$80:9166 | src/palette.c |
+| SetTimeOfDayPalette, TransitionTimeOfDayPalettes (+ FinishTimeOfDayPalette), ClearTimeOfDayPalette | $80:8FC7-$80:9166 | src/palette.c |
 | SetPaletteColour, SetPaletteColourNoFade, LoadFirstHalfPaletteToWRAM, LoadSecondHalfPaletteToWRAM | $80:916F-$80:9208 | src/palette.c |
-| PrepareNightPalette, ChangePalettebyTime, PrepareSpritePalette, CustomiseSpritePalette, SetPaletteToLoad | $80:9241-$80:9501 | src/palette.c |
-| Event_TimeofDayPalette | $84:9356 | src/palette.c |
-| CBBBB, CDDDD, CEEEE, CFFFF (choques) | $83:AD91-$83:B1C8 | src/collision.c |
+| PrepareNightPalette, ChangePaletteByTime, PrepareSpritePalette, CustomiseSpritePalette, SetPaletteToLoad | $80:9241-$80:9501 | src/palette.c |
+| Event_TimeOfDayPalette | $84:9356 | src/palette.c |
+| CollideEventObjects, CollidePlayer, CollideMap, CollideTileCorner (choques) | $83:AD91-$83:B1C8 | src/collision.c |
 | StartToolAnimation y las 28 ToolAnimation* | $82:90A8-$82:925F | src/toolanim.c |
 | PressAOnTile (apretar A) | $82:AD0E | src/interact.c |
 | PlayerMovementInputs (todo el bloque hasta TextBoxAutoClose) | $84:C6B7-$84:CED1 | src/playerinput.c |
 | ReadEventPad (el control de los eventos) | $84:C7D6 | src/playerinput.c |
 | InputTypeSelector, MenuInputs, MenuEventPad, SkipEventScene, TextBoxAutoClose | $84:C034-$84:CF04 | src/menus.c |
-| NameMenuInputs y sus 6 teclas, NameCursorPharse, DrawNameLetter | $84:C066-$84:C286, $82:EBAC, $82:EA60 | src/menus.c |
+| NameMenuInputs y sus 6 teclas, ReadNameCursorCell, DrawNameLetter | $84:C066-$84:C286, $82:EBAC, $82:EA60 | src/menus.c |
 | DrawWholeMap (dibujar el mapa, autotiling) | $82:AF00 | src/mapedit.c |
-| Event_UNKChickenRelated2, Event_Cmd51-59 (comandos 50-59) | $84:BBDA-$84:C013 | src/eventcmds.c |
-| Event_UNKPlayerPos (comando 37, el hijo) | $84:AB27 | src/eventcmds.c |
+| Event_PutDownCarried, Event_Cmd51_PutDownCarriedQuietly-59 (comandos 50-59) | $84:BBDA-$84:C013 | src/eventcmds.c |
+| Event_HorseFrame (comando 37, el hijo) | $84:AB27 | src/eventcmds.c |
 | DivisionSigned (sin uso; HM_INTERP) | $83:80D0 | src/math.c |
 | DecompressTileMap (LZSS) | $83:81F8 | src/decompress.c |
 | PlaceCameraOnMapEntry (la cámara al entrar), MoveSecondBackground (BG2: nubes, paralaje) | $80:9EBC, $80:9F61 | src/scroll.c |
-| Event_ResetFlag ($84:93C9), Event_EditTileonMap ($84:BA10), Event_StartTextBox/Copy, Event_UNKTools | bank $84 | src/eventcmds.c |
-| StartColourAnimation, RunColourAnimations, Zeroes*42Pointer(s), CallIndexedSubrutines y las 51 Colours_FarmSpringSummer_Day... de Subrutines_Table | $80:8E48-$80:95B2, $80:C36C- | src/coloranim.c |
+| Event_ResetFlag ($84:93C9), Event_EditTileOnMap ($84:BA10), Event_StartTextBox/Copy, Event_ReturnToolsToShed | bank $84 | src/eventcmds.c |
+| StartColourAnimation, RunColourAnimations, Zeroes*42Pointer(s), StartMapColourAnimations y las 51 Colours_FarmSpringSummer_Day... de Subrutines_Table | $80:8E48-$80:95B2, $80:C36C- | src/coloranim.c |
 | ReadJoypad (los mandos; lee $4212/$4218/$421A del emulador con hm_io_read) | $80:872B | src/joypad.c |
 | UnusedBarnCoopCheck y UnusedBarnCheck (cuentan gallinas / vacas; sin usar) | $83:C9BA, $83:C9E5 | src/animals.c |
 | ToolUsedSound1 (el ruido de la herramienta; Sound2 espera a PrepareSoundEffect, que llama a WaitForNMI) | $82:8FB1 | src/toolsound.c |
-| CopyCurrentMaptoFarmMap, LoadDefaultFarmMap (MapPointerTable en $82:B174) | $82:A682, $82:A65A | src/farm.c |
-| ClearsofAllCCStructs | $84:8000 | src/events.c |
+| CopyCurrentMapToFarmMap, LoadDefaultFarmMap (MapPointerTable en $82:B174) | $82:A682, $82:A65A | src/farm.c |
+| ClearAllEventSlots | $84:8000 | src/events.c |
 | MultiplicationUnsigned | $83:8067 | src/math.c |
 | RunMapExtras, los ReplaceTiles* de cada mapa (y 4 que HM-Decomp toma por datos: gallinero, cueva, túnel, mapa $37), ChangeMapTileNoVram, SetTileTypesFromChange, DrawShelfItem | $81:A7CE, $81:A9E5-$81:B362, $82:B0A7 | src/maptiles.c |
 | LoadDefaultInstruments/4/6/9/10/11/12/13/14/21/22/25 (la música y las subidas al chip), Multiply16 (multiplicación de 16 bits) | banco $83 | src/audio.c, src/math.c |
 | ShippingScene, ShippingSceneDialogue | $82:8131, $82:8165 | src/shipping.c |
-| DestroyGameObject/858B7B/858B41/858C9F (destruir un objeto), SetSlotAnimation, FreeEventSlot, Event_UNK1, Event_UNKCCchanges7/11 | $85:81A2-, $84:8020, $84:8895, $84:9375, $84:9810, $84:B34B | src/objects.c, events.c, eventcmds.c |
-| Event_UNKCCchanges3/8/15/17 (animaciones; 17 = girarse hacia el jugador) | $84:8F0A, $84:957D, $84:B8D9, $84:BA72 | src/eventcmds.c |
+| DestroyGameObject/858B7B/858B41/858C9F (destruir un objeto), SetSlotAnimation, FreeEventSlot, Event_DestroyOwnObject, Event_FreeOtherSlot/11 | $85:81A2-, $84:8020, $84:8895, $84:9375, $84:9810, $84:B34B | src/objects.c, events.c, eventcmds.c |
+| Event_PlaceSlot/8/15/17 (animaciones; 17 = girarse hacia el jugador) | $84:8F0A, $84:957D, $84:B8D9, $84:BA72 | src/eventcmds.c |
 | MoveGameObject (mover un objeto), ChangeGameObjectSprite (cambiarle el sprite), StepSlot (paso de un slot) | $85:80B9, $85:8100, $84:8331 | src/objects.c, events.c |
-| ReadGameObject, InvertIfFlipedX/Y, ClearSpriteDataTables | $85:81CB, $85:8BB0, $85:8BBC, $85:8ED7 | src/objects.c |
+| ReadGameObject, InvertIfFlippedX/Y, ClearSpriteDataTables | $85:81CB, $85:8BB0, $85:8BBC, $85:8ED7 | src/objects.c |
 | SnowFootprints (huellas en la nieve), RunMapAnimation (animaciones de mapa), FreeMapObject | $81:A58F, $81:A600, $81:A4F1 | src/mapedit.c |
 | WanderSlot (un slot que pasea solo: dirección, zona, mirar adelante) | $84:83CC | src/events.c |
 | UpdateSlotSprite (el sprite de un slot cada cuadro: crear, destruir, mover, cambiar) | $84:8286 | src/events.c |
-| Event_UNKCCchanges5/9 (hablar con alguien), Event_UNKCFD1, Event_AudioRelated2 | $84:9079, $84:9633, $84:9553, $84:8CA8 | src/eventcmds.c |
-| AnimateGameObjects (animar objetos), GetOBJOrderToDraw, PresetsWRAMCopyofOAM / OAMCopy, InitializeOBJs | $85:82C7, $85:8377, $85:8647, $85:8896, $85:820F | src/objects.c |
+| Event_TalkIfSpokenTo/9 (hablar con alguien), Event_StartMapAnimation, Event_ChangeToWantedSong | $84:9079, $84:9633, $84:9553, $84:8CA8 | src/eventcmds.c |
+| AnimateGameObjects (animar objetos), GetOBJOrderToDraw, ClearOAMCopy / OAMCopy, InitializeOBJs | $85:82C7, $85:8377, $85:8647, $85:8896, $85:820F | src/objects.c |
 | LoadGameSlot, NewGameSetup | $83:B2B1, $83:A9BE | src/save.c |
 | LoadMap, PickMapMusic (música de cada mapa) | $82:A5FB, $80:95DE | src/farm.c, audio.c |
 | CreatePlayerObject / 81CFE6 / 81D03D (el objeto del jugador), NameCursorPosition (cursor del nombre) | $81:CFA0-D060, $82:EB57 | src/objects.c, menus.c |
 | StartEnding (comienzo del final: la vaca preferida, el % de desarrollo) | $83:F4D8 | src/animals.c |
-| MapEvent_E586 ... E74C (13 rutinas de quién aparece en cada mapa) | $83:E586-$83:E74C | src/mapevents.c |
-| MapEvent_D4D7 ... DE64 (16 rutinas: las casas) | $83:D4D7-$83:DE9A | src/mapevents.c |
-| MapEvent_DE9B, E407, E4CB | $83:DE9B, $83:E407-$83:E585 | src/mapevents.c |
-| MapEvent_D2E0 (el pueblo; error 24: STA.B $60) | $83:D2E0 | src/mapevents.c |
-| MapEvent_E76D (la introducción, mapa $3C; el comienzo es "datos" en HM-Decomp) | $83:E76D | src/mapevents.c |
-| MapEvent_EBA6 (la presentación del final) | $83:EBA6-$83:F26C | src/mapevents.c |
-| MapEvent_CB69 (la granja) | $83:CB69-$83:D2DF | src/mapevents.c |
+| MapEvent_Beanstalk ... E74C (13 rutinas de quién aparece en cada mapa) | $83:E586-$83:E74C | src/mapevents.c |
+| MapEvent_MariaHouse1 ... DE64 (16 rutinas: las casas) | $83:D4D7-$83:DE9A | src/mapevents.c |
+| MapEvent_Barn, E407, E4CB | $83:DE9B, $83:E407-$83:E585 | src/mapevents.c |
+| MapEvent_Town (el pueblo; error 24: STA.B $60) | $83:D2E0 | src/mapevents.c |
+| MapEvent_IntroDays (la introducción, mapa $3C; el comienzo es "datos" en HM-Decomp) | $83:E76D | src/mapevents.c |
+| MapEvent_EndingSlideShow (la presentación del final) | $83:EBA6-$83:F26C | src/mapevents.c |
+| MapEvent_Farm (la granja) | $83:CB69-$83:D2DF | src/mapevents.c |
 | PutItemDown (dejar el objeto), GetItemSprite (su sprite) | $81:8000, $81:80B7 | src/items.c |
-| Las rutinas de los objetos: ItemObject_01-5A (61, sin las 26 herramientas), las 6 máquinas de estados (ItemAnimalSteps, 818855, 81889A, 8188BC, 8188E5, 818923) y sus 16 pasos (FoodAskToEat-ItemWaitMapAnimation) | $81:80FE-$81:96AE | src/items.c |
+| Las rutinas de los objetos: ItemObject_01_Mushroom-5A (61, sin las 26 herramientas), las 6 máquinas de estados (ItemAnimalSteps, 818855, 81889A, 8188BC, 8188E5, 818923) y sus 16 pasos (FoodAskToEat-ItemWaitMapAnimation) | $81:80FE-$81:96AE | src/items.c |
 | Las acciones del jugador $0F-$57 (PlayerAction_0F_Tv y PlayerAction_10-57, 71 rutinas; falta la $35, espera cuadros) | $81:D716-$81:FAB3 | src/actions.c |
-| El jugador cada cuadro: los 26 pasos por acción de PlayerFrame (PlayerState_XX, PlayerStandStill/C66E/C736/C83B/CB14/CB5E), el fin del cuadro (ResetIdleAnimatioTimer) y el movimiento (MovePlayer); faltan el despachador y la acción $1C (esperan cuadros) | $81:BFDC-$81:CF9F | src/playerstate.c |
+| El jugador cada cuadro: los 26 pasos por acción de PlayerFrame (PlayerState_XX, PlayerStandStill/C66E/C736/C83B/CB14/CB5E), el fin del cuadro (ResetIdleAnimationTimer) y el movimiento (MovePlayer); faltan el despachador y la acción $1C (esperan cuadros) | $81:BFDC-$81:CF9F | src/playerstate.c |
 | Las puertas (CheckDoors: salir por las casillas $C0-$CF, banderas de horario y festivales) y la montaña (CheckMountainFinds: hallazgos por estación, empezar a pescar); HaveLunch ahora exacta también en registros | $80:9A64-$80:9EBB, $82:80AA | src/playerstate.c, stamina.c |
 | El cargador de piezas de sprite del NMI (LoadQueuedSpritePieces; error 28: tres bucles sin fin) | $85:8CB2 | src/objects.c |
 | UploadSoundProgram (la subida del programa de sonido con el protocolo de arranque del chip; se prueba una vez en el cuadro 1 al nombrarla en HM_DECOMP_FUZZ_ONLY, flag HM_LIVE) | $83:843D | src/audio.c |
-| Las rutinas que son solo un retorno (COP_Return, ScreenTransitionReturn, ShippingReturn, CODE_83F4D7) y UNUSED2 ($0103 + 1, nadie la llama) | $80:872A, $80:972B, $82:81BF, $83:F4D7, $83:8376 | src/interact.c, audio.c |
-| El chip de imagen (comprobación nueva HM_IO sobre la máquina real, src/hm_io.c): StartProgramedDMA, ForceBlank, ResetForceBlank, SetsBrightness, InitialzieScreenStatusVar, ManageGraphicPresets, ZeroesVRAM/OAM/CGRAM/PartialVRAM, UNUSED1 | $80:8846-$80:8E47 | src/video.c |
-| StartLastPreparedDMA, LoadsFromVRAMwithOffset, CopiesWRAMtoOBJVGRAM, UpdateGraphics (error 29: apaga el HDMA), AutoMapScrolling | $80:8AB2, $80:AA38, $85:8E57, $80:86B1, $80:95B3 | src/video.c, scroll.c |
+| Las rutinas que son solo un retorno (COP_Return, ScreenTransitionReturn, ShippingReturn, CODE_83F4D7) y UnusedCountInstrument ($0103 + 1, nadie la llama) | $80:872A, $80:972B, $82:81BF, $83:F4D7, $83:8376 | src/interact.c, audio.c |
+| El chip de imagen (comprobación nueva HM_IO sobre la máquina real, src/hm_io.c): StartProgrammedDMA, ForceBlank, ResetForceBlank, SetBrightness, InitializeScreenStatusVars, ManageGraphicPresets, ZeroesVRAM/OAM/CGRAM/PartialVRAM, UnusedHideSprites | $80:8846-$80:8E47 | src/video.c |
+| StartLastPreparedDMA, CopyMapPictureToVRAM, CopySpritePiecesToVRAM, UpdateGraphics (error 29: apaga el HDMA), AutoMapScrolling | $80:8AB2, $80:AA38, $85:8E57, $80:86B1, $80:95B3 | src/video.c, scroll.c |
 | LoadDialogueBox, DrawTileBlock3x2, DrawNameEntryBlanks | $83:92BB, $82:E5E7, $82:EA80 | src/video.c |
 | PutToolOnShelf (herramienta al estante), DrawScreenBar, DrawScreenBars (barras de casillas), DrawSaveFileLine (línea de una partida guardada) | $81:A94A, $82:EAB4, $82:E742, $82:E405 | src/items.c, video.c |
 | PrepareOAMData (la tabla de sprites de cada cuadro; comprobada con el intérprete: la recompilación amplía a propósito la prueba de pantalla para la pantalla ancha) | $85:83E0 | src/objects.c |
 | BackgroundsManager (el dibujo de un mapa al entrar: tilemaps, dibujos de capa, la cámara hasta la entrada; en vivo siempre la corta el NMI, se comprueba con el fuzz) | $80:A7C6 | src/video.c |
 | NMI_Interrupt, COP_Interrupt (las interrupciones), WaitForNMI, WaitForNMIATimes (esperar cuadros; solo con el fuzz: en vivo el código compilado cede el cuadro en el bucle) | $80:867B, $80:8699, $80:8645, $80:865D | src/nmi.c |
-| ScreenFadein, ScreenFadeout, Event_ScreenFadein, Event_ScreenFadeout (fundidos) | $80:87CE, $80:880A, $84:8B83, $84:8CB9 | src/nmi.c, eventcmds.c |
-| PrepareSoundEffect, SetSong, PlayEffectWithSongInstrument, ChangeMusic, ToolUsedSound2, Event_AudioRelated3, PlayerAction_04_Jingle (sonidos que esperan cuadros) | $83:833E, $83:83A4, $83:82FE, $83:82C6, $82:8FF3, $84:95E8, $81:D670 | src/audio.c, toolsound.c, eventcmds.c, interact.c |
-| BAAAA, RunItemRoutine, TakeToolFromShelf, ItemObject_2A-43 (los objetos en el mapa; las herramientas del cobertizo) | $81:A383, $81:809A, $81:87C3, $81:83C9-$81:8491 | src/items.c |
-| EventInstructionInterpreter, IterateCCStructures (el intérprete de guiones y el bucle de los 49 slots) | $84:8249, $84:816F | src/events.c |
-| PlayerState_1C (cambiar la herramienta de la mano y la de la bolsa) | $81:C061 | src/playerstate.c |
+| ScreenFadeIn, ScreenFadeOut, Event_ScreenFadeIn, Event_ScreenFadeOut (fundidos) | $80:87CE, $80:880A, $84:8B83, $84:8CB9 | src/nmi.c, eventcmds.c |
+| PrepareSoundEffect, SetSong, PlayEffectWithSongInstrument, ChangeMusic, ToolUsedSound2, Event_PlayEffectAndWait, PlayerAction_04_Jingle (sonidos que esperan cuadros) | $83:833E, $83:83A4, $83:82FE, $83:82C6, $82:8FF3, $84:95E8, $81:D670 | src/audio.c, toolsound.c, eventcmds.c, interact.c |
+| RunItemsOnMap, RunItemRoutine, TakeToolFromShelf, ItemObject_2A_Sickle-43 (los objetos en el mapa; las herramientas del cobertizo) | $81:A383, $81:809A, $81:87C3, $81:83C9-$81:8491 | src/items.c |
+| EventInstructionInterpreter, RunEventSlots (el intérprete de guiones y el bucle de los 49 slots) | $84:8249, $84:816F | src/events.c |
+| PlayerState_1C_SwapTools (cambiar la herramienta de la mano y la de la bolsa) | $81:C061 | src/playerstate.c |
 | PlayerFrame, PlayerInteractionSelector (el cuadro del jugador: paso de la acción o acción pendiente), PlayerAction_35 | $81:BFB7, $81:D570, $81:E36E | src/playerstate.c, actions.c |
 | LoadAndShowMap, EnterMap, SetScreenTransition (ir a otro mapa y cargarlo) | $80:972C, $80:96D3, $80:9671 | src/transition.c |
-| MapEvent_DED3 (quién aparece en la casa), RunsFunctionbyIndex (la rutina de cada mapa) | $83:DED3, $83:CA98 | src/mapevents.c |
+| MapEvent_PlayerHouse (quién aparece en la casa), StartMapEvents (la rutina de cada mapa) | $83:DED3, $83:CA98 | src/mapevents.c |
 | UpdateTime, NightReset, FirstNightReset, UnusedEndlessLoop (el reloj, la noche, el primer día; error 31: un BRA a sí mismo) | $82:8000, $82:82AC, $83:ABF0, $82:878E | src/day.c |
 | SpawnAfterLoad, GameLoop (la primera mañana y el bucle del juego) | $80:8000, $80:8083 | src/game.c |
 | NamesScreen, SetPlayerName, SetCowNameBought, SetCowNameBorn, SetDogName, SetHorseName, SetKid1Name, SetKid2Name (la pantalla de los nombres; error 30) | $82:E80C, $80:80ED-$80:83AE | src/names.c |
@@ -238,9 +238,9 @@ lluvia y el primer día de invierno). 0 diferencias.
 
 ## Los animales y los eventos (hecho el 20-oct-2026)
 
-Verificado con 10 semillas (200 noches al azar de CowFeedingandStatus por
+Verificado con 10 semillas (200 noches al azar de CowFeedingAndStatus por
 semilla, con 12 vacas, 13 gallinas y todas las banderas al azar) y llamadas
-reales de SetCCPoiner / ResetsCurrentCCStructureLong. 0 diferencias.
+reales de SetEventSlotPointer / ResetCurrentEventSlotLong. 0 diferencias.
 
 - Registro de vaca (16 bytes en $7E:C1C6): +0 estado (01 existe, 02 recién
   nacida, 04 cría, 08 adulta, 10 de mal humor, 20 enferma, 40 preñada, 80
@@ -292,7 +292,7 @@ después.
   ROM ($83:40FA...) la original lee registros del hardware y no se puede
   comparar.
 
-- La casilla donde cae la herramienta: CalculateTileinFront (N casillas
+- La casilla donde cae la herramienta: CalculateTileInFront (N casillas
   hacia donde mira el jugador: 0 abajo, 1 arriba, 2 = +X, otro = -X) o
   TileAtOffsetFromPlayer (un desplazamiento fijo; las herramientas de oro
   usan la tabla de 9 casillas $82:92FA alrededor del jugador).
@@ -351,7 +351,7 @@ sistema de texto).
   lee el cargador del NMI). Si la cola está llena, LoadSpriteComponent
   espera a que el NMI la vacíe (`CMP $BB; BEQ` a sí mismo).
 - **Objetos del mapa**: 10 registros de 16 bytes en $7E:B4E6 (los efectos
-  de las herramientas; BAAAA los mueve cada cuadro). SpawnMapObject toma
+  de las herramientas; RunItemsOnMap los mueve cada cuadro). SpawnMapObject toma
   uno libre; **con los 10 ocupados el juego se cuelga** ($81:A528). Si no
   hay objeto del juego libre, guarda el número del último creado ($A5 no
   cambia).
@@ -444,16 +444,16 @@ sistema de texto).
   caminatas (UNKCCchanges4/6/10), transiciones, objetos en la mano,
   banderas.
 - Nombres corregidos: HM-Decomp anota $80 en vez de $84 en
-  Event_UNKTextrelated, Event_MapScrolling; Event_ChangeItemonHand empieza
+  Event_AddToByteClamped, Event_MapScrolling; Event_ChangeItemOnHand empieza
   en $84:B4DC (dice B4DE); Event_StoreValue ($84:A90F),
-  Event_UNKCCchanges16 ($84:BA51) y Event_UNKReset5C ($84:BB31) no tenían
+  Event_MakeSlotPassable ($84:BA51) y Event_UseTileProperties ($84:BB31) no tenían
   dirección. ResetFlagD / ResetFlagDD no están en la tabla (código
-  muerto); Event_UNKTools ($84:BB65) tampoco y no tiene cuerpo compilado.
+  muerto); Event_ReturnToolsToShed ($84:BB65) tampoco y no tiene cuerpo compilado.
 - La prueba al azar de los comandos con dirección evita la pila y la
   página directa ($7E:0000-1FFF) y el final de un banco.
 - Faltan 34 comandos: los de texto (StartTextBox), pantalla (fades,
-  paleta), sonido, la vaca (Event_UNKCowRelated, 1.567 instrucciones),
-  Event_UNKChickenRelated2, Event_UNKPlayerPos, y los que usan
+  paleta), sonido, la vaca (Event_CowFrame, 1.567 instrucciones),
+  Event_PutDownCarried, Event_HorseFrame, y los que usan
   SetSlotAnimation.
 
 ## El chip de sonido (hecho el 21-oct-2026)
@@ -464,7 +464,7 @@ sistema de texto).
 - src/audio.c: SoundChipBusy, 7, 8, 15, 19, 16, 2. En vivo: 248 efectos de
   sonido del texto de una partida nueva, todos iguales.
 - Con eso: ToolUsedWateringCan y ToolUsedSprinkler (src/toolused.c) y
-  EditTileonMap / EditTileonMapandsets0181 (src/mapedit.c).
+  EditTileOnMap / EditFarmTile (src/mapedit.c).
 
 ## Desplazar el mapa (hecho el 22-oct-2026)
 
@@ -493,8 +493,8 @@ sistema de texto).
 
 ## Choques (hecho el 22-oct-2026)
 
-- `src/collision.c`: CEEEE (el mapa, dos esquinas), CFFFF (una esquina),
-  CBBBB (objetos de evento), CDDDD (el jugador). Tablas de saltos leídas
+- `src/collision.c`: CollideMap (el mapa, dos esquinas), CollideTileCorner (una esquina),
+  CollideEventObjects (objetos de evento), CollidePlayer (el jugador). Tablas de saltos leídas
   de la ROM (HM-Decomp las desensambla como código). Etiquetas indentadas:
   entradas en MANUAL y LOCAL.
 - prep_collision: posiciones lejos del borde (con una esquina negativa el
@@ -512,7 +512,7 @@ sistema de texto).
 - HM_INTERP: no tiene cuerpo compilado propio (está dentro de
   InputTypeSelector); en vivo se probará cuando se reescriba
   InputTypeSelector (falta NameMenuInputs y MenuInputs).
-- prep_player_input: $DA siempre 0-3 (CEEEE/CBBBB saltan por una tabla de
+- prep_player_input: $DA siempre 0-3 (CollideMap/CollideEventObjects saltan por una tabla de
   4), jugador lejos del borde (bus abierto), a veces piso parejo con
   propiedad en el byte +2 (se lee con A = 2: bytes +2/+3) y sin objetos.
 - Fuzz 4 × 2500: 0 diferencias. 23 sabotajes detectados (el de las

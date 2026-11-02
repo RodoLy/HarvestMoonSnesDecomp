@@ -28,21 +28,21 @@ Cada rutina reescrita vive en `src/<sistema>.c`:
 | GetRNG | rng.c | Generador de números aleatorios (LFSR de 24 bits) |
 | AddWood / AddGrass / AddPlayerHappiness | stock.c | Suma a madera, forraje y felicidad, tope 999 |
 | ChangeStamina | stamina.c | Energía del jugador y las etapas de cansancio |
-| GetsCowPointer / GetChickenPointer | animals.c | Dónde están los datos de cada vaca y gallina |
+| GetCowPointer / GetChickenPointer | animals.c | Dónde están los datos de cada vaca y gallina |
 | DivisionUnsigned | math.c | División de 16 bits (por hardware o a mano) |
 | RNGReturn0toA | rng.c | "Tirar un dado de n caras" (0..n-1) |
 | SetWeatherFlags / WeatherTomorrow | weather.c | El clima de mañana y sus banderas |
 | GetTileIndex | farm.c | De posición en píxeles a número de casilla |
-| LoadsDamageProbabilities / ClimateFarmDamageCheck / ClimateFarmDamagePrep | farm.c | Lo que el mal tiempo rompe en la granja de noche |
+| LoadDamageProbabilities / ClimateFarmDamageCheck / ClimateFarmDamagePrep | farm.c | Lo que el mal tiempo rompe en la granja de noche |
 | NightlyFarmTilesCheck / MonthlyFarmTilesCheck | farm.c | Riego, crecimiento y la llegada del invierno |
 | CalculateFarmDevelopment | farm.c | El "desarrollo del rancho" de la evaluación final |
-| AddCowHappiness / CowFeedingandStatus | animals.c | La noche de vacas y gallinas |
-| SetCCPoiner / ResetsCurrentCCStructure* / StartScriptAtTileInFront / UNK_LoadCCData* | events.c | El sistema de eventos |
+| AddCowHappiness / CowFeedingAndStatus | animals.c | La noche de vacas y gallinas |
+| SetEventSlotPointer / ResetsCurrentCCStructure* / StartScriptAtTileInFront / UNK_LoadCCData* | events.c | El sistema de eventos |
 | GetTileContent / GetTileProperty / CheckToolSuccess / PreCheckToolSuccess* | tools.c | ¿Funciona la herramienta en esta casilla? |
-| CalculateTileinFront / TileAtOffsetFromPlayer | tools.c | La casilla frente al jugador |
+| CalculateTileInFront / TileAtOffsetFromPlayer | tools.c | La casilla frente al jugador |
 | ReadTileChange / DrawTileChange / SetTileTypeBlock | mapedit.c | Cambiar casillas del mapa (en memoria) |
-| FindMostLovedName / WifePregnanacyandChilds | people.c | La chica favorita, la esposa y los hijos |
-| LoadsDateNames | calendar.c | Los textos de la fecha |
+| FindMostLovedName / WifePregnancyAndChildren | people.c | La chica favorita, la esposa y los hijos |
+| LoadDateNames | calendar.c | Los textos de la fecha |
 | AddMoney / HaveLunch / TvWeatherForecast | stock.c, stamina.c, weather.c | Dinero, almuerzo y el pronóstico de la tele |
 
 Las direcciones de memoria tienen nombre en `src/hm_ram.h` del proyecto de
@@ -80,7 +80,7 @@ que necesitan entradas grandes (una granja entera) llevan una función
 `prep` que las prepara al azar, y un tope de llamadas (`fuzz_max`).
 
 Cuando la original hace algo que la reescritura no puede imitar (como el
-BRK de CowFeedingandStatus, un bug del juego), la reescritura hace lo que
+BRK de CowFeedingAndStatus, un bug del juego), la reescritura hace lo que
 el código claramente quería, lo documenta, y la prueba al azar no genera esa
 combinación.
 

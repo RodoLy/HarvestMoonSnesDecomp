@@ -1,7 +1,7 @@
 /*
  * animals.c — where the barn and the coop live in RAM.
  *
- * GetsCowPointer ($83:C9A7) and GetChickenPointer ($83:C995): A = slot,
+ * GetCowPointer ($83:C9A7) and GetChickenPointer ($83:C995): A = slot,
  * returns the long pointer $7E:xxxx to that animal's record in $72-$74.
  * Cows are 16-byte records at $7E:C1C6, chickens 8-byte records at $7E:C286.
  */
@@ -16,19 +16,19 @@ static void slot_pointer(uint8_t *ram, HmRegs *r, uint16_t base, unsigned shift)
   r->a = (uint16_t)((ptr & 0xFF00) | 0x7E);   /* SEP #$20; LDA #$7E keeps B */
 }
 
-void hm_GetsCowPointer(uint8_t *ram, HmRegs *r)    { slot_pointer(ram, r, HM_COW_DATA & 0xFFFF, 4); }
+void hm_GetCowPointer(uint8_t *ram, HmRegs *r)    { slot_pointer(ram, r, HM_COW_DATA & 0xFFFF, 4); }
 void hm_GetChickenPointer(uint8_t *ram, HmRegs *r) { slot_pointer(ram, r, HM_CHICKEN_DATA & 0xFFFF, 3); }
 
 /* ─────────────────────────────────────────────────────────────────────────
  * AddCowHappiness ($84:A5D4, JSL, RTL; a local label inside the event
- * command Event_UNKCowRelated in HM-Decomp). $72-$74 = the cow's record
- * (GetsCowPointer), A = signed change. Byte +4 of the record is the cow's
+ * command Event_CowFrame in HM-Decomp). $72-$74 = the cow's record
+ * (GetCowPointer), A = signed change. Byte +4 of the record is the cow's
  * happiness, kept in 0..255.
  * Leftovers: $7E = change, $80 = old happiness, Y = 4. A = old + change
  * with its low byte replaced by the stored value when it was clamped;
  * C = 0 when it fits, 1 when it went over 255, the add's carry when it went
  * below 0.
- * CowFeedingandStatus calls it with -8, -16, -24 (not fed), -12 (gets
+ * CowFeedingAndStatus calls it with -8, -16, -24 (not fed), -12 (gets
  * sick) and -30.
  * ───────────────────────────────────────────────────────────────────────── */
 #define COW_HAPPINESS 4
@@ -59,10 +59,10 @@ void hm_AddCowHappiness(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * CowFeedingandStatus ($83:BC5A, JSL, RTL; no compiled body: it runs in the
+ * CowFeedingAndStatus ($83:BC5A, JSL, RTL; no compiled body: it runs in the
  * recompiler's interpreter). The animals' night, called from NightReset.
  *
- * Cow record (16 bytes, GetsCowPointer):
+ * Cow record (16 bytes, GetCowPointer):
  *   +0 status: 01 exists, 02 newborn calf, 04 calf, 08 adult, 10 cranky,
  *              20 sick, 40 pregnant, 80 just gave birth
  *   +1 flags (bits 0-2 are daily and cleared every night; 80 = got the
@@ -172,7 +172,7 @@ static bool one_in(uint8_t *ram, HmRegs *r, uint8_t n, uint16_t ret)
   call(ram, r, ret, 0x80, hm_RNGReturn0toA);
   return (uint8_t)r->a == 0;
 }
-static void graze(uint8_t *ram, HmRegs *r, uint16_t ret) { call(ram, r, ret, 0x82, hm_Sub_82A9A0); }
+static void graze(uint8_t *ram, HmRegs *r, uint16_t ret) { call(ram, r, ret, 0x82, hm_CowEatsGrass); }
 static bool grass_eaten(const uint8_t *ram) { return hm_rd16(ram, 0x0092E) != 0; }
 static uint16_t weather_flags(const uint8_t *ram) { return hm_rd16(ram, 0x00196); }
 
@@ -411,19 +411,19 @@ static void hen_lays(uint8_t *ram, HmRegs *r, uint16_t i)
   hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) | 0x0400);
 }
 
-void hm_CowFeedingandStatus(uint8_t *ram, HmRegs *r)
+void hm_CowFeedingAndStatus(uint8_t *ram, HmRegs *r)
 {
   bool feeding = !(hm_rd16(ram, NO_FEEDING) & 0x0001);
   if (feeding) {
     for (uint16_t i = 0; i < 12; i++) {
-      animal_begin(ram, r, i, 0xBC73, hm_GetsCowPointer);
+      animal_begin(ram, r, i, 0xBC73, hm_GetCowPointer);
       feed_cow(ram, r, i);
       animal_end(ram, r);
     }
   }
   hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) & 0xEFBF);
   for (uint16_t i = 0; i < 12; i++) {
-    animal_begin(ram, r, i, 0xBE63, hm_GetsCowPointer);
+    animal_begin(ram, r, i, 0xBE63, hm_GetCowPointer);
     cow_grows(ram, r, i);
     animal_end(ram, r);
   }
@@ -563,7 +563,7 @@ void hm_AddNewCow(uint8_t *ram, HmRegs *r)
 {
   uint16_t source = r->a;
   hm_dp_w16(ram, r, 0x7E, source);
-  uint16_t slot = free_slot(ram, r, 12, 0xC8EA, hm_GetsCowPointer);
+  uint16_t slot = free_slot(ram, r, 12, 0xC8EA, hm_GetCowPointer);
   if (slot == 12) { r->a = 1; return; }
 
   for (uint16_t y = 0; y < 16; y++) put8(ram, r, y, 0);
@@ -762,7 +762,7 @@ static void place_cows(uint8_t *ram, HmRegs *r, uint8_t map)
     push16(ram, r, n); push16(ram, r, n);
     r->a = r->x = n;
     hm_jsl(ram, r, 0xC418, 0x83);
-    hm_GetsCowPointer(ram, r);
+    hm_GetCowPointer(ram, r);
     hm_rtl(ram, r);
     r->x = pull16(ram, r);
     if (!status_bit(ram, r, 0x01)) goto next;
@@ -884,7 +884,7 @@ static void count_animals(uint8_t *ram, HmRegs *r, uint16_t slots, uint16_t ret,
   r->c = 1;
 }
 void hm_UnusedBarnCoopCheck(uint8_t *ram, HmRegs *r) { count_animals(ram, r, 13, 0xC9C8, hm_GetChickenPointer); }
-void hm_UnusedBarnCheck(uint8_t *ram, HmRegs *r)     { count_animals(ram, r, 12, 0xC9F3, hm_GetsCowPointer); }
+void hm_UnusedBarnCheck(uint8_t *ram, HmRegs *r)     { count_animals(ram, r, 12, 0xC9F3, hm_GetCowPointer); }
 
 /* ─────────────────────────────────────────────────────────────────────────
  * StartEnding ($83:F4D8, JSR, RTS; reached with a JMP on summer 30 of year
@@ -919,7 +919,7 @@ void hm_StartEnding(uint8_t *ram, HmRegs *r)
   for (uint16_t cow = 0; cow != 12; cow++) {
     hm_push8(ram, r, (uint8_t)(cow >> 8)); hm_push8(ram, r, (uint8_t)cow);   /* PHX */
     r->a = cow;
-    call(ram, r, 0xF521, 0x83, hm_GetsCowPointer);
+    call(ram, r, 0xF521, 0x83, hm_GetCowPointer);
     r->a = (uint16_t)((r->a & 0xFF00) | (*field(ram, r, 0x00) & 0x01));
     if (r->a & 0xFF) {
       uint8_t love = *field(ram, r, 0x04);

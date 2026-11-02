@@ -326,11 +326,11 @@ void hm_StartMapAnimation(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * EditTileonMap ($82:B03A, JSL, RTL). A (low byte) = a tile type, X / Y =
+ * EditTileOnMap ($82:B03A, JSL, RTL). A (low byte) = a tile type, X / Y =
  * a position in pixels: writes the type into the current map ($09B6 +
  * GetTileIndex). Only the logic map changes, not the picture (that is
  * ChangeMapTile's job).
- * EditTileonMapandsets0181 ($82:B049): the same on the farm's own copy
+ * EditFarmTile ($82:B049): the same on the farm's own copy
  * ($7E:A4E6), first setting the width code $0181 = 4 (64 tiles).
  * Leftovers: those of GetTileIndex, with A's low byte = the type. The PHA
  * of the type stays on the stack.
@@ -350,14 +350,14 @@ static uint16_t tile_index_keeping(uint8_t *ram, HmRegs *r, uint8_t type, uint16
   return r->x;
 }
 
-void hm_EditTileonMap(uint8_t *ram, HmRegs *r)
+void hm_EditTileOnMap(uint8_t *ram, HmRegs *r)
 {
   uint8_t type = (uint8_t)r->a;
   uint16_t x = tile_index_keeping(ram, r, type, RET_03A_INDEX);
   hm_bus_wr8(ram, (((uint32_t)r->db << 16) + HM_MAP_TILES + x) & 0xFFFFFF, type);
 }
 
-void hm_EditTileonMapandsets0181(uint8_t *ram, HmRegs *r)
+void hm_EditFarmTile(uint8_t *ram, HmRegs *r)
 {
   uint8_t type = (uint8_t)r->a;
   hm_bus_wr8(ram, ((uint32_t)r->db << 16) + HM_MAP_WIDTH, 4);

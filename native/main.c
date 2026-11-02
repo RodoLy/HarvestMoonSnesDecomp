@@ -1143,12 +1143,12 @@ typedef void Fn(uint8_t *ram, HmRegs *r);
 static Fn *routine_at(uint32_t pc)
 {
   static const struct { uint32_t pc; Fn *fn; } T_[] = {
-    { 0x82D75E, hm_IntroScreen }, { 0x82D80D, hm_IntroScreen_D80D },
-    { 0x82D93F, hm_IntroScreen_D93F }, { 0x82E0EB, hm_IntroScreen_E0EB },
-    { 0x82D871, hm_IntroScreen_D871 },
+    { 0x82D75E, hm_IntroScreen }, { 0x82D80D, hm_IntroFrame },
+    { 0x82D93F, hm_ParentsSceneFrame }, { 0x82E0EB, hm_NewFileScreenFrame },
+    { 0x82D871, hm_IntroDemoCheck },
     { 0x82E1F1, hm_ContinueFileScreen }, { 0x82E337, hm_ContinueFileScreenFrame },
     { 0x82D1C0, hm_FirstDemo }, { 0x82D347, hm_DemoFrame },
-    { 0x82D3C7, hm_DemoPresentation }, { 0x82D6C9, hm_DemoPresentation_D6C9 },
+    { 0x82D3C7, hm_DemoPresentation }, { 0x82D6C9, hm_DemoPresentationFrame },
     { 0x82E7F9, hm_StartFromNewGame }, { 0x82E7E9, hm_StartFromLoad },
     { 0x808083, hm_GameLoop },
     { 0x82E80C, hm_NamesScreen }, { 0x82E95F, hm_NamesScreenFrame },

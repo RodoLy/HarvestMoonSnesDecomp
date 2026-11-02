@@ -177,12 +177,12 @@ void hm_WaitForNMIATimes(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * ScreenFadein ($80:87CE) and ScreenFadeout ($80:880A) (JSL, RTL): the
+ * ScreenFadeIn ($80:87CE) and ScreenFadeOut ($80:880A) (JSL, RTL): the
  * brightness goes, one level at a time, from $92 (or, if $92 = $FF, from
  * where it is, $25) to $94, up or down, $93 frames per level
- * (SetsBrightness, then WaitForNMI $93 times; $26 counts them). At the end
+ * (SetBrightness, then WaitForNMI $93 times; $26 counts them). At the end
  * bit 15 of $7F1F5A is set (faded in) or cleared (faded out).
- * The flags are followed exactly (`p`), since SetsBrightness and
+ * The flags are followed exactly (`p`), since SetBrightness and
  * WaitForNMI save them (PHP) and the NMI pushes them.
  * Leftovers: A = the new $7F1F5A (16-bit), C = 1, X and Y 8-bit.
  * ───────────────────────────────────────────────────────────────────────── */
@@ -222,7 +222,7 @@ static void fade(uint8_t *ram, HmRegs *r, int up)
   *hm_dp(ram, r, FADE_FRAME) = (uint8_t)r->a;
   for (;;) {
     p = lda8(r, p, *hm_dp(ram, r, FADE_BRIGHTNESS));
-    call_with_flags(ram, r, p, (uint16_t)(at + 0x12), hm_SetsBrightness);
+    call_with_flags(ram, r, p, (uint16_t)(at + 0x12), hm_SetBrightness);
     p = lda8(r, p, *hm_dp(ram, r, FADE_BRIGHTNESS));
     p = cmp8(r, p, (uint8_t)r->a, *hm_dp(ram, r, 0x94));
     if ((uint8_t)r->a == *hm_dp(ram, r, 0x94)) break;
@@ -245,5 +245,5 @@ static void fade(uint8_t *ram, HmRegs *r, int up)
   r->n = (uint8_t)(v >> 15);
   r->p = entry;
 }
-void hm_ScreenFadein(uint8_t *ram, HmRegs *r) { fade(ram, r, 1); }
-void hm_ScreenFadeout(uint8_t *ram, HmRegs *r) { fade(ram, r, 0); }
+void hm_ScreenFadeIn(uint8_t *ram, HmRegs *r) { fade(ram, r, 1); }
+void hm_ScreenFadeOut(uint8_t *ram, HmRegs *r) { fade(ram, r, 0); }

@@ -49,7 +49,7 @@ static void fresh_game(uint8_t *ram, HmRegs *r, const Demo *d)
   set_a8(r, 0x0F); *hm_dp(ram, r, 0x92) = 0x0F;            /* SEP #$20; REP #$10 */
   set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
   set_a8(r, 0x01); *hm_dp(ram, r, 0x94) = 0x01;
-  jsl(ram, r, (uint16_t)(d->base + 0x10), 0x80, hm_ScreenFadeout);
+  jsl(ram, r, (uint16_t)(d->base + 0x10), 0x80, hm_ScreenFadeOut);
   set_a8(r, 0x06);                                         /* SEP #$20: 6:00:00 */
   hm_bus_wr8(ram, 0x7F1F1C, 6);
   set_a8(r, 0x00);
@@ -101,11 +101,11 @@ static void fresh_screen(uint8_t *ram, HmRegs *r, uint16_t at)
 {
   jsl(ram, r, at, 0x80, hm_ZeroesVRAM);
   jsl(ram, r, (uint16_t)(at + 4), 0x80, hm_ZeroesCGRAM);
-  jsl(ram, r, (uint16_t)(at + 8), 0x80, hm_Zeroes42Pointers);
+  jsl(ram, r, (uint16_t)(at + 8), 0x80, hm_StopAllColourAnimations);
   jsl(ram, r, (uint16_t)(at + 12), 0x85, hm_ClearSpriteDataTables);
   jsl(ram, r, (uint16_t)(at + 16), 0x85, hm_InitializeOBJs);
   jsl(ram, r, (uint16_t)(at + 20), 0x81, hm_ClearItemRecords);
-  jsl(ram, r, (uint16_t)(at + 24), 0x84, hm_ClearsofAllCCStructs);
+  jsl(ram, r, (uint16_t)(at + 24), 0x84, hm_ClearAllEventSlots);
   jsl(ram, r, (uint16_t)(at + 28), 0x82, hm_LoadDefaultFarmMap);
   r->a = 0x0100;                                           /* REP #$20 */
   wr16(ram, r, 0x0146, 0x0100);
@@ -119,7 +119,7 @@ static void demo_script(uint8_t *ram, HmRegs *r, uint16_t script, uint16_t at)
 /* the scripts run once, and map $098B is entered (its music, its load) */
 static void demo_map(uint8_t *ram, HmRegs *r, uint16_t at)
 {
-  jsl(ram, r, at, 0x84, hm_IterateCCStructures);
+  jsl(ram, r, at, 0x84, hm_RunEventSlots);
   uint8_t map = rd8(ram, r, 0x098B);                       /* SEP #$20 */
   set_a8(r, map);
   *hm_dp(ram, r, 0x22) = map;
@@ -198,7 +198,7 @@ void hm_DemoFrame(uint8_t *ram, HmRegs *r)
  * as 0) and becomes the next one (after $0B, 0 again). $7F1F60 = 8, the
  * shed's second row $EC, a bag of grass and turnip seeds, $08FD/$08FF =
  * 0. It also ends with $7F1F60 bit 7, and, if it ended on the farm (map
- * below 4), the farm's map is kept (CopyCurrentMaptoFarmMap).
+ * below 4), the farm's map is kept (CopyCurrentMapToFarmMap).
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_DemoPresentation(uint8_t *ram, HmRegs *r)
 {
@@ -219,11 +219,11 @@ void hm_DemoPresentation(uint8_t *ram, HmRegs *r)
   set_a8(r, next);                                         /* SEP #$20 */
   hm_bus_wr8(ram, 0x7F1F48, next);
   demo_map(ram, r, 0xD6AC);
-  hm_DemoPresentation_D6C9(ram, r);
+  hm_DemoPresentationFrame(ram, r);
   (void)entry;
 }
 /* its frames ($82:D6C9) */
-void hm_DemoPresentation_D6C9(uint8_t *ram, HmRegs *r)
+void hm_DemoPresentationFrame(uint8_t *ram, HmRegs *r)
 {
   demo_frame(ram, r, 0xD6CF, 0xD6DA, r->p);
   r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5C) & 0x0004);  /* REP #$20 */
@@ -239,6 +239,6 @@ void hm_DemoPresentation_D6C9(uint8_t *ram, HmRegs *r)
   uint8_t map = *hm_dp(ram, r, 0x22);                      /* SEP #$20 */
   set_a8(r, map);
   r->c = map >= 4;
-  if (map < 4) jsl(ram, r, 0xD74C, 0x82, hm_CopyCurrentMaptoFarmMap);
+  if (map < 4) jsl(ram, r, 0xD74C, 0x82, hm_CopyCurrentMapToFarmMap);
   demo_leave(ram, r);
 }

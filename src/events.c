@@ -26,11 +26,11 @@
 #define HM_TILE_IN_FRONT_Y 0x00987
 
 /* ─────────────────────────────────────────────────────────────────────────
- * SetCCPoiner ($84:887C, JSL, RTL). A = slot number; $CC-$CE = its address
+ * SetEventSlotPointer ($84:887C, JSL, RTL). A = slot number; $CC-$CE = its address
  * ($7E:B586 + 64 A). Leftovers: $7E = 64 A; A = (high byte of the address)
  * : $7E; C = carry of the add.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_SetCCPoiner(uint8_t *ram, HmRegs *r)
+void hm_SetEventSlotPointer(uint8_t *ram, HmRegs *r)
 {
   uint16_t offset = (uint16_t)(r->a << 6);
   hm_dp_w16(ram, r, 0x7E, offset);
@@ -42,11 +42,11 @@ void hm_SetCCPoiner(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * ResetsCurrentCCStructureLong ($84:88D4, JSR, RTS — despite the name).
+ * ResetCurrentEventSlotLong ($84:88D4, JSR, RTS — despite the name).
  * Marks the slot at $CC as in use and clears its state: bytes +01, +03..06,
  * +0C, +0F and words +10, +12, +14, +1A, +1C. Ends with A = 0, Y = $14.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r)
+void hm_ResetCurrentEventSlotLong(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t bytes[] = { 0x01, 0x0F, 0x03, 0x04, 0x05, 0x06, 0x0C };
   static const uint8_t words[] = { 0x10, 0x1A, 0x1C, 0x12, 0x14 };
@@ -60,11 +60,11 @@ void hm_ResetsCurrentCCStructureLong(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * ResetsCurrentCCStructureShort ($84:8961, JSR, RTS). The short reset:
+ * ResetCurrentEventSlotShort ($84:8961, JSR, RTS). The short reset:
  * marks the slot in use, sets +01 to 1 and clears +03..06, +0F and the word
  * +10. Ends with A = 0, Y = $10.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_ResetsCurrentCCStructureShort(uint8_t *ram, HmRegs *r)
+void hm_ResetCurrentEventSlotShort(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t zero_bytes[] = { 0x0F, 0x03, 0x04, 0x05, 0x06 };
   hm_bus_wr8(ram, hm_dp_long(ram, r, 0xCC, 0x00), 1);
@@ -80,7 +80,7 @@ void hm_ResetsCurrentCCStructureShort(uint8_t *ram, HmRegs *r)
  * Starting an event script: StartScriptAtTileInFront, StartEventScriptLong and
  * StartEventScript ($84:80F8, $84:8097, $84:803F; JSL, RTL).
  *   A = CC slot, X = script group, Y = script number in the group.
- * They point the slot ($CC, SetCCPoiner) at the script: +30 = the 16-bit
+ * They point the slot ($CC, SetEventSlotPointer) at the script: +30 = the 16-bit
  * offset, entry `script` of the group's table, +32 = its bank. The group's
  * table is entry `group` (24-bit) of $B3:8000 (only the first entry of
  * Events_Bank_Table is used). Then:
@@ -110,7 +110,7 @@ static void start_script(uint8_t *ram, HmRegs *r, const ScriptStart *s)
 {
   uint16_t group = r->x, script = r->y;
   hm_jsl(ram, r, s->ret_set_pointer, 0x84);
-  hm_SetCCPoiner(ram, r);
+  hm_SetEventSlotPointer(ram, r);
   hm_rtl(ram, r);
 
   hm_dp_w16(ram, r, 0x7E, group);
@@ -129,9 +129,9 @@ static void start_script(uint8_t *ram, HmRegs *r, const ScriptStart *s)
   if (s->short_reset) {
     hm_dp_w16(ram, r, 0xC9, offset);
     *hm_dp(ram, r, 0xCB) = bank;
-    jsr(ram, r, s->ret_reset, hm_ResetsCurrentCCStructureShort);
+    jsr(ram, r, s->ret_reset, hm_ResetCurrentEventSlotShort);
   } else {
-    jsr(ram, r, s->ret_reset, hm_ResetsCurrentCCStructureLong);
+    jsr(ram, r, s->ret_reset, hm_ResetCurrentEventSlotLong);
   }
 }
 
@@ -173,20 +173,20 @@ void hm_StartScriptAtTileInFront(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * ClearsofAllCCStructs ($84:8000, JSL, RTL): frees the 49 script slots
- * (the first byte of each to 0), each through SetCCPoiner.
+ * ClearAllEventSlots ($84:8000, JSL, RTL): frees the 49 script slots
+ * (the first byte of each to 0), each through SetEventSlotPointer.
  * Leftovers: $CC-$CE = the last slot, X = $31, Y = 0, C = 1, A = what
- * SetCCPoiner left with its low byte 0.
+ * SetEventSlotPointer left with its low byte 0.
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_CLEAR_ALL 0x800A
 
-void hm_ClearsofAllCCStructs(uint8_t *ram, HmRegs *r)
+void hm_ClearAllEventSlots(uint8_t *ram, HmRegs *r)
 {
   for (uint16_t x = 0; x != 0x31; x++) {
     hm_push8(ram, r, (uint8_t)(x >> 8)); hm_push8(ram, r, (uint8_t)x);   /* PHX */
     r->a = x;                                                            /* TXA */
     hm_jsl(ram, r, RET_CLEAR_ALL, 0x84);
-    hm_SetCCPoiner(ram, r);
+    hm_SetEventSlotPointer(ram, r);
     hm_rtl(ram, r);
     r->y = 0;
     r->a &= 0xFF00;
@@ -220,14 +220,14 @@ void hm_SetSlotAnimation(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * FreeEventSlot ($84:8020, JSL, RTL): frees slot A (its +00 = 0, through
- * SetCCPoiner: $CC-$CE then point at it) and destroys its game object (the
+ * SetEventSlotPointer: $CC-$CE then point at it) and destroys its game object (the
  * slot's +12, DestroyGameObject).
  * Leftovers: those of DestroyGameObject.
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_FreeEventSlot(uint8_t *ram, HmRegs *r)
 {
   hm_jsl(ram, r, 0x8025, 0x84);
-  hm_SetCCPoiner(ram, r);
+  hm_SetEventSlotPointer(ram, r);
   hm_rtl(ram, r);
   r->y = 0;
   r->a &= 0xFF00;
@@ -299,11 +299,11 @@ void hm_StepSlot(uint8_t *ram, HmRegs *r)
  * animation changed).
  * Then, when moving, it looks ahead ($DF/$E1 = the position, $E5/$E7 =
  * the step size, $E3 = 0):
- *  - with +01 bit 7, the map (CEEEE; the tile type of the first corner
+ *  - with +01 bit 7, the map (CollideMap; the tile type of the first corner
  *    goes to +0E): blocked, or a tile $FF or $C0-$CF ahead, stops it;
- *  - the tile $EB of the second corner (also when CEEEE was not called:
+ *  - the tile $EB of the second corner (also when CollideMap was not called:
  *    then it is whatever the last check left there), the same way;
- *  - the player in the way (CDDDD) stops it too.
+ *  - the player in the way (CollidePlayer) stops it too.
  * Tile $E1 (a door?) only lets the slots numbered $18-$23 (+3F) through.
  * Stopping: no step, +05/+06 = +0B, and the forced direction is cleared.
  * Leftovers: $92 = +06; $7E/$80 from the area check; $72-$74 = the
@@ -311,8 +311,8 @@ void hm_StepSlot(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 #define RET_STAND_ANIM   0x86DC   /* JSL SetSlotAnimation at $84:86D9 */
 #define RET_WALK_ANIM    0x8706   /* JSL SetSlotAnimation at $84:8703 */
-#define RET_LOOK_MAP     0x87B1   /* JSL CEEEE at $84:87AE */
-#define RET_LOOK_PLAYER  0x8810   /* JSL CDDDD at $84:880D */
+#define RET_LOOK_MAP     0x87B1   /* JSL CollideMap at $84:87AE */
+#define RET_LOOK_PLAYER  0x8810   /* JSL CollidePlayer at $84:880D */
 #define ANIMATION_BANK   0xB3
 
 static void put8(uint8_t *ram, HmRegs *r, uint16_t at, uint8_t v)
@@ -492,7 +492,7 @@ void hm_WanderSlot(uint8_t *ram, HmRegs *r)
     r->a &= 0xFF80;
     slot8_ext(ram, r, 0x02);
     hm_jsl(ram, r, RET_LOOK_MAP, 0x83);
-    hm_CEEEE(ram, r);
+    hm_CollideMap(ram, r);
     hm_rtl(ram, r);
     uint16_t blocked = r->a;
     hm_push8(ram, r, (uint8_t)(blocked >> 8)); hm_push8(ram, r, (uint8_t)blocked);  /* PHA */
@@ -513,7 +513,7 @@ void hm_WanderSlot(uint8_t *ram, HmRegs *r)
 
   slot8_ext(ram, r, 0x02);
   hm_jsl(ram, r, RET_LOOK_PLAYER, 0x83);
-  hm_CDDDD(ram, r);
+  hm_CollidePlayer(ram, r);
   hm_rtl(ram, r);
   r->c = 1;                                      /* CMP #0 */
   if (r->a) stop_here(ram, r);
@@ -595,29 +595,29 @@ void hm_UpdateSlotSprite(uint8_t *ram, HmRegs *r)
  * Leftovers: A = $CB (8-bit A), Y = $32, X and C those of the command.
  * ───────────────────────────────────────────────────────────────────────── */
 static void (*const EVENT_COMMANDS[90])(uint8_t *, HmRegs *) = {
-  hm_Event_AudioRelated, hm_Event_TimeRunning, hm_Event_TimeStopped, hm_Event_SetHour,
-  hm_Event_Empty, hm_Event_SetPlayerPosition, hm_Event_SetTransitionDest, hm_Event_SetPlayerDirection,
-  hm_Event_UNKChangesGameState, hm_Event_NewCCStructure, hm_Event_ScreenFadein, hm_Event_UNKset7Aflag,
-  hm_Event_UNKCompareset7Aflag, hm_Event_UNKCCchanges2, hm_Event_AudioRelated2, hm_Event_ScreenFadeout,
-  hm_Event_UNKDisableCCstruct, hm_Event_UNKChangesGameState2, hm_Event_JumptoInstruction, hm_Event_UNKSetsCC10,
-  hm_Event_JumpifFlagSet, hm_Event_JumpifEquals, hm_Event_JumpifBetween, hm_Event_GetRNG,
-  hm_Event_JumpIfEqualsRNG, hm_Event_UNKSetAnimation, hm_Event_UNKCCchanges3, hm_Event_UNKCCchanges4,
-  hm_Event_StartTextBox, hm_Event_StartTextBoxCopy, hm_Event_UNKCCchanges5, hm_Event_UNKCCchanges5,
-  hm_Event_UNKJumpif018F, hm_Event_UNKTextrelated, hm_Event_UNKCCchanges6, hm_Event_SetFlag,
-  hm_Event_TimeofDayPalette, hm_Event_UNKCCchanges7, hm_Event_ResetFlag, hm_Event_ResetFlag,
-  hm_Event_ResetFlag, hm_Event_MapScrolling, hm_Event_UNKCFD1, hm_Event_UNKCCchanges8,
-  hm_Event_AudioRelated3, hm_Event_UNKCCchanges9, hm_Event_UNKCCchanges10, hm_Event_UNKCCchanges11,
-  hm_Event_UNKChickenRelated, hm_Event_UNKCowRelated, hm_Event_StoreValue, hm_Event_UNKPickupMole,
-  hm_Event_UNKFishing, hm_Event_UNKPlayerPos, hm_Event_UNKDogRelated, hm_Event_UNK1,
-  hm_Event_UNK2, hm_Event_UNKCCchanges12, hm_Event_UNKCCchanges13, hm_Event_ChangeItemonHand,
-  hm_Event_TransitiontoHouse, hm_Event_TransitiontoX, hm_Event_SetItemonHand, hm_Event_DropItemAnimation,
-  hm_Event_UNKSet5C, hm_Event_UNKCCchanges14, hm_Event_ChangeMoney, hm_Event_JumpifEqualsValue,
-  hm_Event_JumpifEqualsValueLong, hm_Event_JumpifBetweenValue, hm_Event_JumpifBetweenValueLong, hm_Event_SetValueSort,
-  hm_Event_SetValueLong, hm_Event_UNKCCchanges15, hm_Event_UNK3, hm_Event_EditTileonMap,
-  hm_Event_UNKCCchanges16, hm_Event_UNKCCchanges17, hm_Event_UNKReset5C, hm_Event_UNKSet60,
-  hm_Event_UNKChickenRelated2, hm_Event_Cmd51, hm_Event_Cmd52, hm_Event_Cmd53,
-  hm_Event_Cmd54, hm_Event_Cmd55, hm_Event_Cmd56, hm_Event_Cmd57,
-  hm_Event_Cmd58, hm_Event_Cmd59,
+  hm_Event_SetWantedSong, hm_Event_TimeRunning, hm_Event_TimeStopped, hm_Event_SetHour,
+  hm_Event_DoNothing, hm_Event_SetPlayerPosition, hm_Event_SetTransitionDest, hm_Event_SetPlayerDirection,
+  hm_Event_DisablePlayerControl, hm_Event_StartOtherSlot, hm_Event_ScreenFadeIn, hm_Event_SetSceneFlag,
+  hm_Event_WaitForSceneFlag, hm_Event_MoveSlot, hm_Event_ChangeToWantedSong, hm_Event_ScreenFadeOut,
+  hm_Event_FreeOwnSlot, hm_Event_EnablePlayerControl, hm_Event_JumpToInstruction, hm_Event_WaitFrames,
+  hm_Event_JumpIfFlagSet, hm_Event_JumpIfEquals, hm_Event_JumpIfBetween, hm_Event_GetRNG,
+  hm_Event_JumpIfEqualsRNG, hm_Event_SetPlayerAnimation, hm_Event_PlaceSlot, hm_Event_SetSlotSprite,
+  hm_Event_StartTextBox, hm_Event_StartTextBoxCopy, hm_Event_TalkIfSpokenTo, hm_Event_TalkIfSpokenTo,
+  hm_Event_JumpIfAnswer, hm_Event_AddToByteClamped, hm_Event_WanderInArea, hm_Event_SetFlag,
+  hm_Event_TimeOfDayPalette, hm_Event_FreeOtherSlot, hm_Event_ResetFlag, hm_Event_ResetFlag,
+  hm_Event_ResetFlag, hm_Event_MapScrolling, hm_Event_StartMapAnimation, hm_Event_SetSlotAnimation,
+  hm_Event_PlayEffectAndWait, hm_Event_TalkOrTakeShownItem, hm_Event_WanderFreely, hm_Event_SetStandingAnimation,
+  hm_Event_ChickenFrame, hm_Event_CowFrame, hm_Event_StoreValue, hm_Event_PickUpMole,
+  hm_Event_PickUpFish, hm_Event_HorseFrame, hm_Event_DogFrame, hm_Event_DestroyOwnObject,
+  hm_Event_WaitUntilSkippable, hm_Event_WalkPlayer, hm_Event_RunPlayer, hm_Event_ChangeItemOnHand,
+  hm_Event_TransitionToHouse, hm_Event_TransitionToMap, hm_Event_SetItemOnHand, hm_Event_DropItemAnimation,
+  hm_Event_IgnoreTileProperties, hm_Event_AddToWordMax999, hm_Event_ChangeMoney, hm_Event_JumpIfEqualsValue,
+  hm_Event_JumpIfEqualsValueLong, hm_Event_JumpIfBetweenValue, hm_Event_JumpIfBetweenValueLong, hm_Event_SetValueByte,
+  hm_Event_SetValueLong, hm_Event_SetSlotAnimationPlayerDir, hm_Event_PickUpPowerBerry, hm_Event_EditTileOnMap,
+  hm_Event_MakeSlotPassable, hm_Event_FacePlayerIfSpokenTo, hm_Event_UseTileProperties, hm_Event_DisableTools,
+  hm_Event_PutDownCarried, hm_Event_Cmd51_PutDownCarriedQuietly, hm_Event_Cmd52_PickUpChild1, hm_Event_Cmd53_PickUpChild2,
+  hm_Event_Cmd54_AutoCloseTextBox, hm_Event_Cmd55_JumpIfBitClear, hm_Event_Cmd56_UseToolInHand, hm_Event_Cmd57_ChangeStamina,
+  hm_Event_Cmd58_SetFarmTile, hm_Event_Cmd59_SwapTools,
 };
 
 void hm_EventInstructionInterpreter(uint8_t *ram, HmRegs *r)
@@ -643,7 +643,7 @@ void hm_EventInstructionInterpreter(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * IterateCCStructures ($84:816F, JSL, RTL): every frame, unless a text box
+ * RunEventSlots ($84:816F, JSL, RTL): every frame, unless a text box
  * waits ($019A = 2 or 6) or the player is in action 3: a random number to
  * $DE (GetRNG) and then each of the 49 slots in use (+00 bit 0): while its
  * wait (+10) is 0 its script runs one command after another
@@ -655,7 +655,7 @@ void hm_EventInstructionInterpreter(uint8_t *ram, HmRegs *r)
  * Leftovers: A = the new $7F1F60, C = 1 (or that of the compare that
  * stopped it), X = $31 after the slots.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_IterateCCStructures(uint8_t *ram, HmRegs *r)
+void hm_RunEventSlots(uint8_t *ram, HmRegs *r)
 {
   uint8_t input = hm_bus_rd8(ram, (uint32_t)r->db << 16 | 0x019A);
   r->a = (uint16_t)((r->a & 0xFF00) | input);

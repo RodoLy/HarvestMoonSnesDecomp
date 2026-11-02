@@ -31,7 +31,7 @@
  *   +0 flags (bit 0 = in use)   +1 its routine (table $81:A58B)   +2, +3
  *   +4 its game object number   +6 sprite   +8 sprite shown now
  *   +A flip   +C X   +E Y
- * BAAAA ($81:A383) moves them every frame.
+ * RunItemsOnMap ($81:A383) moves them every frame.
  */
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
@@ -518,7 +518,7 @@ void hm_ReadGameObject(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * InvertIfFlipedX / InvertIfFlipedY ($85:8BB0 / $85:8BBC, JSR, RTS): A = a
+ * InvertIfFlippedX / InvertIfFlippedY ($85:8BB0 / $85:8BBC, JSR, RTS): A = a
  * piece's offset inside the sprite; if the object is flipped that way ($9F
  * bit 6 / bit 7) it becomes -A - 16, the mirrored place of a 16-pixel
  * piece. Leftovers: C from that add, or untouched.
@@ -533,8 +533,8 @@ static void invert_if(uint8_t *ram, HmRegs *r, uint16_t bit)
   r->c = sum > 0xFFFF;
   r->a = (uint16_t)sum;
 }
-void hm_InvertIfFlipedX(uint8_t *ram, HmRegs *r) { invert_if(ram, r, 0x0040); }
-void hm_InvertIfFlipedY(uint8_t *ram, HmRegs *r) { invert_if(ram, r, 0x0080); }
+void hm_InvertIfFlippedX(uint8_t *ram, HmRegs *r) { invert_if(ram, r, 0x0040); }
+void hm_InvertIfFlippedY(uint8_t *ram, HmRegs *r) { invert_if(ram, r, 0x0080); }
 
 /* ─────────────────────────────────────────────────────────────────────────
  * ClearSpriteDataTables ($85:8ED7, JSL, RTL): empties everything about the
@@ -723,7 +723,7 @@ void hm_GetOBJOrderToDraw(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * PresetsWRAMCopyofOAM ($85:8647, JSR, RTS) and PresetsWRAMCopyOAMCopy
+ * ClearOAMCopy ($85:8647, JSR, RTS) and ClearOAMCopyAgain
  * ($85:8896, the same code twice): empties the WRAM copy of the sprite
  * table (OAM) before it is filled: the 128 sprites ($7E:A000, 4 bytes
  * each) at X = Y = $F0, off the screen, and the high table ($7E:A200, 32
@@ -733,25 +733,25 @@ void hm_GetOBJOrderToDraw(uint8_t *ram, HmRegs *r)
 #define OAM_COPY       0x7EA000
 #define OAM_COPY_HIGH  0x7EA200
 
-void hm_PresetsWRAMCopyofOAM(uint8_t *ram, HmRegs *r)
+void hm_ClearOAMCopy(uint8_t *ram, HmRegs *r)
 {
   for (uint32_t i = 0; i < 0x200; i += 4) hm_bus_wr16(ram, OAM_COPY + i, 0xF0F0);
   for (uint32_t i = 0; i < 0x20; i += 2) hm_bus_wr16(ram, OAM_COPY_HIGH + i, 0);
   r->a = 1;
   hm_bus_wr16(ram, abs_db(r, 0x00B7), 1);
 }
-void hm_PresetsWRAMCopyOAMCopy(uint8_t *ram, HmRegs *r) { hm_PresetsWRAMCopyofOAM(ram, r); }
+void hm_ClearOAMCopyAgain(uint8_t *ram, HmRegs *r) { hm_ClearOAMCopy(ram, r); }
 
 /* ─────────────────────────────────────────────────────────────────────────
  * InitializeOBJs ($85:820F, JSL, RTL): frees all 40 game objects (their
  * first $12 bytes to 0, the piece bytes +14..+23 to $FF), no object handed
- * out ($DC = 0) and the sprite table emptied (PresetsWRAMCopyofOAM). The
+ * out ($DC = 0) and the sprite table emptied (ClearOAMCopy). The
  * pieces' graphics slots are not touched. $77 / $7A = the bank of sprite
  * $A1's table, as usual.
  * Leftovers: $0086 (absolute) = $5A0, Y = 40, A = 1 and the rest of
- * PresetsWRAMCopyofOAM; X = $57C, C = 1.
+ * ClearOAMCopy; X = $57C, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-#define RET_20F_PRESETS 0x82C5   /* JSR PresetsWRAMCopyofOAM at $85:82C3 */
+#define RET_20F_PRESETS 0x82C5   /* JSR ClearOAMCopy at $85:82C3 */
 
 void hm_InitializeOBJs(uint8_t *ram, HmRegs *r)
 {
@@ -774,7 +774,7 @@ void hm_InitializeOBJs(uint8_t *ram, HmRegs *r)
   r->c = 1;
   hm_dp_w16(ram, r, 0xDC, 0);
   push16(ram, r, RET_20F_PRESETS);
-  hm_PresetsWRAMCopyofOAM(ram, r);
+  hm_ClearOAMCopy(ram, r);
   pull16(ram, r);
 }
 
@@ -1004,13 +1004,13 @@ void hm_LoadQueuedSpritePieces(uint8_t *ram, HmRegs *r)
 
 /* ─────────────────────────────────────────────────────────────────────────
  * PrepareOAMData ($85:83E0, JSL, RTL): the sprite table for this frame.
- * The WRAM copy of the OAM is emptied (PresetsWRAMCopyOAMCopy) and the
+ * The WRAM copy of the OAM is emptied (ClearOAMCopyAgain) and the
  * objects put in drawing order ($084C, GetOBJOrderToDraw). Then, object by
  * object in that order (only the records in use), piece by piece from the
  * last to the first (pieces not loaded, $FF, are skipped):
  *   - the screen position: the object's ($9B, $9D) + the piece's offset in
  *     the sprite's piece list (signed bytes +2 / +3, mirrored by the flip
- *     $9F: InvertIfFlipedX / Y) - the camera ($F5, $F7);
+ *     $9F: InvertIfFlippedX / Y) - the camera ($F5, $F7);
  *   - a piece outside the screen (X not in -16..255, Y not in -16..239) is
  *     left out;
  *   - its 4 bytes at $7E:A000 + $AF: X, Y, the graphics slot's tile number
@@ -1058,7 +1058,7 @@ static uint16_t piece_offset(uint8_t *ram, HmRegs *r, uint16_t y, uint16_t ret, 
 void hm_PrepareOAMData(uint8_t *ram, HmRegs *r)
 {
   set_piece_bank(ram, r, hm_dp_r16(ram, r, 0xA1));
-  push16(ram, r, 0x8401); hm_PresetsWRAMCopyOAMCopy(ram, r); pull16(ram, r);
+  push16(ram, r, 0x8401); hm_ClearOAMCopyAgain(ram, r); pull16(ram, r);
   push16(ram, r, 0x8404); hm_GetOBJOrderToDraw(ram, r); pull16(ram, r);
 
   ordered(ram, r, 0);
@@ -1111,9 +1111,9 @@ void hm_PrepareOAMData(uint8_t *ram, HmRegs *r)
       r->x = hm_dp_r16(ram, r, 0x75);
       uint8_t slot = hm_bus_rd8(ram, abs_x(r, GOBJ + 0x14, r->x));
       if (slot != 0xFF) {
-        uint16_t dx = piece_offset(ram, r, 2, 0x84D6, hm_InvertIfFlipedX);
+        uint16_t dx = piece_offset(ram, r, 2, 0x84D6, hm_InvertIfFlippedX);
         hm_dp_w16(ram, r, 0xBF, (uint16_t)(dx + hm_dp_r16(ram, r, 0x9B) - hm_dp_r16(ram, r, 0xF5)));
-        uint16_t dy = piece_offset(ram, r, 3, 0x84F7, hm_InvertIfFlipedY);
+        uint16_t dy = piece_offset(ram, r, 3, 0x84F7, hm_InvertIfFlippedY);
         uint32_t fy = (uint32_t)(uint16_t)(dy + hm_dp_r16(ram, r, 0x9D)) - hm_dp_r16(ram, r, 0xF7);
         hm_dp_w16(ram, r, 0xC1, (uint16_t)fy);
         hm_dp_w16(ram, r, 0xC5, 3);

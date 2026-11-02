@@ -728,11 +728,11 @@ void hm_UploadSoundProgram(uint8_t *ram, HmRegs *r)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * UNUSED2 ($83:8376, JSL, RTL; nothing calls it): one more instrument
+ * UnusedCountInstrument ($83:8376, JSL, RTL; nothing calls it): one more instrument
  * noted, $0103 + 1 (the count LoadDefaultInstruments and LoadSongInstruments keep).
  * Leftovers: A's low byte = the new count; X, Y, C untouched.
  * ───────────────────────────────────────────────────────────────────────── */
-void hm_UNUSED2(uint8_t *ram, HmRegs *r)
+void hm_UnusedCountInstrument(uint8_t *ram, HmRegs *r)
 {
   uint8_t n = (uint8_t)(rd8(ram, r, 0x0103) + 1);
   set_a8(r, n);

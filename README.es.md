@@ -338,23 +338,23 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Números aleatorios | GetRNG, RNGReturn0toA ("dado de n caras") | `src/rng.c` |
 | Aritmética | DivisionUnsigned | `src/math.c` |
 | Clima | SetWeatherFlags, WeatherTomorrow, TvWeatherForecast (el pronóstico de la tele) | `src/weather.c` |
-| Granja | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment, Sub_82A9A0 (pastar) | `src/farm.c` |
+| Granja | GetTileIndex, LoadDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment, CowEatsGrass (pastar) | `src/farm.c` |
 | Existencias y dinero | AddWood, AddGrass, AddPlayerHappiness, AddMoney | `src/stock.c` |
 | Jugador | ChangeStamina, HaveLunch | `src/stamina.c` |
-| Personas | FindMostLovedName, WifePregnanacyandChilds | `src/people.c` |
-| Calendario | LoadsDateNames | `src/calendar.c` |
-| Animales | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (la noche de los animales), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: gallinas, vacas, perro y caballo en el mapa al que entras) | `src/animals.c` |
+| Personas | FindMostLovedName, WifePregnancyAndChildren | `src/people.c` |
+| Calendario | LoadDateNames | `src/calendar.c` |
+| Animales | GetCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingAndStatus (la noche de los animales), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: gallinas, vacas, perro y caballo en el mapa al que entras) | `src/animals.c` |
 | Final | RanchMasteryCalculator (el puntaje final del rancho) | `src/ending.c` |
-| Comandos de los guiones de evento | 57 de los 90: cada cuadro de la vaca, la gallina y el perro (Event_UNKCowRelated, Event_UNKChickenRelated, Event_UNKDogRelated), saltos y pruebas (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), reloj (TimeRunning / Stopped, SetHour), jugador (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) y banderas | `src/eventcmds.c` |
-| Eventos | SetCCPoiner, ResetsCurrentCCStructureLong / Short, StartScriptAtTileInFront, StartEventScriptLong / Short (arrancar un guion de evento) | `src/events.c` |
-| Edición del mapa | EditTileonMap / EditTileonMapandsets0181, ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), ReadTileChange, DrawTileChange, SetTileTypeBlock, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
+| Comandos de los guiones de evento | 57 de los 90: cada cuadro de la vaca, la gallina y el perro (Event_CowFrame, Event_ChickenFrame, Event_DogFrame), saltos y pruebas (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), reloj (TimeRunning / Stopped, SetHour), jugador (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) y banderas | `src/eventcmds.c` |
+| Eventos | SetEventSlotPointer, ResetCurrentEventSlotLong / Short, StartScriptAtTileInFront, StartEventScriptLong / Short (arrancar un guion de evento) | `src/events.c` |
+| Edición del mapa | EditTileOnMap / EditFarmTile, ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), ReadTileChange, DrawTileChange, SetTileTypeBlock, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | DMA de video | AddProgrammedDMA (encolar una copia a VRAM / CGRAM para el próximo NMI), RemoveProgrammedDMA, DrawTilemapBlock2x2 (un bloque de 2x2 casillas de BG3), CopyLetterToVram (una letra) | `src/dma.c` |
 | Menús | SaveSlotMenuInputs, LoadSlotMenuInputs, StartMenuInputs, TitleMenuInputs, ListInputs (los botones de cada menú), ImmobileInputs (con un cuadro de texto abierto: acelerar, seguir, cerrar, elegir) | `src/menus.c` |
 | Partidas guardadas | SaveGameSlot (todo el formato de la partida), LoadGameSlotResume, CheckSRAMIntegrity (el comprobador también compara la RAM con batería) | `src/save.c` |
 | Sonido | SoundChipBusy / 7 (esperar "listo"), SoundStartCommand, PlaySoundEffect / 19 (efectos de sonido), SoundCommand0C, SoundCommand0B (órdenes al chip de sonido, comprobadas grabando sus respuestas) | `src/audio.c` |
 | Cuadro de texto | PrintTextFrame (ADDDDFFFF: la impresora, código por código), StartTextBox, CloseTextBox (CODE_8393F9), ClearTextBox (borrar el cuadro), BlinkTextBoxArrow / TextBoxArrow / DrawTextBoxArrow (la flecha de "hay más texto"), FindLetterGraphics / DrawLetter / AdvanceLetterCursor / BlinkTextCursor (letras), PrintDigit (números) | `src/text.c` |
 | Objetos | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites y los objetos que dejan las herramientas en el mapa) | `src/objects.c` |
-| Herramientas | GetTileContent, GetTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square, CheckToolSuccessForSound | `src/tools.c` |
+| Herramientas | GetTileContent, GetTileProperty, CheckToolSuccess, CalculateTileInFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square, CheckToolSuccessForSound | `src/tools.c` |
 | Usar las herramientas | Las 28 rutinas ToolUsed*: hoz, azada, martillo, hacha, sus versiones de oro, las cinco semillas, pintura, comida, medicina, poción, campana, ordeñadora, cepillo, habichuelas, semilla de gema, pluma azul, regadera, aspersor; UseToolInHand (usa el objeto en la mano: una rutina por objeto, por Tool_Used_Table) | `src/toolused.c` |
 
 Algunas cosas que se descubrieron por el camino (detalles en los
@@ -386,7 +386,7 @@ comentarios de cada archivo):
   Cualquier objeto que no esté en esa lista "funciona".
 - El sufijo del día es "st/nd/rd" solo para los días 1-3, así que el juego
   escribe "21th", "22th" y "23th".
-- **Un bug del juego original:** en CowFeedingandStatus, después de tirar el
+- **Un bug del juego original:** en CowFeedingAndStatus, después de tirar el
   dado de 1/16 para una vaca que quedó afuera, el registro X se queda en 8
   bits; si además está la bandera de cerca rota ($0196 bit $0400),
   `LDY.W #$0002` en $83:BDE1 se lee como instrucción de 2 bytes y el `00`

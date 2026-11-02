@@ -252,7 +252,7 @@ static void water_now(uint8_t *ram, const HmRegs *regs, int x, int y)
     HmRegs r = *regs;
     r.d = 0;
     r.a = wet; r.x = (uint16_t)(x * 16); r.y = (uint16_t)(y * 16);
-    hm_EditTileonMap(ram, &r);
+    hm_EditTileOnMap(ram, &r);
     uint8_t change = hm_bus_rd8(ram, props() + 4u * wet);
     r = *regs; r.d = 0;
     r.a = change; r.x = (uint16_t)(x * 16); r.y = (uint16_t)(y * 16);

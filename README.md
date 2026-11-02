@@ -323,23 +323,23 @@ SHA-256 `73a3aa87ddd5ce5df5ba51292316f42b6e128280179b0a1b11b4dcddc17d4163`.
 | Random numbers | GetRNG, RNGReturn0toA ("roll an n-sided die") | `src/rng.c` |
 | Arithmetic | DivisionUnsigned | `src/math.c` |
 | Weather | SetWeatherFlags, WeatherTomorrow, TvWeatherForecast (the TV forecast) | `src/weather.c` |
-| Farm | GetTileIndex, LoadsDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment, Sub_82A9A0 (grazing) | `src/farm.c` |
+| Farm | GetTileIndex, LoadDamageProbabilities, ClimateFarmDamageCheck, ClimateFarmDamagePrep, NightlyFarmTilesCheck, MonthlyFarmTilesCheck, CalculateFarmDevelopment, CowEatsGrass (grazing) | `src/farm.c` |
 | Stock and money | AddWood, AddGrass, AddPlayerHappiness, AddMoney | `src/stock.c` |
 | Player | ChangeStamina, HaveLunch | `src/stamina.c` |
-| People | FindMostLovedName, WifePregnanacyandChilds | `src/people.c` |
-| Calendar | LoadsDateNames | `src/calendar.c` |
-| Animals | GetsCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingandStatus (the animals' night), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: chickens, cows, dog and horse on the map you enter) | `src/animals.c` |
+| People | FindMostLovedName, WifePregnancyAndChildren | `src/people.c` |
+| Calendar | LoadDateNames | `src/calendar.c` |
+| Animals | GetCowPointer, GetChickenPointer, AddCowHappiness, CowFeedingAndStatus (the animals' night), AddNewCow, AddNewChicken, PlaceAnimalsOnMap (CODE_83C296: chickens, cows, dog and horse on the map you enter) | `src/animals.c` |
 | Ending | RanchMasteryCalculator (the final ranch score) | `src/ending.c` |
-| Event script commands | 57 of the 90: the cow's, the chicken's and the dog's every frame (Event_UNKCowRelated, Event_UNKChickenRelated, Event_UNKDogRelated), jumps and tests (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), clock (TimeRunning / Stopped, SetHour), player (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) and flags | `src/eventcmds.c` |
-| Events | SetCCPoiner, ResetsCurrentCCStructureLong / Short, StartScriptAtTileInFront, StartEventScriptLong / Short (start an event script) | `src/events.c` |
-| Map edits | EditTileonMap / EditTileonMapandsets0181, ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), ReadTileChange, DrawTileChange, SetTileTypeBlock, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
+| Event script commands | 57 of the 90: the cow's, the chicken's and the dog's every frame (Event_CowFrame, Event_ChickenFrame, Event_DogFrame), jumps and tests (JumptoInstruction, JumpifFlagSet / Equals / Between, JumpIfEqualsRNG, GetRNG), clock (TimeRunning / Stopped, SetHour), player (SetPlayerPosition / Direction, SetTransitionDest, UNKSetAnimation), slots (NewCCStructure, UNKDisableCCstruct, UNKSetsCC10, UNKCCchanges2) and flags | `src/eventcmds.c` |
+| Events | SetEventSlotPointer, ResetCurrentEventSlotLong / Short, StartScriptAtTileInFront, StartEventScriptLong / Short (start an event script) | `src/events.c` |
+| Map edits | EditTileOnMap / EditFarmTile, ChangeMapTile (CODE_81A688), QueueTileGraphicsDMA (CODE_81A6C1), ReadTileChange, DrawTileChange, SetTileTypeBlock, StartMapAnimation (CODE_81A5E1) | `src/mapedit.c` |
 | Video DMA | AddProgrammedDMA (queue a copy to VRAM / CGRAM for the next NMI), RemoveProgrammedDMA, DrawTilemapBlock2x2 (a 2x2 block of BG3 tiles), CopyLetterToVram (one letter) | `src/dma.c` |
 | Menus | SaveSlotMenuInputs, LoadSlotMenuInputs, StartMenuInputs, TitleMenuInputs, ListInputs (the buttons in each menu), ImmobileInputs (with a text box open: speed up, go on, close, choose) | `src/menus.c` |
 | Saved games | SaveGameSlot (the whole save layout), LoadGameSlotResume, CheckSRAMIntegrity (the checker also compares the battery RAM) | `src/save.c` |
 | Sound | SoundChipBusy / 7 (wait for "ready"), SoundStartCommand, PlaySoundEffect / 19 (sound effects), SoundCommand0C, SoundCommand0B (commands to the sound chip, checked by recording its answers) | `src/audio.c` |
 | Text box | PrintTextFrame (ADDDDFFFF: the printer, code by code), StartTextBox, CloseTextBox (CODE_8393F9), ClearTextBox (wipe the box), BlinkTextBoxArrow / TextBoxArrow / DrawTextBoxArrow (the "more text" arrow), FindLetterGraphics / DrawLetter / AdvanceLetterCursor / BlinkTextCursor (letters), PrintDigit (numbers) | `src/text.c` |
 | Objects | SpawnMapObject (CODE_81A500), CreateGameObject (CODE_858000), LoadGameObjectComponents, LoadSpriteComponent (sprites and the objects the tools leave on the map) | `src/objects.c` |
-| Tools | GetTileContent, GetTileProperty, CheckToolSuccess, CalculateTileinFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square, CheckToolSuccessForSound | `src/tools.c` |
+| Tools | GetTileContent, GetTileProperty, CheckToolSuccess, CalculateTileInFront, TileAtOffsetFromPlayer, PreCheckToolSuccess / Line / Square, CheckToolSuccessForSound | `src/tools.c` |
 | Using the tools | All 28 ToolUsed* routines: sickle, hoe, hammer, axe, their gold versions, the five seeds, paint, feed, medicine, potion, bell, milker, brush, beans, gem seed, blue feather, watering can, sprinkler; UseToolInHand (uses the item in hand: one routine per item, through Tool_Used_Table) | `src/toolused.c` |
 
 A few things found along the way (details in each file's comments):
@@ -368,7 +368,7 @@ A few things found along the way (details in each file's comments):
   and in the seasons the tile allows. Any item not on that list "works".
 - The date suffix is "st/nd/rd" only for days 1-3, so the game writes
   "21th", "22th" and "23th".
-- **A bug in the original game:** in CowFeedingandStatus, after a 1-in-16
+- **A bug in the original game:** in CowFeedingAndStatus, after a 1-in-16
   roll for a cow left outside, the X register stays 8-bit; if a broken-fence
   night flag ($0196 bit $0400) is also set, `LDY.W #$0002` at $83:BDE1 is
   decoded as a 2-byte instruction and the leftover `00` executes as `BRK`.
