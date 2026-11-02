@@ -18,7 +18,7 @@ $ProgressPreference = 'SilentlyContinue'      # Invoke-WebRequest is very slow w
 
 $root  = Split-Path -Parent $PSScriptRoot
 $tools = Join-Path $root 'build\tools'
-$old = Join-Path $root 'build\herramientas'   # the folder's name before 1.0 / su nombre antes de la 1.0
+$old = Join-Path $root 'build\herramientas'   # the folder's name before 0.2 / su nombre antes de la 0.2
 if ((Test-Path $old) -and -not (Test-Path $tools)) { Move-Item $old $tools
   # the native build's cache points at the old folder: built again
   foreach ($d in 'android\app\.cxx', 'android\app\build') { $p = Join-Path $root $d; if (Test-Path $p) { Remove-Item -Recurse -Force $p } }

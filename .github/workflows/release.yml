@@ -3,8 +3,8 @@
 # the source, tagged vVERSION. Nothing from the ROM is in them: each player
 # chooses their own copy of the game the first time.
 #
-# Started by pushing a tag vVERSION (git tag v1.0.0-beta; git push origin
-# v1.0.0-beta), or by hand from the Actions page (Release -> Run workflow);
+# Started by pushing a tag vVERSION (git tag v0.2.0-beta; git push origin
+# v0.2.0-beta), or by hand from the Actions page (Release -> Run workflow);
 # never by an ordinary push: a release is a decision. VERSION must match HM_NATIVE_VERSION in
 # native/native.h (the launcher shows it) and versionName in
 # android/app/build.gradle.
@@ -21,9 +21,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version, as in native/native.h (e.g. 1.0.0-beta)'
+        description: 'Version, as in native/native.h (e.g. 0.2.0-beta)'
         type: string
-        default: '1.0.0-beta'
+        default: '0.2.0-beta'
       prerelease:
         description: 'Mark it as a pre-release (beta)'
         type: boolean

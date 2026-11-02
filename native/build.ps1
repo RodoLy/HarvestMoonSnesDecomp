@@ -14,7 +14,7 @@ $ProgressPreference = 'SilentlyContinue'      # Invoke-WebRequest es lentisimo c
 
 $root  = Split-Path -Parent $PSScriptRoot
 $tools = Join-Path $root 'build\tools'
-$old = Join-Path $root 'build\herramientas'   # the folder's name before 1.0 / su nombre antes de la 1.0
+$old = Join-Path $root 'build\herramientas'   # the folder's name before 0.2 / su nombre antes de la 0.2
 if ((Test-Path $old) -and -not (Test-Path $tools)) { Move-Item $old $tools }
 New-Item -ItemType Directory -Force $tools | Out-Null
 

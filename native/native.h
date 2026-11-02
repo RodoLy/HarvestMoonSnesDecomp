@@ -1,6 +1,6 @@
 /* native.h — the native build's console glue (hw.c) and host (main.c). */
 #pragma once
-#define HM_NATIVE_VERSION "1.0.0-beta"
+#define HM_NATIVE_VERSION "0.2.0-beta"
 #include <stdbool.h>
 #include <stdint.h>
 

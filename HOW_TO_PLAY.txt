@@ -1,4 +1,4 @@
-Harvest Moon (SNES) - native build, v1.0.0 beta
+Harvest Moon (SNES) - native build, v0.2.0 beta
 ===============================================
 
 The game runs on its code rewritten in C. No ROM and nothing taken from
@@ -46,7 +46,7 @@ This is a beta: please report problems in the repository's Issues.
 
 ----------------------------------------------------------------------
 
-Harvest Moon (SNES) - version nativa, v1.0.0 beta
+Harvest Moon (SNES) - version nativa, v0.2.0 beta
 
 El juego corre sobre su codigo reescrito en C. No incluye la ROM ni nada
 sacado de ella: necesitas tu propia copia legal de Harvest Moon (USA). La

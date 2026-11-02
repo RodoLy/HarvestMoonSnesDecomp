@@ -44,7 +44,7 @@ fi
 CMAKE="$(command -v cmake 2>/dev/null)"
 if [ -z "$CMAKE" ]; then
   TOOLS="$ROOT/build/tools"
-  [ -d "$ROOT/build/herramientas" ] && [ ! -d "$TOOLS" ] && mv "$ROOT/build/herramientas" "$TOOLS"   # its name before 1.0
+  [ -d "$ROOT/build/herramientas" ] && [ ! -d "$TOOLS" ] && mv "$ROOT/build/herramientas" "$TOOLS"   # its name before 0.2
   NAME="cmake-3.31.10-macos-universal"
   SHA="be9f3faeeaf7921cc2d77cea711dd5e6f72c63af2810cacd9205b3ce8d1593c9"
   CMAKE="$TOOLS/$NAME/CMake.app/Contents/bin/cmake"
