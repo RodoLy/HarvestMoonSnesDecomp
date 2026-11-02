@@ -152,6 +152,7 @@ static bool title_menu_active(void)
 {
   return g_ram[HM_INPUT_STATE] == 4 && g_ram[0x95] == 5 && title_on_screen();
 }
+bool mods_title_ready(void) { return g_ppu && title_menu_active(); }
 static void word_image(int r, uint8_t out[16][96])
 {
   for (int c = 0; c < 12; c++)

@@ -555,4 +555,4 @@ HM_ROM=ruta/rom.sfc tools/check.sh 2000 10
 
 Para cada rutina nueva: escribirla en `src/`, registrarla en
 `src/hm_decomp.c` (con su rango de entradas para la prueba al azar),
-compilar y comprobar. Ver `DECOMPILACION.md`.
+compilar y comprobar. Ver `DECOMPILATION.md`.

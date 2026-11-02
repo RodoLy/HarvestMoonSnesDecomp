@@ -1,7 +1,7 @@
 // The app: the game's C (native/, built by CMake with the NDK) and SDL3, whose
 // source folder is given by HM_SDL3_SOURCE_DIR (or -PsdlDir=...): its C is
 // built with the game and its Java (SDLActivity...) goes into the app.
-// compilar_android.bat sets all of this up.
+// build_android.bat sets all of this up.
 plugins {
     id 'com.android.application'
 }

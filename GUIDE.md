@@ -1,6 +1,6 @@
 # Guide: Harvest Moon (SNES) from the inside
 
-**English** · [Español](GUIA.md)
+**English** · [Español](GUIDE.es.md)
 
 This guide explains, assuming nothing, **how the game works on the inside**,
 from what we find while decompiling it. It is updated with every new

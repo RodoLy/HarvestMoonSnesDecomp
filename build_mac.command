@@ -7,7 +7,7 @@
 #
 # Needs Apple's command line tools (the C compiler); if they are missing it
 # asks macOS to install them. The first time it downloads CMake (50 MB,
-# checked by its SHA-256, into build/herramientas) unless you have one, and
+# checked by its SHA-256, into build/tools) unless you have one, and
 # SDL3's source (window, sound, controls). Then it builds the game, a few
 # minutes the first time, and leaves HarvestMoonNative and
 # "Harvest Moon.command" (double-click to play) in this folder.
@@ -43,7 +43,8 @@ fi
 # 2. CMake: the one installed (Homebrew...), or a copy of its own
 CMAKE="$(command -v cmake 2>/dev/null)"
 if [ -z "$CMAKE" ]; then
-  TOOLS="$ROOT/build/herramientas"
+  TOOLS="$ROOT/build/tools"
+  [ -d "$ROOT/build/herramientas" ] && [ ! -d "$TOOLS" ] && mv "$ROOT/build/herramientas" "$TOOLS"   # its name before 1.0
   NAME="cmake-3.31.10-macos-universal"
   SHA="be9f3faeeaf7921cc2d77cea711dd5e6f72c63af2810cacd9205b3ce8d1593c9"
   CMAKE="$TOOLS/$NAME/CMake.app/Contents/bin/cmake"

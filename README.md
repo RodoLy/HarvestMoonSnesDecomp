@@ -98,7 +98,7 @@ have one, and SDL3's source; the build takes a few minutes.
    PC to keep playing yours).
 
 Or build the APK yourself on a Windows PC: double-click
-**`compilar_android.bat`**. The first time it downloads a Java JDK,
+**`build_android.bat`**. The first time it downloads a Java JDK,
 Android's command-line tools and the SDK pieces the build needs (about 2.5
 GB in all, checked by their checksums), SDL3's source and Gradle; it shows
 Android's license (answer `y`). Then it builds **`HarvestMoon.apk`** (10-20
@@ -114,6 +114,8 @@ back button opens the launcher (or goes back in a menu). With mouse
 controls on, a tap on the field is a click, a drag walks after the finger
 and a long press is a right click.
 
+![Touch controls on a phone](docs/screenshots/android_touch.png)
+
 **Two screens (the AYN Thor).** On a device with a second screen, the
 Harvest Moon 64-style pause menu stays on the lower screen while you play:
 live (the time, your tools, the hearts, the farm, the animals) and used by
@@ -123,6 +125,8 @@ off in Controls → Touch → Second screen (the option only shows when the
 device has another screen). On the Thor, launch the app on
 the **top screen** (long-press it → Screen Launch → Top).
 
+![The AYN Thor's two screens](docs/screenshots/android_two_screens.png)
+
 ### How to play it on Linux
 
 Download **`HarvestMoon-…-Linux.tar.gz`** (x86_64), unpack it and run
@@ -131,9 +135,11 @@ build it yourself, see [How the native build works](#how-the-native-build-works)
 
 ### A launcher in the look of the game
 
-A farm at night under the harvest moon, wooden frames, parchment and the
-pointing hand, all drawn at the SNES's resolution, so its pixels are the
-game's size. Keyboard, gamepad or mouse, in **English (the default), Spanish or Italian**. In the game it opens with **Esc** (or L3 / Guide on a gamepad,
+Wooden frames, parchment and the pointing hand, all drawn at the SNES's
+resolution, so its pixels are the game's size. Once your ROM is chosen it
+opens at the start **over the game's own title screen** (drawn by the game
+from your ROM, its music playing); before that, over a farm at night under
+the harvest moon. Keyboard, gamepad or mouse, in **English (the default), Spanish or Italian**. In the game it opens with **Esc** (or L3 / Guide on a gamepad,
 or OPTIONS on the title screen), with the game paused and the music
 playing on.
 
@@ -246,6 +252,10 @@ music keeps playing.
 |---|---|---|
 | ![OPTIONS](docs/screenshots/title_options.png) | ![Improvements](docs/screenshots/improvements.png) | ![Cheats](docs/screenshots/cheats.png) |
 
+| Your wife offers to help |
+|---|
+| ![Your wife helps](docs/screenshots/wife_help.png) |
+
 **Everything starts off**, so the game is exactly the console's: turn on what you like in Improvements and Options.
 
 ### Mods from the community
@@ -256,6 +266,8 @@ folder inside `mods/`, next to the program. The launcher's **Mods** page
 lists them, with their author and description, and turns each one on or
 off; your ROM file is never changed (the mods are applied in memory when
 the game starts). How to make one: [docs/MODS.md](docs/MODS.md).
+
+![The Mods page](docs/screenshots/mods.png)
 
 ### Controls
 
@@ -388,8 +400,8 @@ A few things found along the way (details in each file's comments):
 - `tools/import_decomp_names.py`, `tools/decomp_overrides.py` — helpers.
 - `scripts/` — scripted playthroughs used by the checks.
 - `GUIDE.md` — **a guide to how the game works inside**, written for
-  someone new to it, with everything found so far (Spanish: `GUIA.md`).
-- `DECOMPILACION.md` — the method, explained. `ESTADO.md` — status and
+  someone new to it, with everything found so far (Spanish: `GUIDE.es.md`).
+- `DECOMPILATION.md` — the method, explained. `STATUS.md` — status and
   notes. (Both in Spanish.)
 
 ## Usage

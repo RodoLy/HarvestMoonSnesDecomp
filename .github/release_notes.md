@@ -17,7 +17,7 @@
 - **Mac** may say it is *from an unidentified developer*: right-click `Harvest Moon.command` → **Open** → **Open** (or, in Terminal, `xattr -dr com.apple.quarantine` on the folder). / Mac puede decir que es *de un desarrollador no identificado*: clic derecho en `Harvest Moon.command` → **Abrir** → **Abrir** (o, en Terminal, `xattr -dr com.apple.quarantine` sobre la carpeta).
 - **Android** asks to allow installing apps from the file manager or browser you open the APK with. On the AYN Thor, launch the app on the top screen: the pause menu stays on the lower one. / **Android** pide permitir instalar apps desde el explorador o navegador con que abras el APK. En la AYN Thor, abre la app en la pantalla de arriba: el menú de pausa se queda en la de abajo.
 
-Prefer to build it yourself? The source and the build scripts (`build.bat`, `build_mac.command`, `compilar_android.bat`) are in the repository. / ¿Prefieres compilarlo tú? El código y los scripts están en el repositorio.
+Prefer to build it yourself? The source and the build scripts (`build.bat`, `build_mac.command`, `build_android.bat`) are in the repository. / ¿Prefieres compilarlo tú? El código y los scripts están en el repositorio.
 
 ### What's in it / Qué trae
 - The whole game in C, with the console's picture and sound. / Todo el juego en C, con la imagen y el sonido de la consola.

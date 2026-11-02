@@ -100,7 +100,7 @@ tienes, y el código de SDL3; compilar tarda unos minutos.
    copiar desde la PC para seguir con tu partida).
 
 O compila el APK tú en una PC con Windows: doble clic en
-**`compilar_android.bat`**. La primera vez descarga un JDK de Java, las
+**`build_android.bat`**. La primera vez descarga un JDK de Java, las
 herramientas de línea de comandos de Android y las piezas del SDK que
 hacen falta (unos 2.5 GB, revisados por sus sumas de verificación), el
 código de SDL3 y Gradle; muestra la licencia de Android (contesta `y`).
@@ -118,6 +118,8 @@ botón de atrás abre el launcher (o regresa en un menú). Con los controles
 con ratón activados, un toque en el campo es un clic, arrastrar camina
 tras el dedo y mantener presionado es clic derecho.
 
+![Controles táctiles en un teléfono](docs/screenshots/android_touch.png)
+
 **Dos pantallas (la AYN Thor).** En un equipo con segunda pantalla, el
 menú de pausa estilo Harvest Moon 64 se queda en la pantalla de abajo
 mientras juegas: en vivo (la hora, tus herramientas, los corazones, la
@@ -128,6 +130,8 @@ Táctil → Segunda pantalla (la opción solo aparece si el equipo tiene otra
 pantalla). En la Thor, abre la app en la **pantalla de
 arriba** (mantén presionada la app → Screen Launch → Top).
 
+![Las dos pantallas de la AYN Thor](docs/screenshots/android_two_screens.png)
+
 ### Cómo jugarlo en Linux
 
 Descarga **`HarvestMoon-…-Linux.tar.gz`** (x86_64), descomprímelo y
@@ -137,9 +141,11 @@ Para compilarlo tú, ver
 
 ### Launcher con el aspecto del juego
 
-Una granja de noche bajo la luna de la cosecha, marcos de madera, pergamino
-y la mano que señala, todo dibujado a la resolución del SNES, así que sus
-píxeles son del tamaño de los del juego. Se maneja con teclado, mando o
+Marcos de madera, pergamino y la mano que señala, todo dibujado a la
+resolución del SNES, así que sus píxeles son del tamaño de los del juego.
+Una vez elegida tu ROM, al iniciar se abre **sobre la pantalla de título
+del propio juego** (la dibuja el juego con tu ROM, con su música); antes
+de eso, sobre una granja de noche bajo la luna de la cosecha. Se maneja con teclado, mando o
 ratón, en **inglés (por defecto), español o italiano**. En el juego se abre con **Esc**
 (o L3 / Guía en el mando, o OPTIONS en el título) y el juego queda en pausa
 mientras la música sigue.
@@ -259,6 +265,10 @@ tu ROM. La música sigue sonando.
 |---|---|---|
 | ![OPTIONS](docs/screenshots/title_options.png) | ![Mejoras](docs/screenshots/improvements.png) | ![Trucos](docs/screenshots/cheats.png) |
 
+| Tu esposa te ofrece ayuda |
+|---|
+| ![Tu esposa te ayuda](docs/screenshots/wife_help.png) |
+
 **Todo viene apagado**, así que el juego es exactamente el de la consola: activa lo que quieras en Mejoras y Opciones.
 
 ### Mods de la comunidad
@@ -270,6 +280,8 @@ hacking) en una carpeta dentro de `mods/`, junto al programa. La página
 desactiva cada uno; tu archivo de ROM nunca se modifica (los mods se
 aplican en memoria al iniciar el juego). Cómo hacer uno:
 [docs/MODS.es.md](docs/MODS.es.md).
+
+![La página Mods](docs/screenshots/mods.png)
 
 ### Controles
 
@@ -408,10 +420,10 @@ comentarios de cada archivo):
 - `tools/progress.py` — calcula el porcentaje de arriba.
 - `tools/import_decomp_names.py`, `tools/decomp_overrides.py` — herramientas.
 - `scripts/` — recorridos automáticos usados por las pruebas.
-- `GUIA.md` — **una guía de cómo funciona el juego por dentro**, para
+- `GUIDE.es.md` — **una guía de cómo funciona el juego por dentro**, para
   quien no sabe nada de esto, con todo lo descubierto hasta ahora (en
   inglés: `GUIDE.md`).
-- `DECOMPILACION.md` — el método explicado. `ESTADO.md` — estado y notas.
+- `DECOMPILATION.md` — el método explicado. `STATUS.md` — estado y notas.
 
 ## Uso
 
@@ -445,7 +457,7 @@ cuadro siguiente pasa por `hm_nmi`, que dibuja el cuadro, lee los controles
 y deja correr el chip de sonido; las rutinas que nunca vuelven (RESET, el
 título, las demos, GameLoop…) dejan en `g_hm_next` a dónde saltan y `main`
 llama a la siguiente. Los detalles están en la sección 5.34 de la
-[guía](GUIA.md).
+[guía](GUIDE.es.md).
 
 ```
 cmake -S native -B build/native
