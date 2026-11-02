@@ -683,7 +683,9 @@ static bool seeds_hud(uint32_t *px, int w)
  *     it. The game ships each one itself, so money and counts are its
  *     own. It stops when the bag is empty, at an item the box does not
  *     take, when a throw shipped nothing, or with the arrows.
- * The bag goes with the diary (src/save.c). */
+ * The bag goes with the diary (src/save.c). It is part of the pause menu
+ * (on only with it): the menu's Bag tab shows it and takes out the one
+ * chosen (mods_bag_choose: moved to the end, then out as above). */
 #define MAP_OBJECTS_AT 0x0B4E6          /* 10 x 16 bytes: +0 flags, +2 state, +3 item */
 #define GAME_STATE     0x000D2
 static struct {
@@ -734,13 +736,22 @@ static bool bag_take(void)
   hm_wr16(g_ram, HM_PLAYER_ACTION, 4);
   return true;
 }
+static bool bag_on(void) { return g_cfg.crop_bag && g_cfg.pause_menu; }   /* part of the pause menu */
+static int s_bag_pending = -1;          /* the pause menu chose one to take out */
+int mods_bag_items(uint8_t out[9]) { int n = bag_on() ? bag_count() : 0; for (int i = 0; i < 9; i++) out[i] = i < n ? g_hm_bag[i] : 0; return n; }
+bool mods_bag_choose(int i)
+{
+  if (!bag_on() || i < 0 || i >= bag_count()) return false;
+  s_bag_pending = i;
+  return true;
+}
 uint16_t mods_bag_pad(uint16_t pad, bool key)
 {
-  g_hm_bag_on = g_cfg.crop_bag;
+  g_hm_bag_on = bag_on();
   bool press = key && !s_bag.prev;
   s_bag.prev = key;
-  if (!g_cfg.crop_bag || !hm_diary_loaded(g_ram) || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE ||
-      g_ram[HM_INPUT_STATE] != 1) { s_bag.ship = 0; return pad; }
+  if (!bag_on() || !hm_diary_loaded(g_ram) || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE ||
+      g_ram[HM_INPUT_STATE] != 1) { s_bag.ship = 0; s_bag_pending = -1; return pad; }
   uint16_t act = player_action();
   uint32_t money = shipped_money();
   bool shipped_now = money > s_bag.shipped;
@@ -755,12 +766,12 @@ uint16_t mods_bag_pad(uint16_t pad, bool key)
     if (++s_bag.wait > 180) { s_bag.ship = 0; return pad; }        /* never forever */
     switch (s_bag.ship) {
     case 1:                                    /* hands free: the next one out */
-      if (holding() || act != 0) return pad;
+      if (holding() || (act != 0 && act != 9)) return pad;
       if (!bag_count() || !at_box() || !sellable(g_hm_bag[bag_count() - 1])) { s_bag.ship = 0; return pad; }
       bag_take(); s_bag.ship = 2; s_bag.wait = 0;
       return pad;
     case 2:                                    /* holding it: throw it into the box */
-      if (!holding() || act != 0) return pad;
+      if (!holding() || (act != 0 && act != 9)) return pad;
       if (!at_box()) { s_bag.ship = 0; return pad; }               /* it stays in the hands */
       s_bag.ship = 3; s_bag.wait = 0;
       return pad | B_A;
@@ -772,17 +783,29 @@ uint16_t mods_bag_pad(uint16_t pad, bool key)
     }
     return pad;
   }
+  if (s_bag_pending >= 0) {                 /* chosen in the pause menu: that one to the end, out */
+    int i = s_bag_pending, n = bag_count();
+    if (holding() || (act != 0 && act != 9)) return pad;    /* wait until the hands are free */
+    s_bag_pending = -1;
+    if (i < n) {
+      uint8_t it = g_hm_bag[i];
+      for (int j = i; j < n - 1; j++) g_hm_bag[j] = g_hm_bag[j + 1];
+      g_hm_bag[n - 1] = it;
+      bag_take();
+    }
+    return pad;
+  }
   if (!press) return pad;
   if (holding()) {
     if (act <= 2) bag_put();
-  } else if (act == 0 && bag_count()) {
+  } else if ((act == 0 || act == 9) && bag_count()) {
     if (at_box()) { s_bag.ship = 1; s_bag.wait = 0; }
     else bag_take();
   }
   return pad;
 }
 /* small pictures of what goes in the bag (12 x 12) */
-static void bag_icon(int x, int y, uint8_t it)
+void mods_bag_icon(int x, int y, uint8_t it)
 {
   static const char *const TURNIP[12] = { "...g..g.....", "....gggg....", "...gggggg...", "....gggg....",
     "....pppp....", "...pwwwwp...", "..wwwwwwww..", "..wwwwwwww..", "..wwwwwwww..", "...wwwwww...", ".....ww.....", "......w....." };
@@ -817,14 +840,14 @@ static void bag_icon(int x, int y, uint8_t it)
 static bool bag_hud(uint32_t *px, int w)
 {
   int n = bag_count();
-  if (!g_cfg.crop_bag || !n || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE || !hm_diary_loaded(g_ram)) return false;
+  if (!bag_on() || !n || g_ram[HM_MAP_ID] >= HM_MAP_FIRST_PICTURE || !hm_diary_loaded(g_ram)) return false;
   if (!px) return true;
   ui_target(px, w, 224);
   int x = (w - 256) / 2 + 6, y = seeds_hud(NULL, w) ? 34 : 6;
   ui_frame(x, y, 8 + 9 * 18, 26, C_PAPER);
   for (int i = 0; i < 9; i++) {
     int ix = x + 4 + i * 18;
-    if (i < n) bag_icon(ix + 3, y + 7, g_hm_bag[i]);
+    if (i < n) mods_bag_icon(ix + 3, y + 7, g_hm_bag[i]);
     else ui_rect(ix + 7, y + 12, 4, 2, C_PAPER_LINE);
   }
   return true;

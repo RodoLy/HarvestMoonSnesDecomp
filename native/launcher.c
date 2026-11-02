@@ -365,11 +365,14 @@ static void build(void)
       choice(V_DAYLEN, "Longer days", "The game clock runs slower. Normally a day (6:00 to 18:00) lasts 3 real minutes.",
              5, T("Off"), T("1.5x (4.5 minutes)"), T("2x (6 minutes)"), T("3x (9 minutes)"), T("4x (12 minutes)"));
       toggle(V_PAUSE, "Pause menu (Harvest Moon 64 style)", "M key or right-stick click (R3): tools, the girls' hearts and your farm's status. The game is paused while it is open.");
+      { Item *bag = add(K_TOGGLE, V_BAG, T("Crop bag"), c->pause_menu
+          ? T("Part of the pause menu. Q (left trigger, middle mouse button): what you carry goes into a bag of 9; with free hands, the last one comes out (or choose it in the menu's Harvest tab). At the shipping box, it ships them all, one by one.")
+          : T("Part of the pause menu: turn the pause menu on first."));
+        bag->dim = !c->pause_menu; }
       toggle(V_TITLEOPT, "OPTIONS on the title screen", "Adds a fourth entry, OPTIONS, below HOW TO PLAY, which opens this options menu.");
       toggle(V_ENDLESS, "Endless game", "The game no longer stops after Year 3: you watch the ending, then wake up on Summer 30 and keep farming through Year 4, 5 and beyond.");
       toggle(V_CROPS, "Walk through crops", "Crops on the farm no longer block your way, so you can reach the middle of a 3x3 patch to water it. They sway as you pass.");
       toggle(V_SEEDS, "One seed at a time", "A seed bag is 9 seeds: each use sows only the tile in front of you, in any order you like. The bag and the stamina go at the 9th seed.");
-      toggle(V_BAG, "Crop bag", "Q (left trigger, middle mouse button): what you carry goes into a bag of 9; with free hands, the last one comes out. At the shipping box, it ships them all, one by one.");
       toggle(V_WIDESCREEN, "Widescreen (16:9)", "Shows more of the map at the sides instead of black bars. At a map's edge, in small rooms and on the title screen it looks like the original (4:3).");
     } else {
       toggle(V_MONEY, "Infinite money", "Keeps your money at the most the game allows: 9,999,990 G.");

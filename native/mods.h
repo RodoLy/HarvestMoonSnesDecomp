@@ -24,6 +24,11 @@ void mods_mouse(int fx, int fy, int button, bool down);
 uint16_t mods_mouse_pad(uint16_t pad);
 /* the crop bag: key = its key is down (Q, left trigger, middle button) */
 uint16_t mods_bag_pad(uint16_t pad, bool key);
+/* for the pause menu's Bag tab: the items (0 = empty) and how many; take
+ * item i out when the game goes on; its 12x12 picture */
+int mods_bag_items(uint8_t out[9]);
+bool mods_bag_choose(int i);
+void mods_bag_icon(int x, int y, uint8_t it);
 void mods_ws_margins(int *left, int *right);
 enum { WS_BUDGET = 43 };
 

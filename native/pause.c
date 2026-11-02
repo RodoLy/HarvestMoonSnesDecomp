@@ -36,12 +36,15 @@
 #include "ui.h"
 #include "i18n.h"
 #include "pause.h"
+#include "config.h"
+#include "mods.h"
 
 enum { GRID_COLS = 8, GRID_ROWS = 3, LW = 256, LH = 224 };
 
 static struct {
   bool open;
-  int tab;               /* 0 tools, 1 hearts, 2 farm */
+  int tab;               /* 0 tools, 1 hearts, 2 farm, 3 the crop bag (when on) */
+  int bx;                /* the bag's cursor, 0-8 */
   int cx, cy;            /* tools cursor: cy -1 = the top slots (cx 0 hand, 1 bag) */
   char message[96];      /* the tools page's feedback line */
 } s;
@@ -136,8 +139,10 @@ static void swap_hand_bag(void)
   say(T("Swapped hand and backpack."));
 }
 
+static void bag_take_out(void);
 static void action_a(void)
 {
+  if (s.tab == 3) { bag_take_out(); return; }
   if (s.tab != 0) return;
   if (!player_free()) { say(T("You can't change tools right now.")); return; }
   if (s.cy < 0) { if (g_ram[HM_TOOL_BACKPACK] || g_ram[HM_TOOL_SELECTED]) swap_hand_bag(); return; }
@@ -282,12 +287,13 @@ static void draw_top(void)
   ui_rect(171, 42, (int)(74 * st / mx), 3, st * 4 < mx ? C_RED : C_GREEN);
 }
 
-static const char *kTabs[3] = { "Tools", "Hearts", "Farm" };
+static const char *kTabs[4] = { "Tools", "Hearts", "Farm", "Harvest" };
+static int ntabs(void) { return g_cfg.crop_bag ? 4 : 3; }   /* the bag: only with the crop bag */
 
 static void draw_tabs(void)
 {
   int x = 8;
-  for (int t = 0; t < 3; t++) {
+  for (int t = 0; t < ntabs(); t++) {
     const char *name = T(kTabs[t]);
     int w = ui_text_w(UI_SMALL, name) + 12;
     bool on = t == s.tab;
@@ -348,6 +354,48 @@ static void draw_tools(int x, int y)
   } else {
     ui_text(UI_SMALL, rx, y + 38, T("(nothing)"), C_INK_SOFT);
   }
+}
+
+/* the crop bag (mods.c): its 9 places; the one under the cursor */
+static const char *bag_name(uint8_t it, char *buf, size_t n)
+{
+  static const char *const names[8] = { "Corn", "Tomato", "Potato", "Turnip", "Egg", "Milk (S)", "Milk (M)", "Milk (L)" };
+  if (it >= 0x10 && it <= 0x17) return T(names[it - 0x10]);
+  snprintf(buf, n, "%s", T("Item"));
+  return buf;
+}
+static unsigned bag_price(uint8_t it) { return g_rom ? g_rom[0x9FDE + 2u * it + 1] * 10u : 0; }  /* $81:9FDE */
+static void draw_bag(int x, int y)
+{
+  uint8_t items[9];
+  int n = mods_bag_items(items);
+  ui_text(UI_SMALL, x, y + 7, T("Crop bag"), C_INK_SOFT);
+  for (int i = 0; i < 9; i++) {
+    int sx = x + i * 26, sy = y + 12;
+    bool sel = s.bx == i;
+    ui_rect(sx, sy, 24, 24, sel ? C_GOLD_DARK : C_PAPER_LINE);
+    ui_rect(sx + 1, sy + 1, 22, 22, sel ? C_SELECT : (i < n ? C_PAPER : C_PAPER_DARK));
+    if (i < n) mods_bag_icon(sx + 6, sy + 6, items[i]);
+  }
+  int ty = y + 52;
+  if (s.bx < n) {
+    char buf[48];
+    ui_text(UI_BODY, x, ty, bag_name(items[s.bx], buf, sizeof buf), C_INK);
+    unsigned p = bag_price(items[s.bx]);
+    if (p) { char c[48]; snprintf(c, sizeof c, T("Sells for %u G"), p); ui_text(UI_SMALL, x, ty + 12, c, C_INK_SOFT); }
+  } else {
+    ui_text(UI_BODY, x, ty, n ? T("(nothing)") : T("The bag is empty."), C_INK_SOFT);
+  }
+  char c[16]; snprintf(c, sizeof c, "%d / 9", n);
+  ui_text_r(UI_SMALL, x + 232, y + 7, c, C_INK_SOFT);
+}
+static void bag_take_out(void)
+{
+  uint8_t items[9];
+  int n = mods_bag_items(items);
+  if (s.bx >= n) { say(n ? T("(nothing)") : T("The bag is empty.")); return; }
+  if (!player_free()) { say(T("You can't take things out right now.")); return; }
+  if (mods_bag_choose(s.bx)) s.open = false;            /* out as the game goes on */
 }
 
 static uint32_t heart_colour(unsigned v)
@@ -419,6 +467,11 @@ static void draw_textbox(void)
     char help[128];
     snprintf(help, sizeof help, "%s    %s %s", T("X  hand ↔ backpack"), T("Y  put away in"), T("the tool shed"));
     ui_text(UI_SMALL, x, 205, help, C_INK_SOFT);
+  } else if (s.tab == 3) {
+    if (s.message[0]) ui_text(UI_BODY, x, 193, s.message, C_GREEN_DARK);
+    else if (!player_free()) ui_text(UI_BODY, x, 193, T("(only while you can move)"), C_RED);
+    else ui_text(UI_BODY, x, 193, T("A  take it out"), C_INK);
+    ui_text(UI_SMALL, x, 205, T("Q  put what you carry in / take the last out"), C_INK_SOFT);
   } else if (s.tab == 1) {
     ui_text(UI_SMALL, x, 192, T("Marks: 200 heart event · 450 first child ·"), C_INK);
     ui_text(UI_SMALL, x, 201, T("650 second child · maximum 999"), C_INK);
@@ -444,6 +497,7 @@ static void render(void)
   ui_frame(4, 68, 248, 106, C_PAPER);
   if (s.tab == 0) draw_tools(12, 72);
   else if (s.tab == 1) draw_hearts(10, 73);
+  else if (s.tab == 3) draw_bag(12, 73);
   else draw_farm(12, 73);
   draw_textbox();
 }
@@ -451,7 +505,8 @@ static void render(void)
 /* ── Input ───────────────────────────────────────────────────────────── */
 static void move(int dx, int dy)
 {
-  if (s.tab != 0) { if (dx) s.tab = (s.tab + 3 + dx) % 3; return; }
+  if (s.tab == 3) { if (dx) { s.bx = (s.bx + 9 + dx) % 9; s.message[0] = 0; } return; }
+  if (s.tab != 0) { if (dx) s.tab = (s.tab + ntabs() + dx) % ntabs(); return; }
   s.message[0] = 0;
   if (dy) {
     s.cy += dy;
@@ -465,7 +520,7 @@ static void move(int dx, int dy)
     s.cx = (s.cx + cols + dx) % cols;
   }
 }
-static void tab(int dir) { s.tab = (s.tab + 3 + dir) % 3; s.message[0] = 0; }
+static void tab(int dir) { s.tab = (s.tab + ntabs() + dir) % ntabs(); s.message[0] = 0; }
 
 void pause_action(char a)
 {
@@ -488,6 +543,7 @@ void pause_open(void)
 {
   s.open = true;
   s.message[0] = 0;
+  if (s.tab >= ntabs()) s.tab = 0;
   if (s.cy >= GRID_ROWS || s.cy < -1) s.cy = 0;
 }
 bool pause_is_open(void) { return s.open; }
