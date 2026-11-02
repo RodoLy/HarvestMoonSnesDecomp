@@ -80,6 +80,13 @@ void hm_SUB_818000(uint8_t *ram, HmRegs *r)
   hm_SpawnMapObject(ram, r);
   hm_rtl(ram, r);
   r->a = 1; r->x = 0; r->y = 0;
+  /* the native build's "walk through crops": the player can stand closer
+   * to a crop than the game expects, so the tile in front (16 pixels
+   * ahead) may not be the one A looked at (7 pixels ahead, PlayerKeyA):
+   * then the crop was picked from one tile and the other one changed (the
+   * crop could be picked again and again). The change goes where A
+   * looked. */
+  if (g_hm_crops_passable) { r->a = 0; r->x = 7; r->y = 7; }
   hm_jsl(ram, r, 0x8046, 0x81);
   hm_CalculateTileinFront(ram, r);
   hm_rtl(ram, r);

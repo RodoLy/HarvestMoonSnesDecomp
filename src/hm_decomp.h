@@ -275,7 +275,8 @@ extern void (*g_hm_frame_hook)(uint8_t *ram);
  *   g_hm_year_suffix: the diary's year ordinal past the game's three
  *     ("4th", "5th"... $82:F298);
  *   g_hm_crops_passable: the player walks through the crops of the farm
- *     (CFFFF, the map's collision: a crop tile no longer blocks);
+ *     (CFFFF, the map's collision: a crop tile no longer blocks; and
+ *     SUB_818000 changes the tile A looked at, 7 pixels ahead);
  *   g_hm_single_seed: a seed bag sows one tile at a time, 9 per bag
  *     (the seeds' ToolUsed; g_hm_seeds_used, grass, corn, tomato, potato,
  *     turnip: the seeds gone from each open bag, kept in the saved game's
