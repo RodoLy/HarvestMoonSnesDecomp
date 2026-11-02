@@ -53,7 +53,7 @@ recompilación y un launcher nuevo.
 > favor no pidas ROMs.
 
 **[⬇ Descargar la última versión](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/latest)**:
-lista para jugar, para Windows, Mac, Linux y Android.
+lista para jugar, para Windows, Mac, Linux y Android. Las novedades: [CHANGELOG.md](CHANGELOG.md#cambios).
 
 > [!NOTE]
 > **La primera vez tu computadora o teléfono te va a advertir: es normal.**

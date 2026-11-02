@@ -52,7 +52,7 @@ a new launcher.
 > it. Please don't ask for ROMs.
 
 **[⬇ Download the latest version](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/latest)**:
-ready to play, for Windows, Mac, Linux and Android.
+ready to play, for Windows, Mac, Linux and Android. What's new: [CHANGELOG.md](CHANGELOG.md).
 
 > [!NOTE]
 > **The first time, your computer or phone will warn you: that is expected.**
