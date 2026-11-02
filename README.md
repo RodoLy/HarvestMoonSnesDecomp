@@ -209,6 +209,10 @@ music keeps playing.
 |---|---|---|
 | ![Tools](docs/screenshots/pause_tools.png) | ![Hearts](docs/screenshots/pause_hearts.png) | ![Farm](docs/screenshots/pause_farm.png) |
 
+| Animals | The crop bag (in Inventory) |
+|---|---|
+| ![Animals](docs/screenshots/pause_animals.png) | ![Crop bag](docs/screenshots/crop_bag.png) |
+
 ### The other improvements (the recompilation's)
 
 - **Endless game** *(off by default)* — you watch the whole Year 3 ending,
@@ -243,7 +247,7 @@ music keeps playing.
   offers to help on the farm for a day, three days or a week (after a
   "no", not again that day). Those mornings (6:00-11:00) she fills
   troughs in the barn and the coop and waters the seeds and plants not
-  watered yet, at most half of the work, walking the farm in her own pictures (talk to her: her usual
+  watered yet (each one as long as you take with the can), at most half of the work, walking the farm in her own pictures (talk to her: her usual
   lines) and hopping over the fences; away from the farm the work gets done
   all the same, at the same pace (the clock stops indoors, and so does she). At 11:00 she
   goes to her midday chores, as in the game (Maria, Nina and Ellen on the
@@ -399,6 +403,9 @@ A few things found along the way (details in each file's comments):
 ## Layout
 
 - `src/` — the rewritten routines and the checker (`hm_decomp.c/.h`).
+  `src/hm_vars.h` names, once, every variable of the game that several
+  files use (with a note on what it is for); `src/hm_regs.h` the console's
+  registers. Each routine file names at its top the few places only it uses.
 - `native/` — the native build: the game run on the rewritten routines
   alone (`main.c`: the window, the pads, the sound; `hw.c`: the console's
   chips around the C).

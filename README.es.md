@@ -218,6 +218,10 @@ tu ROM. La música sigue sonando.
 |---|---|---|
 | ![Herramientas](docs/screenshots/pause_tools.png) | ![Corazones](docs/screenshots/pause_hearts.png) | ![Granja](docs/screenshots/pause_farm.png) |
 
+| Animales | La mochila de cosechas (en Inventario) |
+|---|---|
+| ![Animales](docs/screenshots/pause_animals.png) | ![Mochila de cosechas](docs/screenshots/crop_bag.png) |
+
 ### Las demás mejoras (las de la recompilación)
 
 - **Juego sin fin** *(apagado por defecto)* — ves el final del año 3
@@ -254,7 +258,7 @@ tu ROM. La música sigue sonando.
   te ofrece ayuda en la granja por un día, tres días o una semana (si le
   dices que no, ese día ya no vuelve a preguntar). Esas mañanas (6:00-11:00)
   llena comederos del establo y del gallinero y riega las semillas y plantas
-  sin regar,
+  sin regar (cada una tarda lo mismo que tú con la regadera),
   como máximo la mitad del trabajo, caminando por la granja con sus
   propios sprites (si le hablas, dice sus frases de siempre) y brincando
   las cercas; si no estás en la granja, el trabajo igual se hace, al mismo
@@ -422,6 +426,10 @@ comentarios de cada archivo):
 ## Carpetas
 
 - `src/` — las rutinas reescritas y el comprobador (`hm_decomp.c/.h`).
+  `src/hm_vars.h` nombra, una sola vez, cada variable del juego que usan
+  varios archivos (con una nota de para qué sirve); `src/hm_regs.h`, los
+  registros de la consola. Cada archivo de rutinas nombra al principio los
+  pocos lugares que solo él usa.
 - `native/` — la versión nativa: el juego corriendo solo sobre las rutinas
   reescritas (`main.c`: la ventana, los controles, el sonido; `hw.c`: los
   chips de la consola alrededor del C).
