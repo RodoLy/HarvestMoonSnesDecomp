@@ -268,6 +268,8 @@ tu ROM. La música sigue sonando.
 - **Su ropa de soltera algunos días** *(apagado por defecto)* — casado, uno
   de cada dos días tu esposa se viste con la ropa que usaba antes de la
   boda, esté donde esté (te ayude o no).
+
+  ![Con su ropa de esposa y, otro día, con la de antes de la boda](docs/screenshots/wife_clothes.png)
 - **Controles con ratón** *(apagado por defecto, en Controles → Teclado)* — clic izquierdo junto a
   ti usa la herramienta ahí, clic izquierdo
   más lejos camina hasta ahí (mantenlo para seguir al puntero), clic

@@ -255,6 +255,8 @@ music keeps playing.
 - **Her old clothes some days** *(off by default)* — married, one day in
   two your wife wears the clothes she wore before the wedding, wherever she
   is (with or without her help).
+
+  ![Her clothes as a wife and, another day, the ones from before the wedding](docs/screenshots/wife_clothes.png)
 - **Mouse controls** *(off by default, in Controls → Keyboard)* — left click next to you uses the tool there, left click farther away walks there
   (hold it to follow the pointer), right click talks, picks up or
   opens. A thin square marks the tile under the pointer (light within
