@@ -32,6 +32,8 @@ void mods_bag_icon(int x, int y, uint8_t it);
 /* an item's own sprite (case: SUB_8180B7's, 1 = carried), 16 x 16, colours
  * from the game's palettes (0 = see-through); false if it has none */
 bool mods_item_sprite(uint8_t it, int kase, uint32_t out[256]);
+/* any sprite of the game (its first frame), centred in w x h */
+bool mods_sprite(uint16_t sprite, bool flip, uint32_t *out, int w, int h);
 void mods_ws_margins(int *left, int *right);
 enum { WS_BUDGET = 43 };
 

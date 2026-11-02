@@ -119,13 +119,18 @@ dibujar. Se apaga en Opciones o en Mejoras.
 
 ### Menú de pausa estilo Harvest Moon 64 *(M o R3)*
 
-Fecha y reloj, dinero y energía; **Herramientas** (mano, mochila y la
-bodega: equipar, cambiar y guardar con las reglas del propio juego);
+Fecha y reloj, dinero y energía; **Inventario** (mano, mochila y la
+bodega: equipar, cambiar y guardar con las reglas del propio juego; las
+semillas que quedan; la mochila de cosechas, si está activada);
 **Corazones** (la cara de cada chica, su propio sprite leído de tu ROM,
 con diez corazones); **Granja** (envíos, madera, forraje, vacas, felicidad,
-el clima de mañana). La música sigue sonando.
+el clima de mañana); **Animales** (cada vaca y gallina con su propio
+sprite: ternera o adulta, enferma, preñada, enojada o con hambre,
+felicidad y tamaño de la leche, y si hoy la cepillaste, le hablaste y la
+ordeñaste). Todas las imágenes son los sprites del propio juego, leídos de
+tu ROM. La música sigue sonando.
 
-| Herramientas | Corazones | Granja |
+| Inventario | Corazones | Granja |
 |---|---|---|
 | ![Herramientas](docs/screenshots/pause_tools.png) | ![Corazones](docs/screenshots/pause_hearts.png) | ![Granja](docs/screenshots/pause_farm.png) |
 
@@ -157,7 +162,7 @@ el clima de mañana). La música sigue sonando.
   con las manos libres saca lo último. Tira uno a la caja de envíos tú
   mismo y luego mantén Q un segundo desde el mismo sitio: el resto entra
   uno tras otro, y el juego envía cada uno él mismo, así que el dinero y
-  los contadores son exactamente los suyos. La pestaña Cosechas del menú
+  los contadores son exactamente los suyos. La pestaña Inventario del menú
   de pausa muestra la mochila y te deja elegir cuál sacar; se guarda en tu
   diario.
 - **Controles con ratón** *(apagado por defecto, en Controles → Teclado)* — como en Stardew

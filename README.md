@@ -119,13 +119,17 @@ nothing to draw there. It can be turned off in Options or Improvements.
 
 ### Harvest Moon 64-style pause menu *(M or R3)*
 
-Date and clock, money and stamina; **Tools** (hand, backpack and the tool
-shed: equip, swap and put away by the game's own rules); **Hearts** (each
-girl's face, her own sprite read from your ROM, with ten hearts); **Farm**
-(shipping, lumber, fodder, cows, happiness, tomorrow's weather). The music
-keeps playing.
+Date and clock, money and stamina; **Inventory** (hand, backpack and the
+tool shed: equip, swap and put away by the game's own rules; the seeds
+left; the crop bag, if on); **Hearts** (each girl's face, her own sprite
+read from your ROM, with ten hearts); **Farm** (shipping, lumber, fodder,
+cows, happiness, tomorrow's weather); **Animals** (every cow and chicken
+with its own sprite: calf or adult, sick, pregnant, cranky or hungry,
+happiness and milk size, and whether you brushed, talked to and milked it
+today). Every picture is the game's own sprite, read from your ROM. The
+music keeps playing.
 
-| Tools | Hearts | Farm |
+| Inventory | Hearts | Farm |
 |---|---|---|
 | ![Tools](docs/screenshots/pause_tools.png) | ![Hearts](docs/screenshots/pause_hearts.png) | ![Farm](docs/screenshots/pause_farm.png) |
 
@@ -156,7 +160,7 @@ keeps playing.
   Throw one into the shipping box yourself, then hold Q for a second from
   the same spot and the rest go in one after another — the game ships
   each one itself, so money and counts are exactly its own. The pause
-  menu's Harvest tab shows the bag and lets you pick which one to take
+  menu's Inventory tab shows the bag and lets you pick which one to take
   out; it is kept in your diary.
 - **Mouse controls** *(off by default, in Controls → Keyboard)* — like Stardew Valley: left click
   next to you uses the tool there, left click farther away walks there

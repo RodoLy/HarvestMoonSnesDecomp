@@ -44,7 +44,7 @@ enum { GRID_COLS = 8, GRID_ROWS = 3, LW = 256, LH = 224 };
 static struct {
   bool open;
   int tab;               /* 0 tools, 1 hearts, 2 farm, 3 the crop bag (when on) */
-  int bx;                /* the bag's cursor, 0-8 */
+  int an, ar, ac;        /* animals: the section (0 cows, 1 chickens), its row and column */
   int cx, cy;            /* tools cursor: cy -1 = the top slots (cx 0 hand, 1 bag) */
   char message[96];      /* the tools page's feedback line */
 } s;
@@ -140,9 +140,15 @@ static void tool_icon(int x, int y, uint8_t id)
 
 static void say(const char *m) { snprintf(s.message, sizeof s.message, "%s", m); }
 
+/* the inventory's rows: the shed's 3, and the crop bag's when it is on */
+enum { BAG_ROW = GRID_ROWS };
+static int inv_rows(void) { return GRID_ROWS + (g_cfg.crop_bag ? 1 : 0); }
+static bool on_bag(void) { return s.tab == 0 && s.cy == BAG_ROW; }
+
 /* The item under the cursor (0 = none). */
 static uint8_t cursor_item(void)
 {
+  if (s.cy == BAG_ROW) return 0;
   if (s.cy < 0) return g_ram[s.cx == 0 ? HM_TOOL_SELECTED : HM_TOOL_BACKPACK];
   int i = s.cy * GRID_COLS + s.cx;
   return i < NTOOLS && in_shed(kTools[i].id) ? kTools[i].id : 0;
@@ -173,8 +179,8 @@ static void swap_hand_bag(void)
 static void bag_take_out(void);
 static void action_a(void)
 {
-  if (s.tab == 3) { bag_take_out(); return; }
   if (s.tab != 0) return;
+  if (on_bag()) { bag_take_out(); return; }
   if (!player_free()) { say(T("You can't change tools right now.")); return; }
   if (s.cy < 0) { if (g_ram[HM_TOOL_BACKPACK] || g_ram[HM_TOOL_SELECTED]) swap_hand_bag(); return; }
   uint8_t id = cursor_item();
@@ -182,13 +188,13 @@ static void action_a(void)
 }
 static void action_x(void)
 {
-  if (s.tab != 0) return;
+  if (s.tab != 0 || on_bag()) return;
   if (!player_free()) { say(T("You can't change tools right now.")); return; }
   swap_hand_bag();
 }
 static void action_y(void)   /* put the hand (or the selected bag) item away */
 {
-  if (s.tab != 0) return;
+  if (s.tab != 0 || on_bag()) return;
   if (!player_free()) { say(T("You can't change tools right now.")); return; }
   uint32_t where = (s.cy < 0 && s.cx == 1) ? HM_TOOL_BACKPACK : HM_TOOL_SELECTED;
   uint8_t id = g_ram[where];
@@ -320,8 +326,8 @@ static void draw_top(void)
   ui_rect(171, 42, (int)(74 * st / mx), 3, st * 4 < mx ? C_RED : C_GREEN);
 }
 
-static const char *kTabs[4] = { "Tools", "Hearts", "Farm", "Harvest" };
-static int ntabs(void) { return g_cfg.crop_bag ? 4 : 3; }   /* the bag: only with the crop bag */
+static const char *kTabs[4] = { "Inventory", "Hearts", "Farm", "Animals" };
+static int ntabs(void) { return 4; }
 
 static void draw_tabs(void)
 {
@@ -342,6 +348,24 @@ static void draw_tabs(void)
   ui_text_sh(UI_SMALL, 250 - ui_text_w(UI_SMALL, T("L / R  tabs")), 63, T("L / R  tabs"), C_CREAM);
 }
 
+/* the crop bag (mods.c): its 9 places; the one under the cursor */
+static const char *bag_name(uint8_t it, char *buf, size_t n)
+{
+  static const char *const names[8] = { "Corn", "Tomato", "Potato", "Turnip", "Egg", "Milk (S)", "Milk (M)", "Milk (L)" };
+  if (it >= 0x10 && it <= 0x17) return T(names[it - 0x10]);
+  snprintf(buf, n, "%s", T("Item"));
+  return buf;
+}
+static unsigned bag_price(uint8_t it) { return g_rom ? g_rom[0x9FDE + 2u * it + 1] * 10u : 0; }  /* $81:9FDE */
+static void bag_take_out(void)
+{
+  uint8_t items[9];
+  int n = mods_bag_items(items);
+  if (s.cx >= n) { say(n ? T("(nothing)") : T("The bag is empty.")); return; }
+  if (!player_free()) { say(T("You can't take things out right now.")); return; }
+  if (mods_bag_choose(s.cx)) s.open = false;            /* out as the game goes on */
+}
+
 static void draw_tools(int x, int y)
 {
   /* the shed, every shed item in a fixed place; missing ones are empty */
@@ -359,9 +383,22 @@ static void draw_tools(int x, int y)
       if (n) count_badge(sx + 20, sy + 20, n);
     }
   }
+  /* the crop bag, under the shed: 9 places */
+  int by = y + 11 + GRID_ROWS * 21 + 1;
+  uint8_t bag[9];
+  int bn = g_cfg.crop_bag ? mods_bag_items(bag) : 0;
+  if (g_cfg.crop_bag)
+    for (int i = 0; i < 9; i++) {
+      int sx = x + i * 18;
+      bool sel = s.cy == BAG_ROW && s.cx == i;
+      ui_rect(sx, by, 18, 18, sel ? C_GOLD_DARK : C_PAPER_LINE);
+      ui_rect(sx + 1, by + 1, 16, 16, sel ? C_SELECT : (i < bn ? C_PAPER : C_PAPER_DARK));
+      if (i < bn) mods_bag_icon(sx + 1, by + 1, bag[i]);
+    }
   /* the cursor: a little hand pointing at the slot */
   int px0, py0;
   if (s.cy < 0) { px0 = 104 + s.cx * 30 - 9; py0 = 18; }
+  else if (s.cy == BAG_ROW) { px0 = x + s.cx * 18 - 7; py0 = by + 5; }
   else { px0 = x + s.cx * 21 - 7; py0 = y + 11 + s.cy * 21 + 6; }
   static const char *hand[7] = { "..##....", ".#cc####", "#cccccc#", "#ccc####", "#cccc#..", ".####...", "........" };
   for (int j = 0; j < 7; j++)
@@ -374,6 +411,21 @@ static void draw_tools(int x, int y)
   uint8_t id = cursor_item();
   ui_rect(rx - 4, y + 2, 1, 76, C_PAPER_LINE);
   if (s.cy < 0) ui_text(UI_SMALL, rx, y + 9, s.cx == 0 ? T("In hand:") : T("In backpack:"), C_INK_SOFT);
+  if (s.cy == BAG_ROW) {                        /* the crop bag's place */
+    char c[48];
+    snprintf(c, sizeof c, "%s  %d/9", T("Crop bag"), bn);
+    ui_text(UI_SMALL, rx, y + 9, c, C_INK_SOFT);
+    if (s.cx < bn) {
+      char buf[48];
+      mods_bag_icon(rx, y + 13, bag[s.cx]);
+      ui_text(UI_SMALL, rx, y + 38, bag_name(bag[s.cx], buf, sizeof buf), C_INK);
+      unsigned p = bag_price(bag[s.cx]);
+      if (p) { snprintf(c, sizeof c, T("Sells for %u G"), p); ui_text(UI_SMALL, rx, y + 48, c, C_GREEN_DARK); }
+    } else {
+      ui_text(UI_SMALL, rx, y + 38, bn ? T("(nothing)") : T("The bag is empty."), C_INK_SOFT);
+    }
+    return;
+  }
   if (id) {
     tool_icon(rx, y + 13, id);
     const char *name = tool_name(id);
@@ -400,47 +452,6 @@ static void draw_tools(int x, int y)
   }
 }
 
-/* the crop bag (mods.c): its 9 places; the one under the cursor */
-static const char *bag_name(uint8_t it, char *buf, size_t n)
-{
-  static const char *const names[8] = { "Corn", "Tomato", "Potato", "Turnip", "Egg", "Milk (S)", "Milk (M)", "Milk (L)" };
-  if (it >= 0x10 && it <= 0x17) return T(names[it - 0x10]);
-  snprintf(buf, n, "%s", T("Item"));
-  return buf;
-}
-static unsigned bag_price(uint8_t it) { return g_rom ? g_rom[0x9FDE + 2u * it + 1] * 10u : 0; }  /* $81:9FDE */
-static void draw_bag(int x, int y)
-{
-  uint8_t items[9];
-  int n = mods_bag_items(items);
-  ui_text(UI_SMALL, x, y + 7, T("Crop bag"), C_INK_SOFT);
-  for (int i = 0; i < 9; i++) {
-    int sx = x + i * 26, sy = y + 12;
-    bool sel = s.bx == i;
-    ui_rect(sx, sy, 24, 24, sel ? C_GOLD_DARK : C_PAPER_LINE);
-    ui_rect(sx + 1, sy + 1, 22, 22, sel ? C_SELECT : (i < n ? C_PAPER : C_PAPER_DARK));
-    if (i < n) mods_bag_icon(sx + 4, sy + 4, items[i]);
-  }
-  int ty = y + 52;
-  if (s.bx < n) {
-    char buf[48];
-    ui_text(UI_BODY, x, ty, bag_name(items[s.bx], buf, sizeof buf), C_INK);
-    unsigned p = bag_price(items[s.bx]);
-    if (p) { char c[48]; snprintf(c, sizeof c, T("Sells for %u G"), p); ui_text(UI_SMALL, x, ty + 12, c, C_INK_SOFT); }
-  } else {
-    ui_text(UI_BODY, x, ty, n ? T("(nothing)") : T("The bag is empty."), C_INK_SOFT);
-  }
-  char c[16]; snprintf(c, sizeof c, "%d / 9", n);
-  ui_text_r(UI_SMALL, x + 232, y + 7, c, C_INK_SOFT);
-}
-static void bag_take_out(void)
-{
-  uint8_t items[9];
-  int n = mods_bag_items(items);
-  if (s.bx >= n) { say(n ? T("(nothing)") : T("The bag is empty.")); return; }
-  if (!player_free()) { say(T("You can't take things out right now.")); return; }
-  if (mods_bag_choose(s.bx)) s.open = false;            /* out as the game goes on */
-}
 
 static uint32_t heart_colour(unsigned v)
 {
@@ -500,11 +511,125 @@ static void draw_farm(int x, int y)
 #undef ITEM
 }
 
+/* ── The animals: the barn's cows and the coop's chickens ─────────────
+ * Their records (animals.c): a cow 16 bytes at $7E:C1C6 (+0 status: 02
+ * newborn calf, 04 calf, 08 adult, 10 cranky, 20 sick, 40 pregnant; +1
+ * today: 01 brushed, 02 milked, 04 talked to; +2 the map, $27 the barn;
+ * +3 days left sick; +4 happiness, the milk's size: below $60 S, below $C0
+ * M, else L); a chicken 8 bytes at $7E:C286 (+0: 02 egg, 04 chick, 08 hen,
+ * 10 hungry; +1 the map, $28 the coop). Pictures: the game's own sprites
+ * (cow $18B, calf $1C9, hen $212, chick $217, the egg item $23). */
+enum { COWS = 12, CHICKENS = 13, COW_COLS = 6, HEN_COLS = 7 };
+static const uint8_t *cow(int i) { return &g_ram[HM_COW_DATA + 16 * i]; }
+static const uint8_t *hen(int i) { return &g_ram[HM_CHICKEN_DATA + 8 * i]; }
+static int sec_cols(int n) { return n == 0 ? COW_COLS : HEN_COLS; }
+static int sec_size(int n) { return n == 0 ? COWS : CHICKENS; }
+static int cursor_index(void) { return s.ar * sec_cols(s.an) + s.ac; }
+static void animals_move(int dx, int dy)
+{
+  if (dx) {
+    int cols = sec_cols(s.an), n = sec_size(s.an);
+    s.ac = (s.ac + cols + dx) % cols;
+    if (s.ar * cols + s.ac >= n) s.ac = dx > 0 ? 0 : (n - 1) % cols;
+  }
+  if (dy) {
+    int row = s.an * 2 + s.ar + dy;              /* four rows: cows 0-1, chickens 2-3 */
+    row = (row + 4) % 4;
+    s.an = row / 2; s.ar = row % 2;
+    int cols = sec_cols(s.an), n = sec_size(s.an);
+    if (s.ac >= cols) s.ac = cols - 1;
+    if (s.ar * cols + s.ac >= n) s.ac = (n - 1) % cols;
+  }
+}
+static uint32_t animal_mark(int sec, int i)
+{
+  if (sec == 0) {
+    const uint8_t *c = cow(i);
+    if (c[0] & 0x20) return C_RED;                         /* sick */
+    if (c[0] & 0x10) return UI_RGB(0xEC8A2A);              /* cranky */
+    if (c[0] & 0x40) return UI_RGB(0xF27AA8);              /* pregnant */
+    bool adult = c[0] & 0x08;
+    if ((c[1] & 0x01) && (c[1] & 0x04) && (!adult || (c[1] & 0x02))) return C_GREEN;   /* all done today */
+    return 0;
+  }
+  const uint8_t *h = hen(i);
+  if (h[0] & 0x10) return UI_RGB(0xEC8A2A);                /* hungry */
+  return 0;
+}
+static void draw_animals(int x, int y)
+{
+  uint32_t px[38 * 20];
+  for (int sec = 0; sec < 2; sec++) {
+    int cols = sec_cols(sec), n = sec_size(sec), cw = sec == 0 ? 39 : 33;
+    int top = y + sec * 47, have = 0;
+    for (int i = 0; i < n; i++) have += (sec == 0 ? cow(i)[0] : hen(i)[0]) != 0;
+    char c[32]; snprintf(c, sizeof c, "%s  %d", sec == 0 ? T("COWS") : T("CHICKENS"), have);
+    ui_text(UI_SMALL, x, top + 7, c, C_INK_SOFT);
+    for (int i = 0; i < n; i++) {
+      int gx = i % cols, gy = i / cols;
+      int sx = x + gx * cw, sy = top + 9 + gy * 19;
+      bool sel = s.an == sec && cursor_index() == i;
+      uint8_t st = sec == 0 ? cow(i)[0] : hen(i)[0];
+      ui_rect(sx, sy, cw - 1, 18, sel ? C_GOLD_DARK : C_PAPER_LINE);
+      ui_rect(sx + 1, sy + 1, cw - 3, 16, sel ? C_SELECT : (st ? C_PAPER : C_PAPER_DARK));
+      if (!st) continue;
+      int w = cw - 3, h = 16;
+      bool ok;
+      if (sec == 0) ok = mods_sprite((st & 0x08) ? 0x18B : 0x1C9, false, px, w, h);
+      else if (st & 0x02) { uint32_t e[256]; ok = mods_item_sprite(0x23, 0, e); memset(px, 0, sizeof px);
+                            if (ok) for (int j = 0; j < 16; j++) for (int k = 0; k < 16; k++) if (k + (w - 16) / 2 < w && j < h) px[j * w + k + (w - 16) / 2] = e[j * 16 + k]; }
+      else ok = mods_sprite((st & 0x08) ? 0x212 : 0x217, false, px, w, h);
+      if (ok)
+        for (int j = 0; j < h; j++)
+          for (int k = 0; k < w; k++) if (px[j * w + k]) ui_px(sx + 1 + k, sy + 1 + j, px[j * w + k]);
+      uint32_t m = animal_mark(sec, i);
+      if (m) { ui_rect(sx + cw - 7, sy + 2, 4, 4, C_WOOD_EDGE); ui_rect(sx + cw - 6, sy + 3, 2, 2, m); }
+    }
+  }
+}
+static void animal_details(int x)
+{
+  int i = cursor_index();
+  char a[96], b[128];
+  if (s.an == 0) {
+    const uint8_t *c = cow(i);
+    if (!c[0]) { ui_text(UI_BODY, x, 193, T("(empty)"), C_INK_SOFT); return; }
+    bool adult = c[0] & 0x08;
+    snprintf(a, sizeof a, "%s %d · %s", T("Cow"), i + 1, adult ? T("adult") : T("calf"));
+    if (c[0] & 0x20) { char t[40]; snprintf(t, sizeof t, T(" · sick (%u days)"), c[3]); strncat(a, t, sizeof a - strlen(a) - 1); }
+    if (c[0] & 0x40) strncat(a, T(" · pregnant"), sizeof a - strlen(a) - 1);
+    if (c[0] & 0x10) strncat(a, T(" · cranky"), sizeof a - strlen(a) - 1);
+    ui_text(UI_BODY, x, 193, a, C_INK);
+    const char *milk = c[4] < 0x60 ? "S" : c[4] < 0xC0 ? "M" : "L";
+    snprintf(b, sizeof b, T("Happiness %u/255"), c[4]);
+    if (adult && !(c[0] & 0x40)) { char t[24]; snprintf(t, sizeof t, T(" · milk %s"), milk); strncat(b, t, sizeof b - strlen(b) - 1); }
+    char t[96];
+    const char *yes = T("yes"), *no = T("no");
+    snprintf(t, sizeof t, " · %s %s · %s %s%s%s%s%s", T("brushed"), (c[1] & 1) ? yes : no, T("talked"), (c[1] & 4) ? yes : no,
+             adult ? " · " : "", adult ? T("milked") : "", adult ? " " : "", adult ? ((c[1] & 2) ? yes : no) : "");
+    strncat(b, t, sizeof b - strlen(b) - 1);
+    ui_text(UI_SMALL, x, 205, b, C_INK_SOFT);
+  } else {
+    const uint8_t *h = hen(i);
+    if (!h[0]) { ui_text(UI_BODY, x, 193, T("(empty)"), C_INK_SOFT); return; }
+    const char *kind = (h[0] & 0x02) ? T("egg in the incubator") : (h[0] & 0x04) ? T("chick") : T("hen");
+    snprintf(a, sizeof a, "%s %d · %s", T("Chicken"), i + 1, kind);
+    if (h[0] & 0x10) strncat(a, T(" · hungry"), sizeof a - strlen(a) - 1);
+    ui_text(UI_BODY, x, 193, a, C_INK);
+    ui_text(UI_SMALL, x, 205, h[1] == 0x28 ? T("In the coop") : T("Outside"), C_INK_SOFT);
+  }
+}
+
 static void draw_textbox(void)
 {
   ui_frame(4, 176, 248, 44, C_PAPER);
   int x = 12;
-  if (s.tab == 0) {
+  if (on_bag()) {
+    if (s.message[0]) ui_text(UI_BODY, x, 193, s.message, C_GREEN_DARK);
+    else if (!player_free()) ui_text(UI_BODY, x, 193, T("(only while you can move)"), C_RED);
+    else ui_text(UI_BODY, x, 193, T("A  take it out"), C_INK);
+    ui_text(UI_SMALL, x, 205, T("Q  put what you carry in / take the last out"), C_INK_SOFT);
+  } else if (s.tab == 0) {
     if (s.message[0]) ui_text(UI_BODY, x, 193, s.message, C_GREEN_DARK);
     else if (!player_free()) ui_text(UI_BODY, x, 193, T("(only while you can move)"), C_RED);
     else ui_text(UI_BODY, x, 193, T("A  equip"), C_INK);
@@ -512,10 +637,7 @@ static void draw_textbox(void)
     snprintf(help, sizeof help, "%s    %s %s", T("X  hand ↔ backpack"), T("Y  put away in"), T("the tool shed"));
     ui_text(UI_SMALL, x, 205, help, C_INK_SOFT);
   } else if (s.tab == 3) {
-    if (s.message[0]) ui_text(UI_BODY, x, 193, s.message, C_GREEN_DARK);
-    else if (!player_free()) ui_text(UI_BODY, x, 193, T("(only while you can move)"), C_RED);
-    else ui_text(UI_BODY, x, 193, T("A  take it out"), C_INK);
-    ui_text(UI_SMALL, x, 205, T("Q  put what you carry in / take the last out"), C_INK_SOFT);
+    animal_details(x);
   } else if (s.tab == 1) {
     ui_text(UI_SMALL, x, 192, T("Marks: 200 heart event · 450 first child ·"), C_INK);
     ui_text(UI_SMALL, x, 201, T("650 second child · maximum 999"), C_INK);
@@ -541,7 +663,7 @@ static void render(void)
   ui_frame(4, 68, 248, 106, C_PAPER);
   if (s.tab == 0) draw_tools(12, 72);
   else if (s.tab == 1) draw_hearts(10, 73);
-  else if (s.tab == 3) draw_bag(12, 73);
+  else if (s.tab == 3) draw_animals(10, 72);
   else draw_farm(12, 73);
   draw_textbox();
 }
@@ -549,18 +671,20 @@ static void render(void)
 /* ── Input ───────────────────────────────────────────────────────────── */
 static void move(int dx, int dy)
 {
-  if (s.tab == 3) { if (dx) { s.bx = (s.bx + 9 + dx) % 9; s.message[0] = 0; } return; }
+  if (s.tab == 3) { animals_move(dx, dy); return; }
   if (s.tab != 0) { if (dx) s.tab = (s.tab + ntabs() + dx) % ntabs(); return; }
   s.message[0] = 0;
   if (dy) {
+    int rows = inv_rows();
     s.cy += dy;
-    if (s.cy < -1) s.cy = GRID_ROWS - 1;
-    if (s.cy >= GRID_ROWS) s.cy = -1;
+    if (s.cy < -1) s.cy = rows - 1;
+    if (s.cy >= rows) s.cy = -1;
     if (s.cy < 0) s.cx = s.cx >= GRID_COLS / 2 ? 1 : 0;
     else if (dy > 0 && s.cy == 0) s.cx = s.cx ? 5 : 1;
+    else if (s.cy < GRID_ROWS && s.cx >= GRID_COLS) s.cx = GRID_COLS - 1;
   }
   if (dx) {
-    int cols = s.cy < 0 ? 2 : GRID_COLS;
+    int cols = s.cy < 0 ? 2 : s.cy == BAG_ROW ? 9 : GRID_COLS;
     s.cx = (s.cx + cols + dx) % cols;
   }
 }
@@ -588,7 +712,7 @@ void pause_open(void)
   s.open = true;
   s.message[0] = 0;
   if (s.tab >= ntabs()) s.tab = 0;
-  if (s.cy >= GRID_ROWS || s.cy < -1) s.cy = 0;
+  if (s.cy >= inv_rows() || s.cy < -1) s.cy = 0;
 }
 bool pause_is_open(void) { return s.open; }
 

@@ -826,31 +826,27 @@ static uint32_t snes_rgb(uint16_t c)
   uint32_t r = (c & 31) << 3, g = ((c >> 5) & 31) << 3, b = ((c >> 10) & 31) << 3;
   return UI_RGB(r << 16 | g << 8 | b);
 }
-bool mods_item_sprite(uint8_t it, int kase, uint32_t out[256])
+/* any sprite of the game, drawn as its first frame into w x h (centred,
+ * 0 = see-through); false if it has nothing to draw */
+bool mods_sprite(uint16_t sprite, bool flip, uint32_t *out, int w, int h)
 {
-  memset(out, 0, 256 * sizeof *out);
-  if (it == 0 || it > 0x5A) return false;
-  uint32_t list = hm_bus_rd16(g_ram, 0x8196AF + it * 3u) | (uint32_t)hm_bus_rd8(g_ram, 0x8196AF + it * 3u + 2) << 16;
-  uint16_t sprite = hm_bus_rd16(g_ram, list + 3u * kase);
-  bool item_flip = hm_bus_rd8(g_ram, list + 3u * kase + 2) & 1;
+  enum { CW = 64 };                       /* a canvas big enough for any frame */
+  static uint32_t c[CW * CW];
+  memset(out, 0, (size_t)w * h * sizeof *out);
+  memset(c, 0, sizeof c);
   uint32_t bank = sprite >= 0x262 ? 0x870000 : 0x860000;
   uint16_t number = sprite >= 0x262 ? (uint16_t)(sprite - 0x262) : sprite;
   uint16_t entry = hm_bus_rd16(g_ram, bank + 0x8080 + 2u * number);
   uint32_t pl = bank | hm_bus_rd16(g_ram, bank | entry);
   int count = hm_bus_rd8(g_ram, pl);
-  if (count <= 0 || count > 8) return false;
-  int minx = 99, miny = 99;
-  for (int i = 0; i < count; i++) {
-    int ox = (int8_t)hm_bus_rd8(g_ram, pl + 3 + 5u * i), oy = (int8_t)hm_bus_rd8(g_ram, pl + 4 + 5u * i);
-    if (ox < minx) minx = ox;
-    if (oy < miny) miny = oy;
-  }
-  bool any = false;
+  if (count <= 0 || count > 16) return false;
+  int x0 = CW, x1 = -1, y0 = CW, y1 = -1;
   for (int i = 0; i < count; i++) {
     uint16_t piece = hm_bus_rd16(g_ram, pl + 1 + 5u * i);
-    int ox = (int8_t)hm_bus_rd8(g_ram, pl + 3 + 5u * i) - minx, oy = (int8_t)hm_bus_rd8(g_ram, pl + 4 + 5u * i) - miny;
+    int ox = (int8_t)hm_bus_rd8(g_ram, pl + 3 + 5u * i) + CW / 2, oy = (int8_t)hm_bus_rd8(g_ram, pl + 4 + 5u * i) + CW / 2;
     uint8_t attr = hm_bus_rd8(g_ram, pl + 5 + 5u * i);
-    bool hf = ((attr >> 4) & 1) ^ item_flip, vf = (attr >> 5) & 1;
+    bool hf = ((attr >> 4) & 1) ^ flip, vf = (attr >> 5) & 1;
+    if (flip) ox = CW - 16 - (ox - 0);   /* the whole frame mirrored */
     uint16_t part = (uint16_t)((piece & 0xFFC0) >> 6), low = piece & 0x3F;
     uint32_t src = (uint32_t)(0x88 + (part >> 2)) << 16 |
                    (uint16_t)((hm_bus_rd16(g_ram, 0x868000 + 2u * low) & 0xFF) * 32u + ((part & 3u) << 13) + 0x8000);
@@ -864,26 +860,28 @@ bool mods_item_sprite(uint8_t it, int kase, uint32_t out[256])
         uint8_t p2 = hm_bus_rd8(g_ram, t + 16 + 2u * r), p3 = hm_bus_rd8(g_ram, t + 17 + 2u * r);
         int ci = ((p0 >> b) & 1) | ((p1 >> b) & 1) << 1 | ((p2 >> b) & 1) << 2 | ((p3 >> b) & 1) << 3;
         int X = ox + x, Y = oy + y;
-        if (!ci || X < 0 || Y < 0 || X >= 16 || Y >= 16) continue;
-        out[Y * 16 + X] = snes_rgb((uint16_t)(cg[2 * ci] | cg[2 * ci + 1] << 8));
-        any = true;
+        if (!ci || X < 0 || Y < 0 || X >= CW || Y >= CW) continue;
+        c[Y * CW + X] = snes_rgb((uint16_t)(cg[2 * ci] | cg[2 * ci + 1] << 8));
+        if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y;
       }
   }
-  if (!any) return false;
-  /* centred in the 16 x 16 */
-  int x0 = 16, x1 = -1, y0 = 16, y1 = -1;
-  for (int y = 0; y < 16; y++)
-    for (int x = 0; x < 16; x++)
-      if (out[y * 16 + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-  int dx = (16 - (x1 - x0 + 1)) / 2 - x0, dy = (16 - (y1 - y0 + 1)) / 2 - y0;
-  if (dx || dy) {
-    uint32_t tmp[256];
-    memcpy(tmp, out, sizeof tmp);
-    memset(out, 0, 256 * sizeof *out);
-    for (int y = y0; y <= y1; y++)
-      for (int x = x0; x <= x1; x++) out[(y + dy) * 16 + x + dx] = tmp[y * 16 + x];
-  }
+  if (x1 < 0) return false;
+  int dx = (w - (x1 - x0 + 1)) / 2 - x0, dy = (h - (y1 - y0 + 1)) / 2 - y0;   /* centred */
+  for (int y = y0; y <= y1; y++)
+    for (int x = x0; x <= x1; x++) {
+      int X = x + dx, Y = y + dy;
+      if (X >= 0 && Y >= 0 && X < w && Y < h && c[y * CW + x]) out[Y * w + X] = c[y * CW + x];
+    }
   return true;
+}
+bool mods_item_sprite(uint8_t it, int kase, uint32_t out[256])
+{
+  memset(out, 0, 256 * sizeof *out);
+  if (it == 0 || it > 0x5A) return false;
+  uint32_t list = hm_bus_rd16(g_ram, 0x8196AF + it * 3u) | (uint32_t)hm_bus_rd8(g_ram, 0x8196AF + it * 3u + 2) << 16;
+  uint16_t sprite = hm_bus_rd16(g_ram, list + 3u * kase);
+  bool flip = hm_bus_rd8(g_ram, list + 3u * kase + 2) & 1;
+  return sprite && mods_sprite(sprite, flip, out, 16, 16);
 }
 
 /* a picture of an item in the bag, 16 x 16: its own sprite, or, if it has

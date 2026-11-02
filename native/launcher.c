@@ -366,7 +366,7 @@ static void build(void)
              5, T("Off"), T("1.5x (4.5 minutes)"), T("2x (6 minutes)"), T("3x (9 minutes)"), T("4x (12 minutes)"));
       toggle(V_PAUSE, "Pause menu (Harvest Moon 64 style)", "M key or right-stick click (R3): tools, the girls' hearts and your farm's status. The game is paused while it is open.");
       { Item *bag = add(K_TOGGLE, V_BAG, T("Crop bag"), c->pause_menu
-          ? T("Part of the pause menu. Q (left trigger, middle mouse button): what you carry goes into a bag of 9; with free hands, the last one comes out (or choose it in the menu's Harvest tab). Held a second at the shipping box, it ships them all, one by one.")
+          ? T("Part of the pause menu. Q (left trigger, middle mouse button): what you carry goes into a bag of 9; with free hands, the last one comes out (or choose it in the menu's Inventory tab). Held a second at the shipping box, it ships them all, one by one.")
           : T("Part of the pause menu: turn the pause menu on first."));
         bag->dim = !c->pause_menu; }
       toggle(V_TITLEOPT, "OPTIONS on the title screen", "Adds a fourth entry, OPTIONS, below HOW TO PLAY, which opens this options menu.");
