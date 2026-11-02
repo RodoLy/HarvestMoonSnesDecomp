@@ -21,14 +21,17 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define FLAGS_5A        0x7F1F5A
-#define HOUR            0x7F1F1C
-#define SHIPPED_LOW     0x7F1F07
-#define SHIPPED_HIGH    0x7F1F09
-#define INPUT_STATE     0x019A    /* DB: */
-#define TEXT_BOX_LINES  0x0191    /* DB: */
-#define SCENE_RUNNING   0x0400
-#define SCENE_DONE      0x0800
+/* WRAM $7F:1Fxx (bus addresses) */
+#define FLAGS_5A        0x7F1F5A  /* 16b flags: SCENE_RUNNING, SCENE_DONE */
+#define HOUR            0x7F1F1C  /* 8b: the hour (HM_HOUR) */
+#define SHIPPED_LOW     0x7F1F07  /* 16b: the money shipped today (HM_SHIPPING_MONEY), */
+#define SHIPPED_HIGH    0x7F1F09  /* 8b: its third byte */
+/* Data bank */
+#define INPUT_STATE     0x019A    /* DB: 8b, the input mode (HM_INPUT_STATE) */
+#define TEXT_BOX_LINES  0x0191    /* DB: 8b, the lines of the next text box (0 = pick) */
+/* Direct page: HM_GAME_STATE ($D2, bit 6 = a change of map) and HM_MAP_ID ($22) */
+#define SCENE_RUNNING   0x0400    /* FLAGS_5A bit 10: the shipping scene is running */
+#define SCENE_DONE      0x0800    /* FLAGS_5A bit 11: its script says to show the text */
 
 static uint32_t db_(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static void jsl(uint8_t *ram, HmRegs *r, uint16_t ret, uint8_t bank, void (*fn)(uint8_t *, HmRegs *))
@@ -43,7 +46,7 @@ void hm_ShippingSceneDialogue(uint8_t *ram, HmRegs *r)
 {
   r->a = (uint16_t)(hm_bus_rd16(ram, FLAGS_5A) & SCENE_DONE);
   if (!r->a) return;
-  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) & 0x0040);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0040);
   if (r->a) return;
   r->a = 0x0002;
   hm_bus_wr16(ram, db_(r, INPUT_STATE), 0x0002);
@@ -68,7 +71,7 @@ void hm_ShippingScene(uint8_t *ram, HmRegs *r)
   set_a8(r, hour);
   r->c = hour >= 17;
   if (hour != 17) return;
-  uint8_t map = *hm_dp(ram, r, 0x22);
+  uint8_t map = *hm_dp(ram, r, HM_MAP_ID);
   set_a8(r, map);
   r->c = map >= 4;
   if (map >= 4) return;                                    /* not on the farm */

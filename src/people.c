@@ -8,6 +8,35 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_HEARTS_BASE ($7F1F1F). */
+
+/* The game's saved state, $7F:1Fxx (ram[] offsets 0x11Fxx) */
+#define KID1_AGE       0x11F37   /* 16b: the first child's days, from conception */
+#define KID2_AGE       0x11F39   /* 16b: the second child's */
+#define DAYS_MARRIED   0x11F3B   /* 16b */
+#define FLAGS_64       0x11F64   /* 16b story flags: $0080 the house at level 2 */
+#define WIFE_FLAGS     0x11F66   /* 16b: bits 0-4 the wife (Maria ... Eve) */
+#define FLAGS_6C       0x11F6C   /* 16b: $0080 the anniversary, $0100 / $0200 the
+                                    children's birthdays (they last a day) */
+#define FLAGS_6E       0x11F6E   /* 16b story flags: the children, below */
+#define CHILD1         0x0004
+#define CHILD2         0x0008
+#define CHILD_BORN     0x0010
+
+/* WRAM of the data bank */
+#define MOST_LOVED_NAME 0x008A1  /* 5 x 16b: the text codes of a name */
+
+/* Direct page: $7E is named by its role in each routine */
+#define DIVIDEND       0x7E      /* 16b: DivisionUnsigned's dividend, then the
+                                    remainder (math.c) */
+#define DIVISOR        0x80      /* 16b */
+#define MOST_HEARTS    0x7E      /* 16b: FindMostLovedName's result (= DIVIDEND) */
+#define AFFECTION_IN   0x7E      /* 16b: AffectionToHearts' A (= DIVIDEND) */
+
+/* ROM tables */
+#define HEART_RANGES   0x81D1E8  /* per heart: from, to (words) */
+
 enum { MARIA, ANN, NINA, ELLEN, EVE, GIRLS };
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -19,8 +48,6 @@ enum { MARIA, ANN, NINA, ELLEN, EVE, GIRLS };
  * Leftovers: $7E = the most hearts, X = $0A, Y = the girl, A = the last
  * code written, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-#define MOST_LOVED_NAME 0x008A1   /* 5 x 16b */
-
 static const uint16_t kGirlNames[GIRLS][5] = {
   { 0x26, 0x00, 0x11, 0x08, 0x00 },   /* "Maria" */
   { 0x1A, 0x0D, 0x0D, 0xB1, 0xB1 },   /* "Ann  " */
@@ -37,7 +64,7 @@ void hm_FindMostLovedName(uint8_t *ram, HmRegs *r)
     uint16_t hearts = hm_rd16(ram, HM_HEARTS_BASE + 2 * i);
     if (hearts >= best) { best = hearts; girl = i; }
   }
-  hm_dp_w16(ram, r, 0x7E, best);
+  hm_dp_w16(ram, r, MOST_HEARTS, best);
   for (unsigned k = 0; k < 5; k++)
     hm_wr16(ram, MOST_LOVED_NAME + 2 * k, kGirlNames[girl][k]);
   r->a = kGirlNames[girl][4];
@@ -60,26 +87,15 @@ void hm_FindMostLovedName(uint8_t *ram, HmRegs *r)
  *    every 120 days after that it has a birthday ($7F1F6C bit $0100/$0200).
  *  - $7F1F6C bits $0080, $0100, $0200 are cleared first: they last a day.
  * ───────────────────────────────────────────────────────────────────────── */
-#define WIFE_FLAGS     0x11F66
-#define DAYS_MARRIED   0x11F3B
-#define KID1_AGE       0x11F37
-#define KID2_AGE       0x11F39
-#define FLAGS_64       0x11F64
-#define FLAGS_6C       0x11F6C
-#define FLAGS_6E       0x11F6E
-#define CHILD1         0x0004
-#define CHILD2         0x0008
-#define CHILD_BORN     0x0010
-
 /* $7E = n; $80 = 120; JSL DivisionUnsigned. True if n is a multiple of 120. */
 static bool every_120_days(uint8_t *ram, HmRegs *r, uint16_t n, uint16_t ret)
 {
-  hm_dp_w16(ram, r, 0x7E, n);
-  hm_dp_w16(ram, r, 0x80, 120);
+  hm_dp_w16(ram, r, DIVIDEND, n);
+  hm_dp_w16(ram, r, DIVISOR, 120);
   hm_jsl(ram, r, ret, 0x83);
   hm_DivisionUnsigned(ram, r);
   hm_rtl(ram, r);
-  r->a = hm_dp_r16(ram, r, 0x7E);                /* LDA $7E: the remainder */
+  r->a = hm_dp_r16(ram, r, DIVIDEND);            /* LDA $7E: the remainder */
   return r->a == 0;
 }
 
@@ -166,12 +182,10 @@ void hm_WifePregnancyAndChildren(uint8_t *ram, HmRegs *r)
  * Leftovers: $7E = A in, A = Y = the hearts, X = 4 hearts + 2 (of the last
  * range looked at), C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-#define HEART_RANGES 0x81D1E8
-
 void hm_AffectionToHearts(uint8_t *ram, HmRegs *r)
 {
   uint16_t points = r->a;
-  hm_dp_w16(ram, r, 0x7E, points);
+  hm_dp_w16(ram, r, AFFECTION_IN, points);
   uint16_t y = 0;
   do {
     r->x = (uint16_t)((y << 2) + 2);

@@ -15,11 +15,34 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define HM_FARM_MAP        0x0A4E6   /* $7E:A4E6, 64 x 64 bytes */
-#define HM_MAP_WIDTH_CODE  0x00181   /* 8b: 1 = 16 tiles wide, 2 = 32, else 64 */
-#define HM_GROWN_GRASS_N   0x0092E   /* 16b: fully grown grass tiles */
-#define HM_PLANTED_GRASS   0x11F29   /* 16b: $7F1F29 */
-#define WEATHER_FLAGS      0x00196   /* 16b, SetWeatherFlags (weather.c) */
+/* Also used, from hm_ram.h: HM_SEASON, HM_DAY and HM_MAP_ID ($22, the map
+ * being loaded) */
+/* WRAM (ram[] offsets) */
+#define HM_FARM_MAP          0x0A4E6   /* $7E:A4E6, 64 x 64 bytes */
+#define HM_MAP_WIDTH_CODE    0x00181   /* 8b: 1 = 16 tiles wide, 2 = 32, else 64 */
+#define WEATHER_FLAGS        0x00196   /* 16b, SetWeatherFlags (weather.c) */
+#define CURRENT_MAP          0x09B6    /* DB: the current map's tiles, 4096 bytes */
+#define HM_GROWN_GRASS_N     0x0092E   /* 16b: fully grown grass tiles */
+#define HM_PLANTED_GRASS     0x11F29   /* 16b: $7F1F29 */
+#define HM_RANCH_DEVELOPMENT 0x11F56   /* $7F1F56, 16b */
+#define FLAGS_6E             0x11F6E   /* $7F1F6E, 16b flags; bit $0200 = a fence broke */
+
+/* ROM tables */
+#define MAP_POINTER_TABLE    0x82B174  /* HM-Decomp says $82:B173 */
+#define TILE_PROPERTY_TABLES 0x82B294  /* UNK_PointersTable */
+
+/* Direct page */
+#define TILE_PROPERTIES      0x0D      /* long $0D-$0F: the map's tile property table */
+#define TILE_PROPERTIES_BANK 0x0F
+#define MAP_SOURCE           0x72      /* long $72-$74: where the map's tiles are copied from */
+#define MAP_SOURCE_BANK      0x74
+#define TILE_COLUMN          0x7E      /* 16b: GetTileIndex's column */
+#define TILE_ROW_OFFSET      0x80      /* 16b: GetTileIndex's row x the width */
+#define TILE_LOOP_X          0x82      /* 16b: the farm loops' x, in pixels */
+#define TILE_LOOP_Y          0x84      /* 16b: their y */
+#define FENCE_CHANCE         0x86      /* 16b: ClimateFarmDamageCheck's chances, "1 in n": fences */
+#define GRASS_CHANCE         0x88      /* 16b: grass */
+#define CROP_CHANCE          0x8A      /* 16b: crops and tilled soil */
 
 enum {
   TILE_SOIL          = 0x02,
@@ -58,15 +81,15 @@ void hm_GetTileIndex(uint8_t *ram, HmRegs *r)
 {
   uint16_t column = (uint16_t)(r->x >> 4);
   uint16_t row = (uint16_t)(r->y & 0xFFF0);      /* row * 16 */
-  hm_dp_w16(ram, r, 0x7E, column);
-  hm_dp_w16(ram, r, 0x80, row);
+  hm_dp_w16(ram, r, TILE_COLUMN, column);
+  hm_dp_w16(ram, r, TILE_ROW_OFFSET, row);
   uint8_t width = ram[HM_MAP_WIDTH_CODE];
   if (width != 1) {
     row = (uint16_t)(row << 1);                  /* row * 32 */
-    hm_dp_w16(ram, r, 0x80, row);
+    hm_dp_w16(ram, r, TILE_ROW_OFFSET, row);
     if (width != 2) {
       row = (uint16_t)(row << 1);                /* row * 64 */
-      hm_dp_w16(ram, r, 0x80, row);
+      hm_dp_w16(ram, r, TILE_ROW_OFFSET, row);
     }
   }
   uint32_t index = (uint32_t)column + row;
@@ -81,8 +104,8 @@ static uint16_t tile_begin(uint8_t *ram, HmRegs *r, uint16_t x, uint16_t y, uint
 {
   push16(ram, r, y);
   push16(ram, r, x);
-  hm_dp_w16(ram, r, 0x82, x);
-  hm_dp_w16(ram, r, 0x84, y);
+  hm_dp_w16(ram, r, TILE_LOOP_X, x);
+  hm_dp_w16(ram, r, TILE_LOOP_Y, y);
   r->x = x; r->y = y;
   jsr(ram, r, ret_jsr);
   hm_GetTileIndex(ram, r);
@@ -166,9 +189,9 @@ static bool roll_zero(uint8_t *ram, HmRegs *r, uint16_t chance, uint16_t ret)
 void hm_ClimateFarmDamageCheck(uint8_t *ram, HmRegs *r)
 {
   uint16_t fence_chance = r->a, grass_chance = r->x, crop_chance = r->y;
-  hm_dp_w16(ram, r, 0x86, fence_chance);
-  hm_dp_w16(ram, r, 0x88, grass_chance);
-  hm_dp_w16(ram, r, 0x8A, crop_chance);
+  hm_dp_w16(ram, r, FENCE_CHANCE, fence_chance);
+  hm_dp_w16(ram, r, GRASS_CHANCE, grass_chance);
+  hm_dp_w16(ram, r, CROP_CHANCE, crop_chance);
   ram[HM_MAP_WIDTH_CODE] = 4;                    /* 64 tiles wide */
 
   FOR_EACH_FARM_TILE(x, y) {
@@ -337,7 +360,7 @@ void hm_NightlyFarmTilesCheck(uint8_t *ram, HmRegs *r)
       hm_rtl(ram, r);
       if ((uint8_t)r->a == 0) {
         hm_wr16(ram, WEATHER_FLAGS, hm_rd16(ram, WEATHER_FLAGS) | 0x0400);
-        hm_wr16(ram, 0x11F6E, hm_rd16(ram, 0x11F6E) | 0x0200);
+        hm_wr16(ram, FLAGS_6E, hm_rd16(ram, FLAGS_6E) | 0x0200);
       }
     } else if (t == TILE_TILLED_A || t == TILE_CROPS_FIRST) {
       what = RAIN_WATERS;
@@ -389,7 +412,6 @@ void hm_NightlyFarmTilesCheck(uint8_t *ram, HmRegs *r)
  * broken or not, and everything from 1D up: crops, seeds, grass) into the
  * ranch development score $7F1F56. Ends with A = X = Y = $0400, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-#define HM_RANCH_DEVELOPMENT 0x11F56   /* $7F1F56, 16b */
 #define RET_DEVELOPMENT_TILE 0xAA2C    /* JSR GetTileIndex at $82:AA2A */
 
 void hm_CalculateFarmDevelopment(uint8_t *ram, HmRegs *r)
@@ -451,12 +473,10 @@ void hm_CowEatsGrass(uint8_t *ram, HmRegs *r)
  * Both leave $72-$74 = the source, X = $0FFF, Y = $1000, C = 1, and A =
  * the high byte of the source address : the last byte copied.
  * ───────────────────────────────────────────────────────────────────────── */
-#define MAP_POINTER_TABLE 0x82B174   /* HM-Decomp says $82:B173 */
-
 static void copy_to_farm_map(uint8_t *ram, HmRegs *r)
 {
   for (uint16_t y = 0; y < 0x1000; y++) {
-    uint8_t b = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, y));
+    uint8_t b = hm_bus_rd8(ram, hm_dp_long(ram, r, MAP_SOURCE, y));
     ram[HM_FARM_MAP + y] = b;
     r->a = (uint16_t)((r->a & 0xFF00) | b);
   }
@@ -467,8 +487,8 @@ static void copy_to_farm_map(uint8_t *ram, HmRegs *r)
 
 void hm_CopyCurrentMapToFarmMap(uint8_t *ram, HmRegs *r)
 {
-  hm_dp_w16(ram, r, 0x72, 0x09B6);
-  *hm_dp(ram, r, 0x74) = 0x80;
+  hm_dp_w16(ram, r, MAP_SOURCE, CURRENT_MAP);
+  *hm_dp(ram, r, MAP_SOURCE_BANK) = 0x80;
   r->a = 0x0980;
   copy_to_farm_map(ram, r);
 }
@@ -477,8 +497,8 @@ void hm_LoadDefaultFarmMap(uint8_t *ram, HmRegs *r)
 {
   uint16_t source = hm_bus_rd16(ram, MAP_POINTER_TABLE);
   uint8_t bank = hm_bus_rd8(ram, MAP_POINTER_TABLE + 2);
-  hm_dp_w16(ram, r, 0x72, source);
-  *hm_dp(ram, r, 0x74) = bank;
+  hm_dp_w16(ram, r, MAP_SOURCE, source);
+  *hm_dp(ram, r, MAP_SOURCE_BANK) = bank;
   r->a = (uint16_t)((source & 0xFF00) | bank);
   copy_to_farm_map(ram, r);
 }
@@ -494,38 +514,34 @@ void hm_LoadDefaultFarmMap(uint8_t *ram, HmRegs *r)
  * Leftovers: $72-$74 = the source, A = (high byte of the table entry :
  * the last tile), X = $FFF, Y = $1000, C = 1.
  * ───────────────────────────────────────────────────────────────────────── */
-#define TILE_PROPERTY_TABLES 0x82B294   /* UNK_PointersTable */
-#define CURRENT_MAP          0x09B6     /* DB: */
-#define HM_TILEMAP_TO_LOAD_DP 0x22      /* the map being loaded */
-
 void hm_LoadMap(uint8_t *ram, HmRegs *r)
 {
-  uint8_t map = *hm_dp(ram, r, HM_TILEMAP_TO_LOAD_DP);
+  uint8_t map = *hm_dp(ram, r, HM_MAP_ID);
   r->a = map;                                         /* LDA #0; XBA; LDA */
   r->c = map >= 4;
   uint16_t index;
   if (!r->c) {
-    hm_dp_w16(ram, r, 0x72, 0xA4E6);                  /* the farm's copy */
-    *hm_dp(ram, r, 0x74) = 0x7E;
+    hm_dp_w16(ram, r, MAP_SOURCE, HM_FARM_MAP);       /* the farm's copy */
+    *hm_dp(ram, r, MAP_SOURCE_BANK) = 0x7E;
     r->a = 0xA47E;
     index = 0;
   } else {
     uint16_t sum = (uint16_t)(((map << 1) & 0xFF) + map);   /* 8 bits: ASL; CLC; ADC */
     r->c = sum > 0xFF;
     index = (uint8_t)sum;
-    hm_dp_w16(ram, r, 0x72, hm_bus_rd16(ram, MAP_POINTER_TABLE + index));
+    hm_dp_w16(ram, r, MAP_SOURCE, hm_bus_rd16(ram, MAP_POINTER_TABLE + index));
     uint8_t bank = hm_bus_rd8(ram, MAP_POINTER_TABLE + index + 2);
     r->a = (uint16_t)((hm_bus_rd16(ram, MAP_POINTER_TABLE + index) & 0xFF00) | bank);
-    *hm_dp(ram, r, 0x74) = bank;
+    *hm_dp(ram, r, MAP_SOURCE_BANK) = bank;
   }
   push16(ram, r, index); pull16(ram, r);              /* PHX ... PLX */
   uint16_t table = hm_bus_rd16(ram, TILE_PROPERTY_TABLES + index);
-  hm_dp_w16(ram, r, 0x0D, table);
+  hm_dp_w16(ram, r, TILE_PROPERTIES, table);
   uint8_t bank = hm_bus_rd8(ram, TILE_PROPERTY_TABLES + index + 2);
-  *hm_dp(ram, r, 0x0F) = bank;
+  *hm_dp(ram, r, TILE_PROPERTIES_BANK) = bank;
   r->a = (uint16_t)((table & 0xFF00) | bank);
   for (uint16_t y = 0; y < 0x1000; y++) {
-    uint8_t b = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, y));
+    uint8_t b = hm_bus_rd8(ram, hm_dp_long(ram, r, MAP_SOURCE, y));
     r->a = (uint16_t)((r->a & 0xFF00) | b);
     hm_bus_wr8(ram, ((uint32_t)r->db << 16 | CURRENT_MAP) + y, b);
   }

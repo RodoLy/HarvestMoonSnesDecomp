@@ -23,9 +23,28 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define DIVIDEND   0x7E   /* direct page; the remainder ends up here too */
-#define DIVISOR    0x80
-#define QUOTIENT   0x82   /* only used (and written) by the hand path */
+/* ── Names of the memory locations used here ────────────────────────────── */
+
+/* Direct page */
+#define DIVIDEND   0x7E   /* 16b; the remainder ends up here too */
+#define DIVISOR    0x80   /* 16b */
+#define QUOTIENT   0x82   /* 16b: only used (and written) by the hand path */
+#define MUL_FACTOR 0x7E   /* 16b: Multiply16's second factor (the same word as
+                             DIVIDEND, named by its role there) */
+
+/* WRAM of the data bank: MultiplicationUnsigned / Multiply16 */
+#define MUL_A      0x011A /* 8b: MultiplicationUnsigned's first factor */
+#define MUL_B      0x011B /* 8b: its second factor */
+#define MUL16_IN   0x011C /* 16b: Multiply16's A at the entry */
+#define MUL16_LOW  0x011E /* 16b: low x low */
+#define MUL16_HIGH_A 0x0120 /* 16b: (A's high x low) << 8 */
+#define MUL16_HIGH_B 0x0122 /* 16b: (low x $7E's high) << 8 */
+
+/* Console registers (bank $00) */
+#define WRMPYA     0x004202 /* 8b: the multiplier's first factor */
+#define WRMPYB     0x004203 /* 8b: its second factor; writing it starts it */
+#define WRDIVL     0x004204 /* 16b: the divider's dividend (WRDIVL/H) */
+#define WRDIVB     0x004206 /* 8b: the divisor; writing it starts it */
 
 void hm_DivisionUnsigned(uint8_t *ram, HmRegs *r)
 {
@@ -36,8 +55,8 @@ void hm_DivisionUnsigned(uint8_t *ram, HmRegs *r)
   if (divisor < 0xFF) {
     /* Hardware divider: 16-bit dividend / 8-bit divisor. */
     uint8_t d = (uint8_t)divisor;
-    hm_bus_wr16(ram, 0x004204, dividend);  /* WRDIVL/H */
-    hm_bus_wr8(ram, 0x004206, d);          /* WRDIVB: starts it */
+    hm_bus_wr16(ram, WRDIVL, dividend);  /* WRDIVL/H */
+    hm_bus_wr8(ram, WRDIVB, d);          /* WRDIVB: starts it */
     uint16_t quotient = d ? (uint16_t)(dividend / d) : 0xFFFF;
     uint16_t remainder = d ? (uint16_t)(dividend % d) : dividend;
     hm_dp_w16(ram, r, DIVIDEND, remainder);
@@ -124,10 +143,10 @@ void hm_DivisionSigned(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_MultiplicationUnsigned(uint8_t *ram, HmRegs *r)
 {
-  uint8_t a = hm_bus_rd8(ram, (uint32_t)r->db << 16 | 0x011A);
-  hm_bus_wr8(ram, 0x004202, a);                         /* WRMPYA */
-  uint8_t b = hm_bus_rd8(ram, (uint32_t)r->db << 16 | 0x011B);
-  hm_bus_wr8(ram, 0x004203, b);                         /* WRMPYB: starts it */
+  uint8_t a = hm_bus_rd8(ram, (uint32_t)r->db << 16 | MUL_A);
+  hm_bus_wr8(ram, WRMPYA, a);                           /* WRMPYA */
+  uint8_t b = hm_bus_rd8(ram, (uint32_t)r->db << 16 | MUL_B);
+  hm_bus_wr8(ram, WRMPYB, b);                           /* WRMPYB: starts it */
   r->a = (uint16_t)(a * b);                             /* RDMPY ($4216) */
 }
 
@@ -161,23 +180,23 @@ static uint16_t times(uint8_t *ram, HmRegs *r, uint16_t ret)
 void hm_Multiply16(uint8_t *ram, HmRegs *r)
 {
   hm_push8(ram, r, r->p);                                     /* PHP */
-  uint16_t a = r->a, b = hm_dp_r16(ram, r, 0x7E);
-  m_wr16(ram, r, 0x011C, a);
-  m_wr16(ram, r, 0x011E, 0);
-  m_wr16(ram, r, 0x0120, 0);
-  m_wr16(ram, r, 0x0122, 0);
-  m_wr8(ram, r, 0x011A, (uint8_t)a);
-  m_wr8(ram, r, 0x011B, (uint8_t)b);
-  m_wr16(ram, r, 0x011E, times(ram, r, RET_23_LOW));
+  uint16_t a = r->a, b = hm_dp_r16(ram, r, MUL_FACTOR);
+  m_wr16(ram, r, MUL16_IN, a);
+  m_wr16(ram, r, MUL16_LOW, 0);
+  m_wr16(ram, r, MUL16_HIGH_A, 0);
+  m_wr16(ram, r, MUL16_HIGH_B, 0);
+  m_wr8(ram, r, MUL_A, (uint8_t)a);
+  m_wr8(ram, r, MUL_B, (uint8_t)b);
+  m_wr16(ram, r, MUL16_LOW, times(ram, r, RET_23_LOW));
   if (a & 0xFF00) {
-    m_wr8(ram, r, 0x011A, (uint8_t)(a >> 8));
-    m_wr16(ram, r, 0x0120, (uint16_t)((times(ram, r, RET_23_HIGHA) & 0xFF) << 8));
+    m_wr8(ram, r, MUL_A, (uint8_t)(a >> 8));
+    m_wr16(ram, r, MUL16_HIGH_A, (uint16_t)((times(ram, r, RET_23_HIGHA) & 0xFF) << 8));
   }
   if (b & 0xFF00) {
-    m_wr8(ram, r, 0x011B, (uint8_t)(b >> 8));
-    m_wr8(ram, r, 0x011A, (uint8_t)a);
-    m_wr16(ram, r, 0x0122, (uint16_t)((times(ram, r, RET_23_HIGHB) & 0xFF) << 8));
+    m_wr8(ram, r, MUL_B, (uint8_t)(b >> 8));
+    m_wr8(ram, r, MUL_A, (uint8_t)a);
+    m_wr16(ram, r, MUL16_HIGH_B, (uint16_t)((times(ram, r, RET_23_HIGHB) & 0xFF) << 8));
   }
-  r->a = (uint16_t)(m_rd16(ram, r, 0x011E) + m_rd16(ram, r, 0x0120) + m_rd16(ram, r, 0x0122));
+  r->a = (uint16_t)(m_rd16(ram, r, MUL16_LOW) + m_rd16(ram, r, MUL16_HIGH_A) + m_rd16(ram, r, MUL16_HIGH_B));
   hm_pull8(ram, r);                                           /* PLP */
 }

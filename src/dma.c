@@ -13,7 +13,30 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
+/* ── Names of the memory locations used here (as in video.c) ────────────── */
+
 #define DMA_CHANNEL_FLAGS 0x808B3C   /* ROM: db 1 << ch */
+
+/* Direct page */
+#define DMA_CHANNEL     0x27   /* 8b: the channel to set up next */
+#define DMA_WAITING     0x28   /* 8b: the channels to start, one bit each */
+#define DMA_B_ADDRESS   0x29   /* 8b: the destination register (B-bus, $21xx) */
+#define DMA_VMAIN       0x2A   /* 8b + channel: the VRAM address mode */
+#define DMA_DESTINATION 0x32   /* 16b + 2 channel: the VRAM / CGRAM address */
+#define DMA_SOURCE      0x72   /* 24b $72-$74: the source */
+#define DMA_SOURCE_BANK 0x74   /* 8b: its bank */
+#define LETTER_EXTRA    0x7E   /* 16b: CopyLetterToVram's 16 x A (extra bytes per half) */
+#define LOAD_BUDGET     0xC7   /* 16b: bytes the loader may still send this frame */
+
+#define BBAD_VRAM       0x18   /* $2118: a copy to VRAM */
+
+/* The DMA registers: $4300 + 16 x channel (through the data bank) */
+#define DMA_REGS        0x4300u
+#define DMAP            0      /* 8b: the transfer mode */
+#define BBAD            1      /* 8b: the B-bus register */
+#define A1T             2      /* 16b: the source address */
+#define A1B             4      /* 8b: the source bank */
+#define DAS             5      /* 16b: the size */
 
 /* ─────────────────────────────────────────────────────────────────────────
  * AddProgrammedDMA ($80:8A33, JSL, RTL). A = VRAM address mode for the
@@ -33,20 +56,20 @@ void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r)
   hm_push8(ram, r, (uint8_t)(dest >> 8)); hm_push8(ram, r, (uint8_t)dest);   /* TXA; PHA */
   hm_pull8(ram, r); hm_pull8(ram, r); hm_pull8(ram, r); hm_pull8(ram, r);
 
-  uint8_t ch = *hm_dp(ram, r, 0x27);
-  hm_dp_w16(ram, r, 0x32 + 2u * ch, dest);
-  *hm_dp(ram, r, 0x2A + ch) = (uint8_t)mode;
+  uint8_t ch = *hm_dp(ram, r, DMA_CHANNEL);
+  hm_dp_w16(ram, r, DMA_DESTINATION + 2u * ch, dest);
+  *hm_dp(ram, r, DMA_VMAIN + ch) = (uint8_t)mode;
 
-  uint32_t regs = ((uint32_t)r->db << 16) + 0x4300u + (uint16_t)(ch << 4);
-  uint8_t to = *hm_dp(ram, r, 0x29);
-  hm_bus_wr8(ram, regs + 0, to == 0x18 ? 0x01 : 0x00);      /* DMAPx */
-  hm_bus_wr8(ram, regs + 1, to);                             /* BBADx */
-  hm_bus_wr16(ram, regs + 2, hm_dp_r16(ram, r, 0x72));       /* A1TxL/H */
-  hm_bus_wr8(ram, regs + 4, *hm_dp(ram, r, 0x74));           /* A1Bx */
-  hm_bus_wr16(ram, regs + 5, size);                          /* DASxL/H */
-  hm_dp_w16(ram, r, 0xC7, (uint16_t)(hm_dp_r16(ram, r, 0xC7) - hm_bus_rd16(ram, regs + 5)));
+  uint32_t regs = ((uint32_t)r->db << 16) + DMA_REGS + (uint16_t)(ch << 4);
+  uint8_t to = *hm_dp(ram, r, DMA_B_ADDRESS);
+  hm_bus_wr8(ram, regs + DMAP, to == BBAD_VRAM ? 0x01 : 0x00);  /* DMAPx */
+  hm_bus_wr8(ram, regs + BBAD, to);                             /* BBADx */
+  hm_bus_wr16(ram, regs + A1T, hm_dp_r16(ram, r, DMA_SOURCE));  /* A1TxL/H */
+  hm_bus_wr8(ram, regs + A1B, *hm_dp(ram, r, DMA_SOURCE_BANK)); /* A1Bx */
+  hm_bus_wr16(ram, regs + DAS, size);                           /* DASxL/H */
+  hm_dp_w16(ram, r, LOAD_BUDGET, (uint16_t)(hm_dp_r16(ram, r, LOAD_BUDGET) - hm_bus_rd16(ram, regs + DAS)));
 
-  uint8_t *to_start = hm_dp(ram, r, 0x28);
+  uint8_t *to_start = hm_dp(ram, r, DMA_WAITING);
   *to_start |= hm_bus_rd8(ram, DMA_CHANNEL_FLAGS + ch);
   r->a = *to_start;
   r->x = ch;
@@ -62,9 +85,9 @@ void hm_AddProgrammedDMA(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_RemoveProgrammedDMA(uint8_t *ram, HmRegs *r)
 {
-  r->x = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, 0x27));
+  r->x = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, DMA_CHANNEL));
   uint8_t flag = hm_bus_rd8(ram, (DMA_CHANNEL_FLAGS + r->x) & 0xFFFFFF);
-  uint8_t *to_start = hm_dp(ram, r, 0x28);
+  uint8_t *to_start = hm_dp(ram, r, DMA_WAITING);
   *to_start = (uint8_t)(~flag & *to_start);
   r->a = (uint16_t)((r->a & 0xFF00) | *to_start);
 }
@@ -83,8 +106,8 @@ void hm_RemoveProgrammedDMA(uint8_t *ram, HmRegs *r)
 void hm_DrawTilemapBlock2x2(uint8_t *ram, HmRegs *r)
 {
   uint16_t top = r->x;
-  *hm_dp(ram, r, 0x27) = 6;
-  *hm_dp(ram, r, 0x29) = 0x18;                        /* VRAM data port */
+  *hm_dp(ram, r, DMA_CHANNEL) = 6;
+  *hm_dp(ram, r, DMA_B_ADDRESS) = BBAD_VRAM;          /* VRAM data port */
   r->y = 4;
   r->a = 0x0080;
   hm_push8(ram, r, (uint8_t)(top >> 8));              /* PHX */
@@ -92,12 +115,12 @@ void hm_DrawTilemapBlock2x2(uint8_t *ram, HmRegs *r)
   hm_jsl(ram, r, RET_1B7_TOP, 0x80);
   hm_AddProgrammedDMA(ram, r);
   hm_rtl(ram, r);
-  *hm_dp(ram, r, 0x27) = 7;
-  *hm_dp(ram, r, 0x29) = 0x18;
+  *hm_dp(ram, r, DMA_CHANNEL) = 7;
+  *hm_dp(ram, r, DMA_B_ADDRESS) = BBAD_VRAM;
   hm_pull8(ram, r); hm_pull8(ram, r);                 /* PLX */
   r->x = (uint16_t)(top + 0x20);
   r->y = 4;
-  hm_dp_w16(ram, r, 0x72, (uint16_t)(hm_dp_r16(ram, r, 0x72) + 4));
+  hm_dp_w16(ram, r, DMA_SOURCE, (uint16_t)(hm_dp_r16(ram, r, DMA_SOURCE) + 4));
   r->a = 0x0080;
   hm_jsl(ram, r, RET_1B7_BOTTOM, 0x80);
   hm_AddProgrammedDMA(ram, r);
@@ -118,9 +141,9 @@ void hm_DrawTilemapBlock2x2(uint8_t *ram, HmRegs *r)
 void hm_CopyLetterToVram(uint8_t *ram, HmRegs *r)
 {
   uint16_t extra = (uint16_t)(r->a << 4), top = r->x;
-  hm_dp_w16(ram, r, 0x7E, extra);
-  *hm_dp(ram, r, 0x27) = 6;
-  *hm_dp(ram, r, 0x29) = 0x18;                        /* VRAM data port */
+  hm_dp_w16(ram, r, LETTER_EXTRA, extra);
+  *hm_dp(ram, r, DMA_CHANNEL) = 6;
+  *hm_dp(ram, r, DMA_B_ADDRESS) = BBAD_VRAM;          /* VRAM data port */
   r->y = (uint16_t)(0x10 + extra);
   r->a = 0x0080;
   hm_push8(ram, r, (uint8_t)(top >> 8));              /* PHX */
@@ -128,12 +151,12 @@ void hm_CopyLetterToVram(uint8_t *ram, HmRegs *r)
   hm_jsl(ram, r, RET_166_TOP, 0x80);
   hm_AddProgrammedDMA(ram, r);
   hm_rtl(ram, r);
-  *hm_dp(ram, r, 0x27) = 7;
-  *hm_dp(ram, r, 0x29) = 0x18;
+  *hm_dp(ram, r, DMA_CHANNEL) = 7;
+  *hm_dp(ram, r, DMA_B_ADDRESS) = BBAD_VRAM;
   hm_pull8(ram, r); hm_pull8(ram, r);                 /* PLX */
   r->x = (uint16_t)(top + 0x80);
   r->y = (uint16_t)(0x10 + extra);
-  hm_dp_w16(ram, r, 0x72, (uint16_t)(hm_dp_r16(ram, r, 0x72) + 0x100));
+  hm_dp_w16(ram, r, DMA_SOURCE, (uint16_t)(hm_dp_r16(ram, r, DMA_SOURCE) + 0x100));
   r->a = 0x0080;
   hm_jsl(ram, r, RET_166_BOTTOM, 0x80);
   hm_AddProgrammedDMA(ram, r);

@@ -26,9 +26,41 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define DELAY   0x014A
-#define COLOUR  0x015A
-#define ROW     0x016A
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_SEASON and HM_HOUR
+ * ($7F1F19 / $7F1F1C; WRAM_LONG gives their bus addresses). */
+#define WRAM_LONG(a)    (0x7E0000 + (a))
+
+/* WRAM of the data bank: one byte per channel (+ n) */
+#define DELAY   0x014A          /* 8b: frames left of this step */
+#define COLOUR  0x015A          /* 8b: the colour it changes */
+#define ROW     0x016A          /* 8b: the palette row */
+#define WEATHER_FLAGS   0x0196  /* 16b: weather and day flags; bits 1 / 3 rain, snow */
+#define PALETTE_COPY    0x0900  /* the palette ($7F:0900, HM_CGRAM_SHADOW) */
+
+/* Direct page */
+#define CHANNEL_LIST    0x42    /* 24b per channel ($42 + 3 n): where its list is */
+#define CHANNEL_LIST_BANK 0x44  /* 8b: its bank */
+#define LIST_POINTER    0x72    /* 24b $72-$74: the list worked on; StartColourAnimation's
+                                   argument */
+#define LIST_BANK       0x74    /* 8b: its bank */
+#define DMA_SOURCE      0x72    /* 24b: AddProgrammedDMA's source (= LIST_POINTER) */
+#define DMA_SOURCE_BANK 0x74    /* 8b */
+#define DMA_CHANNEL     0x27    /* 8b: AddProgrammedDMA's channel (dma.c) */
+#define DMA_B_ADDRESS   0x29    /* 8b: its destination register */
+#define BBAD_CGRAM      0x22    /* $2122: a copy to CGRAM */
+#define CHANNEL_N       0x7E    /* 16b: times3's channel number; StartMapColourAnimations:
+                                   the part of the day */
+#define MAP_ROW         0x80    /* 16b: StartMapColourAnimations: the map, then 6 x the
+                                   map (its row of Subrutines_Table) */
+#define UNKNOWN_92      0x92    /* 8b: RunColourAnimations clears it */
+#define ANY_RAN         0x93    /* 8b: 1 = a channel ran this frame (send the palette) */
+
+/* A step of a list (3 bytes) */
+#define STEP_COLOUR     0       /* 16b: the colour; $FFFF the end, $FFFE a jump */
+#define STEP_FRAMES     2       /* 8b: how many frames it stays */
+#define JUMP_TO         2       /* 16b after $FFFE: where the list goes on */
+#define JUMP_BANK       4       /* 8b: its bank */
 
 static uint32_t db_addr(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static uint16_t dp16(uint8_t *ram, const HmRegs *r, unsigned a) { return hm_dp_r16(ram, r, a); }
@@ -46,7 +78,7 @@ static uint16_t pull16(uint8_t *ram, HmRegs *r)
 /* TYA; STA $7E; ASL; CLC; ADC $7E; TAX: the channel's pointer offset */
 static uint16_t times3(uint8_t *ram, HmRegs *r, uint16_t n)
 {
-  set16(ram, r, 0x7E, n);
+  set16(ram, r, CHANNEL_N, n);
   uint32_t s = (uint32_t)(uint16_t)(n << 1) + n;
   r->c = s > 0xFFFF;
   r->a = r->x = (uint16_t)s;
@@ -61,14 +93,14 @@ void hm_StartColourAnimation(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, db_addr(r, (uint16_t)(ROW + r->x)), (uint8_t)r->y);
   hm_bus_wr8(ram, db_addr(r, (uint16_t)(DELAY + r->x)), 0);
   uint16_t n = r->x;                                    /* TXA (16-bit A) */
-  set16(ram, r, 0x7E, n);
+  set16(ram, r, CHANNEL_N, n);
   uint32_t s = (uint32_t)(uint16_t)(n << 1) + n;
   r->c = s > 0xFFFF;
   r->x = (uint8_t)s;                                    /* TAX (8-bit X) */
-  r->a = dp16(ram, r, 0x72);
-  set16(ram, r, 0x42 + r->x, r->a);
-  r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, 0x74));
-  *hm_dp(ram, r, 0x44 + r->x) = *hm_dp(ram, r, 0x74);
+  r->a = dp16(ram, r, LIST_POINTER);
+  set16(ram, r, CHANNEL_LIST + r->x, r->a);
+  r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, LIST_BANK));
+  *hm_dp(ram, r, CHANNEL_LIST_BANK + r->x) = *hm_dp(ram, r, LIST_BANK);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -78,18 +110,18 @@ void hm_StartColourAnimation(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_RunColourAnimations(uint8_t *ram, HmRegs *r)
 {
-  *hm_dp(ram, r, 0x92) = 0;
-  *hm_dp(ram, r, 0x93) = 0;
+  *hm_dp(ram, r, UNKNOWN_92) = 0;
+  *hm_dp(ram, r, ANY_RAN) = 0;
   r->y = 0;
-  r->a = hm_bus_rd16(ram, db_addr(r, 0x0196)) & 0x000A;
+  r->a = hm_bus_rd16(ram, db_addr(r, WEATHER_FLAGS)) & 0x000A;
   if (!r->a) r->y = 4;
   for (;;) {
     uint16_t x = times3(ram, r, r->y);
-    r->a = dp16(ram, r, 0x42 + x);
+    r->a = dp16(ram, r, CHANNEL_LIST + x);
     bool set = r->a != 0;
     if (!set) {
-      r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, 0x44 + x));
-      set = *hm_dp(ram, r, 0x44 + x) != 0;
+      r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, CHANNEL_LIST_BANK + x));
+      set = *hm_dp(ram, r, CHANNEL_LIST_BANK + x) != 0;
     }
     if (!set) {
       r->c = r->y >= 4;
@@ -97,29 +129,29 @@ void hm_RunColourAnimations(uint8_t *ram, HmRegs *r)
       goto next;
     }
     r->a = (uint16_t)((r->a & 0xFF00) | 1);
-    *hm_dp(ram, r, 0x93) = 1;
+    *hm_dp(ram, r, ANY_RAN) = 1;
     push16(ram, r, r->y);                               /* PHY */
-    set16(ram, r, 0x72, dp16(ram, r, 0x42 + x));
-    *hm_dp(ram, r, 0x74) = *hm_dp(ram, r, 0x44 + x);
-    r->a = (uint16_t)((dp16(ram, r, 0x42 + x) & 0xFF00) | *hm_dp(ram, r, 0x44 + x));
-    r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, 0));
+    set16(ram, r, LIST_POINTER, dp16(ram, r, CHANNEL_LIST + x));
+    *hm_dp(ram, r, LIST_BANK) = *hm_dp(ram, r, CHANNEL_LIST_BANK + x);
+    r->a = (uint16_t)((dp16(ram, r, CHANNEL_LIST + x) & 0xFF00) | *hm_dp(ram, r, CHANNEL_LIST_BANK + x));
+    r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, LIST_POINTER, STEP_COLOUR));
     r->c = r->a >= 0xFFFF;
     if (r->a == 0xFFFF) {                               /* the end of the list */
-      set16(ram, r, 0x42 + x, 0);
-      *hm_dp(ram, r, 0x44 + x) = 0;
+      set16(ram, r, CHANNEL_LIST + x, 0);
+      *hm_dp(ram, r, CHANNEL_LIST_BANK + x) = 0;
     } else {
       r->c = r->a >= 0xFFFE;
       if (r->a == 0xFFFE) {                             /* a jump */
         r->y = 2;
-        r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, 2));
-        set16(ram, r, 0x42 + x, r->a);
+        r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, LIST_POINTER, JUMP_TO));
+        set16(ram, r, CHANNEL_LIST + x, r->a);
         r->y = 4;
-        uint8_t bank = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, 4));
+        uint8_t bank = hm_bus_rd8(ram, hm_dp_long(ram, r, LIST_POINTER, JUMP_BANK));
         r->a = (uint16_t)((r->a & 0xFF00) | bank);
-        *hm_dp(ram, r, 0x44 + x) = bank;
-        set16(ram, r, 0x72, dp16(ram, r, 0x42 + x));
-        *hm_dp(ram, r, 0x74) = bank;
-        r->a = (uint16_t)((dp16(ram, r, 0x42 + x) & 0xFF00) | bank);
+        *hm_dp(ram, r, CHANNEL_LIST_BANK + x) = bank;
+        set16(ram, r, LIST_POINTER, dp16(ram, r, CHANNEL_LIST + x));
+        *hm_dp(ram, r, LIST_BANK) = bank;
+        r->a = (uint16_t)((dp16(ram, r, CHANNEL_LIST + x) & 0xFF00) | bank);
       }
     }
     r->y = pull16(ram, r);                              /* PLY; TYX */
@@ -135,7 +167,7 @@ void hm_RunColourAnimations(uint8_t *ram, HmRegs *r)
     push16(ram, r, row);                                /* LDA #0; XBA; LDA; PHA */
     uint8_t col = hm_bus_rd8(ram, db_addr(r, (uint16_t)(COLOUR + r->x)));
     push16(ram, r, col);
-    r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, 0));
+    r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, LIST_POINTER, STEP_COLOUR));
     r->x = pull16(ram, r);                              /* PLX; PLY */
     r->y = pull16(ram, r);
     hm_jsl(ram, r, 0x8EEE, 0x80);
@@ -144,34 +176,34 @@ void hm_RunColourAnimations(uint8_t *ram, HmRegs *r)
     r->y = pull16(ram, r);                              /* PLY; PHY; TYX */
     push16(ram, r, r->y);
     r->x = r->y;
-    uint8_t frames = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, 2));
+    uint8_t frames = hm_bus_rd8(ram, hm_dp_long(ram, r, LIST_POINTER, STEP_FRAMES));
     r->a = (uint16_t)((r->a & 0xFF00) | frames);
     hm_bus_wr8(ram, db_addr(r, (uint16_t)(DELAY + r->x)), frames);
     r->y = pull16(ram, r);
     x = times3(ram, r, r->y);
-    uint32_t p = (uint32_t)dp16(ram, r, 0x42 + x) + 3;  /* the next step */
-    set16(ram, r, 0x42 + x, (uint16_t)p);
-    uint16_t b = (uint16_t)(*hm_dp(ram, r, 0x44 + x) + (p > 0xFFFF));
+    uint32_t p = (uint32_t)dp16(ram, r, CHANNEL_LIST + x) + 3; /* the next step */
+    set16(ram, r, CHANNEL_LIST + x, (uint16_t)p);
+    uint16_t b = (uint16_t)(*hm_dp(ram, r, CHANNEL_LIST_BANK + x) + (p > 0xFFFF));
     r->c = b > 0xFF;
     r->a = (uint16_t)((p & 0xFF00) | (uint8_t)b);
-    *hm_dp(ram, r, 0x44 + x) = (uint8_t)b;
+    *hm_dp(ram, r, CHANNEL_LIST_BANK + x) = (uint8_t)b;
   next:
     times3(ram, r, r->y);
     r->y = (uint16_t)(r->y + 1);
     r->c = r->y >= 0x10;
     if (r->y == 0x10) break;
   }
-  if (!*hm_dp(ram, r, 0x93)) {
+  if (!*hm_dp(ram, r, ANY_RAN)) {
     r->a = (uint16_t)(r->a & 0xFF00);
     return;
   }
   /* send the palette: channel 5, to $2122 (CGRAM), from $7F:0900 */
-  *hm_dp(ram, r, 0x27) = 5;
-  *hm_dp(ram, r, 0x29) = 0x22;
+  *hm_dp(ram, r, DMA_CHANNEL) = 5;
+  *hm_dp(ram, r, DMA_B_ADDRESS) = BBAD_CGRAM;
   r->y = 0x0100;
   r->x = 0;
-  set16(ram, r, 0x72, 0x0900);
-  *hm_dp(ram, r, 0x74) = 0x7F;
+  set16(ram, r, DMA_SOURCE, PALETTE_COPY);
+  *hm_dp(ram, r, DMA_SOURCE_BANK) = 0x7F;
   r->a = 0x097F;
   hm_jsl(ram, r, 0x8F50, 0x80);
   hm_AddProgrammedDMA(ram, r);
@@ -185,8 +217,8 @@ static void stop_from(uint8_t *ram, HmRegs *r, uint16_t y)
 {
   do {
     uint16_t x = times3(ram, r, y);
-    set16(ram, r, 0x42 + x, 0);
-    *hm_dp(ram, r, 0x44 + x) = 0;
+    set16(ram, r, CHANNEL_LIST + x, 0);
+    *hm_dp(ram, r, CHANNEL_LIST_BANK + x) = 0;
     y = (uint16_t)(y + 1);
     r->c = y >= 0x10;
   } while (y != 0x10);
@@ -197,8 +229,8 @@ void hm_StopColourAnimationsFrom(uint8_t *ram, HmRegs *r) { stop_from(ram, r, r-
 void hm_StopColourAnimation(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = times3(ram, r, r->a);
-  set16(ram, r, 0x42 + x, 0);
-  *hm_dp(ram, r, 0x44 + x) = 0;
+  set16(ram, r, CHANNEL_LIST + x, 0);
+  *hm_dp(ram, r, CHANNEL_LIST_BANK + x) = 0;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -212,9 +244,9 @@ static void start_all(uint8_t *ram, HmRegs *r, const Start *s, unsigned n)
 {
   for (unsigned i = 0; i < n; i++) {
     r->a = s[i].list;                                   /* REP #$20; SEP #$10 */
-    set16(ram, r, 0x72, s[i].list);
+    set16(ram, r, LIST_POINTER, s[i].list);
     r->a = (uint16_t)((s[i].list & 0xFF00) | s[i].bank);
-    *hm_dp(ram, r, 0x74) = s[i].bank;
+    *hm_dp(ram, r, LIST_BANK) = s[i].bank;
     r->a = (uint16_t)((s[i].list & 0xFF00) | s[i].colour);
     r->x = s[i].channel;
     r->y = s[i].row;
@@ -592,7 +624,7 @@ static void (*sub_at(uint16_t pc))(uint8_t *, HmRegs *)
 void hm_StartMapColourAnimations(uint8_t *ram, HmRegs *r)
 {
   static const uint8_t starts[4] = { 7, 15, 17, 18 };
-  uint8_t h = (uint8_t)hm_bus_rd8(ram, 0x7F1F1C);
+  uint8_t h = (uint8_t)hm_bus_rd8(ram, WRAM_LONG(HM_HOUR));
   r->a = (uint16_t)((r->a & 0xFF00) | h);
   uint16_t part = 0;
   for (; part < 4; part++) {
@@ -600,19 +632,19 @@ void hm_StartMapColourAnimations(uint8_t *ram, HmRegs *r)
     if (!r->c) break;
   }
   r->x = part;
-  set16(ram, r, 0x7E, part);
-  uint16_t map = *hm_dp(ram, r, 0x22);                  /* LDA #0; XBA; LDA $22 */
-  set16(ram, r, 0x80, map);
+  set16(ram, r, CHANNEL_N, part);                       /* the part of the day */
+  uint16_t map = *hm_dp(ram, r, HM_MAP_ID);             /* LDA #0; XBA; LDA $22 */
+  set16(ram, r, MAP_ROW, map);
   uint32_t s = (uint32_t)(uint16_t)(map << 2) + map;    /* ASL; ASL; CLC; ADC; ADC */
   s = (s & 0xFFFF) + map + (s > 0xFFFF);
   uint16_t six = (uint16_t)s;
-  set16(ram, r, 0x80, six);
+  set16(ram, r, MAP_ROW, six);
   uint32_t t = (uint32_t)(uint16_t)(six << 1) + 0x0A;   /* ASL; CLC; ADC #10 */
   r->x = (uint16_t)t;
   r->a = hm_bus_rd16(ram, db_addr(r, (uint16_t)(SUB_TABLE + r->x)));
   r->c = r->a >= 0xFFFF;
   if (r->a != 0xFFFF) {                                 /* autumn and winter only */
-    uint8_t season = hm_bus_rd8(ram, 0x7F1F19);
+    uint8_t season = hm_bus_rd8(ram, WRAM_LONG(HM_SEASON));
     r->a = (uint16_t)((r->a & 0xFF00) | season);
     r->c = season >= 2;
     if (!r->c) return;

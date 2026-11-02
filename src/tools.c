@@ -13,11 +13,34 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
+/* Also used, from hm_ram.h: HM_SEASON, HM_MAP_ID ($22) and HM_TOOL_SELECTED ($0921) */
+/* WRAM */
 #define HM_MAP_TILES          0x009B6   /* the current map's tile types (DB:) */
-#define HM_PLAYER_DIRECTION   0xDA      /* direct page, 16b */
+#define HM_TILE_IN_FRONT_X    0x00985   /* 16b: where the tool lands */
+#define HM_TILE_IN_FRONT_Y    0x00987
+#define TOOL_SOUND_CHOICE     0x0922    /* DB: 8b, the answer that picks the tool's sound */
+#define PROPERTY_FLAGS_5C     0x11F5C   /* $7F1F5C bit 3: no tile checks */
+
+/* ROM tables */
 #define DIRECTION_FLAG_TABLE  0x82ACFE  /* ROM: dw 01, 02, 04, 08 */
 #define SEASON_FLAG_TABLE     0x82AD06  /* ROM: dw 10, 20, 40, 80 */
-#define PROPERTY_FLAGS_5C     0x11F5C   /* $7F1F5C bit 3: no tile checks */
+#define SQUARE_OFFSETS        0x8292FA  /* ROM: dw dx, dy per entry */
+
+/* Direct page */
+#define TILE_PROPERTIES       0x0D      /* long $0D-$0F: the map's tile property table */
+#define HM_PLAYER_X           0xD6      /* 16b, pixels */
+#define HM_PLAYER_Y           0xD8
+#define HM_PLAYER_DIRECTION   0xDA      /* 16b: 0 down, 1 up, 2 right, 3 left */
+/* GetTileProperty's scratch: */
+#define PROPERTY_WHICH        0x82      /* 16b: which property word (its A) */
+#define PROPERTY_FLAG         0x84      /* 16b: the last direction / season flag tested */
+/* CalculateTileInFront's scratch: */
+#define FRONT_AHEAD           0x7E      /* 16b: 16 x the tiles ahead */
+#define FRONT_EXTRA_X         0x80      /* 16b: its X (the extra pixels across) */
+#define FRONT_EXTRA_Y         0x82      /* 16b: its Y (the extra pixels down) */
+/* TileAtOffsetFromPlayer's scratch (the same bytes): */
+#define OFFSET_X_PIXELS       0x7E      /* 16b: 16 x its X */
+#define OFFSET_Y_PIXELS       0x80      /* 16b: 16 x its Y */
 
 static void push16(uint8_t *ram, HmRegs *r, uint16_t v)
 {
@@ -63,7 +86,7 @@ void hm_GetTileContent(uint8_t *ram, HmRegs *r)
 void hm_GetTileProperty(uint8_t *ram, HmRegs *r)
 {
   uint16_t which = r->a;
-  hm_dp_w16(ram, r, 0x82, which);
+  hm_dp_w16(ram, r, PROPERTY_WHICH, which);
   if (hm_rd16(ram, PROPERTY_FLAGS_5C) & 0x0008) {
     r->a = 0; r->x = 0;
     return;
@@ -76,22 +99,22 @@ void hm_GetTileProperty(uint8_t *ram, HmRegs *r)
   push16(ram, r, type);                          /* PHX; PHA */
   push16(ram, r, type);
   r->y = (uint16_t)(type * 4 + 3);               /* the side/season byte */
-  uint8_t sides = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0D, r->y));
+  uint8_t sides = hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPERTIES, r->y));
 
   uint16_t dir = hm_dp_r16(ram, r, HM_PLAYER_DIRECTION);
   r->c = dir >> 15;                              /* ASL */
   uint16_t flag = hm_bus_rd16(ram, DIRECTION_FLAG_TABLE + (uint16_t)(dir << 1));
-  hm_dp_w16(ram, r, 0x84, flag);
+  hm_dp_w16(ram, r, PROPERTY_FLAG, flag);
   bool applies = sides & flag;
   if (applies) {
     r->c = 0;
     flag = hm_bus_rd16(ram, SEASON_FLAG_TABLE + 2u * ram[HM_SEASON]);
-    hm_dp_w16(ram, r, 0x84, flag);
+    hm_dp_w16(ram, r, PROPERTY_FLAG, flag);
     applies = sides & flag;
   }
   if (!applies) {
     r->y = (uint16_t)(r->y - 1);
-    if (hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0D, r->y)) & 0x80) {
+    if (hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPERTIES, r->y)) & 0x80) {
       pull16(ram, r); pull16(ram, r);            /* PLA; PLX */
       r->a = 0; r->x = 0;
       return;
@@ -102,7 +125,7 @@ void hm_GetTileProperty(uint8_t *ram, HmRegs *r)
   uint32_t sum = 4u * type + which;              /* ASL; ASL; ADC $82 */
   r->c = sum > 0xFFFF;
   r->y = (uint16_t)sum;
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x0D, r->y));
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, TILE_PROPERTIES, r->y));
   if (!applies) r->x = 0;
 }
 
@@ -195,11 +218,6 @@ void hm_CheckToolSuccess(uint8_t *ram, HmRegs *r)
  * whatever the direction. Leftovers: $7E = 16 X, $80 = 16 Y, A = the new Y,
  * C from its add.
  * ───────────────────────────────────────────────────────────────────────── */
-#define HM_PLAYER_X       0xD6   /* direct page, 16b, pixels */
-#define HM_TILE_IN_FRONT_X 0x00985 /* 16b: where the tool lands */
-#define HM_TILE_IN_FRONT_Y 0x00987
-#define HM_PLAYER_Y       0xD8
-
 /* CLC; ADC b; ADC c — or SEC; SBC b; SBC c — with the carry chained. */
 static uint16_t add2(uint16_t a, uint16_t b, uint16_t c, uint8_t *carry)
 {
@@ -220,9 +238,9 @@ static uint16_t sub2(uint16_t a, uint16_t b, uint16_t c, uint8_t *carry)
 void hm_CalculateTileInFront(uint8_t *ram, HmRegs *r)
 {
   uint16_t ahead = (uint16_t)(r->a << 4);
-  hm_dp_w16(ram, r, 0x7E, ahead);
-  hm_dp_w16(ram, r, 0x80, r->x);
-  hm_dp_w16(ram, r, 0x82, r->y);
+  hm_dp_w16(ram, r, FRONT_AHEAD, ahead);
+  hm_dp_w16(ram, r, FRONT_EXTRA_X, r->x);
+  hm_dp_w16(ram, r, FRONT_EXTRA_Y, r->y);
   uint16_t px = hm_dp_r16(ram, r, HM_PLAYER_X), py = hm_dp_r16(ram, r, HM_PLAYER_Y);
   hm_wr16(ram, HM_TILE_IN_FRONT_X, px);
   hm_wr16(ram, HM_TILE_IN_FRONT_Y, py);
@@ -237,8 +255,8 @@ void hm_CalculateTileInFront(uint8_t *ram, HmRegs *r)
 void hm_TileAtOffsetFromPlayer(uint8_t *ram, HmRegs *r)
 {
   uint16_t dx = (uint16_t)(r->x << 4), dy = (uint16_t)(r->y << 4);
-  hm_dp_w16(ram, r, 0x7E, dx);
-  hm_dp_w16(ram, r, 0x80, dy);
+  hm_dp_w16(ram, r, OFFSET_X_PIXELS, dx);
+  hm_dp_w16(ram, r, OFFSET_Y_PIXELS, dy);
   uint32_t x = (uint32_t)hm_dp_r16(ram, r, HM_PLAYER_X) + dx;
   hm_wr16(ram, HM_TILE_IN_FRONT_X, (uint16_t)x);
   uint32_t y = (uint32_t)hm_dp_r16(ram, r, HM_PLAYER_Y) + dy;
@@ -254,8 +272,6 @@ void hm_TileAtOffsetFromPlayer(uint8_t *ram, HmRegs *r)
  * gold tools reach further). Square: entry A (0..8) of the offset table
  * $82:92FA, around the player.
  * ───────────────────────────────────────────────────────────────────────── */
-#define SQUARE_OFFSETS 0x8292FA   /* ROM: dw dx, dy per entry */
-
 static void check_tile_in_front(uint8_t *ram, HmRegs *r, uint16_t ret)
 {
   r->x = hm_rd16(ram, HM_TILE_IN_FRONT_X);
@@ -305,5 +321,5 @@ void hm_PreCheckToolSuccessSquare(uint8_t *ram, HmRegs *r)
 void hm_CheckToolSuccessForSound(uint8_t *ram, HmRegs *r)
 {
   tile_ahead_then_check(ram, r, 1, 0x928B, 0x9297);
-  hm_bus_wr8(ram, ((uint32_t)r->db << 16) | 0x0922, (uint8_t)r->a);
+  hm_bus_wr8(ram, ((uint32_t)r->db << 16) | TOOL_SOUND_CHOICE, (uint8_t)r->a);
 }

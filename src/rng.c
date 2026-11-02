@@ -14,6 +14,16 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_RNG_STATE ($7E:0100-0102). */
+
+/* Direct page used by RNGReturn0toA */
+#define ROLL_LAST_FACE    0x92   /* 8b: n, then n-1 */
+#define ROLL_STEP         0x93   /* 8b: 255 / n */
+#define ROLL_VALUE        0x94   /* 8b: what GetRNG gave */
+#define DIVIDEND          0x7E   /* 16b: DivisionUnsigned's dividend (math.c) */
+#define DIVISOR           0x80   /* 16b: its divisor */
+
 /* ROR through carry, 8-bit, as the 65816 does it. */
 static uint8_t ror8(uint8_t v, uint8_t *carry)
 {
@@ -74,28 +84,28 @@ void hm_RNGReturn0toA(uint8_t *ram, HmRegs *r)
 {
   uint8_t faces = (uint8_t)r->a;
   r->x &= 0xFF; r->y &= 0xFF;                    /* SEP #$30 */
-  *hm_dp(ram, r, 0x92) = faces;
+  *hm_dp(ram, r, ROLL_LAST_FACE) = faces;
   hm_push8(ram, r, faces);                       /* PHA */
-  *hm_dp(ram, r, 0x93) = 0;
+  *hm_dp(ram, r, ROLL_STEP) = 0;
 
   /* step = 255 / faces */
-  hm_dp_w16(ram, r, 0x7E, 0x00FF);
-  hm_dp_w16(ram, r, 0x80, faces);
+  hm_dp_w16(ram, r, DIVIDEND, 0x00FF);
+  hm_dp_w16(ram, r, DIVISOR, faces);
   hm_jsl(ram, r, RNG_RET_DIVISION, 0x83);
   hm_DivisionUnsigned(ram, r);
   hm_rtl(ram, r);
   uint8_t step = (uint8_t)r->a;
-  *hm_dp(ram, r, 0x93) = step;
+  *hm_dp(ram, r, ROLL_STEP) = step;
 
   hm_jsl(ram, r, RNG_RET_GETRNG, 0x83);
   hm_GetRNG(ram, r);
   hm_rtl(ram, r);
   r->x &= 0xFF; r->y &= 0xFF;                    /* SEP #$30 */
   uint8_t roll = (uint8_t)r->a;
-  *hm_dp(ram, r, 0x94) = roll;
+  *hm_dp(ram, r, ROLL_VALUE) = roll;
 
   uint8_t last = (uint8_t)(hm_pull8(ram, r) - 1);  /* PLA; DEC */
-  *hm_dp(ram, r, 0x92) = last;
+  *hm_dp(ram, r, ROLL_LAST_FACE) = last;
 
   uint8_t result = 0, edge = step;
   while (edge < roll && ++result != last)

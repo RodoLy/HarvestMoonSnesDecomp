@@ -33,18 +33,35 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define RANCH_MASTERY      0x11F54   /* $7F1F54, 16b */
-#define RANCH_DEVELOPMENT  0x11F56
-#define MONEY_LOW          0x11F04
-#define HAPPINESS          0x11F33
+/* ── Names of the memory locations used here ──────────────────────────────
+ * The game's saved state, $7F:1Fxx (ram[] offsets 0x11Fxx), and one
+ * data-bank variable. */
+#define RANCH_MASTERY      0x11F54   /* $7F1F54, 16b: the score worked out here */
+#define RANCH_DEVELOPMENT  0x11F56   /* 16b: the ranch development score (farm.c) */
+#define MONEY_LOW          0x11F04   /* 16b: the money's low word (HM_MONEY) */
+#define HAPPINESS          0x11F33   /* 16b: the player's happiness (HM_HAPPINESS) */
 #define HEARTS             0x11F1F   /* Maria, Ann, Nina, Ellen, Eve: 16b each */
-#define SHIPPED_CORN       0x11F4A
+#define SHIPPED_CORN       0x11F4A   /* 16b each: the crops shipped */
 #define SHIPPED_TOMATOES   0x11F4C
 #define SHIPPED_TURNIPS    0x11F4E
 #define SHIPPED_POTATOES   0x11F50
 #define COWS_N             0x11F0A   /* 8b */
-#define CHICKENS_N         0x11F0B
-#define MAX_STAMINA        0x00917
+#define CHICKENS_N         0x11F0B   /* 8b */
+#define MAX_STAMINA        0x00917   /* 8b, data bank (HM_MAX_STAMINA) */
+#define ENDING_STEP        0x11F47   /* $7F1F47, 8b: the ending's step */
+#define FLAGS_5E           0x11F5E   /* 16b flags: $8000 set here */
+#define FLAGS_64           0x11F64   /* 16b story flags: $40 / $80 the house's first /
+                                        second extension */
+#define FLAGS_66           0x11F66   /* 16b: bits 0-4 the painted parts of the house */
+#define FLAGS_6C           0x11F6C   /* 16b: $1000 the turtle shell */
+#define FLAGS_6E           0x11F6E   /* 16b story flags: $08 / $04 the first / second
+                                        child, $4000 the clock */
+
+/* Direct page */
+#define COW_POINTER        0x72      /* 24b $72-$74: the cow's record (GetCowPointer) */
+/* A cow's record (see animals.c) */
+#define COW_STATUS         0         /* 8b: bit 0 = the cow exists */
+#define COW_HAPPINESS      4         /* 8b */
 
 #define RET_COW_POINTER    0xF46D    /* JSL GetCowPointer at $83:F46A */
 #define RET_NEXT_SCRIPT    0xF4C0    /* JSL StartEventScriptLong at $83:F4BD */
@@ -99,13 +116,13 @@ void hm_RanchMasteryCalculator(uint8_t *ram, HmRegs *r)
   add_sixteenths(ram, r, SHIPPED_TURNIPS);
   add_score(ram, r, (uint16_t)(hm_rd16(ram, HAPPINESS) >> 5), 0);
 
-  bonus(ram, r, 0x11F64, 0x0080, 16);                    /* house: second extension */
-  bonus(ram, r, 0x11F64, 0x0040, 16);                    /* house: first extension */
-  bonus(ram, r, 0x11F6E, 0x0008, 16);                    /* first child */
-  bonus(ram, r, 0x11F6E, 0x0004, 16);                    /* second child */
-  bonus(ram, r, 0x11F66, 0x001F, 32);                    /* painted house */
-  bonus(ram, r, 0x11F6E, 0x4000, 22);                    /* clock */
-  bonus(ram, r, 0x11F6C, 0x1000, 21);                    /* turtle shell */
+  bonus(ram, r, FLAGS_64, 0x0080, 16);                    /* house: second extension */
+  bonus(ram, r, FLAGS_64, 0x0040, 16);                    /* house: first extension */
+  bonus(ram, r, FLAGS_6E, 0x0008, 16);                    /* first child */
+  bonus(ram, r, FLAGS_6E, 0x0004, 16);                    /* second child */
+  bonus(ram, r, FLAGS_66, 0x001F, 32);                    /* painted house */
+  bonus(ram, r, FLAGS_6E, 0x4000, 22);                    /* clock */
+  bonus(ram, r, FLAGS_6C, 0x1000, 21);                    /* turtle shell */
   add_score(ram, r, (uint16_t)(hm_rd16(ram, RANCH_DEVELOPMENT) >> 1), 0);
 
   for (uint16_t cow = 0; cow < 12; cow++) {
@@ -115,13 +132,13 @@ void hm_RanchMasteryCalculator(uint8_t *ram, HmRegs *r)
     hm_jsl(ram, r, RET_COW_POINTER, 0x83);
     hm_GetCowPointer(ram, r);
     hm_rtl(ram, r);
-    uint32_t record = hm_dp_long(ram, r, 0x72, 0);
+    uint32_t record = hm_dp_long(ram, r, COW_POINTER, COW_STATUS);
     uint8_t status = hm_bus_rd8(ram, record);
     r->a = (uint16_t)((r->a & 0xFF00) | (status & 1));
     r->y = 0;
     if (status & 1) {                                    /* the cow exists */
       r->y = 4;
-      uint8_t points = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, 4)) >> 3);
+      uint8_t points = (uint8_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, COW_POINTER, COW_HAPPINESS)) >> 3);
       r->c = points >= 25;
       if (points >= 25) points = 25;
       add_score(ram, r, points, 0);
@@ -139,7 +156,7 @@ void hm_RanchMasteryCalculator(uint8_t *ram, HmRegs *r)
   hm_jsl(ram, r, RET_NEXT_SCRIPT, 0x84);
   hm_StartEventScriptLong(ram, r);
   hm_rtl(ram, r);
-  ram[0x11F47] = 0x25;
-  r->a = hm_rd16(ram, 0x11F5E) | 0x8000;
-  hm_wr16(ram, 0x11F5E, r->a);
+  ram[ENDING_STEP] = 0x25;
+  r->a = hm_rd16(ram, FLAGS_5E) | 0x8000;
+  hm_wr16(ram, FLAGS_5E, r->a);
 }

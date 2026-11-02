@@ -28,7 +28,19 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define STAMINA_FROZEN_FLAGS  0x11F60   /* $7F1F60 */
+/* WRAM (ram[] offsets); also used, from hm_ram.h: HM_MAX_STAMINA,
+ * HM_CURRENT_STAMINA, HM_EXHAUSTION, HM_GAME_STATE ($D2), HM_ANIM_REQUEST,
+ * HM_PLAYER_ACTION ($D4) and HM_HOUR */
+#define STAMINA_FROZEN_FLAGS  0x11F60   /* $7F1F60: 16b flags; bit 3 = energy frozen */
+#define HM_LUNCH_CHOICE       0x0924    /* DB: 8b, which lunch the player eats (0..2) */
+
+/* Direct page: scratch ChangeStamina leaves behind */
+#define STAMINA_CHANGE        0x92      /* 8b: the change */
+#define STAMINA_CHANGE16      0x82      /* 16b $82-$83: the change, sign-extended */
+#define STAMINA_CHANGE16_HIGH 0x83      /* 8b: its high byte (from the caller's N) */
+#define STAMINA_MAX_COPY      0x7E      /* 16b: the maximum energy */
+#define STAMINA_AFTER         0x80      /* 16b: the energy after the change */
+
 #define EXHAUSTED             0x0008    /* HM_GAME_STATE bit */
 #define ACTION_TIRED          0x000B
 #define ANIM_COLLAPSE         0x004D
@@ -39,18 +51,18 @@ void hm_ChangeStamina(uint8_t *ram, HmRegs *r)
   int8_t change = (int8_t)r->a;
   /* Scratch the original leaves behind: $92 = change, $82/$83 = change
    * sign-extended to 16 bits (with the caller's N, see above). */
-  *hm_dp(ram, r, 0x92) = (uint8_t)change;
-  *hm_dp(ram, r, 0x82) = (uint8_t)change;
-  *hm_dp(ram, r, 0x83) = r->n ? 0xFF : 0x00;
+  *hm_dp(ram, r, STAMINA_CHANGE) = (uint8_t)change;
+  *hm_dp(ram, r, STAMINA_CHANGE16) = (uint8_t)change;
+  *hm_dp(ram, r, STAMINA_CHANGE16_HIGH) = r->n ? 0xFF : 0x00;
   if (hm_rd16(ram, STAMINA_FROZEN_FLAGS) & 0x0008) {
     r->a = 0x0008;                       /* LDA flags; AND #8: X, Y, C untouched */
     return;
   }
 
   uint8_t max = ram[HM_MAX_STAMINA];
-  uint16_t after = (uint16_t)(ram[HM_CURRENT_STAMINA] + hm_dp_r16(ram, r, 0x82));
-  hm_dp_w16(ram, r, 0x7E, max);
-  hm_dp_w16(ram, r, 0x80, after);
+  uint16_t after = (uint16_t)(ram[HM_CURRENT_STAMINA] + hm_dp_r16(ram, r, STAMINA_CHANGE16));
+  hm_dp_w16(ram, r, STAMINA_MAX_COPY, max);
+  hm_dp_w16(ram, r, STAMINA_AFTER, after);
 
   /* A after the energy update (only its high byte survives below) */
   uint16_t a;
@@ -116,7 +128,6 @@ void hm_ChangeStamina(uint8_t *ram, HmRegs *r)
  * Leftovers: A, X, Y and C of the test it stops at or of the last call
  * (C = 1 on a busy action, from its CMP; past them, action >= $18).
  * ───────────────────────────────────────────────────────────────────────── */
-#define HM_LUNCH_CHOICE   0x0924   /* DB */
 #define RET_LUNCH_STAMINA 0x80C0   /* JSL ChangeStamina at $82:80BD */
 #define RET_LUNCH_ROLL    0x8118   /* JSL RNGReturn0toA at $82:8115 */
 
@@ -132,16 +143,16 @@ void hm_HaveLunch(uint8_t *ram, HmRegs *r)
   hm_ChangeStamina(ram, r);
   hm_rtl(ram, r);
 
-  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) & 0x0430);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0430);
   if (r->a) return;
-  uint16_t action = hm_dp_r16(ram, r, 0xD4);
+  uint16_t action = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
   r->a = action;
   static const uint16_t busy[] = { 0x0F, 0x10, 0x11, 0x12, 0x13, 0x17, 0x18 };
   for (unsigned i = 0; i < sizeof busy / sizeof busy[0]; i++) {
     r->c = action >= busy[i];
     if (action == busy[i]) return;
   }
-  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) & 0x0800);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0800);
   if (r->a) return;
 
   r->a = (uint16_t)((r->a & 0xFF00) | 3);
@@ -149,7 +160,7 @@ void hm_HaveLunch(uint8_t *ram, HmRegs *r)
   hm_RNGReturn0toA(ram, r);
   hm_rtl(ram, r);
   hm_bus_wr8(ram, (uint32_t)r->db << 16 | HM_LUNCH_CHOICE, (uint8_t)r->a);
-  hm_dp_w16(ram, r, 0xD2, (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0004));
-  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0400);
-  hm_dp_w16(ram, r, 0xD2, r->a);
+  hm_dp_w16(ram, r, HM_GAME_STATE, (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0004));
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0400);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
 }

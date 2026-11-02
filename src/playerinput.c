@@ -23,20 +23,45 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define GAME_STATE   0xD2
-#define ACTION       0xD4
-#define PLAYER_X     0xD6
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_ANIM_REQUEST ($0901) and
+ * HM_TOOL_SELECTED ($0921). */
+
+/* Direct page */
+#define GAME_STATE   0xD2     /* 16b flags (HM_GAME_STATE): $02 holding an item, $10
+                                 carrying, $0800 carrying the dog, $1000 an event */
+#define ACTION       0xD4     /* 16b: the player's action (HM_PLAYER_ACTION) */
+#define PLAYER_X     0xD6     /* 16b: the player's position */
 #define PLAYER_Y     0xD8
-#define FACING       0xDA
-#define PAD_HELD     0x0124
-#define PAD_NEW      0x0128
-#define PAD_SCRIPT   0x08FD
+#define FACING       0xDA     /* 16b: 0 down, 1 up, 2 right, 3 left */
+#define COLLIDE_X    0xDF     /* 16b: CollideMap's input: the position of who moves */
+#define COLLIDE_Y    0xE1     /* 16b */
+#define COLLIDE_AHEAD 0xE3    /* 16b: how far ahead to look */
+#define COLLIDE_STEP_X 0xE5   /* 16b: the step */
+#define COLLIDE_STEP_Y 0xE7   /* 16b */
+#define COLLIDE_TILE_1 0xE9   /* 16b: CollideMap's output: the first corner's tile type */
+#define COLLIDE_TILE_2 0xEB   /* 16b: the second corner's tile type */
+
+/* WRAM of the data bank */
+#define PAD_HELD     0x0124   /* 16b: the buttons held */
+#define PAD_NEW      0x0128   /* 16b: pressed this frame */
+#define PLAYER_TILE_1 0x0878  /* 16b: the tile types under the player's front corners */
+#define PLAYER_TILE_2 0x087A  /* 16b */
+#define PAD_SCRIPT   0x08FD   /* 16b: the buttons an event's script presses */
 #define TURN         0x0911   /* the direction being tried */
-#define FRONT_X      0x0985
-#define FRONT_Y      0x0987
-#define FLAGS_5C     0x7F1F5C
-#define FLAGS_60     0x7F1F60
+#define HORSE_TIMER  0x0939   /* 8b: the horse's frames between idle animations */
+#define FRONT_X      0x0985   /* 16b: CalculateTileInFront's point */
+#define FRONT_Y      0x0987   /* 16b */
+
+/* The game's saved state, $7F:1Fxx (bus addresses) */
+#define DOG_X        0x7F1F2C /* 16b: the dog's position */
+#define DOG_Y        0x7F1F2E /* 16b */
+#define DOG_MAP      0x7F1F30 /* 8b: the map the dog is on */
+#define FLAGS_5C     0x7F1F5C /* 16b flags: $20 no control */
+#define FLAGS_60     0x7F1F60 /* 16b flags: $02 / $04 block the actions, $8000 no tools */
 #define OWNED        0x7F1F68   /* bit $80 the dog, $100 the horse */
+
+/* ROM */
 #define CAN_INTERACT 0x84C7B6   /* PlayerActionCanInteract: 1 = no */
 
 enum { K_B = 0x8000, K_Y = 0x4000, K_SELECT = 0x2000, K_UP = 0x0800, K_DOWN = 0x0400,
@@ -117,12 +142,12 @@ static void key_y(uint8_t *ram, HmRegs *r)
     uint32_t s = (uint32_t)(uint8_t)r->a + 0x8B;          /* XBA; LDA #0; XBA; CLC; ADC */
     r->c = s > 0xFFFF;
     r->a = (uint16_t)s;
-    wrw(ram, r, 0x0901, r->a);
+    wrw(ram, r, HM_ANIM_REQUEST, r->a);
     return;
   }
   r->a = hm_bus_rd16(ram, FLAGS_60) & 0x8000;
   if (r->a) return;
-  uint8_t tool = hm_bus_rd8(ram, db_addr(r, 0x0921));
+  uint8_t tool = hm_bus_rd8(ram, db_addr(r, HM_TOOL_SELECTED));
   r->a = (uint16_t)((r->a & 0xFF00) | tool);
   if (!tool) return;
   act(ram, r, 0x000A);                                     /* using a tool */
@@ -147,11 +172,11 @@ static void tile_in_front(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t x, uint1
 /* $DF / $E1 = the player, no step, $E3 = how far */
 static void from_player(uint8_t *ram, HmRegs *r, uint16_t far)
 {
-  set16(ram, r, 0xE3, far);
-  set16(ram, r, 0xDF, dp16(ram, r, PLAYER_X));
-  set16(ram, r, 0xE1, dp16(ram, r, PLAYER_Y));
-  set16(ram, r, 0xE5, 0);
-  set16(ram, r, 0xE7, 0);
+  set16(ram, r, COLLIDE_AHEAD, far);
+  set16(ram, r, COLLIDE_X, dp16(ram, r, PLAYER_X));
+  set16(ram, r, COLLIDE_Y, dp16(ram, r, PLAYER_Y));
+  set16(ram, r, COLLIDE_STEP_X, 0);
+  set16(ram, r, COLLIDE_STEP_Y, 0);
 }
 static void key_b(uint8_t *ram, HmRegs *r)
 {
@@ -173,7 +198,7 @@ static void key_b(uint8_t *ram, HmRegs *r)
       r->a = dp16(ram, r, FACING);
       jsl(ram, r, 0xCA7B, 0x83, hm_CollideMap);
       if (r->a == 0) {
-        set16(ram, r, 0xE3, 0x0020);
+        set16(ram, r, COLLIDE_AHEAD, 0x0020);
         r->a = dp16(ram, r, FACING);
         jsl(ram, r, 0xCA8C, 0x83, hm_CollideEventObjects);
         if (is(r, 0)) { act(ram, r, 0x0003); return; }    /* jump */
@@ -196,7 +221,7 @@ static void way_blocked(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0xCD2F, 0x83, hm_CollideMap);
   bool blocked = r->a != 0;
   if (!blocked) {
-    for (unsigned at = 0xE9; at <= 0xEB && !blocked; at += 2) {
+    for (unsigned at = COLLIDE_TILE_1; at <= COLLIDE_TILE_2 && !blocked; at += 2) {
       uint16_t v = dp16(ram, r, at);
       r->a = (uint16_t)(v - 0xC0);
       r->c = v >= 0xC0;                                    /* SEC; SBC */
@@ -205,7 +230,7 @@ static void way_blocked(uint8_t *ram, HmRegs *r)
     }
   }
   if (!blocked) {
-    set16(ram, r, 0xE3, 0x0010);
+    set16(ram, r, COLLIDE_AHEAD, 0x0010);
     r->a = rdw(ram, r, TURN);
     jsl(ram, r, 0xCD60, 0x83, hm_CollideEventObjects);
     blocked = !is(r, 0);
@@ -244,9 +269,9 @@ static void put_down(uint8_t *ram, HmRegs *r)
   wrw(ram, r, FRONT_Y, dp16(ram, r, PLAYER_Y));
   r->a = 0x0017; r->x = 0; r->y = 0x0014;
   jsl(ram, r, 0xCD07, 0x84, hm_StartScriptAtTileInFront);               /* the putting-down script */
-  wrw(ram, r, 0x0878, 0);
-  wrw(ram, r, 0x087A, 0);
-  hm_bus_wr8(ram, db_addr(r, 0x0939), 0);
+  wrw(ram, r, PLAYER_TILE_1, 0);
+  wrw(ram, r, PLAYER_TILE_2, 0);
+  hm_bus_wr8(ram, db_addr(r, HORSE_TIMER), 0);
 }
 /* carrying the dog ($D2 bit $800): let it go in front, if no object is in
  * the way and three points ahead (CalculateTileInFront with three offsets)
@@ -279,11 +304,11 @@ static void let_dog_go(uint8_t *ram, HmRegs *r)
     if (!r->c) return;
   }
   r->a = rdw(ram, r, FRONT_X);
-  hm_bus_wr16(ram, 0x7F1F2C, r->a);                        /* the dog's place */
+  hm_bus_wr16(ram, DOG_X, r->a);                           /* the dog's place */
   r->a = rdw(ram, r, FRONT_Y);
-  hm_bus_wr16(ram, 0x7F1F2E, r->a);
-  r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, 0x22));
-  hm_bus_wr8(ram, 0x7F1F30, *hm_dp(ram, r, 0x22));         /* and map */
+  hm_bus_wr16(ram, DOG_Y, r->a);
+  r->a = (uint16_t)((r->a & 0xFF00) | *hm_dp(ram, r, HM_MAP_ID));
+  hm_bus_wr8(ram, DOG_MAP, *hm_dp(ram, r, HM_MAP_ID));     /* and map */
   act(ram, r, 0x0016);
   r->a = (uint16_t)(0x0800 ^ 0xFFFF) & dp16(ram, r, GAME_STATE);
   set16(ram, r, GAME_STATE, r->a);

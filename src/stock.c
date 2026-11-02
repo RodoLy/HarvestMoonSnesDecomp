@@ -15,10 +15,17 @@
 
 #define STOCK_MAX 999
 
+/* Direct page */
+#define STOCK_CHANGE      0x7E   /* 16b scratch: the amount added (left there, as the original does) */
+#define MONEY_CHANGE      0x72   /* 24b $72-$74: AddMoney's input, the signed amount */
+#define MONEY_CHANGE_BANK 0x74   /* 8b: its third byte */
+#define MONEY_SUM         0x75   /* 24b $75-$77: AddMoney's output, the sum */
+#define MONEY_SUM_HIGH    0x77   /* 8b: its third byte */
+
 static void add_capped(uint8_t *ram, HmRegs *r, uint32_t counter)
 {
   uint16_t change = r->a;
-  hm_dp_w16(ram, r, 0x7E, change);
+  hm_dp_w16(ram, r, STOCK_CHANGE, change);
   unsigned sum = hm_rd16(ram, counter) + change;   /* CLC; ADC */
   uint16_t value = (uint16_t)sum;
   r->c = sum > 0xFFFF;
@@ -50,11 +57,11 @@ void hm_AddPlayerHappiness(uint8_t *ram, HmRegs *r) { add_capped(ram, r, HM_HAPP
 void hm_AddMoney(uint8_t *ram, HmRegs *r)
 {
   uint32_t money = hm_rd24(ram, HM_MONEY);
-  uint32_t change = hm_dp_r16(ram, r, 0x72) | (uint32_t)*hm_dp(ram, r, 0x74) << 16;
+  uint32_t change = hm_dp_r16(ram, r, MONEY_CHANGE) | (uint32_t)*hm_dp(ram, r, MONEY_CHANGE_BANK) << 16;
   uint32_t sum = money + change;                 /* 16-bit ADC, then 8-bit ADC */
   uint32_t total = sum & 0xFFFFFF;
-  hm_dp_w16(ram, r, 0x75, (uint16_t)total);
-  *hm_dp(ram, r, 0x77) = (uint8_t)(total >> 16);
+  hm_dp_w16(ram, r, MONEY_SUM, (uint16_t)total);
+  *hm_dp(ram, r, MONEY_SUM_HIGH) = (uint8_t)(total >> 16);
   if (total & 0x800000) {                        /* BMI on the top byte */
     r->c = sum > 0xFFFFFF;
     r->a = 1;

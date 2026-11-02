@@ -35,8 +35,25 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
+/* Also used, from hm_ram.h: HM_PLAYER_ACTION ($D4), HM_MAP_ID ($22),
+ * HM_SEASON and HM_TOOL_SELECTED ($0921) */
+/* Direct page */
 #define HM_PLAYER_X        0xD6     /* direct page, 16b, pixels */
 #define HM_PLAYER_Y        0xD8
+#define TILE_PROPERTIES    0x0D     /* long $0D-$0F: the map's tile property table */
+#define MONEY_CHANGE       0x72     /* 24b $72-$74: AddMoney's input, the amount */
+#define MONEY_CHANGE_BANK  0x74     /* 8b: its third byte */
+/* WRAM */
+#define SOUND_EFFECT       0x00114  /* 8b: the sound effect PlaySoundEffect0A plays */
+#define SOUND_BANK         0x00115  /* 8b: its bank */
+#define WEATHER_FLAGS      0x00196  /* 16b: the weather and day flags */
+#define ITEM_FLAGS         0x00974  /* 8b: the map object to spawn (objects.c): its flags, */
+#define ITEM_ROUTINE       0x00975  /*     its routine, */
+#define ITEM_STATE         0x00976  /*     its state, */
+#define ITEM_SPRITE        0x0097A  /*     its sprite, */
+#define ITEM_FLIP          0x0097E  /*     its flip, */
+#define ITEM_X             0x00980  /*     its position */
+#define ITEM_Y             0x00982
 #define HM_TILE_IN_FRONT_X 0x00985  /* 16b: where the tool lands */
 #define HM_TILE_IN_FRONT_Y 0x00987
 #define HM_SOW_STEP        0x0096B  /* 8b: which tile of a multi-tile use */
@@ -49,10 +66,12 @@
 #define HM_SEEDS_TURNIP    0x0092B
 #define HM_COW_FEED        0x0092C  /* 8b: portions in the bag */
 #define HM_CHICKEN_FEED    0x0092D
+#define HM_WATER           0x00926  /* 8b: water left in the can */
 #define HM_COWS_FED        0x00930  /* 8b: troughs filled today */
 #define HM_CHICKENS_FED    0x00931
 #define HM_COW_TROUGHS     0x00932  /* 16b: which troughs have food */
 #define HM_CHICKEN_TROUGHS 0x00934
+#define MOLE_TIMER         0x0093A  /* 8b: the mole's frames (the hoe's mole clears it) */
 #define HM_HOUR            0x11F1C  /* $7F1F1C, 8b */
 #define HM_PLANTED_GRASS   0x11F29  /* $7F1F29, 16b */
 #define FLAGS_5A           0x11F5A  /* $7F1F5A... 16-bit flag words */
@@ -169,11 +188,11 @@ static void change_tile_in_front(uint8_t *ram, HmRegs *r, uint16_t change, uint1
 static void effect(uint8_t *ram, HmRegs *r, uint16_t x, uint16_t y, uint16_t sprite,
                    uint16_t ret)
 {
-  hm_wr16(ram, 0x0980, x);
-  hm_wr16(ram, 0x0982, y);
-  hm_wr16(ram, 0x097A, sprite);
-  hm_wr16(ram, 0x097E, 0);
-  ram[0x0974] = 3; ram[0x0975] = 0; ram[0x0976] = 0;
+  hm_wr16(ram, ITEM_X, x);
+  hm_wr16(ram, ITEM_Y, y);
+  hm_wr16(ram, ITEM_SPRITE, sprite);
+  hm_wr16(ram, ITEM_FLIP, 0);
+  ram[ITEM_FLAGS] = 3; ram[ITEM_ROUTINE] = 0; ram[ITEM_STATE] = 0;
   r->a = 0;
   jsl(ram, r, ret, 0x81, hm_SpawnMapObject);
 }
@@ -196,9 +215,9 @@ static void add(uint8_t *ram, HmRegs *r, void (*fn)(uint8_t *, HmRegs *), uint16
 static void add_money(uint8_t *ram, HmRegs *r, uint16_t tens_of_g, uint16_t ret)
 {
   r->a = tens_of_g;
-  hm_dp_w16(ram, r, 0x72, tens_of_g);
+  hm_dp_w16(ram, r, MONEY_CHANGE, tens_of_g);
   r->a = 0;                                              /* SEP; LDA #0; STA $74 */
-  *hm_dp(ram, r, 0x74) = 0;
+  *hm_dp(ram, r, MONEY_CHANGE_BANK) = 0;
   jsl(ram, r, ret, 0x83, hm_AddMoney);
 }
 static void idle(uint8_t *ram, HmRegs *r)
@@ -352,7 +371,7 @@ static void dig(uint8_t *ram, HmRegs *r, const DigRets *ret, bool mole_clears_09
   if (below(r, load8(r, ram[HM_SEASON]), FALL) && !test(ram, r, FLAGS_60, NO_FINDS)
       && !test(ram, r, FLAGS_5A, 0x1000) && one_in(ram, r, 32, ret->mole_roll)) {
     event(ram, r, 0x0011, 0, 0x0030, ret->mole);         /* a mole */
-    if (mole_clears_093a) ram[0x093A] = 0;
+    if (mole_clears_093a) ram[MOLE_TIMER] = 0;
     set_flag(ram, r, FLAGS_5A, 0x1000);
     return;
   }
@@ -569,7 +588,7 @@ void hm_ToolUsedAxe(uint8_t *ram, HmRegs *r)
   if (!tool_works(ram, r, 0x97C1, hm_PreCheckToolSuccess)) {
     uint8_t map = load8(r, map_id(ram, r));
     if (below(r, map, 0x10) || !below(r, map, 0x14) || !is(r, r->x, 0x00F4)
-        || test(ram, r, 0x00196, 0x001A) || test(ram, r, FLAGS_6A, 0x0020))
+        || test(ram, r, WEATHER_FLAGS, 0x001A) || test(ram, r, FLAGS_6A, 0x0020))
       goto done;
     set_flag(ram, r, FLAGS_6A, 0x0020);
     r->a = 0; r->x = 0x0017; r->y = 0;
@@ -818,13 +837,11 @@ void hm_ToolUsedCowFeed(uint8_t *ram, HmRegs *r)
  * gets the picture of entry 4 (type + 1) of the tile table [$0D] (the
  * byte there is the ChangeMapTile change).
  * ───────────────────────────────────────────────────────────────────────── */
-#define HM_WATER           0x00926  /* 8b: water left in the can */
-
 static void make_sound(uint8_t *ram, HmRegs *r, uint16_t ret)
 {
   load8(r, 0x07);
-  ram[0x0114] = 0x00;
-  ram[0x0115] = 0x07;
+  ram[SOUND_EFFECT] = 0x00;
+  ram[SOUND_BANK] = 0x07;
   jsl(ram, r, ret, 0x83, hm_PlaySoundEffect0A);
 }
 static void water_tile(uint8_t *ram, HmRegs *r, uint16_t ret_edit, uint16_t ret_change)
@@ -837,7 +854,7 @@ static void water_tile(uint8_t *ram, HmRegs *r, uint16_t ret_edit, uint16_t ret_
   hm_pull8(ram, r); hm_pull8(ram, r);                    /* PLA */
   r->y = (uint16_t)(watered << 2);
   r->c = (watered << 1) & 0x8000 ? 1 : 0;                /* ASL; ASL */
-  uint8_t change = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0D, r->y));
+  uint8_t change = hm_bus_rd8(ram, hm_dp_long(ram, r, TILE_PROPERTIES, r->y));
   change_tile_in_front(ram, r, change, ret_change);
 }
 

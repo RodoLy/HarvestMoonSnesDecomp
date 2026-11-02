@@ -38,12 +38,31 @@ static uint16_t rd16(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_
 static void wr8(uint8_t *ram, const HmRegs *r, uint16_t a, uint8_t v) { hm_bus_wr8(ram, abs_(r, a), v); }
 static void wr16(uint8_t *ram, const HmRegs *r, uint16_t a, uint16_t v) { hm_bus_wr16(ram, abs_(r, a), v); }
 
-enum { HVBJOY = 0x4212, JOY1 = 0x4218, JOY2 = 0x421A,
-       PAD1 = 0x0124, PAD1_LAST = 0x0126, PAD1_NEW = 0x0128, PAD1_UP = 0x012A,
-       PAD1_REPEAT = 0x012C, PAD1_EXTRA = 0x012E,
-       PAD2 = 0x0130, PAD2_LAST = 0x0132, PAD2_NEW = 0x0134, PAD2_UP = 0x0136,
-       PAD2_REPEAT = 0x0138, PAD2_EXTRA = 0x013A,
-       HELD = 0x23 };
+/* ── Names of the memory locations used here ────────────────────────────── */
+
+/* Console registers */
+#define HVBJOY        0x4212   /* bit 0 = the automatic pad reading is running */
+#define JOY1          0x4218   /* 16b: pad 1's buttons */
+#define JOY2          0x421A   /* 16b: pad 2's buttons */
+
+/* WRAM of the data bank: pad 1 */
+#define PAD1          0x0124   /* 16b: the buttons held */
+#define PAD1_LAST     0x0126   /* 16b: last frame's */
+#define PAD1_NEW      0x0128   /* 16b: pressed this frame (HM_JOY_NEW elsewhere) */
+#define PAD1_UP       0x012A   /* 16b: let go this frame */
+#define PAD1_REPEAT   0x012C   /* 16b: the new presses, plus autorepeat */
+#define PAD1_EXTRA    0x012E   /* 16b: ORed into the buttons read, then cleared */
+/* pad 2: the same (nothing reads them) */
+#define PAD2          0x0130
+#define PAD2_LAST     0x0132
+#define PAD2_NEW      0x0134
+#define PAD2_UP       0x0136
+#define PAD2_REPEAT   0x0138
+#define PAD2_EXTRA    0x013A
+
+/* Direct page */
+#define DP_LOW_BYTES_ONLY 0x00 /* 8b: not 0 = read only the low bytes (never) */
+#define HELD          0x23     /* 16b: frames some button has been held */
 
 void hm_ReadJoypad(uint8_t *ram, HmRegs *r)
 {
@@ -52,7 +71,7 @@ void hm_ReadJoypad(uint8_t *ram, HmRegs *r)
 
   wr16(ram, r, PAD1_LAST, rd16(ram, r, PAD1));
   wr16(ram, r, PAD2_LAST, rd16(ram, r, PAD2));
-  if (*hm_dp(ram, r, 0x00)) {                                  /* never */
+  if (*hm_dp(ram, r, DP_LOW_BYTES_ONLY)) {                     /* never */
     wr8(ram, r, PAD1_EXTRA, rd8(ram, r, JOY1));
     wr8(ram, r, PAD2, rd8(ram, r, JOY2));
   } else {

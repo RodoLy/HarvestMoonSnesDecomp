@@ -12,6 +12,10 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_WEATHER_TOMORROW ($098C), HM_YEAR ($7F1F18),
+ * HM_SEASON ($7F1F19) and HM_DAY ($7F1F1B). The ROM's chance tables and the
+ * TV's are named further down, next to the routines that read them. */
 #define WEATHER_FLAGS      0x00196   /* 16b, written by SetWeatherFlags */
 #define STORY_FLAGS_64     0x11F64   /* $7F1F64: bit 0 summer storm seen,
                                       * bit 1 winter storm seen */
@@ -289,8 +293,8 @@ void hm_WeatherTomorrow(uint8_t *ram, HmRegs *r)
  * Leftovers: X = tomorrow's code; A = 0, or the value just stored;
  * C untouched.
  * ───────────────────────────────────────────────────────────────────────── */
-#define TV_FORECAST      0x00990
-#define TV_FORECAST_MAP  0x8281FD
+#define TV_FORECAST      0x00990    /* 8b: what the TV's forecast shows */
+#define TV_FORECAST_MAP  0x8281FD   /* ROM: tomorrow's code -> the forecast */
 
 void hm_TvWeatherForecast(uint8_t *ram, HmRegs *r)
 {

@@ -16,9 +16,16 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define SEASON_NAMES    0x828AD9
-#define WEEKDAY_NAMES   0x828B19
-#define ORDINAL_NAMES   0x828BF9
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_SEASON ($7F1F19), HM_WEEKDAY ($7F1F1A) and
+ * HM_DAY ($7F1F1B). */
+
+/* ROM tables of text codes */
+#define SEASON_NAMES    0x828AD9  /* 16 bytes per season */
+#define WEEKDAY_NAMES   0x828B19  /* 32 bytes per weekday */
+#define ORDINAL_NAMES   0x828BF9  /* 4 bytes per suffix: st, nd, rd, th */
+
+/* The text buffers (data bank WRAM) */
 #define SEASON_TEXT     0x008B3   /* 6 x 16b */
 #define WEEKDAY_TEXT    0x008BF   /* 9 x 16b */
 #define ORDINAL_TEXT    0x008D1   /* 2 x 16b */

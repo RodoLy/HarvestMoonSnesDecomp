@@ -30,6 +30,66 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
+/* Also used, from hm_ram.h: HM_MAP_ID ($22, the map being loaded),
+ * HM_TOOL_SELECTED ($0921) and HM_TOOL_BACKPACK ($0923) */
+
+/* WRAM $7F:1Fxx (bus addresses) */
+#define SHED_ITEMS          0x7F1F00   /* the shed, one bit per item (+ the record's byte) */
+#define COWS                0x7F1F0A   /* 8b: cows owned */
+#define YEAR                0x7F1F18   /* 8b: 0 = the first year */
+#define SEASON              0x7F1F19   /* 8b: 0 spring ... 3 winter */
+#define DAY                 0x7F1F1B   /* 8b: 1..30 */
+#define POWER_BERRIES       0x7F1F36   /* 8b: power berries eaten */
+#define EGGS_LAID           0x7F1F45   /* 16b: one bit per hen that laid an egg */
+#define FLAGS_5A            0x7F1F5A   /* 16b flags; bit 0 = map $37 seen */
+#define FLAGS_64            0x7F1F64   /* 16b story flags (house extensions, a cow pregnant...) */
+#define FLAGS_66            0x7F1F66   /* 16b flags; bits 9-12 = the house painted */
+#define FLAGS_68            0x7F1F68   /* 16b flags; bit 0 = the shops are open */
+#define FLAGS_6A            0x7F1F6A   /* 16b flags; bits 0-3 = the gold tools on sale */
+#define FLAGS_6C            0x7F1F6C   /* 16b flags */
+#define FLAGS_6E            0x7F1F6E   /* 16b flags; bit 14 = the clock */
+
+/* WRAM of the data bank */
+#define WEATHER             0x0196     /* 16b: the weather and day flags */
+#define BARN_FODDER         0x0932     /* 16b: one bit per barn trough with food */
+#define COOP_FODDER         0x0934     /* 16b: one bit per coop trough with food */
+
+/* ROM tables */
+#define TILE_TYPE_SHEET     0xA7F500   /* the tile types, laid out like the graphics sheet */
+#define SHED_LIST           0xBE0F     /* $81:BE0F: the shed's items, 8 bytes each */
+#define FLOWER_SHOP_LIST    0xBEEF     /* $81:BEEF: the flower shop's */
+#define GENERAL_STORE_LIST  0xBF27     /* $81:BF27: the general store's */
+#define ANIMAL_SHOP_LIST    0xBF6F     /* $81:BF6F: the animal shop's */
+#define POWER_FLOWER_PLACES 0x81AC49   /* x, y words; 10 places */
+#define TROUGH_BITS         0x82A571   /* a word per trough: its bit in BARN_FODDER / COOP_FODDER */
+#define HEN_BITS            0x81BF97   /* a word per hen: its bit in EGGS_LAID */
+#define HEN_PLACES          0x83CA10   /* 4 bytes per hen: x, y in the coop */
+#define BARN_TROUGHS        0x81B0ED   /* 4 bytes per barn trough: x, y */
+#define COOP_TROUGHS        0x81B19F   /* 4 bytes per coop trough: x, y */
+#define MAP_ROUTINES        0x81A9F6   /* a word per map: its routine (bank $81) */
+#define MAPS_GRAPHICS       0x80AA7C   /* Maps_Graphics_Table: a word per map */
+
+/* Direct page */
+#define CHANGE_GFX          0x7E   /* 16b: ReadTileChange's output: the graphics' offset, */
+#define CHANGE_COLS         0x80   /* 16b: the columns, */
+#define CHANGE_ROWS         0x82   /* 16b: the rows, */
+#define CHANGE_TYPE         0x84   /* 16b: the tile type to write (0 = none) */
+#define BLOCK_COLS          0x86   /* 16b: SetTileTypeBlock's input: the columns */
+#define BLOCK_ROWS          0x88   /* 16b: the rows */
+#define BG_RECORD           0x18   /* 16b: GetBackgroundData: the map's graphics record */
+#define SHELF_BIT           0x92   /* 8b: DrawShelfItem: the item's bit */
+/* $72-$74 is a long pointer: */
+#define TYPE_SHEET_PTR      0x72   /* SetTileTypesFromChange: TILE_TYPE_SHEET */
+#define SHELF_LIST_PTR      0x72   /* DrawShelfItem: the list of items */
+#define LONG_PTR_BANK       0x74   /* its bank */
+/* SetTileTypesFromChange's own uses: */
+#define TYPES_X             0x8E   /* 16b: the position */
+#define TYPES_Y             0x90   /* 16b */
+#define TYPE_AT             0x86   /* 16b: the next type to read in the sheet (BLOCK_COLS
+                                    * elsewhere) */
+#define TYPES_COLS          0x82   /* 16b: the columns (CHANGE_ROWS elsewhere) */
+#define TYPES_ROWS          0x84   /* 16b: the rows (CHANGE_TYPE elsewhere) */
+
 static void push16(uint8_t *ram, HmRegs *r, uint16_t v)
 {
   hm_push8(ram, r, (uint8_t)(v >> 8));
@@ -83,9 +143,9 @@ void hm_ChangeMapTileNoVram(uint8_t *ram, HmRegs *r)
   jsl(ram, r, RET_7CE_ENTRY, 0x81, hm_ReadTileChange);
   r->x = pull16(ram, r);                                  /* PLX; PLY */
   r->y = pull16(ram, r);
-  hm_dp_w16(ram, r, 0x86, hm_dp_r16(ram, r, 0x80));
-  hm_dp_w16(ram, r, 0x88, hm_dp_r16(ram, r, 0x82));
-  r->a = hm_dp_r16(ram, r, 0x84);
+  hm_dp_w16(ram, r, BLOCK_COLS, hm_dp_r16(ram, r, CHANGE_COLS));
+  hm_dp_w16(ram, r, BLOCK_ROWS, hm_dp_r16(ram, r, CHANGE_ROWS));
+  r->a = hm_dp_r16(ram, r, CHANGE_TYPE);
   if (r->a == 0) return;
   jsl(ram, r, RET_7CE_TYPES, 0x82, hm_SetTileTypeBlock);
 }
@@ -100,34 +160,33 @@ void hm_ChangeMapTileNoVram(uint8_t *ram, HmRegs *r)
  * the last type read, $82 / $84 = columns / rows; X / Y = the same, C = 1,
  * A from the last EditTileOnMap.
  * ───────────────────────────────────────────────────────────────────────── */
-#define TILE_TYPE_SHEET 0xA7F500
 #define RET_0A7_ENTRY   0xB0B0
 #define RET_0A7_EDIT    0xB113
 
 void hm_SetTileTypesFromChange(uint8_t *ram, HmRegs *r)
 {
-  hm_dp_w16(ram, r, 0x8E, r->x);
-  hm_dp_w16(ram, r, 0x90, r->y);
+  hm_dp_w16(ram, r, TYPES_X, r->x);
+  hm_dp_w16(ram, r, TYPES_Y, r->y);
   jsl(ram, r, RET_0A7_ENTRY, 0x81, hm_ReadTileChange);
-  hm_dp_w16(ram, r, 0x72, (uint16_t)TILE_TYPE_SHEET);
-  *hm_dp(ram, r, 0x74) = (uint8_t)(TILE_TYPE_SHEET >> 16);
-  uint16_t graphics = hm_dp_r16(ram, r, 0x7E);
-  hm_dp_w16(ram, r, 0x86, (uint16_t)(((graphics & 0x7F) >> 2) + ((graphics >> 7) << 4)));
-  uint16_t rows = hm_dp_r16(ram, r, 0x82), cols = hm_dp_r16(ram, r, 0x80);
-  hm_dp_w16(ram, r, 0x84, rows);
-  hm_dp_w16(ram, r, 0x82, cols);
+  hm_dp_w16(ram, r, TYPE_SHEET_PTR, (uint16_t)TILE_TYPE_SHEET);
+  *hm_dp(ram, r, LONG_PTR_BANK) = (uint8_t)(TILE_TYPE_SHEET >> 16);
+  uint16_t graphics = hm_dp_r16(ram, r, CHANGE_GFX);
+  hm_dp_w16(ram, r, TYPE_AT, (uint16_t)(((graphics & 0x7F) >> 2) + ((graphics >> 7) << 4)));
+  uint16_t rows = hm_dp_r16(ram, r, CHANGE_ROWS), cols = hm_dp_r16(ram, r, CHANGE_COLS);
+  hm_dp_w16(ram, r, TYPES_ROWS, rows);
+  hm_dp_w16(ram, r, TYPES_COLS, cols);
   uint16_t row = 0;
   do {
     push16(ram, r, row);                                  /* PHY */
     uint16_t col = 0;
     do {
       push16(ram, r, col); push16(ram, r, row);           /* PHX; PHY */
-      uint16_t at = hm_dp_r16(ram, r, 0x86);
-      hm_dp_w16(ram, r, 0x86, (uint16_t)(at + 1));
-      uint8_t type = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, at));
+      uint16_t at = hm_dp_r16(ram, r, TYPE_AT);
+      hm_dp_w16(ram, r, TYPE_AT, (uint16_t)(at + 1));
+      uint8_t type = hm_bus_rd8(ram, hm_dp_long(ram, r, TYPE_SHEET_PTR, at));
       hm_push8(ram, r, type);                             /* PLY; PHY; PHA */
-      uint32_t px = (uint32_t)(uint16_t)(col << 4) + hm_dp_r16(ram, r, 0x8E);
-      uint32_t py = (uint32_t)(uint16_t)(row << 4) + hm_dp_r16(ram, r, 0x90);
+      uint32_t px = (uint32_t)(uint16_t)(col << 4) + hm_dp_r16(ram, r, TYPES_X);
+      uint32_t py = (uint32_t)(uint16_t)(row << 4) + hm_dp_r16(ram, r, TYPES_Y);
       r->x = (uint16_t)px;
       r->y = (uint16_t)py;
       r->c = py > 0xFFFF;
@@ -135,10 +194,10 @@ void hm_SetTileTypesFromChange(uint8_t *ram, HmRegs *r)
       jsl(ram, r, RET_0A7_EDIT, 0x82, hm_EditTileOnMap);
       pull16(ram, r);                                     /* PLY; PLX */
       col = (uint16_t)(pull16(ram, r) + 1);
-    } while (col != hm_dp_r16(ram, r, 0x82));
+    } while (col != hm_dp_r16(ram, r, TYPES_COLS));
     row = (uint16_t)(pull16(ram, r) + 1);
-  } while (row != hm_dp_r16(ram, r, 0x84));
-  r->x = hm_dp_r16(ram, r, 0x82);
+  } while (row != hm_dp_r16(ram, r, TYPES_ROWS));
+  r->x = hm_dp_r16(ram, r, TYPES_COLS);
   r->y = row;
   r->c = 1;
 }
@@ -156,25 +215,24 @@ void hm_SetTileTypesFromChange(uint8_t *ram, HmRegs *r)
  * the byte number, Y = 8 A, C from comparing Y with 2 and 1; otherwise
  * ChangeMapTileNoVram's.
  * ───────────────────────────────────────────────────────────────────────── */
-#define SHED_ITEMS      0x7F1F00
 #define RET_2BB_STAMP   0xB361
 
 void hm_DrawShelfItem(uint8_t *ram, HmRegs *r)
 {
   uint16_t item = r->a, list = r->x, how = r->y;
   push16(ram, r, how); push16(ram, r, item);              /* PHY; PHA */
-  static const uint16_t lists[4] = { 0xBE0F, 0xBEEF, 0xBF27, 0xBF6F };
+  static const uint16_t lists[4] = { SHED_LIST, FLOWER_SHOP_LIST, GENERAL_STORE_LIST, ANIMAL_SHOP_LIST };
   uint16_t at = lists[list < 4 ? list : 0];
-  hm_dp_w16(ram, r, 0x72, at);
-  *hm_dp(ram, r, 0x74) = 0x81;
+  hm_dp_w16(ram, r, SHELF_LIST_PTR, at);
+  *hm_dp(ram, r, LONG_PTR_BANK) = 0x81;
   item = pull16(ram, r);                                  /* PLA */
   r->c = (item >> 13) & 1;                                /* the third ASL */
   uint16_t y = (uint16_t)(item << 3);
   push16(ram, r, y);                                      /* PHY */
-  uint8_t byte = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, (uint16_t)(y + 6)));
-  uint8_t bit = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, (uint16_t)(y + 7)));
+  uint8_t byte = hm_bus_rd8(ram, hm_dp_long(ram, r, SHELF_LIST_PTR, (uint16_t)(y + 6)));
+  uint8_t bit = hm_bus_rd8(ram, hm_dp_long(ram, r, SHELF_LIST_PTR, (uint16_t)(y + 7)));
   r->x = byte;
-  *hm_dp(ram, r, 0x92) = bit;
+  *hm_dp(ram, r, SHELF_BIT) = bit;
   r->y = y = pull16(ram, r);                              /* PLY */
   how = pull16(ram, r);                                   /* PLA */
   r->a = how;
@@ -185,11 +243,11 @@ void hm_DrawShelfItem(uint8_t *ram, HmRegs *r)
     r->a = (uint16_t)((how & 0xFF00) | (rd8(ram, SHED_ITEMS + byte) & bit));
     if (how == 1 ? !owned : owned) return;
   }
-  uint16_t px = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, y));
+  uint16_t px = hm_bus_rd16(ram, hm_dp_long(ram, r, SHELF_LIST_PTR, y));
   push16(ram, r, px);
-  uint16_t py = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, (uint16_t)(y + 2)));
+  uint16_t py = hm_bus_rd16(ram, hm_dp_long(ram, r, SHELF_LIST_PTR, (uint16_t)(y + 2)));
   push16(ram, r, py);
-  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, (uint16_t)(y + 4)));
+  r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, SHELF_LIST_PTR, (uint16_t)(y + 4)));
   r->y = pull16(ram, r);
   r->x = pull16(ram, r);
   jsl(ram, r, RET_2BB_STAMP, 0x81, hm_ChangeMapTileNoVram);
@@ -232,11 +290,11 @@ static void item(uint8_t *ram, HmRegs *r, uint16_t n, uint16_t list, uint16_t ho
  * (8-bit A): true when you have it in your hand or in the bag */
 static bool carrying(uint8_t *ram, HmRegs *r, uint8_t tool)
 {
-  uint8_t hand = hm_bus_rd8(ram, db_(r, 0x0921));
+  uint8_t hand = hm_bus_rd8(ram, db_(r, HM_TOOL_SELECTED));
   r->a = (uint16_t)((r->a & 0xFF00) | hand);
   r->c = hand >= tool;
   if (hand == tool) return true;
-  uint8_t bag = hm_bus_rd8(ram, db_(r, 0x0923));
+  uint8_t bag = hm_bus_rd8(ram, db_(r, HM_TOOL_BACKPACK));
   r->a = (uint16_t)((r->a & 0xFF00) | bag);
   r->c = bag >= tool;
   return bag == tool;
@@ -250,20 +308,6 @@ static uint8_t get8(uint8_t *ram, HmRegs *r, uint32_t addr)
 }
 static bool cmp8(HmRegs *r, uint8_t v, uint8_t k) { r->c = v >= k; return v == k; }
 
-#define WEATHER   0x0196       /* DB: */
-#define FLAGS_5A  0x7F1F5A
-#define FLAGS_64  0x7F1F64
-#define FLAGS_66  0x7F1F66
-#define FLAGS_68  0x7F1F68
-#define FLAGS_6A  0x7F1F6A
-#define FLAGS_6C  0x7F1F6C
-#define FLAGS_6E  0x7F1F6E
-#define POWER_BERRIES 0x7F1F36
-#define YEAR      0x7F1F18
-#define SEASON    0x7F1F19
-#define DAY       0x7F1F1B
-#define COWS      0x7F1F0A
-
 /* ─────────────────────────────────────────────────────────────────────────
  * ReplaceTilesFarm ($81:AAB6, maps 0-3): what you built or found.
  *   $7F1F64 bit 1 / bit 0: two things by the farm (changes $60, $5F);
@@ -273,8 +317,6 @@ static bool cmp8(HmRegs *r, uint8_t v, uint8_t k) { r->c = v >= k; return v == k
  *   $7F1F66 bits 9-12: the house painted ($59, $58, $5A, $5C, four parts);
  *   $7F1F68 bit 12: $F5.
  * ───────────────────────────────────────────────────────────────────────── */
-#define POWER_FLOWER_PLACES 0x81AC49
-
 void hm_ReplaceTilesFarm(uint8_t *ram, HmRegs *r)
 {
   if (flag(ram, r, FLAGS_64, 0x0002)) stamp_typed(ram, r, 0x60, 0x0310, 0x0360, 0xAAD0, 0xAAD9);
@@ -458,10 +500,6 @@ void hm_ReplaceTilesToolShed(uint8_t *ram, HmRegs *r)
  * ($F1) by each hen that laid one ($7F1F45, the bits of $81:BF97), at the
  * hens' places in the coop ($83:CA10).
  * ───────────────────────────────────────────────────────────────────────── */
-#define TROUGH_BITS   0x82A571
-#define HEN_BITS      0x81BF97
-#define HEN_PLACES    0x83CA10
-
 static void by_bits(uint8_t *ram, HmRegs *r, uint16_t n, uint32_t bits, uint32_t food,
                     uint32_t places, uint16_t change, uint16_t ret)
 {
@@ -487,13 +525,13 @@ static void by_bits(uint8_t *ram, HmRegs *r, uint16_t n, uint32_t bits, uint32_t
 void hm_ReplaceTilesBarn(uint8_t *ram, HmRegs *r)
 {
   item(ram, r, 0x1A, 0, 1, 0xB0B5);
-  by_bits(ram, r, 13, TROUGH_BITS, db_(r, 0x0932), 0x81B0ED, 0x99, 0xB0E2);
+  by_bits(ram, r, 13, TROUGH_BITS, db_(r, BARN_FODDER), BARN_TROUGHS, 0x99, 0xB0E2);
 }
 void hm_ReplaceTilesCoop(uint8_t *ram, HmRegs *r)
 {
   item(ram, r, 0x19, 0, 1, 0xB12E);
-  by_bits(ram, r, 12, TROUGH_BITS, db_(r, 0x0934), 0x81B19F, 0x99, 0xB15D);
-  by_bits(ram, r, 13, HEN_BITS, 0x7F1F45, HEN_PLACES, 0xF1, 0xB194);
+  by_bits(ram, r, 12, TROUGH_BITS, db_(r, COOP_FODDER), COOP_TROUGHS, 0x99, 0xB15D);
+  by_bits(ram, r, 13, HEN_BITS, EGGS_LAID, HEN_PLACES, 0xF1, 0xB194);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -530,12 +568,11 @@ void hm_ReplaceTilesNothing(uint8_t *ram, HmRegs *r) { (void)ram; (void)r; }
  * RunMapExtras ($81:A9E5, JSL, RTL): the routine of map $22
  * (maps $00-$5F), called with JSR (A9F6,X).
  * ───────────────────────────────────────────────────────────────────────── */
-#define MAP_ROUTINES  0x81A9F6
 #define RET_9E5_CALL  0xA9F4
 
 void hm_RunMapExtras(uint8_t *ram, HmRegs *r)
 {
-  r->a = *hm_dp(ram, r, 0x22);
+  r->a = *hm_dp(ram, r, HM_MAP_ID);
   r->c = (r->a >> 15) & 1;                                /* ASL */
   r->a = (uint16_t)(r->a << 1);
   r->x = r->a;
@@ -567,14 +604,12 @@ void hm_RunMapExtras(uint8_t *ram, HmRegs *r)
  * (through the data bank) at its record; $18 = that pointer.
  * Leftovers: A = the pointer's high byte : the byte, X = 2 map, C = 0.
  * ───────────────────────────────────────────────────────────────────────── */
-#define MAPS_GRAPHICS 0x80AA7C
-
 void hm_GetBackgroundData(uint8_t *ram, HmRegs *r)
 {
-  r->x = (uint16_t)(*hm_dp(ram, r, 0x22) << 1);
+  r->x = (uint16_t)(*hm_dp(ram, r, HM_MAP_ID) << 1);
   r->c = 0;
   uint16_t record = rd16(ram, MAPS_GRAPHICS + r->x);
-  hm_dp_w16(ram, r, 0x18, record);
+  hm_dp_w16(ram, r, BG_RECORD, record);
   uint8_t b = hm_bus_rd8(ram, (((uint32_t)r->db << 16) + record + r->y) & 0xFFFFFF);  /* (dp),Y */
   r->a = (uint16_t)((record & 0xFF00) | b);
 }

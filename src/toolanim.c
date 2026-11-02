@@ -14,11 +14,13 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define ANIMATION      0x0901   /* the player's animation to play */
-#define TOOL_SOUND     0x091B
-#define TOOL           0x0921
-#define CAN_WATER      0x0926
-#define FLAGS_5A       0x7F1F5A
+/* Also used, from hm_ram.h: HM_ANIM_REQUEST ($0901, the player's animation
+ * to play), HM_TOOL_SELECTED ($0921, the item in hand), HM_GAME_STATE ($D2,
+ * bit 3 = no stamina) and HM_PLAYER_ACTION ($D4) */
+#define TOOL_FRAMES      0x091B   /* DB: 8b, frames of the tool's use (its sound at $18) */
+#define CAN_WATER        0x0926   /* DB: 8b, water left in the watering can */
+#define FLAGS_5A         0x7F1F5A /* 16b flags; bit $10 = the bell calls the cows */
+#define PLAYER_DIRECTION 0xDA     /* direct page, 16b: the way the player faces (0-3) */
 #ifndef SEED_TOSS
 #define SEED_TOSS      0x74
 #endif
@@ -38,12 +40,12 @@ static void jsr(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmR
 static void animation(uint8_t *ram, HmRegs *r, uint16_t n)
 {
   r->a = n;
-  hm_bus_wr16(ram, db_addr(r, ANIMATION), n);
+  hm_bus_wr16(ram, db_addr(r, HM_ANIM_REQUEST), n);
 }
 /* LDA #base; CLC; ADC $DA: one animation per direction */
 static void facing(uint8_t *ram, HmRegs *r, uint16_t base)
 {
-  uint32_t s = (uint32_t)base + hm_dp_r16(ram, r, 0xDA);
+  uint32_t s = (uint32_t)base + hm_dp_r16(ram, r, PLAYER_DIRECTION);
   r->c = s > 0xFFFF;
   animation(ram, r, (uint16_t)s);
 }
@@ -124,16 +126,16 @@ void hm_StartToolAnimation(uint8_t *ram, HmRegs *r)
     hm_ToolAnimationBlueFeather, hm_ToolAnimationChickenFeed, hm_ToolAnimationCowFeed,
     hm_ToolAnimationUnusedTool,
   };
-  r->a = hm_dp_r16(ram, r, 0xD2) & 0x0008;
+  r->a = hm_dp_r16(ram, r, HM_GAME_STATE) & 0x0008;
   if (r->a) {                                              /* no stamina */
     animation(ram, r, 0x4D);
     r->a = 0x000B;
-    hm_dp_w16(ram, r, 0xD4, 0x000B);                       /* action: tired */
+    hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0x000B);           /* action: tired */
     return;
   }
   jsr(ram, r, 0x90BA, hm_CheckToolSuccessForSound);
-  hm_bus_wr8(ram, db_addr(r, TOOL_SOUND), 0);
-  uint8_t item = hm_bus_rd8(ram, db_addr(r, TOOL));
+  hm_bus_wr8(ram, db_addr(r, TOOL_FRAMES), 0);
+  uint8_t item = hm_bus_rd8(ram, db_addr(r, HM_TOOL_SELECTED));
   r->c = item >> 7;                                        /* ASL (8 bits) */
   r->a = r->x = (uint8_t)(item << 1);
   if (item < sizeof animate / sizeof animate[0])           /* the game has no more */

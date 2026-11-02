@@ -16,7 +16,22 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define TOOL_NOISE_TABLE 0x829054
+#define TOOL_NOISE_TABLE  0x829054   /* ROM: 3 bytes per item: bank, effect on a hit, on a miss */
+#define SONG_INSTRUMENTS  0x80B8CD   /* ROM: per song, its instrument (- 1) */
+
+/* WRAM of the data bank (also HM_TOOL_SELECTED, $0921: the item in hand) */
+#define INSTRUMENT_COUNT  0x0103     /* 8b: the instruments noted (PrepareSoundEffect's slot) */
+#define SOUND_EFFECT      0x0114     /* 8b: the sound effect to play / prepare */
+#define SOUND_BANK        0x0115     /* 8b: its bank */
+#define SONG_PLAYING      0x0118     /* 8b: the song playing (0 for none) */
+#define LOADED_TOOL_SOUND 0x0119     /* 8b: the item whose noises are loaded */
+#define TOOL_SOUND_CHOICE 0x0922     /* 8b: 0 = it lands on something, 1 = it does not,
+                                      * 2 = silent (CheckToolSuccessForSound) */
+
+/* Direct page scratch */
+#define NOISE_CHOICE      0x80       /* 16b: ToolUsedSound1's copy of TOOL_SOUND_CHOICE */
+#define NOISE_TOOL        0x7E       /* 16b: the item (to make 3 x item) */
+
 #define RET_SOUND1_PLAY  0x8FF1
 
 static uint32_t db_(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
@@ -26,23 +41,23 @@ static uint8_t noise(uint8_t *ram, uint16_t x) { return hm_bus_rd8(ram, (TOOL_NO
 
 void hm_ToolUsedSound1(uint8_t *ram, HmRegs *r)
 {
-  uint16_t sound = hm_bus_rd8(ram, db_(r, 0x0922));
+  uint16_t sound = hm_bus_rd8(ram, db_(r, TOOL_SOUND_CHOICE));
   r->a = sound;
   r->c = sound >= 2;                                       /* CMP #2 */
   if (sound == 2) return;
-  hm_dp_w16(ram, r, 0x80, sound);
-  uint16_t tool = hm_bus_rd8(ram, db_(r, 0x0921));
-  hm_dp_w16(ram, r, 0x7E, tool);
+  hm_dp_w16(ram, r, NOISE_CHOICE, sound);
+  uint16_t tool = hm_bus_rd8(ram, db_(r, HM_TOOL_SELECTED));
+  hm_dp_w16(ram, r, NOISE_TOOL, tool);
   r->c = 0;                                                /* ASL, CLC; ADC */
   r->x = idx(r, (uint16_t)(tool * 3));                     /* TAX */
-  hm_bus_wr8(ram, db_(r, 0x0115), noise(ram, r->x));       /* the bank */
+  hm_bus_wr8(ram, db_(r, SOUND_BANK), noise(ram, r->x));   /* the bank */
   r->x = idx(r, r->x + 1u);                                /* INX */
   uint16_t sum = (uint16_t)(r->x + sound);                 /* TXA; CLC; ADC $80 */
   r->x = idx(r, sum);                                      /* TAX */
   uint8_t effect = noise(ram, r->x);
   r->a = (uint16_t)((sum & 0xFF00) | effect);
   if (!effect) return;
-  hm_bus_wr8(ram, db_(r, 0x0114), effect);
+  hm_bus_wr8(ram, db_(r, SOUND_EFFECT), effect);
   hm_jsl(ram, r, RET_SOUND1_PLAY, 0x83);
   hm_PlaySoundEffect0A(ram, r);
   hm_rtl(ram, r);
@@ -60,36 +75,34 @@ void hm_ToolUsedSound1(uint8_t *ram, HmRegs *r)
  * Leftovers: A = the item (8-bit), X where it last read the table, C = 0
  * from the ADC or that of the compare / PrepareSoundEffect.
  * ───────────────────────────────────────────────────────────────────────── */
-#define SONG_INSTRUMENTS 0x80B8CD
-
 void hm_ToolUsedSound2(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
-  uint8_t tool = hm_bus_rd8(ram, db_(r, 0x0921));
+  uint8_t tool = hm_bus_rd8(ram, db_(r, HM_TOOL_SELECTED));
   r->a = tool;                                             /* LDA #0; XBA; LDA $0921 */
-  uint8_t noted = hm_bus_rd8(ram, db_(r, 0x0119));
+  uint8_t noted = hm_bus_rd8(ram, db_(r, LOADED_TOOL_SOUND));
   r->c = tool >= noted;
   if (tool != noted) {
-    hm_dp_w16(ram, r, 0x7E, tool);                         /* REP #$20; STA $7E */
+    hm_dp_w16(ram, r, NOISE_TOOL, tool);                   /* REP #$20; STA $7E */
     r->x = (uint16_t)(tool * 3);                           /* ASL; CLC; ADC $7E; TAX */
     r->c = 0;
     r->a = r->x;
     uint8_t bank = noise(ram, r->x);
     r->a = (uint16_t)((r->a & 0xFF00) | bank);
     if (bank) {
-      hm_bus_wr8(ram, db_(r, 0x0115), bank);
+      hm_bus_wr8(ram, db_(r, SOUND_BANK), bank);
       r->x++;
       hm_push8(ram, r, (uint8_t)(r->x >> 8));              /* PHX */
       hm_push8(ram, r, (uint8_t)r->x);
       uint8_t first = noise(ram, r->x);
       r->a = (uint16_t)((r->a & 0xFF00) | first);
       if (first) {
-        hm_bus_wr8(ram, db_(r, 0x0114), first);
-        r->a = hm_bus_rd8(ram, db_(r, 0x0118));
+        hm_bus_wr8(ram, db_(r, SOUND_EFFECT), first);
+        r->a = hm_bus_rd8(ram, db_(r, SONG_PLAYING));
         r->x = r->a;
         uint8_t ins = (uint8_t)(hm_bus_rd8(ram, (SONG_INSTRUMENTS + r->x) & 0xFFFFFF) + 1);
         r->a = (uint16_t)((r->a & 0xFF00) | ins);
-        hm_bus_wr8(ram, db_(r, 0x0103), ins);
+        hm_bus_wr8(ram, db_(r, INSTRUMENT_COUNT), ins);
         r->p = (uint8_t)(entry & ~0x40);
         hm_jsl(ram, r, 0x9037, 0x83);
         hm_PrepareSoundEffect(ram, r);
@@ -100,7 +113,7 @@ void hm_ToolUsedSound2(uint8_t *ram, HmRegs *r)
       uint8_t second = noise(ram, r->x);
       r->a = (uint16_t)((r->a & 0xFF00) | second);
       if (second) {
-        hm_bus_wr8(ram, db_(r, 0x0114), second);
+        hm_bus_wr8(ram, db_(r, SOUND_EFFECT), second);
         r->p = (uint8_t)(entry & ~0x40);
         hm_jsl(ram, r, 0x904A, 0x83);
         hm_PrepareSoundEffect(ram, r);
@@ -109,6 +122,6 @@ void hm_ToolUsedSound2(uint8_t *ram, HmRegs *r)
       r->p = entry;
     }
   }
-  r->a = (uint16_t)((r->a & 0xFF00) | hm_bus_rd8(ram, db_(r, 0x0921)));
-  hm_bus_wr8(ram, db_(r, 0x0119), (uint8_t)r->a);
+  r->a = (uint16_t)((r->a & 0xFF00) | hm_bus_rd8(ram, db_(r, HM_TOOL_SELECTED)));
+  hm_bus_wr8(ram, db_(r, LOADED_TOOL_SOUND), (uint8_t)r->a);
 }
