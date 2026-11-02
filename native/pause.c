@@ -124,6 +124,20 @@ static bool player_free(void)
          (act == 0 || act == 1 || act == 2 || act == 9) && g_ram[HM_ITEM_ON_HAND] == 0;
 }
 
+/* a tool's picture: the game's own sprite of it on the shed's shelf (the
+ * shelf items $2A-$43 are the tools 1-$1A; their case 3, or 0), else the
+ * drawn icon */
+static void tool_icon(int x, int y, uint8_t id)
+{
+  uint32_t px[256];
+  if (id >= 1 && id <= 0x1A && (mods_item_sprite((uint8_t)(0x29 + id), 3, px) || mods_item_sprite((uint8_t)(0x29 + id), 0, px))) {
+    for (int j = 0; j < 16; j++)
+      for (int i = 0; i < 16; i++) if (px[j * 16 + i]) ui_px(x + i, y + j, px[j * 16 + i]);
+    return;
+  }
+  ui_icon(x, y, id);
+}
+
 static void say(const char *m) { snprintf(s.message, sizeof s.message, "%s", m); }
 
 /* The item under the cursor (0 = none). */
@@ -279,8 +293,8 @@ static void draw_top(void)
   bool on_top = s.tab == 0 && s.cy < 0;
   ui_slot(104, 8, 26, C_GREEN, C_GREEN_DARK, on_top && s.cx == 0);
   ui_slot(134, 8, 26, C_BLUE, C_BLUE_DARK, on_top && s.cx == 1);
-  ui_icon(109, 13, r[HM_TOOL_SELECTED]);
-  ui_icon(139, 13, r[HM_TOOL_BACKPACK]);
+  tool_icon(109, 13, r[HM_TOOL_SELECTED]);
+  tool_icon(139, 13, r[HM_TOOL_BACKPACK]);
   { unsigned n = item_count(r[HM_TOOL_SELECTED]); if (n) count_badge(130, 34, n); }
   { unsigned n = item_count(r[HM_TOOL_BACKPACK]); if (n) count_badge(160, 34, n); }
   ui_text_c(UI_SMALL, 117, 45, T("Hand"), C_CREAM);
@@ -340,7 +354,7 @@ static void draw_tools(int x, int y)
     ui_rect(sx, sy, 20, 20, sel ? C_GOLD_DARK : C_PAPER_LINE);
     ui_rect(sx + 1, sy + 1, 18, 18, sel ? C_SELECT : (have ? C_PAPER : C_PAPER_DARK));
     if (have) {
-      ui_icon(sx + 2, sy + 2, kTools[i].id);
+      tool_icon(sx + 2, sy + 2, kTools[i].id);
       unsigned n = item_count(kTools[i].id);
       if (n) count_badge(sx + 20, sy + 20, n);
     }
@@ -361,7 +375,7 @@ static void draw_tools(int x, int y)
   ui_rect(rx - 4, y + 2, 1, 76, C_PAPER_LINE);
   if (s.cy < 0) ui_text(UI_SMALL, rx, y + 9, s.cx == 0 ? T("In hand:") : T("In backpack:"), C_INK_SOFT);
   if (id) {
-    ui_icon(rx, y + 13, id);
+    tool_icon(rx, y + 13, id);
     const char *name = tool_name(id);
     /* wrap a two-word name over two lines when it is too wide */
     char a[48]; snprintf(a, sizeof a, "%s", name);

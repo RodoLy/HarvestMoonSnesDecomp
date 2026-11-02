@@ -813,8 +813,8 @@ uint16_t mods_bag_pad(uint16_t pad, bool key)
   return pad;
 }
 /* The item's own sprite, the one the game draws over the player's head
- * (SUB_8180B7, case 1): DATA8_8196AF gives the item's list, its case 1 the
- * sprite; the sprite's entry ($86/$87:8080 + 2 x the number) its first
+ * (SUB_8180B7, case 1; the tools on the shed's shelves: case 3, or 0):
+ * DATA8_8196AF gives the item's list, the case the sprite; the sprite's entry ($86/$87:8080 + 2 x the number) its first
  * frame's piece list: a count, then 5 bytes a piece (the piece number,
  * X and Y offsets, attributes: palette bits 0-2, flips bits 4-5). A
  * piece's graphics are where the loader (CODE_858CB2) takes them from:
@@ -826,13 +826,13 @@ static uint32_t snes_rgb(uint16_t c)
   uint32_t r = (c & 31) << 3, g = ((c >> 5) & 31) << 3, b = ((c >> 10) & 31) << 3;
   return UI_RGB(r << 16 | g << 8 | b);
 }
-static bool item_sprite(uint8_t it, uint32_t out[256])
+bool mods_item_sprite(uint8_t it, int kase, uint32_t out[256])
 {
   memset(out, 0, 256 * sizeof *out);
   if (it == 0 || it > 0x5A) return false;
   uint32_t list = hm_bus_rd16(g_ram, 0x8196AF + it * 3u) | (uint32_t)hm_bus_rd8(g_ram, 0x8196AF + it * 3u + 2) << 16;
-  uint16_t sprite = hm_bus_rd16(g_ram, list + 3);
-  bool item_flip = hm_bus_rd8(g_ram, list + 5) & 1;
+  uint16_t sprite = hm_bus_rd16(g_ram, list + 3u * kase);
+  bool item_flip = hm_bus_rd8(g_ram, list + 3u * kase + 2) & 1;
   uint32_t bank = sprite >= 0x262 ? 0x870000 : 0x860000;
   uint16_t number = sprite >= 0x262 ? (uint16_t)(sprite - 0x262) : sprite;
   uint16_t entry = hm_bus_rd16(g_ram, bank + 0x8080 + 2u * number);
@@ -869,7 +869,21 @@ static bool item_sprite(uint8_t it, uint32_t out[256])
         any = true;
       }
   }
-  return any;
+  if (!any) return false;
+  /* centred in the 16 x 16 */
+  int x0 = 16, x1 = -1, y0 = 16, y1 = -1;
+  for (int y = 0; y < 16; y++)
+    for (int x = 0; x < 16; x++)
+      if (out[y * 16 + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  int dx = (16 - (x1 - x0 + 1)) / 2 - x0, dy = (16 - (y1 - y0 + 1)) / 2 - y0;
+  if (dx || dy) {
+    uint32_t tmp[256];
+    memcpy(tmp, out, sizeof tmp);
+    memset(out, 0, 256 * sizeof *out);
+    for (int y = y0; y <= y1; y++)
+      for (int x = x0; x <= x1; x++) out[(y + dy) * 16 + x + dx] = tmp[y * 16 + x];
+  }
+  return true;
 }
 
 /* a picture of an item in the bag, 16 x 16: its own sprite, or, if it has
@@ -877,7 +891,7 @@ static bool item_sprite(uint8_t it, uint32_t out[256])
 void mods_bag_icon(int x, int y, uint8_t it)
 {
   uint32_t px[256];
-  if (item_sprite(it, px)) {
+  if (mods_item_sprite(it, 1, px)) {
     for (int j = 0; j < 16; j++)
       for (int i = 0; i < 16; i++) if (px[j * 16 + i]) ui_rect(x + i, y + j, 1, 1, px[j * 16 + i]);
     return;
