@@ -541,18 +541,6 @@ static void animals_move(int dx, int dy)
   if (s.ac < s.ar) s.ar = s.ac;
   if (s.ac >= s.ar + ROWS_SHOWN) s.ar = s.ac - ROWS_SHOWN + 1;
 }
-static uint32_t animal_mark(int sec, int i)
-{
-  if (sec == 0) {
-    const uint8_t *c = cow(i);
-    if (c[0] & 0x20) return C_RED;                         /* sick */
-    if (c[0] & 0x10) return UI_RGB(0xEC8A2A);              /* cranky */
-    if (c[0] & 0x40) return UI_RGB(0xF27AA8);              /* pregnant */
-    return 0;
-  }
-  if (hen(i)[0] & 0x10) return UI_RGB(0xEC8A2A);           /* hungry */
-  return 0;
-}
 /* the animal's picture, the game's own sprite, in a w x h box at (x, y) */
 static void animal_picture(int sec, int i, int x, int y, int w, int h)
 {
@@ -591,8 +579,6 @@ static void draw_animals(int x, int y)
     ui_rect(x, ry, 36, 18, C_WOOD_EDGE);
     ui_rect(x + 1, ry + 1, 34, 16, C_PAPER_DARK);
     animal_picture(sc, i, x + 2, ry + 1, 32, 16);
-    uint32_t m = animal_mark(sc, i);
-    if (m) { ui_rect(x + 30, ry + 2, 4, 4, C_WOOD_EDGE); ui_rect(x + 31, ry + 3, 2, 2, m); }
     char name[32]; animal_name(sc, i, name, sizeof name);
     ui_text(UI_BODY, x + 42, ry + 13, name, C_INK);
     if (sc == 0) {
