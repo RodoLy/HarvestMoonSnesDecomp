@@ -54,6 +54,17 @@ a new launcher.
 **[⬇ Download the latest version](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/latest)**:
 ready to play, for Windows, Mac, Linux and Android.
 
+> [!NOTE]
+> **The first time, your computer or phone will warn you: that is expected.**
+> This is a free hobby project: the programs are not signed with a paid
+> certificate and the APK is not from the Play Store, so Windows (*"Windows
+> protected your PC"* → **More info → Run anyway**), macOS (*"unidentified
+> developer"* → right-click → **Open**) and Android (*"unknown apps"* → allow
+> it for your browser or file manager) ask you first. The downloads are built
+> by GitHub itself from this public source (the **Actions** tab), and each
+> release lists their SHA-256 so you can check a file. If you would rather
+> not run a downloaded program, build it yourself with the scripts below.
+
 ### How to play it on Windows
 
 1. Download **`HarvestMoon-…-Windows.zip`** and unzip it anywhere.

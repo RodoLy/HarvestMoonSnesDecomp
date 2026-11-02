@@ -191,6 +191,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -l out
+          # each file's SHA-256, beside them and in the notes, to check a download
+          (cd out && sha256sum HarvestMoon-* > SHA256SUMS.txt)
           sed "s/{VERSION}/$V/g" .github/release_notes.md > notes.md
+          {
+            echo
+            echo "### SHA-256"
+            echo
+            echo "To check a download / Para comprobar una descarga: Windows \`certutil -hashfile <file> SHA256\`, Mac \`shasum -a 256 <file>\`, Linux \`sha256sum <file>\`."
+            echo
+            echo '```'
+            cat out/SHA256SUMS.txt
+            echo '```'
+          } >> notes.md
           gh release create "v$V" out/* --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md \
             ${{ (inputs.prerelease || contains(github.ref_name, 'beta')) && '--prerelease' || '' }}

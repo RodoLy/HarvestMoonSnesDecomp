@@ -17,7 +17,9 @@ MAC (Apple Silicon or Intel, macOS 11+)
     Terminal: xattr -dr com.apple.quarantine on this folder).
 
 ANDROID (phones, tablets, the AYN Thor)
-    Open the .apk on the device to install it. Choose your ROM with
+    Open the .apk on the device to install it. If Android says it cannot
+    install unknown apps from this source: Settings > allow it, then
+    Install (and Install anyway if Play Protect asks). Choose your ROM with
     Android's file picker. On the AYN Thor launch the app on the top
     screen: the pause menu stays on the lower one while you play.
 
@@ -61,7 +63,9 @@ MAC (Apple Silicon o Intel, macOS 11+)
     Terminal: xattr -dr com.apple.quarantine sobre esta carpeta).
 
 ANDROID (telefonos, tablets, la AYN Thor)
-    Abre el .apk en el equipo para instalarlo. Elige tu ROM con el
+    Abre el .apk en el equipo para instalarlo. Si Android dice que no
+    puede instalar apps desconocidas de esta fuente: Ajustes > permitirlo,
+    luego Instalar (e Instalar de todas formas si Play Protect pregunta). Elige tu ROM con el
     selector de archivos de Android. En la AYN Thor abre la app en la
     pantalla de arriba: el menu de pausa se queda en la de abajo.
 
