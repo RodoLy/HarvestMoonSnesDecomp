@@ -24,8 +24,55 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define ROW_BUFFER_1   0x0746
-#define ROW_BUFFER_2   0x07C6
+#define ROW_BUFFER_1   0x0746   /* DB: the first half's 32 entries */
+#define ROW_BUFFER_2   0x07C6   /* DB: the second half's */
+
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_CAM_X / HM_CAM_Y ($013C /
+ * $013E: BG1's scroll) and the camera's limits HM_CAM_MIN_X ($ED),
+ * HM_CAM_MIN_Y ($EF), HM_CAM_MAX_X ($F1), HM_CAM_MAX_Y ($F3). */
+
+/* Direct page */
+#define VRAM_COLUMN    0x10   /* 16b: the VRAM position of the next column */
+#define WRAM_COLUMN    0x12   /* 16b: its position in the WRAM map */
+#define VRAM_ROW       0x14   /* 16b: the VRAM position of the next row */
+#define WRAM_ROW       0x16   /* 16b: its position in the WRAM map */
+#define ROW_LENGTH     0x1A   /* 16b: the map's row length */
+#define ROW_OFFSET     0x1C   /* 16b: the camera's offset inside the row */
+#define CAMERA_SPEED   0x1E   /* 16b: pixels per frame */
+#define SUB_X          0x20   /* 8b: the sub-tile offset across, 0-7 */
+#define SUB_Y          0x21   /* 8b: down */
+#define DMA_CHANNEL    0x27   /* 8b: AddProgrammedDMA's channel (dma.c) */
+#define DMA_B_ADDRESS  0x29   /* 8b: its destination register (B-bus, $21xx) */
+#define RUN1_SOURCE    0x72   /* 24b $72-$74: the first run's source in the map; queue():
+                                 the DMA's source (AddProgrammedDMA) */
+#define RUN1_SOURCE_BANK 0x74
+#define RUN2_SOURCE    0x75   /* 24b $75-$77: the second run's source */
+#define RUN2_SOURCE_BANK 0x77
+#define RUN1_MAP_AT    0x7E   /* 16b: the first run's place in the map */
+#define RUN1_BUFFER_AT 0x80   /* 16b: its place in the buffer */
+#define RUN2_MAP_AT    0x82   /* 16b: the second run's place in the map */
+#define RUN2_BUFFER_AT 0x84   /* 16b: its place in the buffer */
+#define ROW_INNER      0x86   /* 16b: ROW_OFFSET / 4 */
+#define PLAYER_X       0xD6   /* 16b: the player's position */
+#define PLAYER_Y       0xD8   /* 16b */
+#define PLAYER_DIRECTION 0xDA /* 16b: the way the player faces: 0 down, 1 up, 2 right, 3 left */
+#define CAMERA_X       0xF5   /* 16b: the camera's position */
+#define CAMERA_Y       0xF7   /* 16b */
+
+/* WRAM of the data bank (through db_addr) */
+#define WEATHER_FLAGS  0x0196   /* 16b: bit 0 the map scrolls; BG2: bits 1, 2 (clouds), 3 */
+#define CAMERA_SPEED_X 0x087C   /* 16b: the camera's own movement per frame */
+#define CAMERA_SPEED_Y 0x087E   /* 16b */
+#define CAMERA_FRAMES  0x0880   /* 8b: for how many frames */
+#define PLAYER_SCREEN_X 0x090B  /* 16b: where the player is on the screen */
+#define PLAYER_SCREEN_Y 0x090D  /* 16b */
+#define BG2_DRIFT_TIMER 0x091C  /* 8b: frames to the clouds' next drift (to 10) */
+
+/* Video memory */
+#define BG1_MAP        0x2000   /* $7E:2000: the whole map's BG1 tilemap */
+#define BG1_VRAM       0x6000   /* VRAM: the window of it (64 x 32 entries) */
+#define BBAD_VRAM      0x18     /* $2118: a copy to VRAM */
 
 static uint32_t db_addr(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static uint16_t dp16(uint8_t *ram, const HmRegs *r, unsigned a) { return hm_dp_r16(ram, r, a); }
@@ -41,7 +88,8 @@ static void pull16(uint8_t *ram, HmRegs *r) { hm_pull8(ram, r); hm_pull8(ram, r)
  * ($80, $84) */
 static void runs(uint8_t *ram, HmRegs *r, uint16_t a, uint16_t b, uint16_t c, uint16_t d)
 {
-  set16(ram, r, 0x7E, a); set16(ram, r, 0x80, b); set16(ram, r, 0x82, c); set16(ram, r, 0x84, d);
+  set16(ram, r, RUN1_MAP_AT, a); set16(ram, r, RUN1_BUFFER_AT, b); set16(ram, r, RUN2_MAP_AT, c);
+  set16(ram, r, RUN2_BUFFER_AT, d);
 }
 
 /* 32 entries from [$72] (+$7E) and [$75] (+$82) into the buffers; each run
@@ -50,22 +98,22 @@ static void copy_entries(uint8_t *ram, HmRegs *r, uint16_t step, uint16_t wrap)
 {
   for (uint16_t x = 0; x < 0x40; x += 2) {
     push16(ram, r, x);                                  /* PHX */
-    if (dp16(ram, r, 0x80) == 0x40) {
-      set16(ram, r, 0x80, 0);
-      set16(ram, r, 0x7E, (uint16_t)(dp16(ram, r, 0x7E) + wrap));
+    if (dp16(ram, r, RUN1_BUFFER_AT) == 0x40) {
+      set16(ram, r, RUN1_BUFFER_AT, 0);
+      set16(ram, r, RUN1_MAP_AT, (uint16_t)(dp16(ram, r, RUN1_MAP_AT) + wrap));
     }
-    if (dp16(ram, r, 0x84) == 0x40) {
-      set16(ram, r, 0x84, 0);
-      set16(ram, r, 0x82, (uint16_t)(dp16(ram, r, 0x82) + wrap));
+    if (dp16(ram, r, RUN2_BUFFER_AT) == 0x40) {
+      set16(ram, r, RUN2_BUFFER_AT, 0);
+      set16(ram, r, RUN2_MAP_AT, (uint16_t)(dp16(ram, r, RUN2_MAP_AT) + wrap));
     }
-    uint16_t v = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, dp16(ram, r, 0x7E)));
-    hm_bus_wr16(ram, (db_addr(r, ROW_BUFFER_1) + dp16(ram, r, 0x80)) & 0xFFFFFF, v);
-    v = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x75, dp16(ram, r, 0x82)));
-    hm_bus_wr16(ram, (db_addr(r, ROW_BUFFER_2) + dp16(ram, r, 0x84)) & 0xFFFFFF, v);
-    set16(ram, r, 0x7E, (uint16_t)(dp16(ram, r, 0x7E) + step));
-    set16(ram, r, 0x80, (uint16_t)(dp16(ram, r, 0x80) + 2));
-    set16(ram, r, 0x82, (uint16_t)(dp16(ram, r, 0x82) + step));
-    set16(ram, r, 0x84, (uint16_t)(dp16(ram, r, 0x84) + 2));
+    uint16_t v = hm_bus_rd16(ram, hm_dp_long(ram, r, RUN1_SOURCE, dp16(ram, r, RUN1_MAP_AT)));
+    hm_bus_wr16(ram, (db_addr(r, ROW_BUFFER_1) + dp16(ram, r, RUN1_BUFFER_AT)) & 0xFFFFFF, v);
+    v = hm_bus_rd16(ram, hm_dp_long(ram, r, RUN2_SOURCE, dp16(ram, r, RUN2_MAP_AT)));
+    hm_bus_wr16(ram, (db_addr(r, ROW_BUFFER_2) + dp16(ram, r, RUN2_BUFFER_AT)) & 0xFFFFFF, v);
+    set16(ram, r, RUN1_MAP_AT, (uint16_t)(dp16(ram, r, RUN1_MAP_AT) + step));
+    set16(ram, r, RUN1_BUFFER_AT, (uint16_t)(dp16(ram, r, RUN1_BUFFER_AT) + 2));
+    set16(ram, r, RUN2_MAP_AT, (uint16_t)(dp16(ram, r, RUN2_MAP_AT) + step));
+    set16(ram, r, RUN2_BUFFER_AT, (uint16_t)(dp16(ram, r, RUN2_BUFFER_AT) + 2));
     pull16(ram, r);                                     /* PLX */
   }
 }
@@ -78,14 +126,14 @@ static void queue(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t half, uint16_t 
 {
   static const uint16_t buffer[2] = { ROW_BUFFER_1, ROW_BUFFER_2 };
   for (unsigned ch = 0; ch < 2; ch++) {
-    *hm_dp(ram, r, 0x27) = (uint8_t)ch;
-    *hm_dp(ram, r, 0x29) = 0x18;
+    *hm_dp(ram, r, DMA_CHANNEL) = (uint8_t)ch;
+    *hm_dp(ram, r, DMA_B_ADDRESS) = BBAD_VRAM;
     r->y = 0x0040;
-    uint32_t to = (uint32_t)at + 0x6000;                /* CLC; ADC #$6000 (; ADC half) */
+    uint32_t to = (uint32_t)at + BG1_VRAM;              /* CLC; ADC #$6000 (; ADC half) */
     if (ch) to = (to & 0xFFFF) + half + (to > 0xFFFF);
     r->x = (uint16_t)to;
-    set16(ram, r, 0x72, buffer[ch]);
-    *hm_dp(ram, r, 0x74) = 0x80;
+    set16(ram, r, RUN1_SOURCE, buffer[ch]);
+    *hm_dp(ram, r, RUN1_SOURCE_BANK) = 0x80;
     r->a = mode;
     hm_jsl(ram, r, ch ? ret2 : ret1, 0x80);
     hm_AddProgrammedDMA(ram, r);
@@ -96,7 +144,7 @@ static void queue(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t half, uint16_t 
 /* the row windows from $12 (LoadMapRowBelow / LoadMapRowAbove) */
 static void row_runs(uint8_t *ram, HmRegs *r)
 {
-  uint16_t v = dp16(ram, r, 0x12);
+  uint16_t v = dp16(ram, r, WRAM_COLUMN);
   if (v < 0x20) runs(ram, r, 0, 0, 0, 0);
   else if (v < 0x60) runs(ram, r, (uint16_t)(v - 0x20), (uint16_t)(v - 0x20), 0, 0);
   else if (v < 0xA0) runs(ram, r, 0x80, 0, (uint16_t)(v - 0x60), (uint16_t)(v - 0x60));
@@ -107,7 +155,7 @@ static void row_runs(uint8_t *ram, HmRegs *r)
  * position is the screen row, (offset >> 8) * 2 */
 static void column_runs(uint8_t *ram, HmRegs *r, uint16_t last_mask)
 {
-  uint16_t v = dp16(ram, r, 0x16);
+  uint16_t v = dp16(ram, r, WRAM_ROW);
   if (v < 0x1000) runs(ram, r, 0, 0, 0, 0);
   else if (v < 0x3000) {
     uint16_t o = (uint16_t)(v - 0x1000);
@@ -122,10 +170,10 @@ static void column_runs(uint8_t *ram, HmRegs *r, uint16_t last_mask)
 }
 static void sources(uint8_t *ram, HmRegs *r, uint16_t first, uint16_t second_offset)
 {
-  set16(ram, r, 0x72, first);
-  set16(ram, r, 0x75, (uint16_t)(first + second_offset));
-  *hm_dp(ram, r, 0x74) = 0x7E;
-  *hm_dp(ram, r, 0x77) = 0x7E;
+  set16(ram, r, RUN1_SOURCE, first);
+  set16(ram, r, RUN2_SOURCE, (uint16_t)(first + second_offset));
+  *hm_dp(ram, r, RUN1_SOURCE_BANK) = 0x7E;
+  *hm_dp(ram, r, RUN2_SOURCE_BANK) = 0x7E;
 }
 /* the next VRAM position: `next`, wrapped from `a` to `a2` and `b` to `b2` */
 static void next_position(HmRegs *r, uint8_t *ram, unsigned at, uint16_t next,
@@ -149,30 +197,30 @@ static void next_position(HmRegs *r, uint8_t *ram, unsigned at, uint16_t next,
 void hm_LoadMapRowBelow(uint8_t *ram, HmRegs *r)
 {
   row_runs(ram, r);
-  uint16_t inner = (uint16_t)(dp16(ram, r, 0x1C) >> 2);
-  set16(ram, r, 0x86, inner);
-  uint32_t s = 0x2000u + dp16(ram, r, 0x16);           /* CLC; ADC $16; ADC $1C */
-  s = (s & 0xFFFF) + dp16(ram, r, 0x1C) + (s > 0xFFFF);
+  uint16_t inner = (uint16_t)(dp16(ram, r, ROW_OFFSET) >> 2);
+  set16(ram, r, ROW_INNER, inner);
+  uint32_t s = (uint32_t)BG1_MAP + dp16(ram, r, WRAM_ROW); /* CLC; ADC $16; ADC $1C */
+  s = (s & 0xFFFF) + dp16(ram, r, ROW_OFFSET) + (s > 0xFFFF);
   uint16_t first = (uint16_t)((uint16_t)s - inner);    /* SEC; SBC $86 */
   sources(ram, r, first, 0x40);
   copy_entries(ram, r, 2, 0x40);
-  queue(ram, r, dp16(ram, r, 0x14), 0x0400, 0x0080, 0xA2B6, 0xA2E3);
-  set16(ram, r, 0x16, (uint16_t)(dp16(ram, r, 0x16) + dp16(ram, r, 0x1A)));
-  next_position(r, ram, 0x14, (uint16_t)(dp16(ram, r, 0x14) + 0x20), 0x0400, 0x0800, 0x0C00, 0x0000);
+  queue(ram, r, dp16(ram, r, VRAM_ROW), 0x0400, 0x0080, 0xA2B6, 0xA2E3);
+  set16(ram, r, WRAM_ROW, (uint16_t)(dp16(ram, r, WRAM_ROW) + dp16(ram, r, ROW_LENGTH)));
+  next_position(r, ram, VRAM_ROW, (uint16_t)(dp16(ram, r, VRAM_ROW) + 0x20), 0x0400, 0x0800, 0x0C00, 0x0000);
 }
 
 /* LoadMapRowAbove ($80:A308): the row above. */
 void hm_LoadMapRowAbove(uint8_t *ram, HmRegs *r)
 {
   row_runs(ram, r);
-  uint16_t inner = (uint16_t)(dp16(ram, r, 0x1C) >> 2);
-  set16(ram, r, 0x86, inner);
-  uint16_t first = (uint16_t)(0x2000 + dp16(ram, r, 0x16) - inner);
+  uint16_t inner = (uint16_t)(dp16(ram, r, ROW_OFFSET) >> 2);
+  set16(ram, r, ROW_INNER, inner);
+  uint16_t first = (uint16_t)(BG1_MAP + dp16(ram, r, WRAM_ROW) - inner);
   sources(ram, r, first, 0x40);
   copy_entries(ram, r, 2, 0x40);
-  queue(ram, r, dp16(ram, r, 0x14), 0x0400, 0x0080, 0xA42F, 0xA45C);
-  set16(ram, r, 0x16, (uint16_t)(dp16(ram, r, 0x16) - dp16(ram, r, 0x1A)));
-  next_position(r, ram, 0x14, (uint16_t)(dp16(ram, r, 0x14) - 0x20), 0xFFE0, 0x0BE0, 0x07E0, 0x03E0);
+  queue(ram, r, dp16(ram, r, VRAM_ROW), 0x0400, 0x0080, 0xA42F, 0xA45C);
+  set16(ram, r, WRAM_ROW, (uint16_t)(dp16(ram, r, WRAM_ROW) - dp16(ram, r, ROW_LENGTH)));
+  next_position(r, ram, VRAM_ROW, (uint16_t)(dp16(ram, r, VRAM_ROW) - 0x20), 0xFFE0, 0x0BE0, 0x07E0, 0x03E0);
 }
 
 /* LoadMapColumnRight ($80:A481): the column at the right. The second run's source
@@ -182,31 +230,31 @@ void hm_LoadMapRowAbove(uint8_t *ram, HmRegs *r)
 void hm_LoadMapColumnRight(uint8_t *ram, HmRegs *r)
 {
   column_runs(ram, r, 0x0F);
-  uint32_t s = 0x2000u + dp16(ram, r, 0x12);           /* CLC; ADC $12; ADC #$60 */
+  uint32_t s = (uint32_t)BG1_MAP + dp16(ram, r, WRAM_COLUMN); /* CLC; ADC $12; ADC #$60 */
   s = (s & 0xFFFF) + 0x60 + (s > 0xFFFF);
   uint16_t first = (uint16_t)s;
   sources(ram, r, first, (uint16_t)(0x2000 + (s > 0xFFFF)));
   copy_entries(ram, r, 0x100, 0x2000);
-  queue(ram, r, dp16(ram, r, 0x10), 0x0800, 0x0081, 0xA5C4, 0xA5F1);
-  set16(ram, r, 0x12, (uint16_t)(dp16(ram, r, 0x12) + 2));
-  next_position(r, ram, 0x10, (uint16_t)(dp16(ram, r, 0x10) + 1), 0x0020, 0x0400, 0x0420, 0x0000);
+  queue(ram, r, dp16(ram, r, VRAM_COLUMN), 0x0800, 0x0081, 0xA5C4, 0xA5F1);
+  set16(ram, r, WRAM_COLUMN, (uint16_t)(dp16(ram, r, WRAM_COLUMN) + 2));
+  next_position(r, ram, VRAM_COLUMN, (uint16_t)(dp16(ram, r, VRAM_COLUMN) + 1), 0x0020, 0x0400, 0x0420, 0x0000);
 }
 
 /* LoadMapColumnLeft ($80:A617): the column at the left. */
 void hm_LoadMapColumnLeft(uint8_t *ram, HmRegs *r)
 {
   column_runs(ram, r, 0x1F);
-  uint16_t first = (uint16_t)(0x2000 + dp16(ram, r, 0x12) - 0x20);
+  uint16_t first = (uint16_t)(BG1_MAP + dp16(ram, r, WRAM_COLUMN) - 0x20);
   sources(ram, r, first, 0x2000);
   copy_entries(ram, r, 0x100, 0x2000);
-  queue(ram, r, dp16(ram, r, 0x10), 0x0800, 0x0081, 0xA75B, 0xA788);
-  set16(ram, r, 0x12, (uint16_t)(dp16(ram, r, 0x12) - 2));
-  uint16_t next = (uint16_t)(dp16(ram, r, 0x10) - 1);
+  queue(ram, r, dp16(ram, r, VRAM_COLUMN), 0x0800, 0x0081, 0xA75B, 0xA788);
+  set16(ram, r, WRAM_COLUMN, (uint16_t)(dp16(ram, r, WRAM_COLUMN) - 2));
+  uint16_t next = (uint16_t)(dp16(ram, r, VRAM_COLUMN) - 1);
   r->c = next >= 0xFFFF;                              /* CMP #$FFFF */
   if (next == 0xFFFF) next = 0x041F;
   else { r->c = next >= 0x03FF; if (next == 0x03FF) next = 0x001F; }
   r->a = next;
-  set16(ram, r, 0x10, next);
+  set16(ram, r, VRAM_COLUMN, next);
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
@@ -230,15 +278,15 @@ static bool follow(uint8_t *ram, HmRegs *r, unsigned pos, uint16_t bg, unsigned 
     room = (uint16_t)(dp16(ram, r, high) - p);
     r->a = room;
   }
-  r->c = room >= dp16(ram, r, 0x1E);
-  if (room < dp16(ram, r, 0x1E)) set16(ram, r, 0x1E, room);
-  r->a = hm_bus_rd16(ram, db_addr(r, 0x0196)) & 0x0001;
+  r->c = room >= dp16(ram, r, CAMERA_SPEED);
+  if (room < dp16(ram, r, CAMERA_SPEED)) set16(ram, r, CAMERA_SPEED, room);
+  r->a = hm_bus_rd16(ram, db_addr(r, WEATHER_FLAGS)) & 0x0001;
   return r->a != 0;
 }
 /* forwards: offset += speed; at 8 or more, -8 and a new line */
 static bool forwards(uint8_t *ram, HmRegs *r, unsigned sub)
 {
-  uint16_t s = (uint16_t)(*hm_dp(ram, r, sub) + *hm_dp(ram, r, 0x1E));
+  uint16_t s = (uint16_t)(*hm_dp(ram, r, sub) + *hm_dp(ram, r, CAMERA_SPEED));
   r->c = s > 0xFF;
   uint8_t v = (uint8_t)s;
   *hm_dp(ram, r, sub) = v;
@@ -253,7 +301,7 @@ static bool forwards(uint8_t *ram, HmRegs *r, unsigned sub)
 /* backwards: offset -= speed; below 0, +8 and a new line */
 static bool backwards(uint8_t *ram, HmRegs *r, unsigned sub)
 {
-  uint8_t o = *hm_dp(ram, r, sub), sp = *hm_dp(ram, r, 0x1E);
+  uint8_t o = *hm_dp(ram, r, sub), sp = *hm_dp(ram, r, CAMERA_SPEED);
   r->c = o >= sp;
   uint8_t v = (uint8_t)(o - sp);
   *hm_dp(ram, r, sub) = v;
@@ -270,7 +318,7 @@ static bool backwards(uint8_t *ram, HmRegs *r, unsigned sub)
 /* UpdateBGOffset ($80:A0AB): the camera goes down. */
 void hm_UpdateBGOffset(uint8_t *ram, HmRegs *r)
 {
-  if (follow(ram, r, 0xF7, 0x013E, 0xEF, 0xF3, true) && forwards(ram, r, 0x21)) {
+  if (follow(ram, r, CAMERA_Y, HM_CAM_Y, HM_CAM_MIN_Y, HM_CAM_MAX_Y, true) && forwards(ram, r, SUB_Y)) {
     hm_jsl(ram, r, 0xA0DF, 0x80);
     hm_LoadMapRowBelow(ram, r);
     hm_rtl(ram, r);
@@ -279,7 +327,7 @@ void hm_UpdateBGOffset(uint8_t *ram, HmRegs *r)
 /* ScrollCameraUp ($80:A0E1): the camera goes up. */
 void hm_ScrollCameraUp(uint8_t *ram, HmRegs *r)
 {
-  if (follow(ram, r, 0xF7, 0x013E, 0xEF, 0xF3, false) && backwards(ram, r, 0x21)) {
+  if (follow(ram, r, CAMERA_Y, HM_CAM_Y, HM_CAM_MIN_Y, HM_CAM_MAX_Y, false) && backwards(ram, r, SUB_Y)) {
     hm_jsl(ram, r, 0xA11A, 0x80);
     hm_LoadMapRowAbove(ram, r);
     hm_rtl(ram, r);
@@ -288,7 +336,7 @@ void hm_ScrollCameraUp(uint8_t *ram, HmRegs *r)
 /* ScrollCameraRight ($80:A11C): the camera goes right. */
 void hm_ScrollCameraRight(uint8_t *ram, HmRegs *r)
 {
-  if (follow(ram, r, 0xF5, 0x013C, 0xED, 0xF1, true) && forwards(ram, r, 0x20)) {
+  if (follow(ram, r, CAMERA_X, HM_CAM_X, HM_CAM_MIN_X, HM_CAM_MAX_X, true) && forwards(ram, r, SUB_X)) {
     hm_jsl(ram, r, 0xA150, 0x80);
     hm_LoadMapColumnRight(ram, r);
     hm_rtl(ram, r);
@@ -297,7 +345,7 @@ void hm_ScrollCameraRight(uint8_t *ram, HmRegs *r)
 /* ScrollCameraLeft ($80:A152): the camera goes left. */
 void hm_ScrollCameraLeft(uint8_t *ram, HmRegs *r)
 {
-  if (follow(ram, r, 0xF5, 0x013C, 0xED, 0xF1, false) && backwards(ram, r, 0x20)) {
+  if (follow(ram, r, CAMERA_X, HM_CAM_X, HM_CAM_MIN_X, HM_CAM_MAX_X, false) && backwards(ram, r, SUB_X)) {
     hm_jsl(ram, r, 0xA18B, 0x80);
     hm_LoadMapColumnLeft(ram, r);
     hm_rtl(ram, r);
@@ -345,8 +393,8 @@ static void place_axis(uint8_t *ram, HmRegs *r, unsigned pos, unsigned low, unsi
 }
 void hm_PlaceCameraOnMapEntry(uint8_t *ram, HmRegs *r)
 {
-  place_axis(ram, r, 0xD6, 0xED, 0xF1, 0x090B, 0x20, 0xF5);
-  place_axis(ram, r, 0xD8, 0xEF, 0xF3, 0x090D, 0x21, 0xF7);
+  place_axis(ram, r, PLAYER_X, HM_CAM_MIN_X, HM_CAM_MAX_X, PLAYER_SCREEN_X, SUB_X, CAMERA_X);
+  place_axis(ram, r, PLAYER_Y, HM_CAM_MIN_Y, HM_CAM_MAX_Y, PLAYER_SCREEN_Y, SUB_Y, CAMERA_Y);
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
@@ -360,8 +408,8 @@ void hm_PlaceCameraOnMapEntry(uint8_t *ram, HmRegs *r)
  *    BG2 moves with the camera (when the camera moves) and every 10 frames
  *    ($091C) drifts one pixel right and one up; bit 3: BG2 = the camera.
  * ═════════════════════════════════════════════════════════════════════════ */
-#define BG2_X 0x0140
-#define BG2_Y 0x0142
+#define BG2_X 0x0140   /* DB: 16b, BG2's scroll across */
+#define BG2_Y 0x0142   /* DB: 16b, up-down */
 
 static uint16_t rdw(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_rd16(ram, db_addr(r, a)); }
 static void wrw(uint8_t *ram, const HmRegs *r, uint16_t a, uint16_t v) { hm_bus_wr16(ram, db_addr(r, a), v); }
@@ -375,12 +423,12 @@ static bool at_limit(uint8_t *ram, HmRegs *r, uint16_t v, unsigned a, unsigned b
 }
 static void drift(uint8_t *ram, HmRegs *r)
 {
-  uint8_t t = (uint8_t)(hm_bus_rd8(ram, db_addr(r, 0x091C)) + 1);
+  uint8_t t = (uint8_t)(hm_bus_rd8(ram, db_addr(r, BG2_DRIFT_TIMER)) + 1);
   r->a = (uint16_t)((r->a & 0xFF00) | t);
-  hm_bus_wr8(ram, db_addr(r, 0x091C), t);
+  hm_bus_wr8(ram, db_addr(r, BG2_DRIFT_TIMER), t);
   r->c = t >= 0x0A;
   if (t != 0x0A) return;
-  hm_bus_wr8(ram, db_addr(r, 0x091C), 0);
+  hm_bus_wr8(ram, db_addr(r, BG2_DRIFT_TIMER), 0);
   uint16_t x = rdw(ram, r, BG2_X);
   wrw(ram, r, BG2_X, (uint16_t)(x + 1));
   uint16_t y = rdw(ram, r, BG2_Y);
@@ -390,44 +438,44 @@ static void drift(uint8_t *ram, HmRegs *r)
 }
 static void follow_bg2(uint8_t *ram, HmRegs *r)
 {
-  wrw(ram, r, BG2_X, dp16(ram, r, 0xF5));
-  r->a = dp16(ram, r, 0xF7);
+  wrw(ram, r, BG2_X, dp16(ram, r, CAMERA_X));
+  r->a = dp16(ram, r, CAMERA_Y);
   wrw(ram, r, BG2_Y, r->a);
 }
 void hm_MoveSecondBackground(uint8_t *ram, HmRegs *r)
 {
-  uint8_t map = *hm_dp(ram, r, 0x22);
+  uint8_t map = *hm_dp(ram, r, HM_MAP_ID);
   r->a = (uint16_t)((r->a & 0xFF00) | map);
   r->c = map >= 0x26;
   if (map == 0x26) return;
   r->c = map >= 0x31;
   if (r->c) {                                             /* parallax maps */
-    r->a = dp16(ram, r, 0xF7);
-    if (at_limit(ram, r, r->a, 0xEF, 0xF3)) return;
-    r->a = dp16(ram, r, 0xF5);
+    r->a = dp16(ram, r, CAMERA_Y);
+    if (at_limit(ram, r, r->a, HM_CAM_MIN_Y, HM_CAM_MAX_Y)) return;
+    r->a = dp16(ram, r, CAMERA_X);
     wrw(ram, r, BG2_X, r->a);
-    uint16_t speed = dp16(ram, r, 0x1E);
+    uint16_t speed = dp16(ram, r, CAMERA_SPEED);
     r->c = speed >> 15;
     r->a = (uint16_t)(speed << 1);
-    set16(ram, r, 0x1E, r->a);
-    r->a = dp16(ram, r, 0xDA);
+    set16(ram, r, CAMERA_SPEED, r->a);
+    r->a = dp16(ram, r, PLAYER_DIRECTION);
     r->c = r->a >= 2;
     if (r->a == 2) return;
     r->c = r->a >= 3;
     if (r->a == 3) return;
-    uint16_t y = dp16(ram, r, 0xF7);
+    uint16_t y = dp16(ram, r, CAMERA_Y);
     r->a = (uint16_t)((y >> 1) + 0x80);                   /* LSR; CLC; ADC #$80 */
     r->c = (uint32_t)(y >> 1) + 0x80 > 0xFFFF;
     wrw(ram, r, BG2_Y, r->a);
     return;
   }
-  if ((r->a = rdw(ram, r, 0x0196) & 0x0002)) { follow_bg2(ram, r); return; }
-  if (!(r->a = rdw(ram, r, 0x0196) & 0x0004)) {
-    if ((r->a = rdw(ram, r, 0x0196) & 0x0008)) follow_bg2(ram, r);
+  if ((r->a = rdw(ram, r, WEATHER_FLAGS) & 0x0002)) { follow_bg2(ram, r); return; }
+  if (!(r->a = rdw(ram, r, WEATHER_FLAGS) & 0x0004)) {
+    if ((r->a = rdw(ram, r, WEATHER_FLAGS) & 0x0008)) follow_bg2(ram, r);
     return;
   }
   /* the clouds: with the camera, then the drift */
-  uint16_t dir = dp16(ram, r, 0xDA);
+  uint16_t dir = dp16(ram, r, PLAYER_DIRECTION);
   r->a = dir;
   unsigned d = 4;
   for (unsigned k = 0; k < 4; k++) {
@@ -436,10 +484,11 @@ void hm_MoveSecondBackground(uint8_t *ram, HmRegs *r)
   }
   if (d < 4) {
     bool vertical = d < 2;
-    r->a = dp16(ram, r, vertical ? 0xF7 : 0xF5);
-    if (!at_limit(ram, r, r->a, vertical ? 0xEF : 0xED, vertical ? 0xF3 : 0xF1)) {
+    r->a = dp16(ram, r, vertical ? CAMERA_Y : CAMERA_X);
+    if (!at_limit(ram, r, r->a, vertical ? HM_CAM_MIN_Y : HM_CAM_MIN_X,
+                  vertical ? HM_CAM_MAX_Y : HM_CAM_MAX_X)) {
       uint16_t at = vertical ? BG2_Y : BG2_X;
-      uint16_t v = rdw(ram, r, at), s = dp16(ram, r, 0x1E);
+      uint16_t v = rdw(ram, r, at), s = dp16(ram, r, CAMERA_SPEED);
       if (d == 0 || d == 2) { r->a = (uint16_t)(v + s); r->c = (uint32_t)v + s > 0xFFFF; }
       else { r->a = (uint16_t)(v - s); r->c = v >= s; }
       wrw(ram, r, at, r->a);
@@ -457,14 +506,15 @@ void hm_MoveSecondBackground(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_AutoMapScrolling(uint8_t *ram, HmRegs *r)
 {
-  uint32_t timer = (uint32_t)r->db << 16 | 0x0880;
+  uint32_t timer = (uint32_t)r->db << 16 | CAMERA_FRAMES;
   uint8_t t = hm_bus_rd8(ram, timer);
   r->a = (uint16_t)((r->a & 0xFF00) | t);
   if (!t) return;
   t--;
   r->a = (uint16_t)((r->a & 0xFF00) | t);
   hm_bus_wr8(ram, timer, t);
-  static const uint16_t pos[] = { 0xF5, 0xF7 }, speed[] = { 0x087C, 0x087E }, bg[] = { 0x013C, 0x013E };
+  static const uint16_t pos[] = { CAMERA_X, CAMERA_Y }, speed[] = { CAMERA_SPEED_X, CAMERA_SPEED_Y },
+                        bg[] = { HM_CAM_X, HM_CAM_Y };
   for (int i = 0; i < 2; i++) {
     uint32_t sum = (uint32_t)hm_dp_r16(ram, r, pos[i]) + hm_bus_rd16(ram, (uint32_t)r->db << 16 | speed[i]);
     r->c = sum > 0xFFFF;
@@ -472,5 +522,5 @@ void hm_AutoMapScrolling(uint8_t *ram, HmRegs *r)
     hm_dp_w16(ram, r, pos[i], r->a);
     hm_bus_wr16(ram, (uint32_t)r->db << 16 | bg[i], r->a);
   }
-  if (r->a & 0x8000) hm_bus_wr16(ram, (uint32_t)r->db << 16 | 0x013E, 0);
+  if (r->a & 0x8000) hm_bus_wr16(ram, (uint32_t)r->db << 16 | HM_CAM_Y, 0);
 }

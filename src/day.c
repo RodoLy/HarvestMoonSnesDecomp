@@ -11,13 +11,128 @@
 
 typedef void Fn(uint8_t *ram, HmRegs *r);
 
-#define YEAR     0x7F1F18
-#define SEASON   0x7F1F19
-#define WEEKDAY  0x7F1F1A
-#define DAY      0x7F1F1B
-#define HOUR     0x7F1F1C
-#define MINUTES  0x7F1F1D
-#define SECONDS  0x7F1F1E
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_GAME_STATE ($D2),
+ * HM_PLAYER_ACTION ($D4), HM_ANIM_REQUEST ($0901), HM_MAX_STAMINA ($0917),
+ * HM_CURRENT_STAMINA ($0918), HM_ITEM_ON_HAND ($091D), HM_TOOL_SELECTED
+ * ($0921), HM_TOOL_BACKPACK ($0923), HM_EXHAUSTION ($096C), HM_TIME_RUNNING ($0973), HM_INPUT_STATE ($019A),
+ * HM_TEXT_X ($0185), HM_SHED_ITEMS ($7F:1F00) and HM_SHIPPING_MONEY
+ * ($7F:1F07). */
+#define WRAM_LONG(a)      (0x7E0000 + (a))   /* a ram[] offset as a bus address */
+
+/* The calendar (bus addresses, $7F:1F18-$7F:1F1E) */
+#define YEAR     0x7F1F18   /* 8b: 0 = the first year (HM_YEAR) */
+#define SEASON   0x7F1F19   /* 8b: 0 spring ... 3 winter (HM_SEASON) */
+#define WEEKDAY  0x7F1F1A   /* 8b: 0-6 (HM_WEEKDAY) */
+#define DAY      0x7F1F1B   /* 8b: 1-30 (HM_DAY) */
+#define HOUR     0x7F1F1C   /* 8b: 24h clock (HM_HOUR) */
+#define MINUTES  0x7F1F1D   /* 8b: 0-14 (HM_MINUTES) */
+#define SECONDS  0x7F1F1E   /* 8b: frames, 0-59 (HM_SECONDS) */
+
+/* The saved state, $7F:1Fxx (ram[] offsets 0x11Fxx; WRAM_LONG gives the bus
+ * address) */
+#define SHED_ROW_2        (HM_SHED_ITEMS + 2) /* 8b: the shed's third byte (bit 1 the
+                                      golden hoe, bit 2 the golden hammer) */
+#define SHIPPING_MONEY_HIGH 0x11F09 /* 8b: the third byte of HM_SHIPPING_MONEY */
+#define LUMBER_NEEDED     0x11F0E  /* 16b: the wood the next house extension needs */
+#define BUILD_NIGHTS      0x11F35  /* 8b: nights the house has been building */
+#define FLAGS_5A          0x11F5A  /* 16b day flags: $0400 the shipping box's talk */
+#define FLAGS_5C          0x11F5C  /* 16b day flags */
+#define FLAGS_5E          0x11F5E  /* 16b day flags: $04 no breakfast, $8000 the music
+                                      goes on after 18:00 */
+#define FLAGS_60          0x11F60  /* 16b day flags: $01 set with $0196 bit 4 */
+#define FLAGS_62          0x11F62  /* 16b day flags */
+#define FLAGS_64          0x11F64  /* 16b story flags: $10 / $20 today's special days,
+                                      $40 / $80 the house's first / second extension */
+#define FLAGS_66          0x11F66  /* 16b story flags: $20 -> $40; $80 the house is being
+                                      built, $0100 it is done */
+#define FLAGS_68          0x11F68  /* 16b story flags: $01 a day went by; $0800 -> $1000;
+                                      $8000 the golden hammer */
+#define FLAGS_6A          0x11F6A  /* 16b story flags: $80 the golden hoe; $0400 -> $0800;
+                                      visits $1000 / $4000 */
+#define FLAGS_6C          0x11F6C  /* 16b story flags: visits $01, $04, $10 */
+#define FLAGS_6E          0x11F6E  /* 16b story flags: $8000 a tool back to the shed */
+#define FLAGS_70          0x11F70  /* 16b: $02 today's special day ($0196 bit 8) */
+#define FLAGS_74          0x11F74  /* 16b day flags */
+#define FLAGS_76          0x11F76  /* 16b day flags */
+#define FLAGS_78          0x11F78  /* 16b day flags */
+#define FLAGS_7A          0x11F7A  /* 16b: the scene flags */
+
+/* WRAM of the data bank ($0100-$1FFF; through db / rd8 / wr8) */
+#define WANTED_SONG       0x0110   /* 8b: the song asked for */
+#define SOUND_EFFECT      0x0114   /* 8b: the sound effect to play */
+#define PLAYING_SONG      0x0117   /* 8b: the song playing */
+#define EFFECTS_SONG      0x0118   /* 8b: the song whose instrument the effects use */
+#define JOY_HELD          0x0124   /* 16b: Joy1's buttons held */
+#define UNKNOWN_0148      0x0148   /* 8b: cleared here and by reset.c */
+#define LOADED_PALETTE    0x017B   /* 8b: the palette in use (palette.c) */
+#define TRANSITION_X      0x017D   /* 16b: where the player appears after a transition */
+#define TRANSITION_Y      0x017F   /* 16b */
+#define TEXT_NUMBER       0x0183   /* 16b: the text being shown */
+#define TEXT_CODE_AT      0x0187   /* 16b: which code of the text the printer is at */
+#define ARROW_BLINK       0x018B   /* 8b: the text box arrow's blink */
+#define TEXT_BOX_STATE    0x019B   /* 8b: the text box's state bits */
+#define OAM_SIZE_USED     0x084A   /* 16b: bytes of the sprite table filled (objects.c) */
+#define PLAYER_TILE_1     0x0878   /* 16b: the tile types under the player's front corners */
+#define PLAYER_TILE_2     0x087A   /* 16b */
+#define CAMERA_SPEED_X    0x087C   /* 16b: the camera's own movement per frame */
+#define CAMERA_SPEED_Y    0x087E   /* 16b */
+#define CAMERA_FRAMES     0x0880   /* 8b: for how many frames */
+#define FOOTPRINT_X       0x0907   /* 16b: where the last footprint was left */
+#define FOOTPRINT_Y       0x0909   /* 16b */
+#define PLAYER_TURN       0x0911   /* 16b: the direction being tried (playerinput.c) */
+#define PLAYER_TIMER      0x0915   /* 16b: the player's animation timer */
+#define STEP_COUNT        0x0919   /* 8b: moves since the last footprint */
+#define STEP_SOUND_TIMER  0x091A   /* 8b: frames to the next step sound */
+#define TOOL_FRAMES       0x091B   /* 8b: frames of the tool's use */
+#define SHOWN_ITEM        0x091E   /* 8b: the item the player held up */
+#define PICKED_TILE_BYTE  0x091F   /* 8b: byte +0 of the tile picked up */
+#define CARRIED_SLOT      0x0920   /* 8b: the CC slot being carried */
+#define TOOL_SOUND_CHOICE 0x0922   /* 8b: what picks the tool's sound */
+#define BREAKFAST         0x0924   /* 8b: the breakfast (0-3, stamina.c HM_LUNCH_CHOICE) */
+#define IDLE_TIMER        0x0925   /* 8b: frames standing idle */
+#define COWS_FED          0x0930   /* 8b: troughs filled today */
+#define CHICKENS_FED      0x0931   /* 8b */
+#define COW_TROUGHS       0x0932   /* 16b: which troughs have food */
+#define CHICKEN_TROUGHS   0x0934   /* 16b */
+#define SOW_STEP          0x096B   /* 8b: which tile of a multi-tile use (HM_SOW_STEP) */
+#define HIT_COUNTER       0x096D   /* 8b: the hammer's and the axe's hits */
+#define UNKNOWN_0972      0x0972   /* 8b: cleared by FirstNightReset, not read here */
+#define DOOR_STEP         0x098A   /* 8b: frames of the walk out of a door */
+#define TRANSITION_MAP    0x098B   /* 8b: the map a transition goes to */
+#define SAVE_SLOT         0x098E   /* 8b: the diary slot (0 or 1) */
+#define UNKNOWN_098F      0x098F   /* 8b: cleared by FirstNightReset, not read here */
+#define TV_FORECAST       0x0990   /* 8b (weather.c) */
+#define NAME_CELL         0x0991   /* 16b: the name screen's cursor cell (menus.c) */
+#define NAME_PAGE         0x0993   /* 8b: the name screen's page */
+#define NAME_COUNT        0x0994   /* 8b: letters of the name typed */
+#define WEATHER_FLAGS     0x0196   /* 16b: weather and day flags; bits 4, 8, 9 special days */
+#define VISIT_NIGHTS      0x09A3   /* 8b: nights counted for a visit (to 3) */
+
+/* Direct page */
+#define NMI_STATUS        0x00   /* 8b: set by the NMI */
+#define PALETTE_TARGET    0x04   /* 24b $04-$06: the palette the colours move to */
+#define PALETTE_TARGET_BANK 0x06
+#define DMA_WAITING       0x28   /* 8b: the DMA channels to start, one bit each */
+#define COLOUR_LIST_0     0x42   /* 24b: colour animation channel 0's list ($42 + 3 n) */
+#define COLOUR_LIST_0_BANK 0x44
+#define COLOUR_LIST_1     0x45   /* 24b: channel 1's */
+#define COLOUR_LIST_1_BANK 0x47
+#define COLOUR_LIST_2     0x48   /* 24b: channel 2's */
+#define COLOUR_LIST_2_BANK 0x4A
+#define MONEY_AMOUNT      0x72   /* 24b $72-$74: what AddMoney adds */
+#define MONEY_AMOUNT_BANK 0x74   /* 8b: its third byte */
+#define FADE_FROM         0x92   /* 8b: ScreenFadeOut's starting brightness */
+#define FADE_SPEED        0x93   /* 8b: frames per brightness level */
+#define FADE_TO           0x94   /* 8b: the brightness it ends at */
+#define MAP_ANIM          0xCF   /* long $CF-$D1: a map animation's next step */
+#define MAP_ANIM_BANK     0xD1
+#define PLAYER_X          0xD6   /* 16b: the player's position */
+#define PLAYER_Y          0xD8   /* 16b */
+#define PLAYER_DIRECTION  0xDA   /* 16b: the way the player faces: 0 down */
+#define GOBJ_COUNT        0xDC   /* 16b: game objects handed out so far (objects.c) */
+#define COLLIDE_TILE_1    0xE9   /* 16b: CollideMap's output: the first corner's tile type */
+#define COLLIDE_TILE_2    0xEB   /* 16b: the second corner's */
 
 static uint32_t db(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static uint8_t rd8(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_rd8(ram, db(r, a)); }
@@ -116,7 +231,7 @@ static bool count8(uint8_t *ram, HmRegs *r, uint32_t addr, uint8_t n)
 static void visit_nights(uint8_t *ram, HmRegs *r, uint32_t addr, uint16_t now, uint16_t next)
 {
   if (!flag(ram, r, addr, now) || flag(ram, r, addr, next)) return;
-  if (!count8(ram, r, db(r, 0x09A3), 3)) return;
+  if (!count8(ram, r, db(r, VISIT_NIGHTS), 3)) return;
   flag_on(ram, r, addr, next);
   flag_off(ram, r, addr, now);
 }
@@ -156,83 +271,83 @@ static void new_date(uint8_t *ram, HmRegs *r)
 
 static void story(uint8_t *ram, HmRegs *r)
 {
-  if (flag(ram, r, 0x7F1F66, 0x0020)) {
-    flag_off(ram, r, 0x7F1F66, 0x0020);
-    flag_on(ram, r, 0x7F1F66, 0x0040);
+  if (flag(ram, r, WRAM_LONG(FLAGS_66), 0x0020)) {
+    flag_off(ram, r, WRAM_LONG(FLAGS_66), 0x0020);
+    flag_on(ram, r, WRAM_LONG(FLAGS_66), 0x0040);
   }
-  if (flag(ram, r, 0x7F1F66, 0x0080) && count8(ram, r, 0x7F1F35, 4)) {
-    flag_on(ram, r, 0x7F1F66, 0x0100);
+  if (flag(ram, r, WRAM_LONG(FLAGS_66), 0x0080) && count8(ram, r, WRAM_LONG(BUILD_NIGHTS), 4)) {
+    flag_on(ram, r, WRAM_LONG(FLAGS_66), 0x0100);
     r->a = 500;
-    hm_bus_wr16(ram, 0x7F1F0E, 500);
-    flag_off(ram, r, 0x7F1F66, 0x0080);
-    if (flag(ram, r, 0x7F1F64, 0x0040)) flag_on(ram, r, 0x7F1F64, 0x0080);
-    else flag_on(ram, r, 0x7F1F64, 0x0040);
+    hm_bus_wr16(ram, WRAM_LONG(LUMBER_NEEDED), 500);
+    flag_off(ram, r, WRAM_LONG(FLAGS_66), 0x0080);
+    if (flag(ram, r, WRAM_LONG(FLAGS_64), 0x0040)) flag_on(ram, r, WRAM_LONG(FLAGS_64), 0x0080);
+    else flag_on(ram, r, WRAM_LONG(FLAGS_64), 0x0040);
   }
-  if (flag(ram, r, 0x7F1F68, 0x0800)) {
-    flag_off(ram, r, 0x7F1F68, 0x0800);
-    flag_on(ram, r, 0x7F1F68, 0x1000);
+  if (flag(ram, r, WRAM_LONG(FLAGS_68), 0x0800)) {
+    flag_off(ram, r, WRAM_LONG(FLAGS_68), 0x0800);
+    flag_on(ram, r, WRAM_LONG(FLAGS_68), 0x1000);
   }
-  if (flag(ram, r, 0x7F1F68, 0x8000)) {
-    flag_off(ram, r, 0x7F1F68, 0x8000);
-    bits_on8(ram, r, 0x7F1F02, 0x04);
+  if (flag(ram, r, WRAM_LONG(FLAGS_68), 0x8000)) {
+    flag_off(ram, r, WRAM_LONG(FLAGS_68), 0x8000);
+    bits_on8(ram, r, WRAM_LONG(SHED_ROW_2), 0x04);
   }
-  if (flag(ram, r, 0x7F1F6A, 0x0080)) {
-    flag_off(ram, r, 0x7F1F6A, 0x0080);
-    if (!flag(ram, r, 0x7F1F6A, 0x0100)) flag_on(ram, r, 0x7F1F6A, 0x0102);
+  if (flag(ram, r, WRAM_LONG(FLAGS_6A), 0x0080)) {
+    flag_off(ram, r, WRAM_LONG(FLAGS_6A), 0x0080);
+    if (!flag(ram, r, WRAM_LONG(FLAGS_6A), 0x0100)) flag_on(ram, r, WRAM_LONG(FLAGS_6A), 0x0102);
     else {
-      static const uint16_t places[2] = { 0x0921, 0x0923 };
+      static const uint16_t places[2] = { HM_TOOL_SELECTED, HM_TOOL_BACKPACK };
       for (int i = 0; i < 2; i++) {
         uint8_t v = rd8(ram, r, places[i]);
         set_a8(r, v);
         r->c = v >= 2;
         if (v == 2) wr8(ram, r, places[i], 0);
       }
-      uint8_t v = (uint8_t)(hm_bus_rd8(ram, 0x7F1F00) & 0xFD);
+      uint8_t v = (uint8_t)(hm_bus_rd8(ram, WRAM_LONG(HM_SHED_ITEMS)) & 0xFD);
       set_a8(r, v);
-      hm_bus_wr8(ram, 0x7F1F00, v);
-      bits_on8(ram, r, 0x7F1F02, 0x02);
+      hm_bus_wr8(ram, WRAM_LONG(HM_SHED_ITEMS), v);
+      bits_on8(ram, r, WRAM_LONG(SHED_ROW_2), 0x02);
     }
   }
-  if (flag(ram, r, 0x7F1F6A, 0x0400) && !flag(ram, r, 0x7F1F6A, 0x0800)) {
-    flag_on(ram, r, 0x7F1F6A, 0x0800);
-    flag_off(ram, r, 0x7F1F6A, 0x0400);
+  if (flag(ram, r, WRAM_LONG(FLAGS_6A), 0x0400) && !flag(ram, r, WRAM_LONG(FLAGS_6A), 0x0800)) {
+    flag_on(ram, r, WRAM_LONG(FLAGS_6A), 0x0800);
+    flag_off(ram, r, WRAM_LONG(FLAGS_6A), 0x0400);
   }
-  visit_nights(ram, r, 0x7F1F6A, 0x1000, 0x2000);
-  visit_nights(ram, r, 0x7F1F6A, 0x4000, 0x8000);
-  visit_nights(ram, r, 0x7F1F6C, 0x0001, 0x0002);
-  visit_nights(ram, r, 0x7F1F6C, 0x0004, 0x0008);
-  visit_nights(ram, r, 0x7F1F6C, 0x0010, 0x0020);
-  if (flag(ram, r, 0x7F1F6E, 0x8000)) {
-    flag_off(ram, r, 0x7F1F6E, 0x8000);
-    bits_on8(ram, r, 0x7F1F02, 0x01);
+  visit_nights(ram, r, WRAM_LONG(FLAGS_6A), 0x1000, 0x2000);
+  visit_nights(ram, r, WRAM_LONG(FLAGS_6A), 0x4000, 0x8000);
+  visit_nights(ram, r, WRAM_LONG(FLAGS_6C), 0x0001, 0x0002);
+  visit_nights(ram, r, WRAM_LONG(FLAGS_6C), 0x0004, 0x0008);
+  visit_nights(ram, r, WRAM_LONG(FLAGS_6C), 0x0010, 0x0020);
+  if (flag(ram, r, WRAM_LONG(FLAGS_6E), 0x8000)) {
+    flag_off(ram, r, WRAM_LONG(FLAGS_6E), 0x8000);
+    bits_on8(ram, r, WRAM_LONG(SHED_ROW_2), 0x01);
   }
-  r->a = (uint16_t)(rd16(ram, r, 0x0196) & 0x0010);
-  if (r->a) flag_on(ram, r, 0x7F1F60, 0x0001);
+  r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x0010);
+  if (r->a) flag_on(ram, r, WRAM_LONG(FLAGS_60), 0x0001);
 }
 
 void hm_NightReset(uint8_t *ram, HmRegs *r)
 {
   new_date(ram, r);
   set_a8(r, 0xFF);
-  wr8(ram, r, 0x0117, 0xFF);
+  wr8(ram, r, PLAYING_SONG, 0xFF);
   jsl(ram, r, 0x8301, 0x83, hm_FadeOutSongSlowly);
-  set_a8(r, 0x0F); *hm_dp(ram, r, 0x92) = 0x0F;
-  set_a8(r, 0x03); *hm_dp(ram, r, 0x93) = 0x03;
-  set_a8(r, 0x01); *hm_dp(ram, r, 0x94) = 0x01;
+  set_a8(r, 0x0F); *hm_dp(ram, r, FADE_FROM) = 0x0F;
+  set_a8(r, 0x03); *hm_dp(ram, r, FADE_SPEED) = 0x03;
+  set_a8(r, 0x01); *hm_dp(ram, r, FADE_TO) = 0x01;
   jsl(ram, r, 0x8313, 0x80, hm_ScreenFadeOut);
   jsl(ram, r, 0x8317, 0x80, hm_ForceBlank);
   set_a8(r, 0x0F);
-  *hm_dp(ram, r, 0x22) = 0x0F;
+  *hm_dp(ram, r, HM_MAP_ID) = 0x0F;
 
-  flag_off(ram, r, 0x7F1F64, 0x0030);                      /* REP #$30 */
-  flag_off(ram, r, 0x7F1F70, 0x0002);
-  r->a = (uint16_t)(rd16(ram, r, 0x0196) & 0x0010);
-  if (r->a) flag_on(ram, r, 0x7F1F64, 0x0020);
+  flag_off(ram, r, WRAM_LONG(FLAGS_64), 0x0030);           /* REP #$30 */
+  flag_off(ram, r, WRAM_LONG(FLAGS_70), 0x0002);
+  r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x0010);
+  if (r->a) flag_on(ram, r, WRAM_LONG(FLAGS_64), 0x0020);
   jsl(ram, r, 0x834E, 0x82, hm_SetWeatherFlags);
-  r->a = (uint16_t)(rd16(ram, r, 0x0196) & 0x0200);
-  if (r->a) flag_on(ram, r, 0x7F1F64, 0x0010);
-  r->a = (uint16_t)(rd16(ram, r, 0x0196) & 0x0100);
-  if (r->a) flag_on(ram, r, 0x7F1F70, 0x0002);
+  r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x0200);
+  if (r->a) flag_on(ram, r, WRAM_LONG(FLAGS_64), 0x0010);
+  r->a = (uint16_t)(rd16(ram, r, WEATHER_FLAGS) & 0x0100);
+  if (r->a) flag_on(ram, r, WRAM_LONG(FLAGS_70), 0x0002);
   jsl(ram, r, 0x837C, 0x80, hm_PickMapMusicAnyHour);
 
   set_a8(r, 0x06);                                         /* SEP #$20 */
@@ -248,71 +363,72 @@ void hm_NightReset(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0x83A8, 0x82, hm_FindMostLovedName);
   jsl(ram, r, 0x83AC, 0x82, hm_WifePregnancyAndChildren);
 
-  wr16(ram, r, 0x0915, 0);                                 /* REP #$20 */
-  hm_dp_w16(ram, r, 0xD2, 0);
-  hm_dp_w16(ram, r, 0xD4, 0);
-  uint8_t max = rd8(ram, r, 0x0917);                       /* SEP #$20 */
+  wr16(ram, r, PLAYER_TIMER, 0);                           /* REP #$20 */
+  hm_dp_w16(ram, r, HM_GAME_STATE, 0);
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
+  uint8_t max = rd8(ram, r, HM_MAX_STAMINA);               /* SEP #$20 */
   set_a8(r, max);
-  wr8(ram, r, 0x0918, max);
-  wr8(ram, r, 0x0925, 0);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0001);     /* REP #$30 */
-  hm_dp_w16(ram, r, 0xD2, r->a);
+  wr8(ram, r, HM_CURRENT_STAMINA, max);
+  wr8(ram, r, IDLE_TIMER, 0);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0001); /* REP #$30 */
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   r->a = 0;
-  hm_dp_w16(ram, r, 0xD4, 0);
-  hm_dp_w16(ram, r, 0xDA, 0);
-  wr16(ram, r, 0x0911, 0);
-  wr16(ram, r, 0x0901, 0);
-  r->a = hm_bus_rd16(ram, 0x7F1F07);                       /* the shipped goods' money */
-  hm_dp_w16(ram, r, 0x72, r->a);
-  set_a8(r, hm_bus_rd8(ram, 0x7F1F09));
-  *hm_dp(ram, r, 0x74) = (uint8_t)r->a;
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
+  hm_dp_w16(ram, r, PLAYER_DIRECTION, 0);
+  wr16(ram, r, PLAYER_TURN, 0);
+  wr16(ram, r, HM_ANIM_REQUEST, 0);
+  r->a = hm_bus_rd16(ram, WRAM_LONG(HM_SHIPPING_MONEY));   /* the shipped goods' money */
+  hm_dp_w16(ram, r, MONEY_AMOUNT, r->a);
+  set_a8(r, hm_bus_rd8(ram, WRAM_LONG(SHIPPING_MONEY_HIGH)));
+  *hm_dp(ram, r, MONEY_AMOUNT_BANK) = (uint8_t)r->a;
   jsl(ram, r, 0x83FB, 0x83, hm_AddMoney);
   r->a = 0;
-  hm_bus_wr16(ram, 0x7F1F07, 0);
-  hm_bus_wr8(ram, 0x7F1F09, 0);
-  wr8(ram, r, 0x0930, 0);                                  /* the animals fed */
-  wr8(ram, r, 0x0931, 0);
-  wr16(ram, r, 0x0932, 0);
-  wr16(ram, r, 0x0934, 0);
-  static const uint32_t days_flags[] = { 0x7F1F5A, 0x7F1F5C, 0x7F1F5E, 0x7F1F60, 0x7F1F62,
-                                         0x7F1F74, 0x7F1F76, 0x7F1F78 };
+  hm_bus_wr16(ram, WRAM_LONG(HM_SHIPPING_MONEY), 0);
+  hm_bus_wr8(ram, WRAM_LONG(SHIPPING_MONEY_HIGH), 0);
+  wr8(ram, r, COWS_FED, 0);                                /* the animals fed */
+  wr8(ram, r, CHICKENS_FED, 0);
+  wr16(ram, r, COW_TROUGHS, 0);
+  wr16(ram, r, CHICKEN_TROUGHS, 0);
+  static const uint32_t days_flags[] = {
+    WRAM_LONG(FLAGS_5A), WRAM_LONG(FLAGS_5C), WRAM_LONG(FLAGS_5E), WRAM_LONG(FLAGS_60),
+    WRAM_LONG(FLAGS_62), WRAM_LONG(FLAGS_74), WRAM_LONG(FLAGS_76), WRAM_LONG(FLAGS_78) };
   for (unsigned i = 0; i < 8; i++) hm_bus_wr16(ram, days_flags[i], 0);
-  flag_on(ram, r, 0x7F1F68, 0x0001);
+  flag_on(ram, r, WRAM_LONG(FLAGS_68), 0x0001);
   story(ram, r);
 
-  uint8_t clock = rd8(ram, r, 0x0973);                     /* SEP #$20 */
+  uint8_t clock = rd8(ram, r, HM_TIME_RUNNING);            /* SEP #$20 */
   set_a8(r, clock & 0x04);
   if (clock & 0x04) {
-    r->a = rd8(ram, r, 0x098E);                            /* LDA #0; XBA; LDA */
+    r->a = rd8(ram, r, SAVE_SLOT);                         /* LDA #0; XBA; LDA */
     jsl(ram, r, 0x870E, 0x83, hm_SaveGameSlot);
   }
-  r->a = (uint16_t)((rd16(ram, r, 0x0124) & 0x2030) ^ 0x2030);   /* REP #$20 */
+  r->a = (uint16_t)((rd16(ram, r, JOY_HELD) & 0x2030) ^ 0x2030); /* REP #$20 */
   if (!r->a) {
     set_a8(r, 0x02); hm_bus_wr8(ram, YEAR, 0x02);
     set_a8(r, 0x01); hm_bus_wr8(ram, SEASON, 0x01);
     set_a8(r, 0x1E); hm_bus_wr8(ram, DAY, 0x1E);
   }
-  wr8(ram, r, 0x0973, 0);                                  /* SEP #$20 */
-  wr8(ram, r, 0x091D, 0);
-  r->a = (uint16_t)(0xFFFD & hm_dp_r16(ram, r, 0xD2));     /* REP #$30 */
-  hm_dp_w16(ram, r, 0xD2, r->a);
+  wr8(ram, r, HM_TIME_RUNNING, 0);                         /* SEP #$20 */
+  wr8(ram, r, HM_ITEM_ON_HAND, 0);
+  r->a = (uint16_t)(0xFFFD & hm_dp_r16(ram, r, HM_GAME_STATE)); /* REP #$30 */
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   r->a = 0x0088;
-  wr16(ram, r, 0x017D, 0x0088);
+  wr16(ram, r, TRANSITION_X, 0x0088);
   r->a = 0x0078;
-  wr16(ram, r, 0x017F, 0x0078);
+  wr16(ram, r, TRANSITION_Y, 0x0078);
   set_a8(r, 0x15);                                         /* SEP #$20 */
-  wr8(ram, r, 0x098B, 0x15);
+  wr8(ram, r, TRANSITION_MAP, 0x15);
   jsl(ram, r, 0x875E, 0x80, hm_EnterMap);
   set_a8(r, 0x14);                                         /* SEP #$20; REP #$10; LDA #$14 */
   r->n = 0;                                                /* (ChangeStamina reads its N) */
   jsl(ram, r, 0x8768, 0x81, hm_ChangeStamina);
-  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5E) & 0x0004);  /* REP #$30 */
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5E)) & 0x0004); /* REP #$30 */
   if (r->a) return;
   set_a8(r, 0x03);
   jsl(ram, r, 0x877B, 0x80, hm_RNGReturn0toA);
-  wr8(ram, r, 0x0924, (uint8_t)r->a);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0004);
-  hm_dp_w16(ram, r, 0xD2, r->a);
+  wr8(ram, r, BREAKFAST, (uint8_t)r->a);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0004);
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -333,12 +449,12 @@ void hm_NightReset(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_UpdateTime(uint8_t *ram, HmRegs *r)
 {
-  uint8_t clock = rd8(ram, r, 0x0973);                     /* SEP #$20; REP #$10 */
+  uint8_t clock = rd8(ram, r, HM_TIME_RUNNING);            /* SEP #$20; REP #$10 */
   set_a8(r, clock & 0x02);
   if (clock & 0x02) { hm_NightReset(ram, r); return; }     /* JMP */
   set_a8(r, clock & 0x01);
   if (!(clock & 0x01)) return;
-  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5A) & 0x0400);  /* REP #$20 */
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5A)) & 0x0400); /* REP #$20 */
   if (r->a) { hm_ShippingSceneDialogue(ram, r); return; }  /* JMP */
   if (count8(ram, r, SECONDS, 60)) {
     set_a8(r, 0);
@@ -358,25 +474,25 @@ void hm_UpdateTime(uint8_t *ram, HmRegs *r)
         set_a8(r, hour);
         r->c = hour >= 18;
         if (hour == 18) {
-          r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5E) & 0x8000);   /* REP #$20 */
+          r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5E)) & 0x8000); /* REP #$20 */
           if (!r->a) {
             set_a8(r, 0xFF);
-            wr8(ram, r, 0x0117, 0xFF);
+            wr8(ram, r, PLAYING_SONG, 0xFF);
             jsl(ram, r, 0x8081, 0x83, hm_FadeOutSongSlowly);
             set_a8(r, 0xFF);
-            wr8(ram, r, 0x0110, 0xFF);
+            wr8(ram, r, WANTED_SONG, 0xFF);
           }
         }
       }
     }
   }
-  uint8_t palette = rd8(ram, r, 0x017B);                   /* SEP #$20 */
+  uint8_t palette = rd8(ram, r, LOADED_PALETTE);           /* SEP #$20 */
   set_a8(r, palette);
   hm_push8(ram, r, palette);                               /* PHA */
   jsl(ram, r, 0x8092, 0x80, hm_SetPaletteToLoad);
   palette = hm_pull8(ram, r);                              /* SEP #$20; PLA */
   set_a8(r, palette);
-  uint8_t now = rd8(ram, r, 0x017B);
+  uint8_t now = rd8(ram, r, LOADED_PALETTE);
   r->c = palette >= now;
   if (palette == now) return;
   r->y = 0x0004;
@@ -415,23 +531,27 @@ static void zero_dp16(uint8_t *ram, HmRegs *r, const uint8_t *a, unsigned n)
 
 void hm_FirstNightReset(uint8_t *ram, HmRegs *r)
 {
-  static const uint16_t w1[] = { 0x0183, 0x0185, 0x0187 };
-  static const uint16_t b1[] = { 0x019B, 0x019A };
-  static const uint8_t dpw1[] = { 0x04, 0x42, 0x45, 0x48 };
-  static const uint8_t dpb1[] = { 0x28, 0x06, 0x44, 0x47, 0x4A };
+  static const uint16_t w1[] = { TEXT_NUMBER, HM_TEXT_X, TEXT_CODE_AT };
+  static const uint16_t b1[] = { TEXT_BOX_STATE, HM_INPUT_STATE };
+  static const uint8_t dpw1[] = { PALETTE_TARGET, COLOUR_LIST_0, COLOUR_LIST_1, COLOUR_LIST_2 };
+  static const uint8_t dpb1[] = { DMA_WAITING, PALETTE_TARGET_BANK, COLOUR_LIST_0_BANK,
+                                  COLOUR_LIST_1_BANK, COLOUR_LIST_2_BANK };
   zero16(ram, r, w1, N(w1));
   zero8(ram, r, b1, N(b1));
   zero_dp16(ram, r, dpw1, N(dpw1));
   zero_dp8(ram, r, dpb1, N(dpb1));
   r->a = 0;
-  hm_bus_wr16(ram, 0x7F1F07, 0);
-  hm_bus_wr8(ram, 0x7F1F09, 0);
+  hm_bus_wr16(ram, WRAM_LONG(HM_SHIPPING_MONEY), 0);
+  hm_bus_wr8(ram, WRAM_LONG(SHIPPING_MONEY_HIGH), 0);
   jsl(ram, r, 0xAC2E, 0x82, hm_LoadDateNames);
 
-  static const uint16_t b2[] = { 0x096D, 0x098A, 0x0972, 0x0919, 0x0993, 0x0994, 0x018B };
-  static const uint16_t w2[] = { 0x0878, 0x087A, 0x0973, 0x0907, 0x0909, 0x0991 };
-  static const uint8_t dpw2[] = { 0xD2, 0xE9, 0xEB, 0xCF, 0xD6, 0xD8 };
-  static const uint8_t dpb2[] = { 0xD1 };
+  static const uint16_t b2[] = { HIT_COUNTER, DOOR_STEP, UNKNOWN_0972, STEP_COUNT, NAME_PAGE,
+                                 NAME_COUNT, ARROW_BLINK };
+  static const uint16_t w2[] = { PLAYER_TILE_1, PLAYER_TILE_2, HM_TIME_RUNNING, FOOTPRINT_X,
+                                 FOOTPRINT_Y, NAME_CELL };
+  static const uint8_t dpw2[] = { HM_GAME_STATE, COLLIDE_TILE_1, COLLIDE_TILE_2, MAP_ANIM,
+                                  PLAYER_X, PLAYER_Y };
+  static const uint8_t dpb2[] = { MAP_ANIM_BANK };
   zero8(ram, r, b2, N(b2));
   zero16(ram, r, w2, N(w2));
   zero_dp16(ram, r, dpw2, N(dpw2));
@@ -442,32 +562,35 @@ void hm_FirstNightReset(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, MINUTES, 0);
   hm_bus_wr8(ram, SECONDS, 0);
   r->a = 0;                                                /* REP #$20 */
-  for (uint32_t f = 0x7F1F5A; f <= 0x7F1F62; f += 2) hm_bus_wr16(ram, f, 0);
-  for (uint32_t f = 0x7F1F74; f <= 0x7F1F7A; f += 2) hm_bus_wr16(ram, f, 0);
-  r->a = (uint16_t)(hm_dp_r16(ram, r, 0xD2) | 0x0001);     /* REP #$30 */
-  hm_dp_w16(ram, r, 0xD2, r->a);
+  for (uint32_t f = WRAM_LONG(FLAGS_5A); f <= WRAM_LONG(FLAGS_62); f += 2) hm_bus_wr16(ram, f, 0);
+  for (uint32_t f = WRAM_LONG(FLAGS_74); f <= WRAM_LONG(FLAGS_7A); f += 2) hm_bus_wr16(ram, f, 0);
+  r->a = (uint16_t)(hm_dp_r16(ram, r, HM_GAME_STATE) | 0x0001); /* REP #$30 */
+  hm_dp_w16(ram, r, HM_GAME_STATE, r->a);
   r->a = 0;
-  hm_dp_w16(ram, r, 0xD4, 0);
-  hm_dp_w16(ram, r, 0xDA, 0);
-  wr16(ram, r, 0x0911, 0);
-  wr16(ram, r, 0x0901, 0);
-  wr16(ram, r, 0x0915, 0);
-  uint8_t max = rd8(ram, r, 0x0917);                       /* SEP #$20 */
+  hm_dp_w16(ram, r, HM_PLAYER_ACTION, 0);
+  hm_dp_w16(ram, r, PLAYER_DIRECTION, 0);
+  wr16(ram, r, PLAYER_TURN, 0);
+  wr16(ram, r, HM_ANIM_REQUEST, 0);
+  wr16(ram, r, PLAYER_TIMER, 0);
+  uint8_t max = rd8(ram, r, HM_MAX_STAMINA);               /* SEP #$20 */
   set_a8(r, max);
-  wr8(ram, r, 0x0918, max);
+  wr8(ram, r, HM_CURRENT_STAMINA, max);
 
-  static const uint16_t b3[] = { 0x091A, 0x091B, 0x0925, 0x0990, 0x091D, 0x091E, 0x091F, 0x0920,
-                                 0x096B, 0x098F, 0x096C, 0x0922, 0x0110, 0x0114, 0x0117, 0x0118,
-                                 0x0930, 0x0931, 0x098B, 0x0880 };
-  static const uint16_t w3[] = { 0x0932, 0x0934, 0x084A, 0x087C, 0x087E };
+  static const uint16_t b3[] = { STEP_SOUND_TIMER, TOOL_FRAMES, IDLE_TIMER, TV_FORECAST,
+                                 HM_ITEM_ON_HAND, SHOWN_ITEM, PICKED_TILE_BYTE, CARRIED_SLOT,
+                                 SOW_STEP, UNKNOWN_098F, HM_EXHAUSTION, TOOL_SOUND_CHOICE,
+                                 WANTED_SONG, SOUND_EFFECT, PLAYING_SONG, EFFECTS_SONG,
+                                 COWS_FED, CHICKENS_FED, TRANSITION_MAP, CAMERA_FRAMES };
+  static const uint16_t w3[] = { COW_TROUGHS, CHICKEN_TROUGHS, OAM_SIZE_USED, CAMERA_SPEED_X,
+                                 CAMERA_SPEED_Y };
   zero8(ram, r, b3, N(b3));
   zero16(ram, r, w3, N(w3));
-  hm_dp_w16(ram, r, 0xDC, 0);
+  hm_dp_w16(ram, r, GOBJ_COUNT, 0);
   r->a = 250;                                              /* REP #$30 */
-  hm_bus_wr16(ram, 0x7F1F0E, 250);
-  if (flag(ram, r, 0x7F1F64, 0x0040)) { r->a = 500; hm_bus_wr16(ram, 0x7F1F0E, 500); }
-  *hm_dp(ram, r, 0x00) = 0;                                /* SEP #$20 */
-  wr8(ram, r, 0x0148, 0);
+  hm_bus_wr16(ram, WRAM_LONG(LUMBER_NEEDED), 250);
+  if (flag(ram, r, WRAM_LONG(FLAGS_64), 0x0040)) { r->a = 500; hm_bus_wr16(ram, WRAM_LONG(LUMBER_NEEDED), 500); }
+  *hm_dp(ram, r, NMI_STATUS) = 0;                          /* SEP #$20 */
+  wr8(ram, r, UNKNOWN_0148, 0);
   jsl(ram, r, 0xAD8C, 0x80, hm_WaitForNMI);
 }
 

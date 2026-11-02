@@ -19,8 +19,8 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define JOY_NEW     0x0128
-#define JOY_REPEAT  0x012C
+#define JOY_NEW     0x0128     /* DB: 16b, Joy1's buttons pressed this frame */
+#define JOY_REPEAT  0x012C     /* DB: 16b, the same with auto-repeat */
 #define BTN_B       0x8000
 #define BTN_START   0x1000
 #define BTN_UP      0x0800
@@ -29,6 +29,48 @@
 #define BTN_RIGHT   0x0100
 #define BTN_A       0x0080
 #define LIST_TEXTS  0x839467   /* DATA8_839467: the text of each of 11 places */
+
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_PLAYER_ACTION ($D4), HM_TEXT_X ($0185),
+ * HM_TEXT_TICK ($0189), HM_INPUT_STATE ($019A), HM_CAM_X / HM_CAM_Y
+ * ($013C / $013E, BG1's scroll) and HM_TITLE_CURSOR ($098D). */
+#define WRAM_LONG(a)      (0x7E0000 + (a))   /* a ram[] offset as a bus address */
+
+/* Direct page */
+#define GRID_PTR          0x72   /* 24b $72-$74: the name page's grid */
+#define GRID_PTR_BANK     0x74   /* 8b: GRID_PTR's bank */
+#define CELL_BYTE         0x7E   /* 16b: ReadNameCursorCell: which byte + 2 (not read) */
+#define MENU_FRAMES       0x90   /* 16b: the title menu's frames (to the demo) */
+#define MENU_ANSWER       0x94   /* 8b: the menu's answer: 1 = B, cancel; 2 = A, accept */
+#define MENU              0x95   /* 8b: the menu shown (MenuInputs) */
+#define MENU_REDRAW       0x97   /* 8b: 1 = draw the menu again */
+
+/* WRAM of the data bank (through db_addr / rd8 / wr8) */
+#define SOUND_EFFECT      0x0114   /* 8b: the sound effect PlaySoundEffect0A plays */
+#define SOUND_BANK        0x0115   /* 8b: its bank */
+#define BG2_Y             0x0142   /* 16b: BG2's scroll, up-down */
+#define TEXT_CODE_AT      0x0187   /* 16b: which code of the text the printer is at */
+#define ARROW_PLACE       0x018A   /* 8b: the arrow's place (0-11; the list: 0-21) */
+#define ARROW_BLINK       0x018B   /* 8b: the arrow's blink: bit 7 the frame, 0-6 a counter */
+#define LAST_OPTION       0x018E   /* 8b: a choice's last option (n - 1) */
+#define ANSWER            0x018F   /* 8b: the option chosen (0 = yes) */
+#define TEXT_BOX_LINES    0x0191   /* 8b: the lines of the next text box */
+#define TEXT_BOX_STATE    0x019B   /* 8b: bit 0 open, 1 printing, 2 the end, 3 waiting,
+                                      4 a choice, 5 the arrow */
+#define SAVE_SLOT         0x098E   /* 8b: the diary slot chosen (0 or 1) */
+#define NAME_CURSOR_X     0x099B   /* 16b: the name screen's cursor, across */
+#define NAME_CURSOR_Y     0x099D   /* 16b: down */
+#define TEXT_AUTO_CLOSE_TIMER 0x09B1 /* 16b: frames a mode-6 text box has been open */
+
+/* WRAM $7F:1Fxx (ram[] offsets 0x11Fxx; WRAM_LONG gives the bus address) */
+#define FLAGS_5A          0x11F5A  /* 16b flags: $8000 the scene can be skipped */
+#define FLAGS_5C          0x11F5C  /* 16b flags: SkipEventScene sets $04 */
+
+/* ROM */
+#define NAME_GRID_0       0xEBF8   /* $82:EBF8: the name screen's page 0, 8 bytes a cell */
+#define NAME_GRID_1       0xEE30   /* $82:EE30: page 1 */
+#define NAME_GRID_2       0xF0D0   /* $82:F0D0: page 2 */
+#define NAME_LETTER_AT    0x82EB4D /* DATA16_82EB4D: the VRAM place of each letter */
 
 static uint32_t db_addr(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static uint8_t rd8(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_rd8(ram, db_addr(r, a)); }
@@ -44,9 +86,9 @@ static void jsl83(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, H
 /* $0114 = sound, $0115 = 6, PlaySoundEffect0A (effect sound, 6, $0A) */
 static void beep(uint8_t *ram, HmRegs *r, uint8_t sound, uint16_t ret)
 {
-  wr8(ram, r, 0x0114, sound);
+  wr8(ram, r, SOUND_EFFECT, sound);
   set_a8(r, 6);
-  wr8(ram, r, 0x0115, 6);
+  wr8(ram, r, SOUND_BANK, 6);
   jsl83(ram, r, ret, hm_PlaySoundEffect0A);
 }
 /* LDA Joy; BIT #button (A = the buttons) */
@@ -59,15 +101,15 @@ static bool pressed(uint8_t *ram, HmRegs *r, uint16_t at, uint16_t button)
  * (redraw) */
 static void other_slot(uint8_t *ram, HmRegs *r, uint16_t ret)
 {
-  wr8(ram, r, 0x098E, (uint8_t)(rd8(ram, r, 0x098E) ^ 0x01));
+  wr8(ram, r, SAVE_SLOT, (uint8_t)(rd8(ram, r, SAVE_SLOT) ^ 0x01));
   set_a8(r, 1);
-  *hm_dp(ram, r, 0x97) = 1;
+  *hm_dp(ram, r, MENU_REDRAW) = 1;
   beep(ram, r, 3, ret);
 }
 static void answer(uint8_t *ram, HmRegs *r, uint8_t which, uint8_t sound, uint16_t ret)
 {
   set_a8(r, which);
-  *hm_dp(ram, r, 0x94) = which;
+  *hm_dp(ram, r, MENU_ANSWER) = which;
   beep(ram, r, sound, ret);
 }
 
@@ -94,7 +136,7 @@ void hm_LoadSlotMenuInputs(uint8_t *ram, HmRegs *r)
   if (pressed(ram, r, JOY_NEW, BTN_DOWN) || pressed(ram, r, JOY_NEW, BTN_UP)) { other_slot(ram, r, 0xC3CE); return; }
   if (pressed(ram, r, JOY_NEW, BTN_B)) { answer(ram, r, 1, 3, 0xC3E7); return; }
   if (!pressed(ram, r, JOY_NEW, BTN_A)) return;
-  r->a = rd8(ram, r, 0x098E);                         /* LDA #0; XBA; LDA $098E */
+  r->a = rd8(ram, r, SAVE_SLOT);                      /* LDA #0; XBA; LDA $098E */
   jsl83(ram, r, 0xC3F4, hm_LoadGameSlotResume);
   r->c = 1;                                           /* CPX #0 */
   if (r->x != 0) answer(ram, r, 2, 1, 0xC413);
@@ -108,11 +150,11 @@ void hm_LoadSlotMenuInputs(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_StartMenuInputs(uint8_t *ram, HmRegs *r)
 {
-  r->a = hm_bus_rd16(ram, 0x7F1F5A) & 0x8000;
+  r->a = hm_bus_rd16(ram, WRAM_LONG(FLAGS_5A)) & 0x8000;
   if (!r->a) return;
   if (!pressed(ram, r, JOY_NEW, BTN_START)) return;
   set_a8(r, 6);
-  *hm_dp(ram, r, 0x95) = 6;
+  *hm_dp(ram, r, MENU) = 6;
   beep(ram, r, 3, 0xC456);
 }
 
@@ -124,27 +166,27 @@ void hm_StartMenuInputs(uint8_t *ram, HmRegs *r)
 void hm_TitleMenuInputs(uint8_t *ram, HmRegs *r)
 {
   if (pressed(ram, r, JOY_NEW, BTN_DOWN)) {
-    hm_dp_w16(ram, r, 0x90, 0);
-    uint8_t at = rd8(ram, r, 0x098D);
+    hm_dp_w16(ram, r, MENU_FRAMES, 0);
+    uint8_t at = rd8(ram, r, HM_TITLE_CURSOR);
     r->c = at >= 2;                                   /* CMP #2 */
     uint8_t next = at == 2 ? 0 : (uint8_t)(at + 1);
-    wr8(ram, r, 0x098D, next);
+    wr8(ram, r, HM_TITLE_CURSOR, next);
     set_a8(r, 1);
-    *hm_dp(ram, r, 0x97) = 1;
+    *hm_dp(ram, r, MENU_REDRAW) = 1;
     beep(ram, r, 3, at == 2 ? 0xC4C2 : 0xC4A2);
   } else if (pressed(ram, r, JOY_NEW, BTN_UP)) {
-    hm_dp_w16(ram, r, 0x90, 0);
-    uint8_t at = rd8(ram, r, 0x098D);
-    wr8(ram, r, 0x098D, at == 0 ? 2 : (uint8_t)(at - 1));
+    hm_dp_w16(ram, r, MENU_FRAMES, 0);
+    uint8_t at = rd8(ram, r, HM_TITLE_CURSOR);
+    wr8(ram, r, HM_TITLE_CURSOR, at == 0 ? 2 : (uint8_t)(at - 1));
     set_a8(r, 1);
-    *hm_dp(ram, r, 0x97) = 1;
+    *hm_dp(ram, r, MENU_REDRAW) = 1;
     beep(ram, r, 3, at == 0 ? 0xC50A : 0xC4E8);
   } else if (pressed(ram, r, JOY_NEW, BTN_A)) {
-    uint8_t at = rd8(ram, r, 0x098D);
+    uint8_t at = rd8(ram, r, HM_TITLE_CURSOR);
     if (at != 0) r->c = at >= 1;                      /* CMP #1 */
     uint8_t menu = at == 0 ? 0x08 : at == 1 ? 0x07 : 0x0A;
     set_a8(r, menu);
-    *hm_dp(ram, r, 0x95) = menu;
+    *hm_dp(ram, r, MENU) = menu;
     beep(ram, r, 1, 0xC53E);
   }
 }
@@ -164,7 +206,7 @@ void hm_TitleMenuInputs(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 static bool erase_arrow_if(uint8_t *ram, HmRegs *r, bool first_column, uint16_t ret)
 {
-  uint8_t at = rd8(ram, r, 0x018A);
+  uint8_t at = rd8(ram, r, ARROW_PLACE);
   set_a8(r, at);
   r->c = at >= 0x0B;
   if (first_column ? at >= 0x0B : at < 0x0B) return false;
@@ -174,9 +216,9 @@ static bool erase_arrow_if(uint8_t *ram, HmRegs *r, bool first_column, uint16_t 
 }
 static void moved(uint8_t *ram, HmRegs *r, uint8_t to)
 {
-  wr8(ram, r, 0x018A, to);
+  wr8(ram, r, ARROW_PLACE, to);
   set_a8(r, to);
-  wr8(ram, r, 0x018B, 0);
+  wr8(ram, r, ARROW_BLINK, 0);
 }
 
 void hm_ListInputs(uint8_t *ram, HmRegs *r)
@@ -184,45 +226,45 @@ void hm_ListInputs(uint8_t *ram, HmRegs *r)
   if (pressed(ram, r, JOY_REPEAT, BTN_DOWN)) {
     beep(ram, r, 3, 0xC5E2);
     if (!erase_arrow_if(ram, r, true, 0xC5F4)) return;
-    uint8_t at = rd8(ram, r, 0x018A);
+    uint8_t at = rd8(ram, r, ARROW_PLACE);
     r->c = at >= 0x0A;
-    if (at == 0x0A) { set_a8(r, 0); wr8(ram, r, 0x018A, 0); }
+    if (at == 0x0A) { set_a8(r, 0); wr8(ram, r, ARROW_PLACE, 0); }
     else moved(ram, r, (uint8_t)(at + 1));
   } else if (pressed(ram, r, JOY_REPEAT, BTN_UP)) {
     beep(ram, r, 3, 0xC623);
     if (!erase_arrow_if(ram, r, true, 0xC635)) return;
-    uint8_t at = rd8(ram, r, 0x018A);
-    if (at == 0) { set_a8(r, 0x0A); wr8(ram, r, 0x018A, 0x0A); }
+    uint8_t at = rd8(ram, r, ARROW_PLACE);
+    if (at == 0) { set_a8(r, 0x0A); wr8(ram, r, ARROW_PLACE, 0x0A); }
     else moved(ram, r, (uint8_t)(at - 1));
   } else if (pressed(ram, r, JOY_REPEAT, BTN_RIGHT)) {
     beep(ram, r, 3, 0xC662);
     if (!erase_arrow_if(ram, r, true, 0xC674)) return;
     r->c = 0;                                         /* CLC; ADC #$0B */
-    moved(ram, r, (uint8_t)(rd8(ram, r, 0x018A) + 0x0B));
+    moved(ram, r, (uint8_t)(rd8(ram, r, ARROW_PLACE) + 0x0B));
   } else if (pressed(ram, r, JOY_REPEAT, BTN_LEFT)) {
     beep(ram, r, 3, 0xC695);
     if (!erase_arrow_if(ram, r, false, 0xC6A7)) return;
     r->c = 1;                                         /* SEC; SBC #$0B */
-    moved(ram, r, (uint8_t)(rd8(ram, r, 0x018A) - 0x0B));
+    moved(ram, r, (uint8_t)(rd8(ram, r, ARROW_PLACE) - 0x0B));
   } else if (pressed(ram, r, JOY_NEW, BTN_A)) {
     beep(ram, r, 1, 0xC58B);
-    wr8(ram, r, 0x019B, 0);
-    wr8(ram, r, 0x019A, 2);
-    uint8_t at = rd8(ram, r, 0x018A);
+    wr8(ram, r, TEXT_BOX_STATE, 0);
+    wr8(ram, r, HM_INPUT_STATE, 2);
+    uint8_t at = rd8(ram, r, ARROW_PLACE);
     r->a = at;                                        /* LDA #0; XBA; LDA $018A */
     r->c = at >= 0x0B;
     if (at >= 0x0B) {
-      wr8(ram, r, 0x019A, 1);
+      wr8(ram, r, HM_INPUT_STATE, 1);
       r->a = 1;
       jsl83(ram, r, 0xC5B1, hm_DrawTextBoxArrow);
     } else {
       r->x = hm_bus_rd16(ram, LIST_TEXTS + 2u * at);
       r->a = (uint16_t)(r->x & 0xFF00);               /* LDA.L ...; TAX; SEP; LDA #0 */
-      wr8(ram, r, 0x0191, 0);
+      wr8(ram, r, TEXT_BOX_LINES, 0);
       jsl83(ram, r, 0xC5C7, hm_StartTextBox);
     }
     r->a = 0x0100;
-    hm_bus_wr16(ram, db_addr(r, 0x0142), 0x0100);
+    hm_bus_wr16(ram, db_addr(r, BG2_Y), 0x0100);
   }
 }
 
@@ -241,7 +283,7 @@ void hm_ListInputs(uint8_t *ram, HmRegs *r)
  *          column, right / left jump to the other one; A closes the box.
  *          Before moving, the cursor is erased (letter $B1 at $0185).
  * ═════════════════════════════════════════════════════════════════════════ */
-#define JOY_HELD     0x0124
+#define JOY_HELD     0x0124    /* DB: 16b, Joy1's buttons held */
 
 static void erase_cursor(uint8_t *ram, HmRegs *r, uint16_t ret)
 {
@@ -251,7 +293,7 @@ static void erase_cursor(uint8_t *ram, HmRegs *r, uint16_t ret)
 }
 static void choose(uint8_t *ram, HmRegs *r, uint8_t option)
 {
-  wr8(ram, r, 0x018F, option);
+  wr8(ram, r, ANSWER, option);
   set_a8(r, option);
 }
 
@@ -259,7 +301,7 @@ static void choice_down(uint8_t *ram, HmRegs *r)
 {
   beep(ram, r, 3, 0xCFFB);
   erase_cursor(ram, r, 0xD007);
-  uint8_t at = rd8(ram, r, 0x018F), last = rd8(ram, r, 0x018E);
+  uint8_t at = rd8(ram, r, ANSWER), last = rd8(ram, r, LAST_OPTION);
   set_a8(r, at);
   r->c = at >= 3;
   if (at >= 3) {
@@ -268,17 +310,17 @@ static void choice_down(uint8_t *ram, HmRegs *r)
   } else {
     r->c = at >= last;
     if (at != last) r->c = at >= 2;
-    if (at == last || at == 2) wr8(ram, r, 0x018F, 0);
+    if (at == last || at == 2) wr8(ram, r, ANSWER, 0);
     else choose(ram, r, (uint8_t)(at + 1));
   }
-  wr8(ram, r, 0x018B, 0);
+  wr8(ram, r, ARROW_BLINK, 0);
 }
 
 static void choice_up(uint8_t *ram, HmRegs *r)
 {
   beep(ram, r, 3, 0xD04B);
   erase_cursor(ram, r, 0xD057);
-  uint8_t at = rd8(ram, r, 0x018F), last = rd8(ram, r, 0x018E);
+  uint8_t at = rd8(ram, r, ANSWER), last = rd8(ram, r, LAST_OPTION);
   set_a8(r, at);
   if (at == 0) {                                     /* to the bottom of the column */
     set_a8(r, last);
@@ -293,22 +335,22 @@ static void choice_up(uint8_t *ram, HmRegs *r)
     r->c = at >= 3;
     choose(ram, r, (uint8_t)(at - 1));
   }
-  wr8(ram, r, 0x018B, 0);
+  wr8(ram, r, ARROW_BLINK, 0);
 }
 
 static void choice_across(uint8_t *ram, HmRegs *r, uint16_t ret_beep, uint16_t ret_erase)
 {
   beep(ram, r, 3, ret_beep);
-  uint8_t last = rd8(ram, r, 0x018E);
+  uint8_t last = rd8(ram, r, LAST_OPTION);
   set_a8(r, last);
   r->c = last >= 3;
   if (last >= 3) {
-    uint8_t at = rd8(ram, r, 0x018F);
+    uint8_t at = rd8(ram, r, ANSWER);
     set_a8(r, at);
     r->c = at >= 2;
     if (at != 2) {
       erase_cursor(ram, r, ret_erase);
-      at = rd8(ram, r, 0x018F);
+      at = rd8(ram, r, ANSWER);
       set_a8(r, at);
       r->c = at >= 2;
       if (at >= 2) { r->c = at >= 3; choose(ram, r, (uint8_t)(at - 3)); }
@@ -323,17 +365,17 @@ static void choice_across(uint8_t *ram, HmRegs *r, uint16_t ret_beep, uint16_t r
       }
     }
   }
-  wr8(ram, r, 0x018B, 0);
+  wr8(ram, r, ARROW_BLINK, 0);
 }
 
 void hm_ImmobileInputs(uint8_t *ram, HmRegs *r)
 {
-  uint8_t box = rd8(ram, r, 0x019B);
+  uint8_t box = rd8(ram, r, TEXT_BOX_STATE);
   set_a8(r, box & 0x02);
   if (box & 0x02) {                                   /* printing: A held = faster */
     if (!pressed(ram, r, JOY_HELD, BTN_A)) return;
     set_a8(r, 4);
-    wr8(ram, r, 0x0189, 4);
+    wr8(ram, r, HM_TEXT_TICK, 4);
     return;
   }
   set_a8(r, box & 0x04);
@@ -343,14 +385,14 @@ void hm_ImmobileInputs(uint8_t *ram, HmRegs *r)
     if (box & 0x08) {                                 /* waiting: A = go on */
       if (!pressed(ram, r, JOY_NEW, BTN_A)) return;
       jsl83(ram, r, 0xCF70, hm_ClearTextBox);
-      hm_bus_wr16(ram, db_addr(r, 0x0187), (uint16_t)(rd16(ram, r, 0x0187) + 1));
-      hm_bus_wr16(ram, db_addr(r, 0x0185), 0x5010);
+      hm_bus_wr16(ram, db_addr(r, TEXT_CODE_AT), (uint16_t)(rd16(ram, r, TEXT_CODE_AT) + 1));
+      hm_bus_wr16(ram, db_addr(r, HM_TEXT_X), 0x5010);
       r->c = 0;                                       /* CLC; ADC #$10 */
-      wr8(ram, r, 0x018B, 0);
-      uint8_t flags = (uint8_t)(rd8(ram, r, 0x019B) & 0xF7);
-      wr8(ram, r, 0x019B, flags);
+      wr8(ram, r, ARROW_BLINK, 0);
+      uint8_t flags = (uint8_t)(rd8(ram, r, TEXT_BOX_STATE) & 0xF7);
+      wr8(ram, r, TEXT_BOX_STATE, flags);
       r->a = (uint16_t)(0x5000 | flags);
-      wr8(ram, r, 0x0189, 0);
+      wr8(ram, r, HM_TEXT_TICK, 0);
       return;
     }
     set_a8(r, box & 0x10);
@@ -363,7 +405,7 @@ void hm_ImmobileInputs(uint8_t *ram, HmRegs *r)
         beep(ram, r, 1, 0xCFDD);
         jsl83(ram, r, 0xCFE1, hm_CloseTextBox);
         set_a8(r, 1);
-        wr8(ram, r, 0x019A, 1);
+        wr8(ram, r, HM_INPUT_STATE, 1);
       }
       return;
     }
@@ -374,7 +416,7 @@ void hm_ImmobileInputs(uint8_t *ram, HmRegs *r)
   if (!pressed(ram, r, JOY_NEW, BTN_A)) return;       /* the end: A closes */
   jsl83(ram, r, 0xCF4E, hm_CloseTextBox);
   set_a8(r, 1);
-  wr8(ram, r, 0x019A, 1);
+  wr8(ram, r, HM_INPUT_STATE, 1);
   r->a = (uint16_t)(rd16(ram, r, JOY_NEW) & 0xFF7F);
   hm_bus_wr16(ram, db_addr(r, JOY_NEW), r->a);
 }
@@ -387,10 +429,10 @@ void hm_ImmobileInputs(uint8_t *ram, HmRegs *r)
  * the letter, and a code: 1-3 switch to page 0-2, 4 "done".
  * The name being typed is at $0885 (4 letters, $B1 = empty), $0994 how many.
  * ═════════════════════════════════════════════════════════════════════════ */
-#define NAME_PAGE   0x0993
-#define NAME_CELL   0x0991
-#define NAME_COUNT  0x0994
-#define NAME        0x0885
+#define NAME_PAGE   0x0993     /* DB: 8b, the page shown (0-2; 3 = done) */
+#define NAME_CELL   0x0991     /* DB: 16b, the cell under the cursor */
+#define NAME_COUNT  0x0994     /* DB: 8b, how many letters are typed */
+#define NAME        0x0885     /* DB: 4 bytes, the name being typed ($B1 = empty) */
 
 /* ReadNameCursorCell ($82:EBAC, JSL, RTL): A = which byte of the cell (0-5:
  * the arrows, the letter, the code) -> A = that byte. */
@@ -399,22 +441,22 @@ void hm_ReadNameCursorCell(uint8_t *ram, HmRegs *r)
   uint16_t which = r->a;
   hm_push8(ram, r, (uint8_t)(which >> 8));                 /* PHA */
   hm_push8(ram, r, (uint8_t)which);
-  uint16_t grid = 0xEBF8;
+  uint16_t grid = NAME_GRID_0;
   uint8_t page = rd8(ram, r, NAME_PAGE);
   r->a = (uint16_t)((0xEB00) | page);                      /* LDA #$82 ... LDA $0993 */
   if (page != 0) {
     r->c = page >= 1;
-    grid = page == 1 ? 0xEE30 : 0xF0D0;
+    grid = page == 1 ? NAME_GRID_1 : NAME_GRID_2;
   }
-  hm_dp_w16(ram, r, 0x72, grid);
-  *hm_dp(ram, r, 0x74) = 0x82;
+  hm_dp_w16(ram, r, GRID_PTR, grid);
+  *hm_dp(ram, r, GRID_PTR_BANK) = 0x82;
   uint16_t lo = hm_pull8(ram, r);
   which = (uint16_t)(lo | hm_pull8(ram, r) << 8);
-  hm_dp_w16(ram, r, 0x7E, (uint16_t)(which + 2));
+  hm_dp_w16(ram, r, CELL_BYTE, (uint16_t)(which + 2));
   uint32_t s = (uint32_t)(uint16_t)(rd16(ram, r, NAME_CELL) << 3) + (uint16_t)(which + 2);
   r->c = s > 0xFFFF;
   r->y = (uint16_t)s;
-  r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, r->y));  /* LDA #0; XBA; LDA [$72],Y */
+  r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, GRID_PTR, r->y)); /* LDA #0; XBA; LDA [$72],Y */
 }
 
 /* NameCursorPosition ($82:EB57, JSL, RTL): the cursor's place on the name screen:
@@ -423,19 +465,19 @@ void hm_ReadNameCursorCell(uint8_t *ram, HmRegs *r)
  * 13 of the cell number (the last ASL). */
 void hm_NameCursorPosition(uint8_t *ram, HmRegs *r)
 {
-  uint16_t grid = 0xEBF8;
+  uint16_t grid = NAME_GRID_0;
   uint8_t page = rd8(ram, r, NAME_PAGE);
-  if (page != 0) grid = page == 1 ? 0xEE30 : 0xF0D0;
-  hm_dp_w16(ram, r, 0x72, grid);
-  *hm_dp(ram, r, 0x74) = 0x82;
+  if (page != 0) grid = page == 1 ? NAME_GRID_1 : NAME_GRID_2;
+  hm_dp_w16(ram, r, GRID_PTR, grid);
+  *hm_dp(ram, r, GRID_PTR_BANK) = 0x82;
   uint16_t cell = rd16(ram, r, NAME_CELL);
   r->c = (cell >> 13) & 1;                                 /* ASL x 3 */
   r->y = (uint16_t)(cell << 3);
-  r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, r->y));
-  hm_bus_wr16(ram, db_addr(r, 0x099B), r->a);
+  r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, GRID_PTR, r->y));
+  hm_bus_wr16(ram, db_addr(r, NAME_CURSOR_X), r->a);
   r->y++;
-  r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x72, r->y));
-  hm_bus_wr16(ram, db_addr(r, 0x099D), r->a);
+  r->a = hm_bus_rd8(ram, hm_dp_long(ram, r, GRID_PTR, r->y));
+  hm_bus_wr16(ram, db_addr(r, NAME_CURSOR_Y), r->a);
 }
 
 /* DrawNameLetter ($82:EA60, JSL, RTL): draw letter A at the name's place
@@ -448,8 +490,8 @@ void hm_DrawNameLetter(uint8_t *ram, HmRegs *r)
   uint16_t i = rd8(ram, r, NAME_COUNT);
   r->c = (i << 1) > 0xFFFF;
   r->x = (uint16_t)(i << 1);
-  r->a = hm_bus_rd16(ram, 0x82EB4Du + r->x);
-  hm_bus_wr16(ram, 0x800185, r->a);
+  r->a = hm_bus_rd16(ram, NAME_LETTER_AT + r->x);
+  hm_bus_wr16(ram, 0x800000 | HM_TEXT_X, r->a);
   uint16_t lo = hm_pull8(ram, r);
   r->a = (uint16_t)(lo | hm_pull8(ram, r) << 8);
   r->x = 0x0001;
@@ -526,8 +568,8 @@ void hm_NameMenuKeyA(uint8_t *ram, HmRegs *r)
     set_a8(r, (uint8_t)(k - 1));
     wr8(ram, r, NAME_PAGE, (uint8_t)(k - 1));
     r->a = PAGE[k - 1].bg_x;
-    hm_bus_wr16(ram, db_addr(r, 0x013C), PAGE[k - 1].bg_x);
-    hm_bus_wr16(ram, db_addr(r, 0x013E), PAGE[k - 1].bg_y);
+    hm_bus_wr16(ram, db_addr(r, HM_CAM_X), PAGE[k - 1].bg_x);
+    hm_bus_wr16(ram, db_addr(r, HM_CAM_Y), PAGE[k - 1].bg_y);
     if (k == 3) r->a = 0x0100;
     hm_bus_wr16(ram, db_addr(r, NAME_CELL), 0);
     beep(ram, r, 1, PAGE[k - 1].ret);
@@ -576,21 +618,21 @@ void hm_NameMenuInputs(uint8_t *ram, HmRegs *r)
 void hm_SkipEventScene(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 9);
-  *hm_dp(ram, r, 0x95) = 9;
+  *hm_dp(ram, r, MENU) = 9;
   beep(ram, r, 3, 0xC2EF);
-  r->a = (uint16_t)(hm_bus_rd16(ram, 0x7F1F5C) | 0x0004);
-  hm_bus_wr16(ram, 0x7F1F5C, r->a);
+  r->a = (uint16_t)(hm_bus_rd16(ram, WRAM_LONG(FLAGS_5C)) | 0x0004);
+  hm_bus_wr16(ram, WRAM_LONG(FLAGS_5C), r->a);
 }
 void hm_MenuEventPad(uint8_t *ram, HmRegs *r)
 {
-  r->a = hm_dp_r16(ram, r, 0xD4);
+  r->a = hm_dp_r16(ram, r, HM_PLAYER_ACTION);
   r->c = r->a >= 3;
   if (r->a != 3) {
     hm_jsl(ram, r, 0xC2C0, 0x84);
     hm_ReadEventPad(ram, r);
     hm_rtl(ram, r);
   }
-  r->a = hm_bus_rd16(ram, 0x7F1F5A) & 0x8000;
+  r->a = hm_bus_rd16(ram, WRAM_LONG(FLAGS_5A)) & 0x8000;
   if (!r->a) return;
   if (pressed(ram, r, JOY_NEW, BTN_START)) hm_SkipEventScene(ram, r);
 }
@@ -602,7 +644,7 @@ void hm_MenuInputs(uint8_t *ram, HmRegs *r)
     { 1, hm_MenuEventPad }, { 2, hm_StartMenuInputs }, { 3, hm_StartMenuInputs },
     { 5, hm_TitleMenuInputs }, { 7, hm_SaveSlotMenuInputs }, { 8, hm_LoadSlotMenuInputs },
   };
-  uint8_t m = *hm_dp(ram, r, 0x95);
+  uint8_t m = *hm_dp(ram, r, MENU);
   set_a8(r, m);
   for (unsigned i = 0; i < sizeof M / sizeof M[0]; i++) {
     r->c = m >= M[i].menu;
@@ -614,19 +656,19 @@ void hm_MenuInputs(uint8_t *ram, HmRegs *r)
  * close the text box and go back to walking (and forget a pressed A). */
 void hm_TextBoxAutoClose(uint8_t *ram, HmRegs *r)
 {
-  uint8_t box = rd8(ram, r, 0x019B);
+  uint8_t box = rd8(ram, r, TEXT_BOX_STATE);
   set_a8(r, box & 0x04);
   if (!(box & 0x04)) return;
-  r->a = (uint16_t)(rd16(ram, r, 0x09B1) + 1);
-  hm_bus_wr16(ram, db_addr(r, 0x09B1), r->a);
+  r->a = (uint16_t)(rd16(ram, r, TEXT_AUTO_CLOSE_TIMER) + 1);
+  hm_bus_wr16(ram, db_addr(r, TEXT_AUTO_CLOSE_TIMER), r->a);
   r->c = r->a >= 0x78;
   if (r->a != 0x78) return;
-  hm_bus_wr16(ram, db_addr(r, 0x09B1), 0);
+  hm_bus_wr16(ram, db_addr(r, TEXT_AUTO_CLOSE_TIMER), 0);
   hm_jsl(ram, r, 0xCEF1, 0x83);
   hm_CloseTextBox(ram, r);
   hm_rtl(ram, r);
   set_a8(r, 1);
-  wr8(ram, r, 0x019A, 1);
+  wr8(ram, r, HM_INPUT_STATE, 1);
   r->a = rd16(ram, r, JOY_NEW) & 0xFF7F;
   hm_bus_wr16(ram, db_addr(r, JOY_NEW), r->a);
 }
@@ -640,7 +682,7 @@ void hm_InputTypeSelector(uint8_t *ram, HmRegs *r)
     hm_PlayerMovementInputs, hm_ImmobileInputs, hm_ListInputs, hm_MenuInputs,
     hm_NameMenuInputs, hm_TextBoxAutoClose,
   };
-  uint8_t m = rd8(ram, r, 0x019A);
+  uint8_t m = rd8(ram, r, HM_INPUT_STATE);
   set_a8(r, m);
   for (uint8_t k = 1; k <= 6; k++) {
     r->c = m >= k;

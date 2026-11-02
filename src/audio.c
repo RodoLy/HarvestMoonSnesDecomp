@@ -23,9 +23,52 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
+/* ── Names of the memory locations used here ──────────────────────────────
+ * Also used, from hm_ram.h: HM_MAP_ID ($22), HM_SEASON ($7F:1F19) and
+ * HM_HOUR ($7F:1F1C). */
+#define WRAM_LONG(a)      (0x7E0000 + (a))   /* a ram[] offset as a bus address */
+
+/* The console's registers (with the data bank) */
+#define APUIO0            0x2140   /* the sound chip's port 0; ports 1-3 follow */
+
+/* Direct page */
+#define DATA_PTR          0x0A   /* 24b $0A-$0C: the bytes being sent to the chip */
+#define DATA_PTR_BANK     0x0C   /* 8b: DATA_PTR's bank */
+#define SOUND_COMMAND     0x92   /* 8b: the command SoundStartCommand sends */
+#define STEADY_READ       0x93   /* 8b: the first of two reads of port 3 */
+#define SOUND_ARG         0x94   /* 8b: the command's argument / the instrument being sent */
+#define LIST_END          0x84   /* 16b: LoadSongInstruments: where the song's list ends */
+/* $7E and $80 mean a different thing in each routine: */
+#define MATH_FACTOR       0x7E   /* 16b: Multiply16's second factor */
+#define DIVIDEND          0x7E   /* 16b: DivisionUnsigned's dividend, then the remainder */
+#define DIVISOR           0x80   /* 16b: DivisionUnsigned's divisor */
+#define GROUP_COUNT       0x80   /* 16b: groups_of_3's result (DIVISOR before) */
+#define SONG_LIST         0x7E   /* 16b: PickMapMusic: the map's list of four songs */
+
+/* WRAM of the data bank (through db_addr / rd8) */
+#define INSTRUMENT_COUNT  0x0103   /* 8b: instruments noted in INSTRUMENTS */
+#define INSTRUMENTS       0x0104   /* 11 bytes $0104-$010E: the instruments sent to the chip */
+#define SONG_INSTRUMENT_COUNT 0x010F /* 8b: how many of them the song brought */
+#define WANTED_SONG       0x0110   /* 8b: the song asked for */
+#define SONG_ARG          0x0111   /* 8b: command $08's first argument */
+#define FADE_ARG          0x0112   /* 8b: command $09's first argument */
+#define SONG_SPEED        0x0113   /* 8b: the second argument of commands $08 / $09 */
+#define SOUND_EFFECT      0x0114   /* 8b: the sound effect PlaySoundEffect plays */
+#define SOUND_BANK        0x0115   /* 8b: its bank (its second argument) */
+#define SOUND_PARAM       0x0116   /* 8b: its third argument */
+#define PLAYING_SONG      0x0117   /* 8b: the song playing */
+#define EFFECTS_SONG      0x0118   /* 8b: the song whose instrument the effects use (0 for $FF) */
+#define LOADED_TOOL_SOUND 0x0119   /* 8b: whose noises are loaded; 0 = load them again */
+#define WEATHER_FLAGS     0x0196   /* 16b: weather and day flags; bit 4 song $16, bit 1 the
+                                      other songs (PickMapMusic) */
+#define TRANSITION_MAP    0x098B   /* 8b: the map a transition goes to */
+
+/* ROM */
+#define SOUND_DATA        0xB2D120 /* the sound program's data ($3F2 bytes) */
+
 static uint32_t db_addr(const HmRegs *r, uint16_t addr) { return (uint32_t)r->db << 16 | addr; }
-static uint8_t port(uint8_t *ram, const HmRegs *r, int n) { return hm_bus_rd8(ram, db_addr(r, (uint16_t)(0x2140 + n))); }
-static void set_port(uint8_t *ram, const HmRegs *r, int n, uint8_t v) { hm_bus_wr8(ram, db_addr(r, (uint16_t)(0x2140 + n)), v); }
+static uint8_t port(uint8_t *ram, const HmRegs *r, int n) { return hm_bus_rd8(ram, db_addr(r, (uint16_t)(APUIO0 + n))); }
+static void set_port(uint8_t *ram, const HmRegs *r, int n, uint8_t v) { hm_bus_wr8(ram, db_addr(r, (uint16_t)(APUIO0 + n)), v); }
 static uint8_t rd8(uint8_t *ram, const HmRegs *r, uint16_t a) { return hm_bus_rd8(ram, db_addr(r, a)); }
 
 static void jsr(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_t *, HmRegs *))
@@ -42,9 +85,9 @@ static void wait_steady(uint8_t *ram, HmRegs *r)
 {
   uint8_t second;
   do {
-    *hm_dp(ram, r, 0x93) = port(ram, r, 3);
+    *hm_dp(ram, r, STEADY_READ) = port(ram, r, 3);
     second = port(ram, r, 3);
-  } while (second != *hm_dp(ram, r, 0x93));
+  } while (second != *hm_dp(ram, r, STEADY_READ));
 }
 /* Steady, then a third read must be `v`; if not, start over. */
 static void wait_steady_then(uint8_t *ram, HmRegs *r, uint8_t v)
@@ -93,7 +136,7 @@ void hm_SoundStartCommand(uint8_t *ram, HmRegs *r)
 {
   wait_steady(ram, r);
   while (port(ram, r, 3) != 1) {}
-  send(ram, r, *hm_dp(ram, r, 0x92), 0, 0);
+  send(ram, r, *hm_dp(ram, r, SOUND_COMMAND), 0, 0);
   wait_steady(ram, r);
   while (port(ram, r, 3) != 4) {}
   set_port(ram, r, 3, 0);
@@ -114,10 +157,10 @@ void hm_PlaySoundEffect(uint8_t *ram, HmRegs *r)
 {
   jsr(ram, r, RET_DDF_READY, hm_SoundChipBusy);
   if (r->a & 0xFF) return;                            /* busy */
-  *hm_dp(ram, r, 0x92) = 0x0A;
+  *hm_dp(ram, r, SOUND_COMMAND) = 0x0A;
   jsr(ram, r, RET_DDF_COMMAND, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
-  send(ram, r, rd8(ram, r, 0x0114), rd8(ram, r, 0x0115), rd8(ram, r, 0x0116));
+  send(ram, r, rd8(ram, r, SOUND_EFFECT), rd8(ram, r, SOUND_BANK), rd8(ram, r, SOUND_PARAM));
   wait_steady_then(ram, r, 8);
   set_port(ram, r, 3, 0);
   set_a8(r, 8);
@@ -132,7 +175,7 @@ void hm_PlaySoundEffect(uint8_t *ram, HmRegs *r)
 void hm_PlaySoundEffect0A(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 0x0A);
-  hm_bus_wr8(ram, db_addr(r, 0x0116), 0x0A);
+  hm_bus_wr8(ram, db_addr(r, SOUND_PARAM), 0x0A);
   hm_jsl(ram, r, RET_332_SOUND, 0x83);
   hm_PlaySoundEffect(ram, r);
   hm_rtl(ram, r);
@@ -146,7 +189,7 @@ void hm_PlaySoundEffect0A(uint8_t *ram, HmRegs *r)
 void hm_SoundCommand0C(uint8_t *ram, HmRegs *r)
 {
   set_a8(r, 0x0C);
-  *hm_dp(ram, r, 0x92) = 0x0C;
+  *hm_dp(ram, r, SOUND_COMMAND) = 0x0C;
   jsr(ram, r, RET_E7F_COMMAND, hm_SoundStartCommand);
 }
 
@@ -159,12 +202,12 @@ void hm_SoundCommand0C(uint8_t *ram, HmRegs *r)
 
 void hm_SoundCommand0B(uint8_t *ram, HmRegs *r)
 {
-  *hm_dp(ram, r, 0x94) = (uint8_t)r->a;
+  *hm_dp(ram, r, SOUND_ARG) = (uint8_t)r->a;
   set_a8(r, 0x0B);
-  *hm_dp(ram, r, 0x92) = 0x0B;
+  *hm_dp(ram, r, SOUND_COMMAND) = 0x0B;
   jsr(ram, r, RET_E32_COMMAND, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
-  send(ram, r, *hm_dp(ram, r, 0x94), 0, 0);
+  send(ram, r, *hm_dp(ram, r, SOUND_ARG), 0, 0);
   wait_steady_then(ram, r, 8);
   set_port(ram, r, 3, 0);
   set_a8(r, 8);
@@ -188,10 +231,10 @@ void hm_SoundCommand09IfBusy(uint8_t *ram, HmRegs *r)
 {
   jsr(ram, r, RET_D8B_BUSY, hm_SoundChipBusyOrPlaying);
   if ((r->a & 0xFF) == 0) return;
-  *hm_dp(ram, r, 0x92) = 0x09;
+  *hm_dp(ram, r, SOUND_COMMAND) = 0x09;
   jsr(ram, r, RET_D8B_COMMAND, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
-  send(ram, r, rd8(ram, r, 0x0112), rd8(ram, r, 0x0113), 0);
+  send(ram, r, rd8(ram, r, FADE_ARG), rd8(ram, r, SONG_SPEED), 0);
   wait_steady_then(ram, r, 8);
   set_port(ram, r, 3, 0);
   set_a8(r, 8);
@@ -205,8 +248,8 @@ void hm_SoundCommand09IfBusy(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_SoundCommand07(uint8_t *ram, HmRegs *r)
 {
-  *hm_dp(ram, r, 0x94) = (uint8_t)r->a;
-  *hm_dp(ram, r, 0x92) = 0x07;
+  *hm_dp(ram, r, SOUND_ARG) = (uint8_t)r->a;
+  *hm_dp(ram, r, SOUND_COMMAND) = 0x07;
   wait_steady(ram, r);
   while (port(ram, r, 3) != 1) {}
   send(ram, r, 0x07, 0, 0);
@@ -227,10 +270,10 @@ void hm_SoundCommand07(uint8_t *ram, HmRegs *r)
 void hm_SoundCommand08(uint8_t *ram, HmRegs *r)
 {
   do jsr(ram, r, RET_D39_BUSY, hm_SoundChipBusyOrPlaying); while (r->a & 0xFF);
-  *hm_dp(ram, r, 0x92) = 0x08;
+  *hm_dp(ram, r, SOUND_COMMAND) = 0x08;
   jsr(ram, r, RET_D39_COMMAND, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
-  send(ram, r, rd8(ram, r, 0x0111), rd8(ram, r, 0x0113), 0);
+  send(ram, r, rd8(ram, r, SONG_ARG), rd8(ram, r, SONG_SPEED), 0);
   wait_steady_then(ram, r, 8);
   set_port(ram, r, 3, 0);
   set_a8(r, 8);
@@ -251,17 +294,17 @@ void hm_DropInstrumentsFrom(uint8_t *ram, HmRegs *r)
 {
   uint8_t n = (uint8_t)r->a;
   hm_push8(ram, r, n);                                       /* PHA */
-  *hm_dp(ram, r, 0x94) = n;
+  *hm_dp(ram, r, SOUND_ARG) = n;
   if (n == 0)
     do jsr(ram, r, RET_9C7_BUSY, hm_SoundChipBusyOrPlaying); while (r->a & 0xFF);
-  *hm_dp(ram, r, 0x92) = 0x04;
+  *hm_dp(ram, r, SOUND_COMMAND) = 0x04;
   jsr(ram, r, RET_9C7_COMMAND, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
   send(ram, r, n, 0, 0);
   while (port(ram, r, 3) != 8) {}
   set_port(ram, r, 3, 0);
   hm_pull8(ram, r);                                          /* PLA */
-  for (uint16_t x = n; x != 0x0B; x++) hm_bus_wr8(ram, db_addr(r, (uint16_t)(0x0104 + x)), 0);
+  for (uint16_t x = n; x != 0x0B; x++) hm_bus_wr8(ram, db_addr(r, (uint16_t)(INSTRUMENTS + x)), 0);
   r->a = 0;
   r->x = 0x0B;
   r->c = 1;
@@ -279,14 +322,14 @@ void hm_DropInstrumentsFrom(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 static void change_song(uint8_t *ram, HmRegs *r, uint8_t speed, uint16_t ret)
 {
-  uint8_t want = rd8(ram, r, 0x0110), playing = rd8(ram, r, 0x0117);
+  uint8_t want = rd8(ram, r, WANTED_SONG), playing = rd8(ram, r, PLAYING_SONG);
   set_a8(r, want);
   r->c = want >= playing;
   if (want == playing) return;
   set_a8(r, playing);
   if (playing == 0) return;
-  hm_bus_wr8(ram, db_addr(r, 0x0112), 0x01);
-  hm_bus_wr8(ram, db_addr(r, 0x0113), speed);
+  hm_bus_wr8(ram, db_addr(r, FADE_ARG), 0x01);
+  hm_bus_wr8(ram, db_addr(r, SONG_SPEED), speed);
   set_a8(r, speed);
   hm_jsl(ram, r, ret, 0x83);
   hm_SoundCommand09IfBusy(ram, r);
@@ -297,15 +340,15 @@ void hm_FadeOutSongSlowly(uint8_t *ram, HmRegs *r) { change_song(ram, r, 0x40, 0
 
 void hm_StartSong(uint8_t *ram, HmRegs *r)
 {
-  uint8_t want = rd8(ram, r, 0x0110), playing = rd8(ram, r, 0x0117);
+  uint8_t want = rd8(ram, r, WANTED_SONG), playing = rd8(ram, r, PLAYING_SONG);
   set_a8(r, want);
   if (want != 0) {
     r->c = want >= playing;
     if (want != playing) {
       r->c = want == 0xFF;                                   /* CMP #$FF */
       if (want != 0xFF) {
-        hm_bus_wr8(ram, db_addr(r, 0x0111), 0x01);
-        hm_bus_wr8(ram, db_addr(r, 0x0113), 0x40);
+        hm_bus_wr8(ram, db_addr(r, SONG_ARG), 0x01);
+        hm_bus_wr8(ram, db_addr(r, SONG_SPEED), 0x40);
         set_a8(r, 0x40);
         hm_jsl(ram, r, 0x839D, 0x83);
         hm_SoundCommand08(ram, r);
@@ -313,7 +356,7 @@ void hm_StartSong(uint8_t *ram, HmRegs *r)
       }
     }
   }
-  hm_bus_wr8(ram, db_addr(r, 0x0119), 0);
+  hm_bus_wr8(ram, db_addr(r, LOADED_TOOL_SOUND), 0);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -363,12 +406,12 @@ static void times(uint8_t *ram, HmRegs *r, uint16_t ret)
 /* bytes -> groups of 3, rounded up: $80 (DivisionUnsigned leaves Y = 0) */
 static uint16_t groups_of_3(uint8_t *ram, HmRegs *r, uint16_t bytes, uint16_t ret)
 {
-  hm_dp_w16(ram, r, 0x7E, bytes);
-  hm_dp_w16(ram, r, 0x80, 3);
+  hm_dp_w16(ram, r, DIVIDEND, bytes);
+  hm_dp_w16(ram, r, DIVISOR, 3);
   jsl83(ram, r, ret, hm_DivisionUnsigned);
-  hm_dp_w16(ram, r, 0x80, r->a);
-  if (hm_dp_r16(ram, r, 0x7E)) hm_dp_w16(ram, r, 0x80, (uint16_t)(hm_dp_r16(ram, r, 0x80) + 1));
-  return hm_dp_r16(ram, r, 0x80);
+  hm_dp_w16(ram, r, GROUP_COUNT, r->a);
+  if (hm_dp_r16(ram, r, DIVIDEND)) hm_dp_w16(ram, r, GROUP_COUNT, (uint16_t)(hm_dp_r16(ram, r, GROUP_COUNT) + 1));
+  return hm_dp_r16(ram, r, GROUP_COUNT);
 }
 /* after a command's group: "done" (4), clear, then "ready" again */
 static void next_group(uint8_t *ram, HmRegs *r)
@@ -382,7 +425,7 @@ static void next_group(uint8_t *ram, HmRegs *r)
 static void send_3(uint8_t *ram, HmRegs *r)
 {
   uint8_t b[3];
-  for (int i = 0; i < 3; i++) b[i] = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0A, (uint16_t)(r->y + i)));
+  for (int i = 0; i < 3; i++) b[i] = hm_bus_rd8(ram, hm_dp_long(ram, r, DATA_PTR, (uint16_t)(r->y + i)));
   r->y = (uint16_t)(r->y + 3);
   r->x = (uint16_t)(r->x - 1);
   send(ram, r, b[0], b[1], b[2]);
@@ -394,8 +437,8 @@ static void send_3(uint8_t *ram, HmRegs *r)
  * 3 count, C = 1. */
 static void send_instrument(uint8_t *ram, HmRegs *r, uint16_t ret_times, uint16_t ret_divide)
 {
-  uint8_t ins = *hm_dp(ram, r, 0x94);
-  hm_dp_w16(ram, r, 0x7E, ins);
+  uint8_t ins = *hm_dp(ram, r, SOUND_ARG);
+  hm_dp_w16(ram, r, MATH_FACTOR, ins);
   r->a = 0x000A;
   times(ram, r, ret_times);                                /* X = 10 ins */
   uint16_t x = r->a;
@@ -409,8 +452,8 @@ static void send_instrument(uint8_t *ram, HmRegs *r, uint16_t ret_times, uint16_
   send(ram, r, rom8(ram, AUDIO_TABLE3 + x), rom8(ram, AUDIO_TABLE3 + x + 1), 0);
   x = (uint16_t)(x + 2);
   next_group(ram, r);
-  hm_dp_w16(ram, r, 0x0A, rom16(ram, AUDIO_TABLE3 + x));
-  *hm_dp(ram, r, 0x0C) = rom8(ram, AUDIO_TABLE3 + x + 2);
+  hm_dp_w16(ram, r, DATA_PTR, rom16(ram, AUDIO_TABLE3 + x));
+  *hm_dp(ram, r, DATA_PTR_BANK) = rom8(ram, AUDIO_TABLE3 + x + 2);
   uint16_t count = groups_of_3(ram, r, rom16(ram, AUDIO_TABLE5 + (uint8_t)(ins << 1)), ret_divide);
   r->x = count;
   send(ram, r, (uint8_t)count, (uint8_t)(count >> 8), 0);
@@ -434,14 +477,14 @@ static void send_instrument(uint8_t *ram, HmRegs *r, uint16_t ret_times, uint16_
 void hm_LoadEffectInstrument(uint8_t *ram, HmRegs *r)
 {
   r->x = 0;
-  *hm_dp(ram, r, 0x92) = 0x03;
+  *hm_dp(ram, r, SOUND_COMMAND) = 0x03;
   jsr(ram, r, 0x8B0C, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
-  uint8_t ins = rom8(ram, AUDIO_TABLE2 + rd8(ram, r, 0x0114));
-  *hm_dp(ram, r, 0x94) = ins;
-  uint8_t n = rd8(ram, r, 0x0103);
-  hm_bus_wr8(ram, db_addr(r, (uint16_t)(0x0104 + n)), ins);
-  hm_bus_wr8(ram, db_addr(r, 0x0103), (uint8_t)(n + 1));
+  uint8_t ins = rom8(ram, AUDIO_TABLE2 + rd8(ram, r, SOUND_EFFECT));
+  *hm_dp(ram, r, SOUND_ARG) = ins;
+  uint8_t n = rd8(ram, r, INSTRUMENT_COUNT);
+  hm_bus_wr8(ram, db_addr(r, (uint16_t)(INSTRUMENTS + n)), ins);
+  hm_bus_wr8(ram, db_addr(r, INSTRUMENT_COUNT), (uint8_t)(n + 1));
   send_instrument(ram, r, 0x8B4A, 0x8C54);
   set_port(ram, r, 3, 0);
 }
@@ -456,31 +499,31 @@ void hm_LoadEffectInstrument(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_LoadSongInstruments(uint8_t *ram, HmRegs *r)
 {
-  hm_bus_wr8(ram, db_addr(r, 0x0103), 0);
-  hm_bus_wr8(ram, db_addr(r, 0x010F), 0);
-  for (uint16_t x = 0; x != 0x0B; x++) hm_bus_wr8(ram, db_addr(r, (uint16_t)(0x0104 + x)), 0);
+  hm_bus_wr8(ram, db_addr(r, INSTRUMENT_COUNT), 0);
+  hm_bus_wr8(ram, db_addr(r, SONG_INSTRUMENT_COUNT), 0);
+  for (uint16_t x = 0; x != 0x0B; x++) hm_bus_wr8(ram, db_addr(r, (uint16_t)(INSTRUMENTS + x)), 0);
   r->y = 0;
-  hm_dp_w16(ram, r, 0x7E, rd8(ram, r, 0x0110));
+  hm_dp_w16(ram, r, MATH_FACTOR, rd8(ram, r, WANTED_SONG));
   r->a = 0x000E;
   times(ram, r, 0x87B5);
   uint16_t x = (uint16_t)(r->a + 3);
   uint16_t end = (uint16_t)(r->a + 0x0E);
-  hm_dp_w16(ram, r, 0x84, end);
+  hm_dp_w16(ram, r, LIST_END, end);
   for (;;) {
     uint8_t ins = rom8(ram, AUDIO_TABLE6 + x);
-    *hm_dp(ram, r, 0x94) = ins;
+    *hm_dp(ram, r, SOUND_ARG) = ins;
     if (ins) {
-      hm_bus_wr8(ram, db_addr(r, (uint16_t)(0x0104 + r->y)), ins);
-      hm_bus_wr8(ram, db_addr(r, 0x0103), (uint8_t)(rd8(ram, r, 0x0103) + 1));
-      hm_bus_wr8(ram, db_addr(r, 0x010F), (uint8_t)(rd8(ram, r, 0x010F) + 1));
+      hm_bus_wr8(ram, db_addr(r, (uint16_t)(INSTRUMENTS + r->y)), ins);
+      hm_bus_wr8(ram, db_addr(r, INSTRUMENT_COUNT), (uint8_t)(rd8(ram, r, INSTRUMENT_COUNT) + 1));
+      hm_bus_wr8(ram, db_addr(r, SONG_INSTRUMENT_COUNT), (uint8_t)(rd8(ram, r, SONG_INSTRUMENT_COUNT) + 1));
     } else {
       do x++; while (x != end && rom8(ram, AUDIO_TABLE6 + x) == 0);
       if (x != end) continue;                              /* found one: back to the top */
-      *hm_dp(ram, r, 0x94) = 0x06;
+      *hm_dp(ram, r, SOUND_ARG) = 0x06;
       x--;
     }
     r->x = x;
-    *hm_dp(ram, r, 0x92) = 0x03;
+    *hm_dp(ram, r, SOUND_COMMAND) = 0x03;
     jsr(ram, r, 0x87EF, hm_SoundStartCommand);
     wait_steady_then(ram, r, 1);
     uint16_t y = r->y;
@@ -505,11 +548,11 @@ void hm_LoadDefaultInstruments(uint8_t *ram, HmRegs *r)
 {
   for (uint16_t x = 0; x != 0x0A; x++) {
     uint8_t ins = rom8(ram, AUDIO_TABLE4 + x);
-    *hm_dp(ram, r, 0x94) = ins;
+    *hm_dp(ram, r, SOUND_ARG) = ins;
     set_a8(r, ins);
     r->x = x;
     if (!ins) continue;
-    *hm_dp(ram, r, 0x92) = 0x02;
+    *hm_dp(ram, r, SOUND_COMMAND) = 0x02;
     jsr(ram, r, 0x85B8, hm_SoundStartCommand);
     wait_steady_then(ram, r, 1);
     hm_push8(ram, r, (uint8_t)(x >> 8)); hm_push8(ram, r, (uint8_t)x);   /* PHX */
@@ -528,19 +571,19 @@ void hm_LoadDefaultInstruments(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_SendSongData(uint8_t *ram, HmRegs *r)
 {
-  *hm_dp(ram, r, 0x92) = 0x05;
+  *hm_dp(ram, r, SOUND_COMMAND) = 0x05;
   jsr(ram, r, 0x8A30, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
-  uint8_t song = rd8(ram, r, 0x0110);
+  uint8_t song = rd8(ram, r, WANTED_SONG);
   uint16_t count = groups_of_3(ram, r, rom16(ram, AUDIO_TABLE7 + (uint8_t)(song << 1)), 0x8A5E);
   send(ram, r, (uint8_t)count, (uint8_t)(count >> 8), 0);
   while (port(ram, r, 3) != 4) {}
   r->y = 0;
-  hm_dp_w16(ram, r, 0x7E, song);
+  hm_dp_w16(ram, r, MATH_FACTOR, song);
   r->a = 0x000E;
   times(ram, r, 0x8A98);
-  hm_dp_w16(ram, r, 0x0A, rom16(ram, AUDIO_TABLE6 + r->a));
-  *hm_dp(ram, r, 0x0C) = rom8(ram, AUDIO_TABLE6 + (uint16_t)(r->a + 2));
+  hm_dp_w16(ram, r, DATA_PTR, rom16(ram, AUDIO_TABLE6 + r->a));
+  *hm_dp(ram, r, DATA_PTR_BANK) = rom8(ram, AUDIO_TABLE6 + (uint16_t)(r->a + 2));
   r->x = count;
   do {
     set_port(ram, r, 3, 0);
@@ -561,7 +604,7 @@ void hm_SendSongData(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_SendSoundData(uint8_t *ram, HmRegs *r)
 {
-  *hm_dp(ram, r, 0x92) = 0x01;
+  *hm_dp(ram, r, SOUND_COMMAND) = 0x01;
   jsr(ram, r, 0x84DD, hm_SoundStartCommand);
   wait_steady_then(ram, r, 1);
   uint16_t count = groups_of_3(ram, r, 0x03F2, 0x8502);
@@ -569,8 +612,8 @@ void hm_SendSoundData(uint8_t *ram, HmRegs *r)
   wait_steady_then(ram, r, 4);
   set_port(ram, r, 3, 0);
   r->y = 0;
-  hm_dp_w16(ram, r, 0x0A, 0xD120);
-  *hm_dp(ram, r, 0x0C) = 0xB2;
+  hm_dp_w16(ram, r, DATA_PTR, (uint16_t)SOUND_DATA);
+  *hm_dp(ram, r, DATA_PTR_BANK) = (uint8_t)(SOUND_DATA >> 16);
   r->x = count;
   do {
     wait_steady_then(ram, r, 1);
@@ -598,16 +641,16 @@ void hm_SendSoundData(uint8_t *ram, HmRegs *r)
 
 void hm_PickMapMusic(uint8_t *ram, HmRegs *r)
 {
-  uint8_t map = *hm_dp(ram, r, 0x22);
+  uint8_t map = *hm_dp(ram, r, HM_MAP_ID);
   set_a8(r, map);
   r->c = map >= 0x1E;
   if (map != 0x1E) {
-    uint8_t hour = hm_bus_rd8(ram, 0x7F1F1C);
+    uint8_t hour = hm_bus_rd8(ram, WRAM_LONG(HM_HOUR));
     set_a8(r, hour);
     r->c = hour >= 18;
     if (r->c) {                                       /* Max7E0110 */
       set_a8(r, 0xFF);
-      hm_bus_wr8(ram, db_addr(r, 0x0110), 0xFF);
+      hm_bus_wr8(ram, db_addr(r, WANTED_SONG), 0xFF);
       return;
     }
   }
@@ -617,12 +660,12 @@ void hm_PickMapMusic(uint8_t *ram, HmRegs *r)
  * new day's music even at night) */
 void hm_PickMapMusicAnyHour(uint8_t *ram, HmRegs *r)
 {
-  uint8_t map = *hm_dp(ram, r, 0x22);
-  hm_bus_wr8(ram, db_addr(r, 0x0110), 0);
-  uint16_t flags = hm_bus_rd16(ram, db_addr(r, 0x0196));
+  uint8_t map = *hm_dp(ram, r, HM_MAP_ID);
+  hm_bus_wr8(ram, db_addr(r, WANTED_SONG), 0);
+  uint16_t flags = hm_bus_rd16(ram, db_addr(r, WEATHER_FLAGS));
   if (flags & 0x0010) {
     r->a = 0x0016;
-    hm_bus_wr8(ram, db_addr(r, 0x0110), 0x16);
+    hm_bus_wr8(ram, db_addr(r, WANTED_SONG), 0x16);
     return;
   }
   r->a = flags & 0x0002;
@@ -636,7 +679,7 @@ void hm_PickMapMusicAnyHour(uint8_t *ram, HmRegs *r)
       r->c = map >= 0x31;
       if (!r->c) { r->c = map >= 0x15; if (r->c) song = 0x14; }
       r->a = song;
-      hm_bus_wr8(ram, db_addr(r, 0x0110), song);
+      hm_bus_wr8(ram, db_addr(r, WANTED_SONG), song);
       return;
     }
   }
@@ -647,12 +690,12 @@ void hm_PickMapMusicAnyHour(uint8_t *ram, HmRegs *r)
   r->a = list;
   r->c = list == 0xFFFF;                              /* CMP #$FFFF */
   if (list == 0xFFFF) return;
-  hm_dp_w16(ram, r, 0x7E, list);
-  uint8_t season = hm_bus_rd8(ram, 0x7F1F19);
+  hm_dp_w16(ram, r, SONG_LIST, list);
+  uint8_t season = hm_bus_rd8(ram, WRAM_LONG(HM_SEASON));
   r->y = season;
   uint8_t song = hm_bus_rd8(ram, (db_addr(r, list) + season) & 0xFFFFFF);   /* LDA ($7E),Y */
   r->a = song;
-  hm_bus_wr8(ram, db_addr(r, 0x0110), song);
+  hm_bus_wr8(ram, db_addr(r, WANTED_SONG), song);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -702,7 +745,7 @@ void hm_UploadSoundProgram(uint8_t *ram, HmRegs *r)
 
   uint8_t index = 0;
   for (uint16_t left = IPL_BLOCK_SIZE; left; left--) {
-    uint8_t byte = hm_bus_rd8(ram, hm_dp_long(ram, r, 0x0A, r->y));
+    uint8_t byte = hm_bus_rd8(ram, hm_dp_long(ram, r, DATA_PTR, r->y));
     r->y++;
     if (left != IPL_BLOCK_SIZE) {
       wait_echo(ram, r, index);
@@ -734,9 +777,9 @@ void hm_UploadSoundProgram(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_UnusedCountInstrument(uint8_t *ram, HmRegs *r)
 {
-  uint8_t n = (uint8_t)(rd8(ram, r, 0x0103) + 1);
+  uint8_t n = (uint8_t)(rd8(ram, r, INSTRUMENT_COUNT) + 1);
   set_a8(r, n);
-  hm_bus_wr8(ram, db_addr(r, 0x0103), n);
+  hm_bus_wr8(ram, db_addr(r, INSTRUMENT_COUNT), n);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -754,9 +797,9 @@ void hm_UnusedCountInstrument(uint8_t *ram, HmRegs *r)
 void hm_PrepareSoundEffect(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
-  r->a = rd8(ram, r, 0x0103);                              /* LDA #0; XBA; LDA $0103 */
+  r->a = rd8(ram, r, INSTRUMENT_COUNT);                    /* LDA #0; XBA; LDA $0103 */
   r->x = r->a;                                             /* TAX */
-  set_a8(r, rd8(ram, r, (uint16_t)(0x0104 + r->x)));
+  set_a8(r, rd8(ram, r, (uint16_t)(INSTRUMENTS + r->x)));
   if ((uint8_t)r->a) {
     r->a = (uint16_t)(r->x + 1);                           /* TXA; INC A */
     hm_jsl(ram, r, 0x8359, 0x83);
@@ -768,7 +811,7 @@ void hm_PrepareSoundEffect(uint8_t *ram, HmRegs *r)
     hm_rtl(ram, r);
     r->p = entry;
   }
-  r->a = rd8(ram, r, 0x0114);                              /* LDA #0; XBA; LDA $0114 */
+  r->a = rd8(ram, r, SOUND_EFFECT);                        /* LDA #0; XBA; LDA $0114 */
   r->x = r->a;
   set_a8(r, rom8(ram, AUDIO_TABLE2 + r->x));
   if (!(uint8_t)r->a) return;
@@ -819,13 +862,13 @@ static uint8_t flags16(uint8_t p, uint16_t a, uint8_t c)
 void hm_SetSong(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p, p = entry;
-  uint8_t want = rd8(ram, r, 0x0110), playing = rd8(ram, r, 0x0117);
+  uint8_t want = rd8(ram, r, WANTED_SONG), playing = rd8(ram, r, PLAYING_SONG);
   set_a8(r, want);
   r->c = want >= playing;
   if (want != playing) {
     set_a8(r, 0);
     call83(ram, r, 0x83B3, hm_DropInstrumentsFrom);
-    uint8_t v = rd8(ram, r, 0x0110);
+    uint8_t v = rd8(ram, r, WANTED_SONG);
     set_a8(r, v);
     if (v) {
       r->c = v >= 0xFF;
@@ -836,19 +879,19 @@ void hm_SetSong(uint8_t *ram, HmRegs *r)
       }
     }
   }
-  hm_bus_wr8(ram, db_addr(r, 0x0115), 0x06);
-  hm_bus_wr8(ram, db_addr(r, 0x0114), 0x03);
-  uint8_t song = rd8(ram, r, 0x0110);
+  hm_bus_wr8(ram, db_addr(r, SOUND_BANK), 0x06);
+  hm_bus_wr8(ram, db_addr(r, SOUND_EFFECT), 0x03);
+  uint8_t song = rd8(ram, r, WANTED_SONG);
   r->a = song;                                               /* LDA #0; XBA; LDA */
-  hm_bus_wr8(ram, db_addr(r, 0x0118), song);
+  hm_bus_wr8(ram, db_addr(r, EFFECTS_SONG), song);
   r->c = song >= 0xFF;
   if (song == 0xFF) {
     set_a8(r, 0);
-    hm_bus_wr8(ram, db_addr(r, 0x0118), 0);
+    hm_bus_wr8(ram, db_addr(r, EFFECTS_SONG), 0);
   }
   r->x = r->a;                                               /* TAX */
   set_a8(r, rom8(ram, SONG_INSTRUMENTS + r->x));
-  hm_bus_wr8(ram, db_addr(r, 0x0103), (uint8_t)r->a);
+  hm_bus_wr8(ram, db_addr(r, INSTRUMENT_COUNT), (uint8_t)r->a);
   r->p = p;
   call83(ram, r, 0x83FF, hm_PrepareSoundEffect);
   r->p = entry;
@@ -866,15 +909,15 @@ void hm_SetSong(uint8_t *ram, HmRegs *r)
 void hm_PlayEffectWithSongInstrument(uint8_t *ram, HmRegs *r)
 {
   uint8_t entry = r->p;
-  hm_bus_wr8(ram, db_addr(r, 0x0114), (uint8_t)r->a);       /* SEP #$20; REP #$10 */
+  hm_bus_wr8(ram, db_addr(r, SOUND_EFFECT), (uint8_t)r->a); /* SEP #$20; REP #$10 */
   hm_push8(ram, r, (uint8_t)(r->y >> 8));                    /* PHY */
   hm_push8(ram, r, (uint8_t)r->y);
   r->a = r->x;                                               /* REP #$20; TXA */
-  hm_bus_wr8(ram, db_addr(r, 0x0115), (uint8_t)r->a);
-  r->a = rd8(ram, r, 0x0118);
+  hm_bus_wr8(ram, db_addr(r, SOUND_BANK), (uint8_t)r->a);
+  r->a = rd8(ram, r, EFFECTS_SONG);
   r->x = r->a;
   set_a8(r, (uint8_t)(rom8(ram, SONG_INSTRUMENTS + r->x) + 1));
-  hm_bus_wr8(ram, db_addr(r, 0x0103), (uint8_t)r->a);
+  hm_bus_wr8(ram, db_addr(r, INSTRUMENT_COUNT), (uint8_t)r->a);
   call83(ram, r, 0x8324, hm_PrepareSoundEffect);
   call83(ram, r, 0x8328, hm_PlaySoundEffect0A);
   uint8_t lo = hm_pull8(ram, r);                             /* REP #$30; PLY; TYA */
@@ -898,19 +941,19 @@ void hm_ChangeMusic(uint8_t *ram, HmRegs *r)
   call83(ram, r, 0x82CE, hm_FadeOutSong);
   set_a8(r, hm_pull8(ram, r));                               /* PLA */
   uint8_t song = (uint8_t)r->a;
-  hm_bus_wr8(ram, db_addr(r, 0x0110), song);
+  hm_bus_wr8(ram, db_addr(r, WANTED_SONG), song);
   /* SetSong sends the song (and its ADC clears V) when it changes */
-  if (song != rd8(ram, r, 0x0117) && song != 0 && song != 0xFF) p &= (uint8_t)~0x40;
+  if (song != rd8(ram, r, PLAYING_SONG) && song != 0 && song != 0xFF) p &= (uint8_t)~0x40;
   call83(ram, r, 0x82D8, hm_SetSong);
   call83(ram, r, 0x82DC, hm_StartSong);
-  set_a8(r, rd8(ram, r, 0x0110));
-  hm_bus_wr8(ram, db_addr(r, 0x0117), (uint8_t)r->a);
+  set_a8(r, rd8(ram, r, WANTED_SONG));
+  hm_bus_wr8(ram, db_addr(r, PLAYING_SONG), (uint8_t)r->a);
   r->a = 0x00B4;                                             /* REP #$30; LDA #$B4 */
   uint8_t pw = flags16(p, r->a, r->c);
   wait_frames(ram, r, 0x82ED, pw);
-  uint8_t map = rd8(ram, r, 0x098B);                         /* SEP #$20 */
+  uint8_t map = rd8(ram, r, TRANSITION_MAP);                 /* SEP #$20 */
   set_a8(r, map);
-  *hm_dp(ram, r, 0x22) = map;
+  *hm_dp(ram, r, HM_MAP_ID) = map;
   r->p = (uint8_t)((pw & ~0x82) | 0x20 | (map & 0x80) | (map ? 0 : 0x02));
   hm_jsl(ram, r, 0x82F8, 0x80);
   hm_PickMapMusic(ram, r);

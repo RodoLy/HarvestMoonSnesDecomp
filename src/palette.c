@@ -22,25 +22,60 @@
 #include "hm_decomp.h"
 #include "hm_ram.h"   /* from the recompilation project */
 
-#define PALETTE_POINTERS   0x80B9FD
+#define PALETTE_POINTERS   0x80B9FD   /* PalettePointerTable: 3 bytes per palette */
 #define TIME_PALETTES      0x80BB5C   /* 6 bytes per map */
 #define SPRITE_COLOURS     0x80BD9C   /* UNK_Table9: 3 colours per season / time */
 #define CHILD_COLOURS      0x80BDFC   /* UNK_Table10: 3 colours per baby stage */
 #define SPRITE_PALETTES    0xBE44     /* UNK_Table11 (read with the data bank) */
 
-#define SENT       0x7F0900
-#define PREPARED   0x7F0B00
-#define SHOWN      0x7F0D00
+#define SENT       0x7F0900   /* the colours sent to the console (HM_CGRAM_SHADOW) */
+#define PREPARED   0x7F0B00   /* a palette being prepared */
+#define SHOWN      0x7F0D00   /* the colours shown now */
 
-#define HOUR       0x7F1F1C
-#define SEASON     0x7F1F19
-#define PREGNANCY  0x7F1F3B
-#define CHILDREN   0x7F1F66
-#define FLAGS_5E   0x7F1F5E
+#define HOUR       0x7F1F1C   /* 8b: the hour (HM_HOUR) */
+#define SEASON     0x7F1F19   /* 8b: 0 spring ... 3 winter (HM_SEASON) */
+#define PREGNANCY  0x7F1F3B   /* 16b: the wife's pregnancy */
+#define CHILDREN   0x7F1F66   /* 16b: bits 0-4 the baby's / child's stage */
+#define FLAGS_5E   0x7F1F5E   /* 16b flags: $80 / $0100 / $0200 sprite palette $71-$73 */
 
 #define COUNTDOWN  0x017A   /* frames until the next step (to 32) */
 #define LOADED     0x017B   /* the palette in use */
 #define NEXT       0x017C   /* the palette being moved to */
+
+/* ── Names of the other memory locations used here ────────────────────────
+ * Also used, from hm_ram.h: HM_MAP_ID ($22) and HM_TIME_RUNNING ($0973). */
+#define WEATHER_FLAGS    0x0196   /* DB: 16b, bit 2: colours 12-15 move too */
+
+/* Direct page */
+#define PALETTE_TARGET   0x04   /* 24b $04-$06: the palette the colours move to (0 = none) */
+#define PALETTE_TARGET_BANK 0x06
+#define DMA_CHANNEL      0x27   /* 8b: AddProgrammedDMA's channel (dma.c) */
+#define DMA_B_ADDRESS    0x29   /* 8b: its destination register (B-bus, $21xx) */
+#define PALETTE_PTR      0x72   /* 24b $72-$74: the palette being copied; the DMA's source */
+#define PALETTE_PTR_BANK 0x74
+#define COLOURS_END      0x84   /* 16b: TransitionTimeOfDayPalettes: bytes of colours to move */
+#define DP_SCRIPT_POS    0xC9   /* 24b $C9-$CB: the position in the event script */
+/* $92 means a different thing in each routine: */
+#define CHANGED          0x92   /* 8b: TransitionTimeOfDayPalettes: 1 = a colour moved */
+#define TO_PREPARED      0x92   /* 8b: SetPaletteColour(NoFade), CustomiseSpritePalette:
+                                   0 = into SENT, else into PREPARED (the night colours) */
+/* $7E-$82 are scratch, named per routine: */
+#define RED              0x7E   /* 16b: TransitionTimeOfDayPalettes: the colour's red, */
+#define GREEN            0x80   /*      its green */
+#define BLUE             0x82   /*      and its blue */
+#define PART             0x7E   /* 16b: time_palette: the part of the day */
+#define MAP_NUMBER       0x80   /* 16b: time_palette, PrepareNightPalette: the map */
+#define PALETTE_NUM      0x7E   /* 16b: the palette loaded or moved to */
+#define COLOUR_ROW       0x7E   /* 16b: colour_index: the palette row (Y) */
+#define COLOUR_OFFSET    0x80   /* 16b: colour_index: 2 x the colour (X) */
+#define COLOUR_VALUE     0x82   /* 16b: colour_index: the colour (A) */
+#define COPY_END         0x7E   /* 16b: copy_half: $100, the bytes to copy */
+#define NIGHT_OFFSET     0x7E   /* 16b: CustomiseSpritePalette: 4 / 6 at night, else 0 */
+#define TABLE_INDEX      0x80   /* CustomiseSpritePalette: the entry of the colour table */
+#define SEASON_INDEX     0x82   /* 16b: CustomiseSpritePalette: the season (or the map - 8) */
+
+/* The console's registers */
+#define BBAD_CGDATA      0x22   /* $2122: a copy to CGRAM */
 
 static uint32_t db_addr(const HmRegs *r, uint16_t a) { return (uint32_t)r->db << 16 | a; }
 static uint16_t dp16(uint8_t *ram, const HmRegs *r, unsigned a) { return hm_dp_r16(ram, r, a); }
@@ -89,9 +124,9 @@ static uint16_t part_of_day(uint8_t *ram, HmRegs *r)
 /* the map's palette for the part of the day: X = $22 * 6 + part */
 static uint8_t time_palette(uint8_t *ram, HmRegs *r, uint16_t part)
 {
-  set16(ram, r, 0x7E, part);                              /* STX $7E */
-  uint16_t map = *hm_dp(ram, r, 0x22);                    /* LDA #0; XBA; LDA $22 */
-  set16(ram, r, 0x80, map);
+  set16(ram, r, PART, part);                              /* STX $7E */
+  uint16_t map = *hm_dp(ram, r, HM_MAP_ID);               /* LDA #0; XBA; LDA $22 */
+  set16(ram, r, MAP_NUMBER, map);
   uint32_t s = (uint32_t)(uint16_t)(map << 2) + map;       /* ASL; ASL; CLC; ADC $80 */
   s = (s & 0xFFFF) + map + (s > 0xFFFF);                   /* ADC $80 */
   s = (s & 0xFFFF) + part + (s > 0xFFFF);                  /* ADC $7E */
@@ -112,16 +147,16 @@ void hm_SetTimeOfDayPalette(uint8_t *ram, HmRegs *r)
   hm_bus_wr8(ram, db_addr(r, NEXT), n);
   hm_bus_wr8(ram, db_addr(r, COUNTDOWN), 0);
   r->a = n;                                               /* XBA; LDA #0; XBA */
-  set16(ram, r, 0x7E, n);
+  set16(ram, r, PALETTE_NUM, n);
   uint8_t h = lda8(r, hm_bus_rd8(ram, HOUR));
   r->c = h >= 0x12;
   if (r->c) {
-    set16(ram, r, 0x04, 0x0B00);
-    *hm_dp(ram, r, 0x06) = 0x7F;
+    set16(ram, r, PALETTE_TARGET, (uint16_t)PREPARED);
+    *hm_dp(ram, r, PALETTE_TARGET_BANK) = (uint8_t)(PREPARED >> 16);
     r->a = 0x0B7F;
     return;
   }
-  palette_pointer(ram, r, n, 0x04);
+  palette_pointer(ram, r, n, PALETTE_TARGET);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -142,75 +177,75 @@ static uint16_t step(uint8_t *ram, HmRegs *r, uint16_t now, uint16_t target, uns
   now = (uint16_t)(target > now ? now + 1 : now - 1);
   set16(ram, r, at, now);
   lda8(r, 1);
-  *hm_dp(ram, r, 0x92) = 1;
+  *hm_dp(ram, r, CHANGED) = 1;
   return now;
 }
 
 void hm_FinishTimeOfDayPalette(uint8_t *ram, HmRegs *r)
 {
-  set16(ram, r, 0x04, 0);
-  *hm_dp(ram, r, 0x06) = 0;
+  set16(ram, r, PALETTE_TARGET, 0);
+  *hm_dp(ram, r, PALETTE_TARGET_BANK) = 0;
   uint8_t next = lda8(r, hm_bus_rd8(ram, db_addr(r, NEXT)));
   hm_bus_wr8(ram, db_addr(r, LOADED), next);
 }
 
 void hm_TransitionTimeOfDayPalettes(uint8_t *ram, HmRegs *r)
 {
-  if (!(lda8(r, hm_bus_rd8(ram, db_addr(r, 0x0973))) & 1)) {   /* time stopped */
+  if (!(lda8(r, hm_bus_rd8(ram, db_addr(r, HM_TIME_RUNNING))) & 1)) { /* time stopped */
     lda8(r, 0);
     return;
   }
-  r->a = dp16(ram, r, 0x04);
-  if (r->a == 0 && lda8(r, *hm_dp(ram, r, 0x06)) == 0) return; /* nothing to do */
+  r->a = dp16(ram, r, PALETTE_TARGET);
+  if (r->a == 0 && lda8(r, *hm_dp(ram, r, PALETTE_TARGET_BANK)) == 0) return; /* nothing to do */
   uint8_t count = lda8(r, (uint8_t)(hm_bus_rd8(ram, db_addr(r, COUNTDOWN)) + 1));
   hm_bus_wr8(ram, db_addr(r, COUNTDOWN), count);
   r->c = count >= 0x20;
   if (count != 0x20) return;
   hm_bus_wr8(ram, db_addr(r, COUNTDOWN), 0);
 
-  set16(ram, r, 0x84, r->a = 0x0100);
+  set16(ram, r, COLOURS_END, r->a = 0x0100);
   uint8_t h = lda8(r, hm_bus_rd8(ram, HOUR));
   r->c = h >= 18;
-  if (r->c) set16(ram, r, 0x84, r->a = 0x0200);
-  *hm_dp(ram, r, 0x92) = 0;
+  if (r->c) set16(ram, r, COLOURS_END, r->a = 0x0200);
+  *hm_dp(ram, r, CHANGED) = 0;
 
   uint16_t y = 0;
   do {
     r->c = y >= 2;
     if (y == 2) {
       y = 0x18;
-      r->a = hm_bus_rd16(ram, db_addr(r, 0x0196)) & 0x0004;
+      r->a = hm_bus_rd16(ram, db_addr(r, WEATHER_FLAGS)) & 0x0004;
       if (r->a == 0) y = 0x20;
     }
     r->x = y;
-    uint32_t from = hm_dp_long(ram, r, 0x04, y);
+    uint32_t from = hm_dp_long(ram, r, PALETTE_TARGET, y);
     uint16_t now = hm_bus_rd16(ram, SHOWN + y);
     uint16_t want = hm_bus_rd16(ram, from);
-    step(ram, r, now & 0x001F, want & 0x001F, 0x7E);
-    step(ram, r, (now & 0x03E0) >> 5, (want & 0x03E0) >> 5, 0x80);
-    step(ram, r, (now & 0x7C00) >> 10, (want & 0x7C00) >> 10, 0x82);
+    step(ram, r, now & 0x001F, want & 0x001F, RED);
+    step(ram, r, (now & 0x03E0) >> 5, (want & 0x03E0) >> 5, GREEN);
+    step(ram, r, (now & 0x7C00) >> 10, (want & 0x7C00) >> 10, BLUE);
     /* ASL $80 x5, ASL $82 x10, then red | green | blue */
-    set16(ram, r, 0x80, (uint16_t)(dp16(ram, r, 0x80) << 5));
-    set16(ram, r, 0x82, (uint16_t)(dp16(ram, r, 0x82) << 10));
-    r->a = (uint16_t)(dp16(ram, r, 0x7E) | dp16(ram, r, 0x80) | dp16(ram, r, 0x82));
+    set16(ram, r, GREEN, (uint16_t)(dp16(ram, r, GREEN) << 5));
+    set16(ram, r, BLUE, (uint16_t)(dp16(ram, r, BLUE) << 10));
+    r->a = (uint16_t)(dp16(ram, r, RED) | dp16(ram, r, GREEN) | dp16(ram, r, BLUE));
     hm_bus_wr16(ram, SENT + y, r->a);
     hm_bus_wr16(ram, SHOWN + y, r->a);
     y = (uint16_t)(y + 2);
-    r->c = y >= dp16(ram, r, 0x84);
-  } while (y != dp16(ram, r, 0x84));
+    r->c = y >= dp16(ram, r, COLOURS_END);
+  } while (y != dp16(ram, r, COLOURS_END));
   r->y = y;
 
-  if (lda8(r, *hm_dp(ram, r, 0x92)) == 0) {               /* all equal: done */
+  if (lda8(r, *hm_dp(ram, r, CHANGED)) == 0) {            /* all equal: done */
     hm_FinishTimeOfDayPalette(ram, r);
     return;
   }
   /* send the colours: channel 6, to $2122 (CGRAM), from $7F:0900 */
-  *hm_dp(ram, r, 0x27) = 6;
-  *hm_dp(ram, r, 0x29) = 0x22;
-  r->y = dp16(ram, r, 0x84);
+  *hm_dp(ram, r, DMA_CHANNEL) = 6;
+  *hm_dp(ram, r, DMA_B_ADDRESS) = BBAD_CGDATA;
+  r->y = dp16(ram, r, COLOURS_END);
   r->x = 0;
-  set16(ram, r, 0x72, 0x0900);
-  *hm_dp(ram, r, 0x74) = 0x7F;
+  set16(ram, r, PALETTE_PTR, (uint16_t)SENT);
+  *hm_dp(ram, r, PALETTE_PTR_BANK) = (uint8_t)(SENT >> 16);
   r->a = 0x097F;
   hm_jsl(ram, r, 0x9155, 0x80);
   hm_AddProgrammedDMA(ram, r);
@@ -220,8 +255,8 @@ void hm_TransitionTimeOfDayPalettes(uint8_t *ram, HmRegs *r)
 /* ClearTimeOfDayPalette ($80:9166): drop the target palette. */
 void hm_ClearTimeOfDayPalette(uint8_t *ram, HmRegs *r)
 {
-  set16(ram, r, 0x04, 0);
-  *hm_dp(ram, r, 0x06) = 0;
+  set16(ram, r, PALETTE_TARGET, 0);
+  *hm_dp(ram, r, PALETTE_TARGET_BANK) = 0;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -232,27 +267,27 @@ void hm_ClearTimeOfDayPalette(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 static uint16_t colour_index(uint8_t *ram, HmRegs *r)
 {
-  set16(ram, r, 0x82, r->a);
-  set16(ram, r, 0x7E, r->y);
-  set16(ram, r, 0x80, (uint16_t)(r->x << 1));
-  uint32_t s = (uint32_t)(uint16_t)(r->y << 5) + dp16(ram, r, 0x80);
+  set16(ram, r, COLOUR_VALUE, r->a);
+  set16(ram, r, COLOUR_ROW, r->y);
+  set16(ram, r, COLOUR_OFFSET, (uint16_t)(r->x << 1));
+  uint32_t s = (uint32_t)(uint16_t)(r->y << 5) + dp16(ram, r, COLOUR_OFFSET);
   r->c = s > 0xFFFF;
   r->a = r->x = (uint16_t)s;                              /* TAX */
-  lda8(r, *hm_dp(ram, r, 0x92));
+  lda8(r, *hm_dp(ram, r, TO_PREPARED));
   return r->x;
 }
 void hm_SetPaletteColour(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = colour_index(ram, r);
   bool prepared = (uint8_t)r->a != 0;
-  r->a = dp16(ram, r, 0x82);
+  r->a = dp16(ram, r, COLOUR_VALUE);
   hm_bus_wr16(ram, ((prepared ? PREPARED : SENT) + x) & 0xFFFFFF, r->a);
 }
 void hm_SetPaletteColourNoFade(uint8_t *ram, HmRegs *r)
 {
   uint16_t x = colour_index(ram, r);
   bool prepared = (uint8_t)r->a != 0;
-  r->a = dp16(ram, r, 0x82);
+  r->a = dp16(ram, r, COLOUR_VALUE);
   if (prepared) {
     hm_bus_wr16(ram, (PREPARED + x) & 0xFFFFFF, r->a);
   } else {
@@ -267,10 +302,10 @@ void hm_SetPaletteColourNoFade(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 static void copy_half(uint8_t *ram, HmRegs *r, uint32_t to, uint16_t x, bool also_shown)
 {
-  set16(ram, r, 0x7E, 0x0100);
+  set16(ram, r, COPY_END, 0x0100);
   uint16_t y = 0;
   do {
-    r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, 0x72, y));
+    r->a = hm_bus_rd16(ram, hm_dp_long(ram, r, PALETTE_PTR, y));
     hm_bus_wr16(ram, to + x, r->a);
     if (also_shown) hm_bus_wr16(ram, SHOWN + x, r->a);
     y = (uint16_t)(y + 2);
@@ -282,14 +317,14 @@ static void copy_half(uint8_t *ram, HmRegs *r, uint32_t to, uint16_t x, bool als
 }
 void hm_LoadFirstHalfPaletteToWRAM(uint8_t *ram, HmRegs *r)
 {
-  set16(ram, r, 0x7E, r->a);
-  palette_pointer(ram, r, r->a, 0x72);
+  set16(ram, r, PALETTE_NUM, r->a);
+  palette_pointer(ram, r, r->a, PALETTE_PTR);
   copy_half(ram, r, SENT, 0x0000, true);
 }
 void hm_LoadSecondHalfPaletteToWRAM(uint8_t *ram, HmRegs *r)
 {
-  set16(ram, r, 0x7E, r->a);
-  palette_pointer(ram, r, r->a, 0x72);
+  set16(ram, r, PALETTE_NUM, r->a);
+  palette_pointer(ram, r, r->a, PALETTE_PTR);
   copy_half(ram, r, SENT, 0x0100, true);
 }
 
@@ -303,11 +338,11 @@ void hm_LoadSecondHalfPaletteToWRAM(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 static bool night_colours(uint8_t *ram, HmRegs *r)
 {
-  if (lda8(r, *hm_dp(ram, r, 0x92)) != 0) return true;
+  if (lda8(r, *hm_dp(ram, r, TO_PREPARED)) != 0) return true;
   uint8_t h = lda8(r, hm_bus_rd8(ram, HOUR));
   r->c = h >= 18;
   if (!r->c) return false;
-  uint8_t map = lda8(r, *hm_dp(ram, r, 0x22));
+  uint8_t map = lda8(r, *hm_dp(ram, r, HM_MAP_ID));
   r->c = map >= 0x31;
   if (r->c) return true;
   r->c = map >= 0x15;
@@ -332,12 +367,12 @@ void hm_CustomiseSpritePalette(uint8_t *ram, HmRegs *r)
 {
   static const uint16_t RET_SEASON[3] = { 0x9413, 0x9427, 0x943A };
   static const uint16_t RET_CHILD[3] = { 0x94D8, 0x94EC, 0x94FF };
-  set16(ram, r, 0x7E, 0);
-  if (night_colours(ram, r)) set16(ram, r, 0x7E, r->a = 0x0004);
+  set16(ram, r, NIGHT_OFFSET, 0);
+  if (night_colours(ram, r)) set16(ram, r, NIGHT_OFFSET, r->a = 0x0004);
 
   /* the season, or the mountain map */
   r->a = 0;                                               /* LDA #0; XBA */
-  uint8_t map = lda8(r, hm_bus_rd8(ram, db_addr(r, 0x0022)));
+  uint8_t map = lda8(r, hm_bus_rd8(ram, db_addr(r, HM_MAP_ID)));
   r->c = map >= 4;
   bool mountain = false;
   if (r->c) {
@@ -350,18 +385,18 @@ void hm_CustomiseSpritePalette(uint8_t *ram, HmRegs *r)
   } else {
     lda8(r, hm_bus_rd8(ram, SEASON));
   }
-  set16(ram, r, 0x82, r->a);
+  set16(ram, r, SEASON_INDEX, r->a);
 
   /* X = ((v * 2) + the word at $80) * 2, v = $82 + $7E (8 bits) */
-  uint16_t s8 = (uint16_t)(*hm_dp(ram, r, 0x82) + *hm_dp(ram, r, 0x7E));
+  uint16_t s8 = (uint16_t)(*hm_dp(ram, r, SEASON_INDEX) + *hm_dp(ram, r, NIGHT_OFFSET));
   uint8_t v = (uint8_t)s8;
-  *hm_dp(ram, r, 0x80) = v;
-  uint32_t s = (uint32_t)(uint16_t)(v << 1) + dp16(ram, r, 0x80);
+  *hm_dp(ram, r, TABLE_INDEX) = v;
+  uint32_t s = (uint32_t)(uint16_t)(v << 1) + dp16(ram, r, TABLE_INDEX);
   three_colours(ram, r, SPRITE_COLOURS, (uint16_t)(s << 1), 0x0A, 0x0F, RET_SEASON);
 
   /* the baby / child */
-  set16(ram, r, 0x7E, 0);
-  if (night_colours(ram, r)) set16(ram, r, 0x7E, r->a = 0x0006);
+  set16(ram, r, NIGHT_OFFSET, 0);
+  if (night_colours(ram, r)) set16(ram, r, NIGHT_OFFSET, r->a = 0x0006);
   r->a = hm_bus_rd16(ram, PREGNANCY);
   if (r->a == 0) return;
   uint16_t stage = 0;
@@ -370,8 +405,8 @@ void hm_CustomiseSpritePalette(uint8_t *ram, HmRegs *r)
     if (r->a) stage = (uint16_t)(bit + 1);
   }
   if (!stage) return;
-  uint16_t n = (uint16_t)(stage + dp16(ram, r, 0x7E));    /* CLC; ADC $7E */
-  set16(ram, r, 0x80, n);
+  uint16_t n = (uint16_t)(stage + dp16(ram, r, NIGHT_OFFSET)); /* CLC; ADC $7E */
+  set16(ram, r, TABLE_INDEX, n);
   uint32_t t = (uint32_t)(uint16_t)(n << 1) + n;          /* ASL; CLC; ADC $80 */
   three_colours(ram, r, CHILD_COLOURS, (uint16_t)((uint16_t)t << 1), 0x08, 0x0B, RET_CHILD);
 }
@@ -384,28 +419,28 @@ void hm_CustomiseSpritePalette(uint8_t *ram, HmRegs *r)
  * ───────────────────────────────────────────────────────────────────────── */
 void hm_PrepareNightPalette(uint8_t *ram, HmRegs *r)
 {
-  uint16_t map = *hm_dp(ram, r, 0x22);
-  set16(ram, r, 0x80, map);
+  uint16_t map = *hm_dp(ram, r, HM_MAP_ID);
+  set16(ram, r, MAP_NUMBER, map);
   uint32_t s = (uint32_t)(uint16_t)(map << 2) + map;
   s = (s & 0xFFFF) + map + (s > 0xFFFF);
   s = (s & 0xFFFF) + 4 + (s > 0xFFFF);
   r->x = (uint16_t)s;
   r->a = hm_bus_rd8(ram, TIME_PALETTES + r->x);
-  set16(ram, r, 0x7E, r->a);
-  palette_pointer(ram, r, r->a, 0x72);
+  set16(ram, r, PALETTE_NUM, r->a);
+  palette_pointer(ram, r, r->a, PALETTE_PTR);
   copy_half(ram, r, PREPARED, 0x0000, false);
 
   r->a = 0;
-  uint16_t m2 = (uint16_t)(*hm_dp(ram, r, 0x22) << 1);     /* ASL (8 bits) */
+  uint16_t m2 = (uint16_t)(*hm_dp(ram, r, HM_MAP_ID) << 1); /* ASL (8 bits) */
   r->c = m2 > 0xFF;
   r->x = (uint16_t)((m2 & 0xFF) + 1);
   r->a = hm_bus_rd8(ram, db_addr(r, (uint16_t)(SPRITE_PALETTES + r->x)));
-  set16(ram, r, 0x7E, r->a);
-  palette_pointer(ram, r, r->a, 0x72);
+  set16(ram, r, PALETTE_NUM, r->a);
+  palette_pointer(ram, r, r->a, PALETTE_PTR);
   copy_half(ram, r, PREPARED, 0x0100, false);
 
   lda8(r, 1);
-  *hm_dp(ram, r, 0x92) = 1;
+  *hm_dp(ram, r, TO_PREPARED) = 1;
   hm_jsl(ram, r, 0x92E0, 0x80);
   hm_CustomiseSpritePalette(ram, r);
   hm_rtl(ram, r);
@@ -442,7 +477,7 @@ void hm_PrepareSpritePalette(uint8_t *ram, HmRegs *r)
     ret2 = ret_custom[which];
   } else {
     r->a = 0;
-    uint16_t m2 = (uint16_t)(*hm_dp(ram, r, 0x22) << 1);  /* ASL (8 bits) */
+    uint16_t m2 = (uint16_t)(*hm_dp(ram, r, HM_MAP_ID) << 1); /* ASL (8 bits) */
     r->x = (uint16_t)(m2 & 0xFF);
     uint8_t h = lda8(r, hm_bus_rd8(ram, HOUR));
     r->c = h >= 0x12;
@@ -452,7 +487,7 @@ void hm_PrepareSpritePalette(uint8_t *ram, HmRegs *r)
   hm_jsl(ram, r, ret1, 0x80);
   hm_LoadSecondHalfPaletteToWRAM(ram, r);
   hm_rtl(ram, r);
-  *hm_dp(ram, r, 0x92) = 0;
+  *hm_dp(ram, r, TO_PREPARED) = 0;
   hm_jsl(ram, r, ret2, 0x80);
   hm_CustomiseSpritePalette(ram, r);
   hm_rtl(ram, r);
@@ -480,15 +515,15 @@ void hm_SetPaletteToLoad(uint8_t *ram, HmRegs *r)
  * <byte>". */
 void hm_Event_TimeOfDayPalette(uint8_t *ram, HmRegs *r)
 {
-  uint16_t pc = (uint16_t)(dp16(ram, r, 0xC9) + 1);
-  set16(ram, r, 0xC9, pc);
+  uint16_t pc = (uint16_t)(dp16(ram, r, DP_SCRIPT_POS) + 1);
+  set16(ram, r, DP_SCRIPT_POS, pc);
   r->a = pc;
-  lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, 0xC9, 0)));
+  lda8(r, hm_bus_rd8(ram, hm_dp_long(ram, r, DP_SCRIPT_POS, 0)));
   hm_jsl(ram, r, 0x9369, 0x80);
   hm_SetTimeOfDayPalette(ram, r);
   hm_rtl(ram, r);
-  uint16_t after = dp16(ram, r, 0xC9);
+  uint16_t after = dp16(ram, r, DP_SCRIPT_POS);
   r->c = after == 0xFFFF;
   r->a = (uint16_t)(after + 1);
-  set16(ram, r, 0xC9, r->a);
+  set16(ram, r, DP_SCRIPT_POS, r->a);
 }
