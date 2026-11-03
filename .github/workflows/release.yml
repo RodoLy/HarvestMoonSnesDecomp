@@ -204,5 +204,12 @@ jobs:
             cat out/SHA256SUMS.txt
             echo '```'
           } >> notes.md
-          gh release create "v$V" out/* --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md \
-            ${{ (inputs.prerelease || contains(github.ref_name, 'beta')) && '--prerelease' || '' }}
+          # a release already made by hand (Releases -> Draft a new release) gets the files and notes
+          if gh release view "v$V" > /dev/null 2>&1; then
+            gh release upload "v$V" out/* --clobber
+            gh release edit "v$V" --title "v$V" --notes-file notes.md \
+              ${{ (inputs.prerelease || contains(github.ref_name, 'beta')) && '--prerelease' || '' }}
+          else
+            gh release create "v$V" out/* --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md \
+              ${{ (inputs.prerelease || contains(github.ref_name, 'beta')) && '--prerelease' || '' }}
+          fi
