@@ -9,7 +9,7 @@
 - **Mods**: a `mods` folder and a **Mods** page in the launcher; drop the community's IPS / BPS patches in and turn them on. Your ROM is never changed.
 - **The launcher by day**: the start screen's farm under a sunny sky.
 - New improvements (all off by default):
-  - **Your wife helps on the farm**: married with her ten hearts, talk to her again after her line of the day and she offers to help for a day, three days or a week; mornings she feeds the animals and waters (half of the work at most, hopping over fences), then goes to her midday chores.
+  - **Your wife helps on the farm**: married with her ten hearts, talk to her again after her line of the day and she offers to help for a day, three days or a week; mornings she feeds the animals and waters (half of the work at most, hopping over fences), then goes to her midday chores. Her question has the game's own text box and letter sound.
   - **Her old clothes some days**: one day in two your wife wears the clothes she wore before the wedding (an improvement of its own).
   - **Crop bag**: 9 slots for what you carry, inside the pause menu; hold Q at the shipping box to ship it all.
   - **Walk through crops**: crops no longer block the way, and the plants sway as you pass.
@@ -17,7 +17,7 @@
   - **Mouse controls**: click to use a tool, walk or talk; the pause menu works with the mouse too.
 - **Pause menu** (Harvest Moon 64 style): tools and seeds with their original sprites, an Inventory tab, and an **Animals** tab (cows with ten hearts of happiness, chickens).
 - **Widescreen** follows your screen's shape (16:10 or 16:9) and now covers the start screens too (logo, intro, title, diaries).
-- Fixes: the intro road no longer goes crooked when Start is pressed; picking up with "walk through crops" no longer harvests endlessly.
+- Fixes: the intro road no longer goes crooked when Start is pressed; picking up with "walk through crops" no longer harvests endlessly. On Windows, a ROM in a folder with accents or other letters now opens; a ROM still in its .zip / .7z download is recognised and the launcher says to extract it.
 
 ## 0.1.0-beta
 
@@ -46,7 +46,7 @@ cheats. Built on your own computer with `build.bat`.
   - **Controles con ratón**: clic para usar una herramienta, caminar o hablar; el menú de pausa también funciona con el ratón.
 - **Menú de pausa** (estilo Harvest Moon 64): herramientas y semillas con sus sprites originales, una pestaña de Inventario y una de **Animales** (vacas con diez corazones de felicidad, gallinas).
 - **Pantalla ancha** que toma la forma de tu pantalla (16:10 o 16:9) y ahora también en las pantallas de inicio (logo, introducción, título, diarios).
-- Arreglos: el camino de la introducción ya no se tuerce al presionar Start; recoger con «caminar entre cultivos» ya no cosecha sin fin.
+- Arreglos: el camino de la introducción ya no se tuerce al presionar Start; recoger con «caminar entre cultivos» ya no cosecha sin fin. En Windows, una ROM en una carpeta con acentos u otras letras ya abre; una ROM todavía dentro de su .zip / .7z se reconoce y el launcher indica descomprimirla.
 
 ## 0.1.0-beta
 

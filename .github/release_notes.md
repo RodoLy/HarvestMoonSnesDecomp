@@ -38,7 +38,7 @@ Prefer not to run a downloaded program? Build it yourself from the source with `
   - **Mouse controls**: click to use a tool, walk or talk; the pause menu works with the mouse too.
 - **Pause menu** (Harvest Moon 64 style): tools and seeds with their original sprites, an Inventory tab, and an **Animals** tab (cows with ten hearts of happiness, chickens).
 - **Widescreen** follows your screen's shape (16:10 or 16:9) and now covers the start screens too (logo, intro, title, diaries).
-- Fixes: the intro road no longer goes crooked when Start is pressed; picking up with "walk through crops" no longer harvests endlessly.
+- Fixes: the intro road no longer goes crooked when Start is pressed; picking up with "walk through crops" no longer harvests endlessly. On Windows, a ROM in a folder with accents or other letters now opens; a ROM still in its .zip / .7z download is recognised and the launcher says to extract it.
 
 ### Novedades de la 0.2.0-beta
 
@@ -55,7 +55,7 @@ Prefer not to run a downloaded program? Build it yourself from the source with `
   - **Controles con ratón**: clic para usar una herramienta, caminar o hablar; el menú de pausa también funciona con el ratón.
 - **Menú de pausa** (estilo Harvest Moon 64): herramientas y semillas con sus sprites originales, una pestaña de Inventario y una de **Animales** (vacas con diez corazones de felicidad, gallinas).
 - **Pantalla ancha** que toma la forma de tu pantalla (16:10 o 16:9) y ahora también en las pantallas de inicio (logo, introducción, título, diarios).
-- Arreglos: el camino de la introducción ya no se tuerce al presionar Start; recoger con «caminar entre cultivos» ya no cosecha sin fin.
+- Arreglos: el camino de la introducción ya no se tuerce al presionar Start; recoger con «caminar entre cultivos» ya no cosecha sin fin. En Windows, una ROM en una carpeta con acentos u otras letras ya abre; una ROM todavía dentro de su .zip / .7z se reconoce y el launcher indica descomprimirla.
 
 ### What's in it / Qué trae
 - The whole game in C, with the console's picture and sound. / Todo el juego en C, con la imagen y el sonido de la consola.

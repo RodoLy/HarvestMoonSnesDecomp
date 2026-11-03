@@ -1116,9 +1116,44 @@ static void at_clean_point(void)
   }
 }
 
+/* The game's letter sound (PrintTextFrame: effect 3, bank 6, $0A), for the
+ * host's own text boxes (the wife's question). It speaks to the sound chip
+ * with the game's own handshake (PlaySoundEffect, audio.c), but every wait
+ * has a limit and the sound is simply skipped when the chip does not
+ * answer: the menu may have opened while the game itself was in the middle
+ * of a command (a lag frame), and then it must not be disturbed. */
+static bool s_in_lag;
+static bool apu_wait(uint8_t v)
+{
+  for (int i = 0; i < 60000; i++) {               /* about a quarter of a second of the chip's time */
+    uint8_t a = hm_apu_read(0x2143), b = hm_apu_read(0x2143);
+    if (a == b && hm_apu_read(0x2143) == v) return true;
+  }
+  return false;
+}
+void host_text_sound(void)
+{
+  if (!s_booted || s_headless || s_in_lag) return;
+  void (*lag)(void) = g_native_lag_frame;
+  g_native_lag_frame = NULL;                      /* no game frame inside these waits */
+  if (apu_wait(1) && !(hm_apu_read(0x2140) & 0x10)) {          /* ready, not busy */
+    hm_apu_write(0x2140, 0x0A); hm_apu_write(0x2141, 0); hm_apu_write(0x2142, 0); hm_apu_write(0x2143, 2);
+    if (apu_wait(4)) {
+      hm_apu_write(0x2143, 0);
+      if (apu_wait(1)) {
+        hm_apu_write(0x2140, 3); hm_apu_write(0x2141, 6); hm_apu_write(0x2142, 0x0A); hm_apu_write(0x2143, 2);
+        apu_wait(8);
+      }
+    }
+    hm_apu_write(0x2143, 0);
+  }
+  g_native_lag_frame = lag;
+}
+
 /* a frame that ends inside a wait for the sound chip (hw.c) */
 static void lag_frame(void)
 {
+  s_in_lag = true;
   if (native_nmi_enabled()) {
     /* the NMI saves and restores everything; the C's live flags too */
     HmRegs keep = s_regs;
@@ -1127,6 +1162,7 @@ static void lag_frame(void)
   } else {
     end_of_frame(g_ram);
   }
+  s_in_lag = false;
 }
 
 /* ── The routines the game goes on to ─────────────────────────────────── */

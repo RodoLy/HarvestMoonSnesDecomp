@@ -728,7 +728,13 @@ bool wife_dialog_update(const UiInput *in)
 {
   if (W.shown < page_letters()) {                    /* still printing */
     bool quick = g_cfg.fast_text || (in->held & B_A) || (in->held & B_B);
-    if (quick || ++W.tick >= 4) { W.tick = 0; W.shown++; }
+    if (quick || ++W.tick >= 4) {
+      W.tick = 0; W.shown++;
+      /* the game's letter sound, as its own text boxes play it (at most
+       * every 4th letter when the text runs fast, as it does there) */
+      static int n;
+      if (!quick || (++n & 3) == 0) host_text_sound();
+    }
     return false;
   }
   if (W.page == 1) return in->accept || in->back || in->click || in->rclick;

@@ -34,3 +34,4 @@ bool host_running(void);               /* a game is going (not before the first 
 const char *host_rom(void);            /* the ROM being played, or "" */
 bool host_state_info(int slot, char *when, size_t n);
 void host_toast(const char *text);
+void host_text_sound(void);         /* the game's text-letter sound (menus drawn by the host) */
