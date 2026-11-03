@@ -84,6 +84,11 @@ try {
   $src += Get-ChildItem 'src\*.c' | Where-Object { $_.Name -ne 'hm_decomp.c' -and $_.Name -ne 'hm_io.c' } | ForEach-Object { "src\$($_.Name)" }
   $src += Get-ChildItem 'native\chips\snes\*.c' | ForEach-Object { "native\chips\snes\$($_.Name)" }
   $src += 'native\chips\audio_trace.c'
+  # file names in UTF-8 (a ROM in a folder with accents opens): native\win\utf8.manifest
+  $res = 'build\utf8.res.o'
+  New-Item -ItemType Directory -Force 'build' | Out-Null
+  & "$llvmDir\bin\x86_64-w64-mingw32-windres.exe" -I native\win native\win\utf8.rc -O coff -o $res
+  if ($LASTEXITCODE -eq 0) { $src += $res }
   Write-Host "Building / Compilando: $($src.Count) files..."
   & $cc -O2 -std=gnu11 -w -Inative -Isrc -Inative\chips -Inative\chips\snes "-I$sdl\include" @src "-L$sdl\lib" -lSDL3 -mwindows -o HarvestMoonNative.exe
   if ($LASTEXITCODE -ne 0) { throw 'The build failed, see the messages above / La compilacion fallo, mira los mensajes de arriba.' }
