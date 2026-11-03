@@ -67,7 +67,7 @@ jobs:
           sudo apt-get install -y -qq mingw-w64 ninja-build > /dev/null
       - name: Build (cross, x64)
         run: |
-          cmake -S native -B b -G Ninja -DCMAKE_TOOLCHAIN_FILE=native/mingw-w64.cmake -DCMAKE_BUILD_TYPE=Release
+          cmake -S native -B b -G Ninja -DCMAKE_TOOLCHAIN_FILE="$PWD/native/mingw-w64.cmake" -DCMAKE_BUILD_TYPE=Release
           cmake --build b
           x86_64-w64-mingw32-strip b/HarvestMoonNative.exe
       - name: Package
