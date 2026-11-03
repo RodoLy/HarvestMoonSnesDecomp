@@ -28,14 +28,14 @@ DasK) y es proyecto hermano de
 > la ROM ni nada sacado de ella: la primera vez el programa te pide tu
 > copia, la revisa y la recuerda. Por favor no pidas ROMs.
 
-**[⬇ Descargar la última versión](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/latest)** · Novedades: [CHANGELOG.md](CHANGELOG.md)
+**[⬇ Descargar la v0.2.0-beta](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/tag/v0.2.0-beta)** (todas las versiones: [Releases](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases)) · Novedades: [CHANGELOG.md](CHANGELOG.md)
 
 | | Descarga | O compílalo tú |
 |---|---|---|
-| **Windows** 10/11 | `…-Windows.zip`: descomprime y abre `HarvestMoonNative.exe` | `build.bat` |
-| **Mac** (macOS 11+) | `…-Mac.zip`: descomprime y doble clic en `Harvest Moon.command` | `build_mac.command` |
-| **Android** 8+ | `…-Android.apk`: ábrelo en el equipo para instalarlo | `build_android.bat` (en Windows) |
-| **Linux** (x86_64) | `…-Linux.tar.gz`: descomprime y ejecuta `./HarvestMoonNative` | [ver abajo](#compilar-y-comprobar) |
+| **Windows** 10/11 | [**HarvestMoon-0.2.0-beta-Windows.zip**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Windows.zip): descomprime y abre `HarvestMoonNative.exe` | `build.bat` |
+| **Mac** (macOS 11+) | [**HarvestMoon-0.2.0-beta-Mac.zip**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Mac.zip): descomprime y doble clic en `Harvest Moon.command` | `build_mac.command` |
+| **Android** 8+ | [**HarvestMoon-0.2.0-beta-Android.apk**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Android.apk): ábrelo en el equipo para instalarlo | `build_android.bat` (en Windows) |
+| **Linux** (x86_64) | [**HarvestMoon-0.2.0-beta-Linux.tar.gz**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Linux.tar.gz): descomprime y ejecuta `./HarvestMoonNative` | [ver abajo](#compilar-y-comprobar) |
 
 > [!NOTE]
 > **La primera vez tu computadora o teléfono te va a advertir: es normal.**
