@@ -105,4 +105,12 @@ if(ANDROID)
 endif()
 if(WIN32)
   set_target_properties(HarvestMoonNative PROPERTIES WIN32_EXECUTABLE ON)
+  # file names in UTF-8 (a ROM in a folder with accents opens): MSVC merges
+  # the .manifest itself, MinGW takes it as a resource
+  if(MSVC)
+    target_sources(HarvestMoonNative PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/win/utf8.manifest)
+  else()
+    enable_language(RC)
+    target_sources(HarvestMoonNative PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/win/utf8.rc)
+  endif()
 endif()

@@ -63,7 +63,8 @@ typedef struct {
 typedef struct {
   char path[1024], file[256], title[24];
   uint32_t size, crc;
-  int verdict;            /* 2 the known ROM, 1 another Harvest Moon, 0 another game, -1 unreadable */
+  int verdict;            /* 2 the known ROM, 1 another Harvest Moon, 0 another game, -1 unreadable,
+                             -2 a compressed file (.zip, .7z, .rar, .gz): to extract first */
 } Game;
 
 static struct {
@@ -107,12 +108,18 @@ static void inspect(Game *g)
   FILE *f = fopen(g->path, "rb");
   if (!f) return;
   fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
-  if (n < 0x8000 || n > 8 << 20) { fclose(f); g->verdict = 0; return; }
+  if (n < 8 || n > 64 << 20) { fclose(f); g->verdict = 0; return; }
   uint8_t *d = malloc((size_t)n);
   if (!d) { fclose(f); return; }
   size_t got = fread(d, 1, (size_t)n, f);
   fclose(f);
   if (got != (size_t)n) { free(d); return; }
+  /* a ROM still in its download's archive: say so instead of "not Harvest Moon" */
+  if ((d[0] == 'P' && d[1] == 'K' && d[2] == 3 && d[3] == 4) || !memcmp(d, "7z\xBC\xAF\x27\x1C", 6) ||
+      !memcmp(d, "Rar!", 4) || (d[0] == 0x1F && d[1] == 0x8B)) {
+    g->verdict = -2; g->size = (uint32_t)n; free(d); return;
+  }
+  if (n < 0x8000 || n > 8 << 20) { free(d); g->verdict = 0; return; }
   long skip = (n % 1024) == 512 ? 512 : 0;
   const uint8_t *rom = d + skip;
   g->size = (uint32_t)(n - skip);
@@ -129,6 +136,7 @@ static const char *verdict_text(int v)
   return v == 2 ? T("Harvest Moon (USA): checked, ready to play.")
        : v == 1 ? T("Another version of Harvest Moon: it may work (the program follows the USA one).")
        : v == 0 ? T("Not Harvest Moon: this program only plays Harvest Moon (SNES).")
+       : v == -2 ? T("A compressed file (.zip / .7z): extract it first and choose the .sfc or .smc inside.")
        : T("The file could not be read.");
 }
 bool launcher_rom_ok(const char *path, char *out, size_t n)
@@ -146,15 +154,15 @@ static void add_game(const char *path)
   Game *g = &L.games[L.ngames];
   snprintf(g->path, sizeof g->path, "%s", path);
   inspect(g);
-  if (g->verdict < 0) return;
+  if (g->verdict == -1) return;
   for (int i = 0; i < L.ngames; i++)             /* the same file reached two ways */
     if (L.games[i].crc == g->crc && !strcmp(L.games[i].file, g->file)) return;
   L.ngames++;
 }
 static void scan_dir(const char *dir)
 {
-  static const char *pats[] = { "*.sfc", "*.smc" };
-  for (int p = 0; p < 2; p++) {
+  static const char *pats[] = { "*.sfc", "*.smc", "*.zip", "*.7z" };
+  for (int p = 0; p < 4; p++) {
     int n = 0;
     char **list = SDL_GlobDirectory(*dir ? dir : ".", pats[p], SDL_GLOB_CASEINSENSITIVE, &n);
     if (!list) continue;
@@ -331,7 +339,7 @@ static void build(void)
       it->mark = g->verdict == 2 ? C_GREEN : g->verdict == 1 ? C_GOLD : C_RED;
       bool cur = !strcmp(g->path, c->rom);
       snprintf(it->value, sizeof it->value, "%s", cur ? T("chosen") : "");
-      it->dim = g->verdict == 0;
+      it->dim = g->verdict <= 0;
     }
     add(K_ACTION, A_BROWSE, T("Look for another file..."), T("Open the system's file window to pick a ROM (.sfc or .smc) anywhere on this computer."));
     add(K_ACTION, A_QUIT, T("Quit"), T("Close the program."));
@@ -473,7 +481,7 @@ static void confirm(int what, int arg) { L.confirm = what; L.confirm_arg = arg; 
 static void choose_game(int i)
 {
   Game *g = &L.games[i];
-  if (g->verdict < 1) { host_toast(T("This file is not Harvest Moon.")); return; }
+  if (g->verdict < 1) { host_toast(verdict_text(g->verdict)); return; }
   bool changed = strcmp(g->path, g_cfg.rom) != 0;
   if (L.in_game && changed && strcmp(g->path, host_rom())) { confirm(A_GAME, i); return; }
   snprintf(g_cfg.rom, sizeof g_cfg.rom, "%s", g->path);
@@ -916,8 +924,9 @@ void launcher_draw(uint32_t *dst, int w, int h, const uint32_t *game, uint32_t f
     if (it && it->id >= A_GAME) {
       Game *g = &L.games[it->id - A_GAME];
       char d[1400];
-      snprintf(d, sizeof d, "%s\n\"%s\"  ·  %u KB  ·  CRC %08X\n%s", verdict_text(g->verdict), g->title,
-               (unsigned)(g->size / 1024), (unsigned)g->crc, g->path);
+      if (g->verdict == -2) snprintf(d, sizeof d, "%s\n%s", verdict_text(g->verdict), g->path);
+      else snprintf(d, sizeof d, "%s\n\"%s\"  ·  %u KB  ·  CRC %08X\n%s", verdict_text(g->verdict), g->title,
+                    (unsigned)(g->size / 1024), (unsigned)g->crc, g->path);
       textbox(d, hint);
     } else textbox(it && it->id == A_QUIT ? it->desc
                    : T("First time: choose your own copy of Harvest Moon (USA). It is checked and remembered; next time the game opens with it."), hint);
