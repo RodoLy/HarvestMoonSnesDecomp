@@ -697,6 +697,13 @@ cruzada), mapa, días de preñez, **felicidad**, veces golpeada y posición.
 - **Hijos.** El primero necesita 450 corazones con la esposa; el segundo,
   650 y que el primero tenga 90 días. Los dos necesitan la casa en nivel 2
   y 20 días de casados. Un hijo nace 60 días después de concebido.
+  `WifePregnancyAndChildren` (src/people.c, cada noche) encuentra a la
+  esposa por su bit en `$7F:1F66` y su cariño entre el de las chicas. Los
+  días del parto (`$7F:1F6E` bit $10) corren el grupo de eventos `$1F` en
+  la casa: la esposa en cama es el slot 1 (paleta OBJ 3, la de la esposa)
+  y su familia los slots 4 / 6, solo con el bit de una chica. La Diosa de
+  la versión nativa tiene sus hijos así: `g_hm_night_wife` le presta el
+  bit y el cariño de María solo para esa rutina (`native/goddess.c`).
 - **La boda.** El sí de una chica (su guion en los grupos de eventos
   $02 / $03) pone su bit en `$7F:1F66`, el bit 8 de `$7F:1F5E`, y va al
   mapa `$2D` (`Event_TransitionToMap`). El mapa `$2D` es el pueblo con la

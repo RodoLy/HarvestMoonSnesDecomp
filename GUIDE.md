@@ -681,6 +681,13 @@ pregnant, **happiness**, times hit and position.
 - **Children.** The first needs 450 hearts with the wife; the second, 650
   and the first child 90 days old. Both need the house at level 2 and 20
   days of marriage. A child is born 60 days after it is conceived.
+  `WifePregnancyAndChildren` (src/people.c, every night) finds the wife
+  by her bit in `$7F:1F66` and her love among the girls'. The birth's
+  days (`$7F:1F6E` bit $10) play event group `$1F` in the house: the wife
+  in bed is slot 1 (OBJ palette 3, the wife's), her family slot 4 / 6
+  only with a girl's bit. The native build's Goddess has her children
+  through it: `g_hm_night_wife` lends her Maria's bit and love for that
+  routine only (`native/goddess.c`).
 - **The wedding.** A girl's yes (her script in event groups $02 / $03)
   sets her bit in `$7F:1F66`, `$7F:1F5E` bit 8, and goes to map `$2D`
   (`Event_TransitionToMap`). Map `$2D` is the town with the wedding: its
