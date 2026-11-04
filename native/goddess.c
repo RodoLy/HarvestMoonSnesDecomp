@@ -230,6 +230,7 @@ static bool shop_text(uint8_t *ram, uint16_t text);   /* The Golden Feather, bel
 static void seller_sunday(void);
 static void golden_shown(void);
 static void night_wife(uint8_t *ram, bool done);   /* Children, below */
+static void lend_for_ending(uint8_t *ram);
 static bool scene_text(uint8_t *ram, uint16_t text)
 {
   if (shop_text(ram, text)) return true;
@@ -299,7 +300,7 @@ void goddess_frame(void)
   g_hm_feather_used = g_cfg.goddess ? feather_used : NULL;
   g_hm_script_text = g_cfg.goddess ? scene_text : NULL;
   g_hm_night_wife = g_cfg.goddess ? night_wife : NULL;
-  if (g_cfg.goddess && hm_diary_loaded(g_ram)) { seller_sunday(); golden_shown(); }
+  if (g_cfg.goddess && hm_diary_loaded(g_ram)) { seller_sunday(); golden_shown(); lend_for_ending(g_ram); }
   if (s_feather_used) {
     s_feather_used = false;
     if (g_cfg.goddess && hm_diary_loaded(g_ram) && facing_her_pond() && s_scene == NO_SCENE) {
@@ -648,6 +649,23 @@ static void night_wife(uint8_t *ram, bool done)
     hm_wr16(ram, HM_FLAGS_66, (uint16_t)(hm_rd16(ram, HM_FLAGS_66) & ~LENT_WIFE));
     hm_wr16(ram, HM_HEARTS_BASE, s_marias_love);
   }
+  if (done) lend_for_ending(ram);
+}
+/* The ending (summer 30 of the third year, from the morning: StartEnding,
+ * src/animals.c, event group $2E) walks the wife and her family through
+ * the farm and the town by the wife's bit. For the Goddess, Maria's bit is
+ * lent for the whole last day (the ending ends the game), and the wife's
+ * hair (OBJ palette 3, the same sprites as in bed) is her green. */
+static bool s_lent_for_ending;
+static bool ending_day(uint8_t *ram)
+{
+  return ram[HM_YEAR] == 2 && ram[HM_SEASON] == 1 && ram[HM_DAY] == 30;
+}
+static void lend_for_ending(uint8_t *ram)
+{
+  if (s_lent_for_ending || !ending_day(ram) || !goddess_wife(ram)) return;
+  s_lent_for_ending = true;
+  hm_wr16(ram, HM_FLAGS_66, (uint16_t)(hm_rd16(ram, HM_FLAGS_66) | LENT_WIFE));
 }
 static bool expecting(uint8_t *ram)
 {
@@ -891,6 +909,11 @@ void goddess_married_tick(uint8_t *ram)
   if (!g_cfg.goddess) return;
   if (wedding(ram)) return;
   int place = (g_hm_goddess_flags & GODDESS_MARRIED) && hm_diary_loaded(ram) ? her_place(ram[HM_MAP_ID], ram[HM_HOUR]) : 0;
+  if (s_lent_for_ending) {                            /* the game's wife till the game ends */
+    childbed_colours();
+    take_away(HER_SLOT); take_away(SPARKLE_SLOT); G.place = 0;
+    return;
+  }
   if (in_childbed(ram)) {                             /* in bed, the game's wife: not floating about */
     if (ram[HM_MAP_ID] >= 0x15 && ram[HM_MAP_ID] <= 0x17) childbed_colours();
     place = 0;
@@ -944,6 +967,7 @@ void goddess_reset(void)
   memset(&G, 0, sizeof G);
   s_said_pages = 0;
   s_scene = NO_SCENE;
+  s_lent_for_ending = false;                         /* the game starts over: its RAM too */
   s_scene_frames = 0;
   s_shop = NO_SHOP;
   s_keep_no_text = false;
