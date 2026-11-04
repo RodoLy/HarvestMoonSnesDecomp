@@ -324,6 +324,12 @@ extern bool (*g_hm_script_text)(uint8_t *ram, uint16_t text);
  * goddess's wedding, native/goddess.c). It may change the slot's sprite
  * (+16) and flip (+14) and set flag $04 (+01). Off: the game as it is. */
 extern void (*g_hm_slot_picture)(uint8_t *ram, uint32_t slot);
+/* g_hm_night_wife: when set, called by NightReset (day.c) just before
+ * WifePregnancyAndChildren (done = false) and just after it (done = true),
+ * so the host can let the night's wife routine count a wife the game does
+ * not know about (the goddess's children, native/goddess.c). Off: the game
+ * as it is. */
+extern void (*g_hm_night_wife)(uint8_t *ram, bool done);
 extern uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 /* the loops' own entries the host needs (not checked on their own) */
 void hm_IntroDemoCheck(uint8_t *ram, HmRegs *r);    /* intro.c: the demo check */

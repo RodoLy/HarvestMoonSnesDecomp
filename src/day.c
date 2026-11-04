@@ -261,7 +261,9 @@ void hm_NightReset(uint8_t *ram, HmRegs *r)
   jsl(ram, r, 0x83A0, 0x83, hm_CowFeedingAndStatus);
   jsl(ram, r, 0x83A4, 0x82, hm_WeatherTomorrow);
   jsl(ram, r, 0x83A8, 0x82, hm_FindMostLovedName);
+  if (g_hm_night_wife) g_hm_night_wife(ram, false);        /* host: before and after */
   jsl(ram, r, 0x83AC, 0x82, hm_WifePregnancyAndChildren);
+  if (g_hm_night_wife) g_hm_night_wife(ram, true);
 
   wr16(ram, r, HM_PLAYER_TIMER, 0);                        /* REP #$20 */
   hm_dp_w16(ram, r, HM_GAME_STATE, 0);

@@ -130,6 +130,7 @@ void (*g_hm_spring_offer)(uint8_t *ram, uint8_t item);
 void (*g_hm_feather_used)(void);
 bool (*g_hm_script_text)(uint8_t *ram, uint16_t text);
 void (*g_hm_slot_picture)(uint8_t *ram, uint32_t slot);
+void (*g_hm_night_wife)(uint8_t *ram, bool done);
 uint8_t g_hm_bag[9];
 uint8_t g_hm_seeds_used[5];
 uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
