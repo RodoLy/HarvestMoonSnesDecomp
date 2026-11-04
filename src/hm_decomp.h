@@ -309,6 +309,10 @@ extern int g_hm_goddess_on;
 extern uint16_t g_hm_goddess_hearts, g_hm_goddess_day;
 extern uint8_t g_hm_goddess_flags;
 extern void (*g_hm_spring_offer)(uint8_t *ram, uint8_t item);
+/* g_hm_feather_used: called when the Blue Feather is used (shown), by
+ * ToolUsedBlueFeather (toolused.c), after the game's own work: the native
+ * build's goddess takes it as a proposal at her pond. */
+extern void (*g_hm_feather_used)(void);
 /* g_hm_slot_picture: when set, called by UpdateSlotSprite (events.c) with
  * each event slot's address in ram[] before the slot's picture goes to its
  * game object, so the host can dress a slot as someone else (the

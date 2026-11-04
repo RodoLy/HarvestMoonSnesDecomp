@@ -227,6 +227,7 @@ void hm_ToolUsedBlueFeather(uint8_t *ram, HmRegs *r)
 {
   idle(ram, r);
   set_flag(ram, r, HM_FLAGS_5E, 0x0040);
+  if (g_hm_feather_used) g_hm_feather_used();     /* the native build's (hm_decomp.h) */
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
