@@ -629,6 +629,7 @@ static bool present_smooth(const void *pixels, int w, SDL_FRect dst, int ow, int
   SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
   SDL_RenderClear(s_renderer);
   SDL_RenderTexture(s_renderer, s_smooth, NULL, &dst);
+  draw_filter(dst);
   if (!s_in_menu) touch_draw(s_renderer, ow, oh, dst);
   test_shot();
   SDL_RenderPresent(s_renderer);
@@ -667,10 +668,10 @@ static void present(const void *pixels, int w)
   int k = (int)scale;
   if (k < 1) k = 1;
   if (k > 8) k = 8;
-  if (g_cfg.exact_pixels && scale >= 1) scale = (float)k;
+  if (g_cfg.exact_pixels && !g_cfg.smooth && scale >= 1) scale = (float)k;
   SDL_FRect dst = { (float)(int)((ow - w * scale) / 2), (float)(int)((oh - H * scale) / 2), w * scale, H * scale };
   s_dst = dst;
-  if (g_cfg.filter == 4 && present_smooth(pixels, w, dst, ow, oh)) return;
+  if (g_cfg.smooth && present_smooth(pixels, w, dst, ow, oh)) return;
   SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
   if (s_soft || (float)k == scale) {
     SDL_RenderClear(s_renderer);

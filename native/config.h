@@ -23,9 +23,9 @@ typedef struct {
   char games[MAX_GAMES][1024];       /* more ROM files picked by hand */
   int ngames;
   /* video and sound */
-  bool fullscreen, vsync, sprite_limits, widescreen, exact_pixels;
+  bool fullscreen, vsync, sprite_limits, widescreen, exact_pixels, smooth;
   int scale;                         /* window: 1..6 times the picture */
-  int filter;                        /* the picture's look: 0 plain, 1 scanlines, 2 CRT, 3 green, 4 smooth */
+  int filter;                        /* the picture's look: 0 plain, 1 scanlines, 2 CRT, 3 green (smooth pixels: `smooth`) */
   int volume;                        /* 0..100 */
   int ff_speed;                      /* fast forward: 2, 3, 4, 6 */
   char language[8];                  /* "es", "en", "it" */

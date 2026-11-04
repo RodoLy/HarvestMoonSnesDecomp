@@ -166,7 +166,8 @@ void config_load(void)
         else if (!strcmp(k, "spritelimits")) c->sprite_limits = yes(v);
         else if (!strcmp(k, "widescreen")) c->widescreen = yes(v);
         else if (!strcmp(k, "exactpixels")) c->exact_pixels = yes(v);
-        else if (!strcmp(k, "filter")) { c->filter = atoi(v); if (c->filter < 0 || c->filter > 4) c->filter = 0; }
+        else if (!strcmp(k, "filter")) { c->filter = atoi(v); if (c->filter == 4) { c->filter = 0; c->smooth = true; } if (c->filter < 0 || c->filter > 3) c->filter = 0; }
+        else if (!strcmp(k, "smoothpixels")) c->smooth = yes(v);
       } else if (!strcmp(section, "[sound]")) {
         if (!strcmp(k, "volume")) { c->volume = atoi(v); if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; }
       } else if (!strcmp(section, "[general]")) {
@@ -222,8 +223,8 @@ void config_save(void)
     fprintf(f, "[General]\nLanguage = %s\nShowLauncher = %d\nFastForward = %d\n\n", c->language, c->show_launcher, c->ff_speed);
     fprintf(f, "[Games]\nRom = %s\n", c->rom);
     for (int i = 0; i < c->ngames; i++) fprintf(f, "Game%d = %s\n", i + 1, c->games[i]);
-    fprintf(f, "\n[Video]\nFullscreen = %d\nScale = %d\nVSync = %d\nSpriteLimits = %d\nWidescreen = %d\nExactPixels = %d\n# Filter: 0 none, 1 scanlines, 2 CRT, 3 green, 4 smooth\nFilter = %d\n\n",
-            c->fullscreen, c->scale, c->vsync, c->sprite_limits, c->widescreen, c->exact_pixels, c->filter);
+    fprintf(f, "\n[Video]\nFullscreen = %d\nScale = %d\nVSync = %d\nSpriteLimits = %d\nWidescreen = %d\nExactPixels = %d\nSmoothPixels = %d\n# Filter: 0 none, 1 scanlines, 2 CRT, 3 green\nFilter = %d\n\n",
+            c->fullscreen, c->scale, c->vsync, c->sprite_limits, c->widescreen, c->exact_pixels, c->smooth, c->filter);
     fprintf(f, "[Sound]\nVolume = %d\n\n", c->volume);
     fprintf(f, "[Improvements]\nFastText = %d\nDayLength = %d\nPauseMenu = %d\nTitleOptions = %d\nEndless = %d\nWalkThroughCrops = %d\nOneSeedAtATime = %d\nMouseControls = %d\nCropBag = %d\nWifeHelps = %d\nWifeOldClothes = %d\n\n",
             c->fast_text, c->day_length, c->pause_menu, c->title_options, c->endless, c->walk_crops, c->single_seed, c->mouse, c->crop_bag, c->wife_help, c->wife_clothes);

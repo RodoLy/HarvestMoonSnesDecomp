@@ -197,7 +197,7 @@ static int get_value(int id)
   switch (id) {
   case V_FULLSCREEN: return c->fullscreen;
   case V_SCALE: return c->scale - 1;
-  case V_PICTURE: return c->exact_pixels;
+  case V_PICTURE: return c->smooth ? 2 : c->exact_pixels;
   case V_VSYNC: return c->vsync;
   case V_WIDESCREEN: return c->widescreen;
   case V_SPRITES: return c->sprite_limits;
@@ -236,7 +236,7 @@ static void set_value(int id, int v)
   switch (id) {
   case V_FULLSCREEN: c->fullscreen = v; break;
   case V_SCALE: c->scale = v + 1; break;
-  case V_PICTURE: c->exact_pixels = v; break;
+  case V_PICTURE: c->exact_pixels = v == 1; c->smooth = v == 2; break;
   case V_VSYNC: c->vsync = v; break;
   case V_WIDESCREEN: c->widescreen = v; break;
   case V_SPRITES: c->sprite_limits = v; break;
@@ -352,10 +352,10 @@ static void build(void)
     choice(V_SCALE, "Window size", "How many times the console's picture the window is (when it is not full screen).",
            6, "×1", "×2", "×3", "×4", "×5", "×6");
 #endif
-    choice(V_PICTURE, "Picture", "Sharp: as large as the window allows, with no uneven pixels. Exact: whole multiples only, with a border.",
-           2, T("Sharp"), T("Exact pixels"));
-    choice(V_FILTER, "Filter", "The look of an old TV. Scanlines: dark lines between the picture's rows. CRT: the lines plus the screen's red, green and blue stripes and its rounded glow. Green: four shades of green, as on the first handheld screens. Smooth: the pixels' edges rounded, for a softer picture.",
-           5, T("Off"), T("Scanlines"), T("CRT"), T("Green"), T("Smooth"));
+    choice(V_PICTURE, "Picture", "Sharp: as large as the window allows, with no uneven pixels. Exact: whole multiples only, with a border. Smooth: the pixels' edges rounded, for a softer picture (it goes with any filter).",
+           3, T("Sharp"), T("Exact pixels"), T("Smooth"));
+    choice(V_FILTER, "Filter", "The look of an old TV. Scanlines: dark lines between the picture's rows. CRT: the lines plus the screen's red, green and blue stripes and its rounded glow. Green: four shades of green, as on the first handheld screens.",
+           4, T("Off"), T("Scanlines"), T("CRT"), T("Green"));
     toggle(V_VSYNC, "Vertical sync", "Frames follow the screen's refresh (smoothest on 60 Hz screens). Turned off by itself if the screen cannot keep up.");
     toggle(V_WIDESCREEN, "Widescreen", "Shows more of the map at the sides instead of black bars, as wide as your screen. At a map's edge and in small rooms it looks like the original (4:3).");
     choice(V_SPRITES, "Sprites", "Without limit: no flicker when many things share a line. Console: its limit of 32 sprites a line, as on the SNES.",
@@ -560,7 +560,7 @@ static void activate(Item *it, int dir)
   case A_DEFAULT_OPTIONS: {
     Config d; config_defaults(&d);
     Config *c = &g_cfg;
-    c->fullscreen = d.fullscreen; c->scale = d.scale; c->exact_pixels = d.exact_pixels; c->filter = d.filter; c->vsync = d.vsync;
+    c->fullscreen = d.fullscreen; c->scale = d.scale; c->exact_pixels = d.exact_pixels; c->smooth = d.smooth; c->filter = d.filter; c->vsync = d.vsync;
     c->widescreen = d.widescreen; c->sprite_limits = d.sprite_limits; c->volume = d.volume; c->ff_speed = d.ff_speed;
     c->show_launcher = d.show_launcher;
     host_apply_video(); host_apply_sound(); config_save();
