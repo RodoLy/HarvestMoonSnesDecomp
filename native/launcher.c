@@ -354,8 +354,8 @@ static void build(void)
 #endif
     choice(V_PICTURE, "Picture", "Sharp: as large as the window allows, with no uneven pixels. Exact: whole multiples only, with a border.",
            2, T("Sharp"), T("Exact pixels"));
-    choice(V_FILTER, "Filter", "The look of an old TV. Scanlines: dark lines between the picture's rows. CRT: the lines plus the screen's red, green and blue stripes and its rounded glow.",
-           3, T("Off"), T("Scanlines"), T("CRT"));
+    choice(V_FILTER, "Filter", "The look of an old TV. Scanlines: dark lines between the picture's rows. CRT: the lines plus the screen's red, green and blue stripes and its rounded glow. Green: four shades of green, as on the first handheld screens.",
+           4, T("Off"), T("Scanlines"), T("CRT"), T("Green"));
     toggle(V_VSYNC, "Vertical sync", "Frames follow the screen's refresh (smoothest on 60 Hz screens). Turned off by itself if the screen cannot keep up.");
     toggle(V_WIDESCREEN, "Widescreen", "Shows more of the map at the sides instead of black bars, as wide as your screen. At a map's edge and in small rooms it looks like the original (4:3).");
     choice(V_SPRITES, "Sprites", "Without limit: no flicker when many things share a line. Console: its limit of 32 sprites a line, as on the SNES.",

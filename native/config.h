@@ -25,7 +25,7 @@ typedef struct {
   /* video and sound */
   bool fullscreen, vsync, sprite_limits, widescreen, exact_pixels;
   int scale;                         /* window: 1..6 times the picture */
-  int filter;                        /* the picture's look: 0 plain, 1 scanlines, 2 CRT */
+  int filter;                        /* the picture's look: 0 plain, 1 scanlines, 2 CRT, 3 Game Boy green */
   int volume;                        /* 0..100 */
   int ff_speed;                      /* fast forward: 2, 3, 4, 6 */
   char language[8];                  /* "es", "en", "it" */

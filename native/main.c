@@ -544,7 +544,7 @@ static int s_mask_w, s_mask_h, s_mask_kind;
 static void draw_filter(SDL_FRect dst)
 {
   int kind = g_cfg.filter;
-  if (kind <= 0 || dst.h < H) return;
+  if (kind <= 0 || kind > 2 || dst.h < H) return;
   int mw = (int)(dst.w + 0.5f), mh = (int)(dst.h + 0.5f);
   if (!s_mask || mw != s_mask_w || mh != s_mask_h || kind != s_mask_kind) {
     if (s_mask) SDL_DestroyTexture(s_mask);
@@ -592,6 +592,24 @@ static void present(const void *pixels, int w)
     s_texture = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, w, H);
     SDL_SetTextureScaleMode(s_texture, SDL_SCALEMODE_NEAREST);
     s_tex_w = w;
+  }
+  if (g_cfg.filter == 3) {                          /* green: the picture's brightness in 4 shades, dithered */
+    static uint32_t *gb; static size_t gb_n;
+    size_t n = (size_t)w * H;
+    if (n > gb_n) { free(gb); gb = malloc(n * 4); gb_n = gb ? n : 0; }
+    if (gb) {
+      static const uint32_t shade[4] = { 0x0F380F, 0x306230, 0x8BAC0F, 0x9BBC0F };
+      static const uint8_t bayer[4] = { 0, 8, 12, 4 };
+      const uint32_t *src = pixels;
+      for (int y = 0; y < H; y++)
+        for (int x = 0; x < w; x++) {
+          uint32_t c = src[(size_t)y * w + x];
+          int l = (int)(((c >> 16) & 255) * 30 + ((c >> 8) & 255) * 59 + (c & 255) * 11) / 100;
+          int v = (l * 3 + bayer[(x & 1) | (y & 1) << 1] * 3) / 255;
+          gb[(size_t)y * w + x] = shade[v > 3 ? 3 : v];
+        }
+      pixels = gb;
+    }
   }
   SDL_UpdateTexture(s_texture, NULL, pixels, w * 4);
   int ow = w, oh = H;
