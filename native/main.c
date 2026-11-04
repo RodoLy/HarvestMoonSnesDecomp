@@ -34,6 +34,7 @@
 
 #include "hm_decomp.h"
 #include "hm_vars.h"
+#include "hm_ram.h"
 #include "native.h"
 #include "config.h"
 #include "host.h"
@@ -46,6 +47,7 @@
 #include "touch.h"
 #include "ui.h"
 #include "wife.h"
+#include "goddess.h"
 
 enum { W = 256, W_MAX = 256 + 2 * WS_BUDGET, H = 224, SRAM_SIZE = 0x2000 };
 
@@ -103,8 +105,9 @@ static void sram_save(void)
  *   until <addr> ==|!= <value> [timeout], turbo on|off, quit,
  *   mouse <x> <y> [left|right|up]: the pointer on the field (mouse controls),
  *   bag [frames]: the crop bag's key ─────────── */
+static void state_save_file(int slot);
 typedef struct {
-  enum { S_PRESS, S_DUMP, S_POKE, S_UNTIL, S_QUIT, S_NOP, S_MOUSE, S_BAG } kind;
+  enum { S_PRESS, S_DUMP, S_POKE, S_UNTIL, S_QUIT, S_NOP, S_MOUSE, S_BAG, S_SAVE } kind;
   uint16_t mask; int hold, wait;
   uint32_t addr; uint8_t bytes[64]; int nbytes;
   bool ne; uint16_t value; int width, timeout, waited;
@@ -141,6 +144,7 @@ static void script_load(const char *path)
     else if (!strcmp(cmd, "dump")) { e->kind = S_DUMP; snprintf(e->tag, sizeof e->tag, "%s", a1); }
     else if (!strcmp(cmd, "quit")) e->kind = S_QUIT;
     else if (!strcmp(cmd, "bag")) { e->kind = S_BAG; e->value = (uint16_t)(n >= 2 ? atoi(a1) : 3); }
+    else if (!strcmp(cmd, "save")) { e->kind = S_SAVE; e->value = (uint16_t)atoi(a1); }
     else if (!strcmp(cmd, "mouse")) {
       e->kind = S_MOUSE; e->addr = (uint32_t)atoi(a1); e->value = (uint16_t)atoi(a2);
       e->width = !strcmp(a3, "left") ? 1 : !strcmp(a3, "right") ? 2 : !strcmp(a3, "up") ? -1 : 0;
@@ -177,6 +181,12 @@ static void dump(const char *tag)
     for (int i = 0; i < s_fw * H; i++) { uint8_t rgb[3] = { s_pixels[4 * i + 2], s_pixels[4 * i + 1], s_pixels[4 * i] }; fwrite(rgb, 1, 3, f); }
     fclose(f);
   }
+  if (getenv("HM_DUMP_VRAM")) {                    /* tests: the picture chip's memories */
+    extern void native_dump_ppu(FILE *f);
+    snprintf(path, sizeof path, "%s%s%s.ppu", s_dump_dir, *s_dump_dir ? "/" : "", tag);
+    f = fopen(path, "wb");
+    if (f) { native_dump_ppu(f); fclose(f); }
+  }
   fprintf(stderr, "script f=%llu dump %s\n", (unsigned long long)s_frame, tag);
 }
 static uint16_t script_tick(void)
@@ -188,7 +198,7 @@ static uint16_t script_tick(void)
       if (s_count > 0) { s_count--; return 0; }
       s_phase = 0; s_count = e->hold;
     }
-    if (e->kind == S_DUMP || e->kind == S_QUIT || e->kind == S_UNTIL || e->kind == S_NOP || e->kind == S_MOUSE || e->kind == S_BAG) {
+    if (e->kind == S_DUMP || e->kind == S_QUIT || e->kind == S_UNTIL || e->kind == S_NOP || e->kind == S_MOUSE || e->kind == S_BAG || e->kind == S_SAVE) {
       if (e->kind == S_UNTIL) {
         uint16_t v = g_ram[e->addr];
         if (e->width == 2) v |= (uint16_t)(g_ram[e->addr + 1] << 8);
@@ -199,6 +209,7 @@ static uint16_t script_tick(void)
       }
       if (e->kind == S_DUMP) dump(e->tag);
       if (e->kind == S_BAG) s_script_bag = e->value;
+      if (e->kind == S_SAVE) state_save_file((int)e->value);
       if (e->kind == S_MOUSE) {
         if (e->width < 0) mods_mouse((int)e->addr, e->value, 1, false);
         else mods_mouse((int)e->addr, e->value, e->width, e->width != 0);
@@ -415,6 +426,20 @@ static void poll_events(void)
       } else if (k >= SDLK_F1 && k <= SDLK_F10) {
         int slot = (int)(k - SDLK_F1) + 1;
         if (ev.key.mod & SDL_KMOD_SHIFT) s_save_slot = slot; else s_load_slot = slot;
+      } else if (k == SDLK_F12 && g_cfg.goddess && hm_diary_loaded(g_ram)) {
+        /* test keys for the Goddess mod (local-only; not in a retail build) */
+        if (ev.key.mod & SDL_KMOD_SHIFT) {
+          g_hm_goddess_flags = (uint8_t)((g_hm_goddess_flags & ~GODDESS_ENGAGED) | GODDESS_MARRIED);
+          host_toast(T("[Test] Married now. The day decides home or the farm."));
+        } else {
+          g_hm_goddess_hearts = 1000;
+          g_hm_goddess_day = 0xFFFF;                       /* so today's offer isn't "already came" */
+          hm_wr16(g_ram, HM_FLAGS_64, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_64) | 0x0040));
+          hm_wr16(g_ram, HM_FLAGS_6A, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_6A) | 0x0020));  /* the quake: her rock is gone */
+          g_ram[HM_ITEM] = 0x41;                             /* the Blue Feather, in hand */
+          hm_wr16(g_ram, 0xD2, (uint16_t)(hm_rd16(g_ram, 0xD2) | 0x0010));  /* carrying it */
+          host_toast(T("[Test] 1000 hearts, house built, her pond open, Blue Feather in hand."));
+        }
       }
       break;
     }
@@ -1194,6 +1219,13 @@ static void end_of_frame(uint8_t *ram)
   }
   if (s_headless) return;
 
+  { const char *e = getenv("HM_EVENT_AT");          /* HM_EVENT_AT=frame:group:script (tests) */
+    long fr; unsigned g, sc;
+    if (e && sscanf(e, "%ld:%x:%x", &fr, &g, &sc) == 3 && fr == (long)s_frame) {
+      HmRegs r = s_regs; r.d = 0; r.db = 0x7E; r.a = 0x15; r.x = (uint16_t)g; r.y = (uint16_t)sc;
+      hm_StartEventScriptLong(g_ram, &r);
+      fprintf(stderr, "event %X:%X started at %ld\n", g, sc, fr);
+    } }
   { const char *e = getenv("HM_MENU_AT");            /* HM_MENU_AT=frame:p|l[,frame:p|l] (tests) */
     for (; e && *e; e = strchr(e, ',') ? strchr(e, ',') + 1 : NULL) {
       const char *c = strchr(e, ':');

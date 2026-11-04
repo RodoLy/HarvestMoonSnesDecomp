@@ -359,3 +359,10 @@ void native_hw_reset(const uint8_t *rom, uint32_t rom_size)
   s_nmi_flag = false; s_wait = 0; g_snesrecomp_last_hdmaen = 0;
   s_pad[0] = s_pad[1] = 0;
 }
+
+/* tests (HM_DUMP_VRAM): VRAM, CGRAM, OAM and the high OAM, one after the other */
+void native_dump_ppu(FILE *f)
+{
+  fwrite(g_ppu->vram, 1, sizeof g_ppu->vram, f); fwrite(g_ppu->cgram, 1, sizeof g_ppu->cgram, f);
+  fwrite(g_ppu->oam, 1, sizeof g_ppu->oam, f); fwrite(g_ppu->highOam, 1, sizeof g_ppu->highOam, f);
+}

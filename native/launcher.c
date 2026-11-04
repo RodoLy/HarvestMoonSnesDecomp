@@ -46,7 +46,7 @@ enum {
 enum {
   V_FULLSCREEN = 1, V_SCALE, V_PICTURE, V_VSYNC, V_WIDESCREEN, V_SPRITES, V_VOLUME, V_FF, V_LANG,
   V_SHOWLAUNCHER, V_FASTTEXT, V_DAYLEN, V_PAUSE, V_TITLEOPT, V_ENDLESS, V_MONEY, V_STAMINA,
-  V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL, V_CROPS, V_SEEDS, V_MOUSE, V_BAG, V_TOUCH, V_SECOND, V_WIFE, V_CLOTHES, V_FILTER,
+  V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL, V_CROPS, V_SEEDS, V_MOUSE, V_BAG, V_TOUCH, V_SECOND, V_WIFE, V_CLOTHES, V_FILTER, V_GODDESS,
   V_PACK = 1000,          /* + the mod's place (modpack.c) */
 };
 
@@ -225,6 +225,7 @@ static int get_value(int id)
   case V_WIFE: return c->wife_help;
   case V_CLOTHES: return c->wife_clothes;
   case V_FILTER: return c->filter;
+  case V_GODDESS: return c->goddess;
   case V_SECOND: return c->second_screen;
   }
   if (id >= V_PACK) { const ModPack *m = modpack_get(id - V_PACK); return m && m->on; }
@@ -264,6 +265,7 @@ static void set_value(int id, int v)
   case V_WIFE: c->wife_help = v; break;
   case V_CLOTHES: c->wife_clothes = v; break;
   case V_FILTER: c->filter = v; break;
+  case V_GODDESS: c->goddess = v; break;
   case V_SECOND: c->second_screen = v; second_apply(); break;
   }
   if (id >= V_PACK) {
@@ -416,6 +418,7 @@ static void build(void)
       toggle(V_ENDLESS, "Endless game", "The game no longer stops after Year 3: you watch the ending, then wake up on Summer 30 and keep farming through Year 4, 5 and beyond.");
       toggle(V_CROPS, "Walk through crops", "Crops on the farm no longer block your way, so you can reach the middle of a 3x3 patch to water it. They sway as you pass.");
       toggle(V_WIFE, "Your wife helps", "Married, with her ten hearts: talk to her twice in a day and she offers to help on the farm for a day, three or a week. Mornings, she feeds the animals and waters the crops (half of the work at most), then goes to her own midday chores.");
+      toggle(V_GODDESS, "The Goddess of Spring", "Throw something into her small pond on the mountain: the first offering each day raises her hearts by what it is worth, and her favourites, the dear things, much more. With her ten hearts and the house built up, a Fullmoon Berry may get a yes. Her hearts are in the pause menu.");
       toggle(V_CLOTHES, "Her old clothes some days", "Married: some days (one in two) your wife wears the clothes she wore before the wedding, wherever she is.");
       toggle(V_SEEDS, "One seed at a time", "A seed bag is 9 seeds: each use sows only the tile in front of you, in any order you like. The bag and the stamina go at the 9th seed.");
       toggle(V_WIDESCREEN, "Widescreen", "Shows more of the map at the sides instead of black bars, as wide as your screen. At a map's edge and in small rooms it looks like the original (4:3).");

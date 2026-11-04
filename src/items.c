@@ -1066,7 +1066,10 @@ static void not_hatching(uint8_t *ram, HmRegs *r)           /* .nothatchableegg 
   r->a = 6;
   if (cpx(r, 0xF0)) { into_spring(ram, r); return; }
   r->a = 7;
-  if (cpx(r, 0xF4)) { into_spot(ram, r); return; }
+  if (cpx(r, 0xF4)) {                                     /* the small pond, the goddess's */
+    if (g_hm_spring_offer) g_hm_spring_offer(ram, rd8(ram, r, HM_ITEM));   /* the native build's goddess */
+    into_spot(ram, r); return;
+  }
   falls(ram, r);
 }
 

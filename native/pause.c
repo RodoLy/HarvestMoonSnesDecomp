@@ -465,27 +465,53 @@ static uint32_t heart_colour(unsigned v)
   return tier[7];
 }
 
+/* the goddess's row (goddess.c): an original emblem — a drop of spring
+ * water crowned with flowers, sparkles around it — in place of a portrait */
+static void goddess_emblem(int x, int y, int cx, int cy, int cs)    /* clipped to (cx, cy, cs x cs) */
+{
+  static const char *const art[16] = {
+    "..*..........*..", "....P.Y.P.Y.P...", "...PYPGPYPGPYP..", "....GGGGGGGGG...",
+    ".......BB.......", "......BLLB......", ".....BLWLLB.....", "....BLWLLLLB....",
+    "....BLLLLLLB....", "...BLLLLLLLLB...", "...BLLLLLLLDB...", "...BLLLLLLDDB..*",
+    "....BLLLLDDB....", ".*...BBDDDB.....", "......BBBB......", "................" };
+  for (int j = 0; j < 16; j++)
+    for (int i = 0; i < 16; i++) {
+      char c = art[j][i];
+      if (c == '.' || x + i < cx || y + j < cy || x + i >= cx + cs || y + j >= cy + cs) continue;
+      uint32_t col = c == 'B' ? C_BLUE_DARK : c == 'L' ? UI_RGB(0x7FB8F0) : c == 'D' ? C_BLUE
+                   : c == 'W' ? C_CREAM : c == 'P' ? UI_RGB(0xF27AA8) : c == 'Y' ? C_GOLD
+                   : c == 'G' ? C_GREEN : UI_RGB(0xFFF4A0);
+      ui_px(x + i, y + j, col);
+    }
+}
+
 static void draw_hearts(int x, int y)
 {
   static const char *names[5] = { "Maria", "Ann", "Nina", "Ellen", "Eve" };
   load_faces();
-  for (int i = 0; i < 5; i++) {
-    int ry = y + i * 19;
-    unsigned v = hm_rd16(g_ram, HM_HEARTS_BASE + i * 2);
-    if (v > 999) v = 999;
+  int rows = g_cfg.goddess ? 6 : 5, step = rows == 6 ? 16 : 19;
+  int fs = rows == 6 ? 16 : 18, ty = rows == 6 ? 12 : 13, hy = rows == 6 ? 4 : 6;   /* a frame, the text, the hearts */
+  for (int i = 0; i < rows; i++) {
+    int ry = y + i * step;
+    unsigned v = i < 5 ? hm_rd16(g_ram, HM_HEARTS_BASE + i * 2) : g_hm_goddess_hearts;
+    if (v > 999 && i < 5) v = 999;
+    if (v > 1000) v = 1000;
     /* portrait frame */
-    ui_rect(x, ry, 18, 18, C_WOOD_EDGE);
-    ui_rect(x + 1, ry + 1, 16, 16, C_PAPER_DARK);
-    if (s_faces_ok)
-      for (int j = 0; j < 16; j++)
-        for (int k = 0; k < 16; k++) ui_px(x + 1 + k, ry + 1 + j, s_face[i][j * 16 + k]);
-    ui_text(UI_BODY, x + 24, ry + 13, T(names[i]), C_INK);
+    ui_rect(x, ry, fs, fs, C_WOOD_EDGE);
+    ui_rect(x + 1, ry + 1, fs - 2, fs - 2, C_PAPER_DARK);
+    int cut = (18 - fs) / 2;                         /* six rows: the pictures lose a pixel each side */
+    if (i == 5) {
+      goddess_emblem(x + 1 - cut, ry + 1 - cut, x + 1, ry + 1, fs - 2);
+    } else if (s_faces_ok)
+      for (int j = 0; j < fs - 2; j++)
+        for (int k = 0; k < fs - 2; k++) ui_px(x + 1 + k, ry + 1 + j, s_face[i][(j + cut) * 16 + k + cut]);
+    ui_text(UI_BODY, x + 24, ry + ty, i < 5 ? T(names[i]) : T("Goddess"), C_INK);
     unsigned full = (v + 50) / 100;
     uint32_t col = heart_colour(v);
-    for (int h = 0; h < 10; h++) ui_heart(x + 76 + h * 9, ry + 6, col, (unsigned)h < full);
+    for (int h = 0; h < 10; h++) ui_heart(x + 76 + h * 9, ry + hy, col, (unsigned)h < full);
     char num[8]; snprintf(num, sizeof num, "%u", v);
-    ui_text_r(UI_SMALL, x + 236, ry + 12, num, C_INK_SOFT);
-    if (i < 4) ui_hline(x + 22, ry + 18, 214, C_PAPER_LINE);
+    ui_text_r(UI_SMALL, x + 236, ry + ty - 1, num, C_INK_SOFT);
+    if (i < rows - 1) ui_hline(x + 22, ry + step - 1, 214, C_PAPER_LINE);
   }
 }
 

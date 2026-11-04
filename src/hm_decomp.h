@@ -300,6 +300,19 @@ extern uint8_t g_hm_seeds_used[5];
  * the saved game's +5C-+5E by SaveGameSlot / LoadGameSlot */
 extern int g_hm_wife_on;
 extern uint16_t g_hm_wife_until;
+/* g_hm_goddess_on: the Harvest Goddess's hearts (native/goddess.c) are on;
+ * her hearts (0-1000), the day of the last offering that counted and her
+ * flags are kept in the saved game's unused +26 to +2B by SaveGameSlot /
+ * LoadGameSlot. g_hm_spring_offer: called with each item thrown into the
+ * mountain's small pond, tile $F4 (items.c, the goddess's: event $17), before the game's own handling. */
+extern int g_hm_goddess_on;
+extern uint16_t g_hm_goddess_hearts, g_hm_goddess_day;
+extern uint8_t g_hm_goddess_flags;
+extern void (*g_hm_spring_offer)(uint8_t *ram, uint8_t item);
+/* married life (native/goddess.c): set each frame, not saved — where she is
+ * today, by the day alone. g_hm_goddess_at_home: a line is due at the house.
+ * g_hm_goddess_sparkle: draw the sparkles by the barn (native/main.c). */
+extern int g_hm_goddess_at_home, g_hm_goddess_sparkle;
 extern uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 /* the loops' own entries the host needs (not checked on their own) */
 void hm_IntroDemoCheck(uint8_t *ram, HmRegs *r);    /* intro.c: the demo check */

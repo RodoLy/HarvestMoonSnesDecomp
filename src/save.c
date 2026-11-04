@@ -37,6 +37,8 @@
 #define BAG_AT        0x52        /* the native build's crop bag: +52-+5A, +5B = $BA */
 #define WIFE_AT       0x5C        /* the native build's wife's help: +5C-+5D, +5E = $A7 */
 #define WIFE_MARK     0xA7
+#define GODDESS_AT    0x26        /* the native build's goddess: +26-+27 hearts, +28-+29 day, +2A flags, +2B = $D9 */
+#define GODDESS_MARK  0xD9
 #define BAG_MARK      0xBA
 #define SLOT_2        0x701000    /* SRAM: the second slot */
 
@@ -291,6 +293,14 @@ void hm_SaveGameSlot(uint8_t *ram, HmRegs *r)
     for (uint16_t i = 0; i < 9; i++) sram_w8(ram, r, (uint16_t)(BAG_AT + i), g_hm_bag[i]);
     sram_w8(ram, r, BAG_AT + 9, BAG_MARK);
   }
+  if (g_hm_goddess_on) {                              /* the native build's goddess */
+    sram_w8(ram, r, GODDESS_AT, (uint8_t)g_hm_goddess_hearts);
+    sram_w8(ram, r, GODDESS_AT + 1, (uint8_t)(g_hm_goddess_hearts >> 8));
+    sram_w8(ram, r, GODDESS_AT + 2, (uint8_t)g_hm_goddess_day);
+    sram_w8(ram, r, GODDESS_AT + 3, (uint8_t)(g_hm_goddess_day >> 8));
+    sram_w8(ram, r, GODDESS_AT + 4, g_hm_goddess_flags);
+    sram_w8(ram, r, GODDESS_AT + 5, GODDESS_MARK);
+  }
   if (g_hm_wife_on) {                                 /* the native build's wife's help */
     sram_w8(ram, r, WIFE_AT, (uint8_t)g_hm_wife_until);
     sram_w8(ram, r, WIFE_AT + 1, (uint8_t)(g_hm_wife_until >> 8));
@@ -498,6 +508,14 @@ void hm_LoadGameSlot(uint8_t *ram, HmRegs *r)
     for (uint16_t i = 0; i < 9; i++)
       g_hm_bag[i] = marked ? hm_bus_rd8(ram, hm_dp_long(ram, r, SLOT_PTR, (uint16_t)(BAG_AT + i))) : 0;
   }
+  if (g_hm_goddess_on) {                              /* the native build's goddess */
+#define GB(k) hm_bus_rd8(ram, hm_dp_long(ram, r, SLOT_PTR, (uint16_t)(GODDESS_AT + (k))))
+    bool marked = GB(5) == GODDESS_MARK;
+    g_hm_goddess_hearts = marked ? (uint16_t)(GB(0) | GB(1) << 8) : 0;
+    g_hm_goddess_day = marked ? (uint16_t)(GB(2) | GB(3) << 8) : 0;
+    g_hm_goddess_flags = marked ? GB(4) : 0;
+#undef GB
+  }
   if (g_hm_wife_on) {                                 /* the native build's wife's help */
     bool marked = hm_bus_rd8(ram, hm_dp_long(ram, r, SLOT_PTR, WIFE_AT + 2)) == WIFE_MARK;
     g_hm_wife_until = marked ? (uint16_t)(hm_bus_rd8(ram, hm_dp_long(ram, r, SLOT_PTR, WIFE_AT)) |
@@ -569,6 +587,7 @@ void hm_NewGameSetup(uint8_t *ram, HmRegs *r)
   memset(g_hm_seeds_used, 0, sizeof g_hm_seeds_used);  /* the native build's seeds */
   memset(g_hm_bag, 0, sizeof g_hm_bag);                 /* and crop bag */
   g_hm_wife_until = 0;                                  /* and the wife's help */
+  g_hm_goddess_hearts = g_hm_goddess_day = 0; g_hm_goddess_flags = 0;   /* and the goddess */
   for (unsigned i = 0; i < sizeof FIELDS / sizeof FIELDS[0]; i++) {
     const Field *f = &FIELDS[i];
     uint32_t to = f->data_bank ? db_addr(r, (uint16_t)f->from) : f->from;
