@@ -229,6 +229,7 @@ static enum { NO_SCENE, SCENE_STARTED, SCENE_TALKING } s_scene;
 static bool shop_text(uint8_t *ram, uint16_t text);   /* The Golden Feather, below */
 static void seller_sunday(void);
 static void golden_shown(void);
+static void night_wife(uint8_t *ram, bool done);   /* Children, below */
 static bool scene_text(uint8_t *ram, uint16_t text)
 {
   if (shop_text(ram, text)) return true;
@@ -297,6 +298,7 @@ void goddess_frame(void)
   g_hm_spring_offer = g_cfg.goddess ? offer : NULL;
   g_hm_feather_used = g_cfg.goddess ? feather_used : NULL;
   g_hm_script_text = g_cfg.goddess ? scene_text : NULL;
+  g_hm_night_wife = g_cfg.goddess ? night_wife : NULL;
   if (g_cfg.goddess && hm_diary_loaded(g_ram)) { seller_sunday(); golden_shown(); }
   if (s_feather_used) {
     s_feather_used = false;
@@ -593,7 +595,7 @@ static void golden_shown(void)
 
 /* ── Married life ─────────────────────────────────────────────────────── */
 #define HER_SLOT      0x0BA46u     /* event slot $13: $7E:B586 + $40 x $13 (fields: SLOT_*) */
-#define SPARKLE_SLOT  0x0BA86u     /* event slot $14 */
+#define SPARKLE_SLOT  0x0BB86u     /* event slot $18 ($14 and $15 are the children's) */
 enum {
   IDLE_SCRIPT = 0x8DED,            /* $B3:8DED: WaitFrames 1, JumpToInstruction $8DED */
   SPARKLE_SPRITE = 0x317,
@@ -606,6 +608,74 @@ enum {
   HOBBY_FROM = 11, HOBBY_TO = 15,  /* her midday blessing of the field */
   AWAY_FROM = 18,                  /* her farm days: home from 18:00 */
 };
+
+/* ── Children ─────────────────────────────────────────────────────────
+ * The game's own way. Each night WifePregnancyAndChildren (src/people.c)
+ * counts the days married and, with the wife's love at 450 (650 for the
+ * second), 20 days married and the house's second extension, a child is on
+ * the way; 60 days later it is born. The routine finds the wife by her bit
+ * in $7F1F66 and her love among the girls'; for that routine only, Maria's
+ * bit and love are lent to the Goddess, and given back as soon as it is
+ * done.
+ *
+ * The birth's days ($7F1F6E bit $10, group $1F in the house) show the wife
+ * in bed, in OBJ palette 3, the wife's; her lines there are the same for
+ * every wife. Without a girl's bit the game leaves her family out and keeps
+ * the colours it has: the hair (colours 8-10) is made the Goddess's green. */
+enum {
+  MOST_LOVE = 999,                     /* the girls' love goes no higher */
+  BIRTH_DAYS = 0x0010,                 /* $7F1F6E: the wife in bed (group $1F) */
+  BORN_AT = 60,                        /* days from the child's start ($7F1F37 / $7F1F39) */
+  BED_HAIR = 8,                        /* the wife in bed: her hair, colours 8-10 */
+};
+static bool s_lent_for_night;
+static uint16_t s_marias_love;
+
+static bool goddess_wife(uint8_t *ram)
+{
+  return (g_hm_goddess_flags & GODDESS_MARRIED) && !(hm_rd16(ram, HM_FLAGS_66) & 0x1F);
+}
+static void night_wife(uint8_t *ram, bool done)
+{
+  if (!done) {
+    s_lent_for_night = goddess_wife(ram);
+    if (!s_lent_for_night) return;
+    s_marias_love = hm_rd16(ram, HM_HEARTS_BASE);
+    hm_wr16(ram, HM_FLAGS_66, (uint16_t)(hm_rd16(ram, HM_FLAGS_66) | LENT_WIFE));
+    hm_wr16(ram, HM_HEARTS_BASE, g_hm_goddess_hearts < MOST_LOVE ? g_hm_goddess_hearts : MOST_LOVE);
+  } else if (s_lent_for_night) {
+    s_lent_for_night = false;
+    hm_wr16(ram, HM_FLAGS_66, (uint16_t)(hm_rd16(ram, HM_FLAGS_66) & ~LENT_WIFE));
+    hm_wr16(ram, HM_HEARTS_BASE, s_marias_love);
+  }
+}
+static bool expecting(uint8_t *ram)
+{
+  uint16_t kids = hm_rd16(ram, HM_FLAGS_6E);
+  return ((kids & 0x0004) && hm_rd16(ram, HM_KID1_AGE) < BORN_AT) ||
+         ((kids & 0x0008) && hm_rd16(ram, HM_KID2_AGE) < BORN_AT);
+}
+static bool a_mother(uint8_t *ram)
+{
+  return (hm_rd16(ram, HM_FLAGS_6E) & 0x0004) && hm_rd16(ram, HM_KID1_AGE) >= BORN_AT;
+}
+static bool in_childbed(uint8_t *ram)
+{
+  return goddess_wife(ram) && (hm_rd16(ram, HM_FLAGS_6E) & BIRTH_DAYS);
+}
+/* her hair on the wife in bed: the Goddess's greens (her colours 6, 7, 5,
+ * light to dark) in the wife's palette, in the buffers and the chip */
+static void childbed_colours(void)
+{
+  static const uint32_t to[3] = { 0x10D00, 0x10B00, HM_CGRAM_SHADOW };
+  static const int hers[3] = { 6, 7, 5 };
+  for (int c = 0; c < 3; c++) {
+    uint16_t colour = (uint16_t)hm_bus_rd16(g_ram, GODDESS_PALETTE + 2u * (uint32_t)hers[c]);
+    int at = 256 + HER_PALETTE * 32 + 2 * (BED_HAIR + c);
+    for (int k = 0; k < 3; k++) { g_ram[to[k] + at] = (uint8_t)colour; g_ram[to[k] + at + 1] = (uint8_t)(colour >> 8); }
+    if (g_ppu) g_ppu->cgram[128 + HER_PALETTE * 16 + BED_HAIR + c] = colour;
+  }
+}
 
 static bool home_day(void)
 {
@@ -693,6 +763,17 @@ static const Line kHomeLines[] = {
   { 1, { { "Tell me about your day,", "won't you?" } } },
   { 2, { { "Rest well tonight." }, { "The spring keeps watch", "over the farm while", "you sleep." } } },
 };
+/* with a child on the way, and once she is a mother */
+static const Line kExpectingLines[] = {
+  { 2, { { "I can feel the little one", "moving..." }, { "Even a goddess gets", "butterflies, dear." } } },
+  { 1, { { "I'm fine. Really!", "Don't worry so much." } } },
+  { 2, { { "The spring sings to the", "baby every night." }, { "I think it listens." } } },
+};
+static const Line kMotherLines[] = {
+  { 1, { { "The little one smiled at", "the sparkles today!" } } },
+  { 2, { { "Our child has your eyes." }, { "And my laugh, I think." } } },
+  { 1, { { "Who knew a goddess could", "be this happy?" } } },
+};
 #define COUNT(a) (int)(sizeof (a) / sizeof (a)[0])
 
 static struct {
@@ -751,6 +832,8 @@ void goddess_dialog_open(void)
   bool farm = g_ram[HM_MAP_ID] <= 3;
   const Line *lines = farm ? kFarmLines : kHomeLines;
   int n = farm ? COUNT(kFarmLines) : COUNT(kHomeLines);
+  if (expecting(g_ram)) { lines = kExpectingLines; n = COUNT(kExpectingLines); }
+  else if (a_mother(g_ram) && G.talks % 2 == 0) { lines = kMotherLines; n = COUNT(kMotherLines); }
   unsigned first = ((unsigned)today() * 2654435761u >> 16) % (unsigned)n;
   const Line *l = &lines[(first + (unsigned)G.talks) % (unsigned)n];
   G.talks++;
@@ -808,6 +891,10 @@ void goddess_married_tick(uint8_t *ram)
   if (!g_cfg.goddess) return;
   if (wedding(ram)) return;
   int place = (g_hm_goddess_flags & GODDESS_MARRIED) && hm_diary_loaded(ram) ? her_place(ram[HM_MAP_ID], ram[HM_HOUR]) : 0;
+  if (in_childbed(ram)) {                             /* in bed, the game's wife: not floating about */
+    if (ram[HM_MAP_ID] >= 0x15 && ram[HM_MAP_ID] <= 0x17) childbed_colours();
+    place = 0;
+  }
   if (!place) { take_away(HER_SLOT); take_away(SPARKLE_SLOT); G.place = 0; return; }
 
   bool hobby = place == 1 && ram[HM_HOUR] >= HOBBY_FROM && ram[HM_HOUR] < HOBBY_TO;
