@@ -128,6 +128,7 @@ uint16_t g_hm_goddess_hearts, g_hm_goddess_day;
 uint8_t g_hm_goddess_flags;
 void (*g_hm_spring_offer)(uint8_t *ram, uint8_t item);
 void (*g_hm_feather_used)(void);
+bool (*g_hm_script_text)(uint8_t *ram, uint16_t text);
 void (*g_hm_slot_picture)(uint8_t *ram, uint32_t slot);
 uint8_t g_hm_bag[9];
 uint8_t g_hm_seeds_used[5];

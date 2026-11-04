@@ -2115,6 +2115,11 @@ static void start_text(uint8_t *ram, HmRegs *r, uint16_t ret)
 {
   advance(ram, r, 1);
   r->x = arg16(ram, r);
+  if (g_hm_script_text && g_hm_script_text(ram, r->x)) {   /* the native build says it instead */
+    advance(ram, r, 3);
+    count_frame(ram, r);
+    return;
+  }
   advance(ram, r, 2);
   hm_bus_wr8(ram, dbw(r, HM_TEXT_BOX_LINES), arg8(ram, r));
   lda8(r, 2);
