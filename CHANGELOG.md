@@ -4,7 +4,7 @@
 
 ## Unreleased (branch `harvest-goddess`)
 
-- **The Goddess of Spring** (an improvement, off by default): offerings at her small pond on the mountain raise her hearts (her favourites, the dear things, much more); at ten hearts, with the house built up, a **Blue Feather** gets a yes. **A week later the wedding plays in front of the church** — the game's own wedding scene, with her as the bride (her original sprite) and the **seven Harvest Sprites as the guests**. Married, she is at the house some days and by the barn, among sparkles, the rest. Her **face from the ROM** and her hearts are in the pause menu's Hearts tab.
+- **The Goddess of Spring** (an improvement, off by default): offerings at her small pond on the mountain raise her hearts (her favourites, the dear things, much more); at ten hearts, with the house built up, a **Blue Feather** gets a yes. **A week later the wedding plays in front of the church** — the game's own wedding scene, with her as the bride (her original sprite) and the **seven Harvest Sprites as the guests**. Married, she is there as herself: some days at home, the others by the barn's door until evening, with her sparkles; **talk to her** and she answers in the game's own text box, letter by letter with its sound. Her **face from the ROM** and her hearts are in the pause menu's Hearts tab.
 
 ## 0.2.0-beta
 
@@ -37,7 +37,7 @@ cheats. Built on your own computer with `build.bat`.
 
 ## Sin publicar (rama `harvest-goddess`)
 
-- **La Diosa de la Primavera** (una mejora, apagada de fábrica): las ofrendas en su estanque pequeño de la montaña le suben los corazones (sus favoritas, las cosas caras, mucho más); con sus diez corazones y la casa ampliada, una **Blue Feather** consigue un sí. **Una semana después la boda es frente a la iglesia**: la escena de boda del propio juego, con ella de novia (su sprite original) y los **siete duendes de la cosecha como invitados**. Ya casados, algunos días está en la casa y el resto junto al establo, entre destellos. **Su cara de la ROM** y sus corazones están en la pestaña Corazones del menú de pausa.
+- **La Diosa de la Primavera** (una mejora, apagada de fábrica): las ofrendas en su estanque pequeño de la montaña le suben los corazones (sus favoritas, las cosas caras, mucho más); con sus diez corazones y la casa ampliada, una **Blue Feather** consigue un sí. **Una semana después la boda es frente a la iglesia**: la escena de boda del propio juego, con ella de novia (su sprite original) y los **siete duendes de la cosecha como invitados**. Ya casados, ella está ahí en persona: algunos días en casa y los demás junto a la puerta del establo hasta la tarde, con sus destellos; **háblale** y contesta en la caja de texto del propio juego, letra por letra y con su sonido. **Su cara de la ROM** y sus corazones están en la pestaña Corazones del menú de pausa.
 
 ## 0.2.0-beta
 
