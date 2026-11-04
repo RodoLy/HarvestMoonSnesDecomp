@@ -909,17 +909,18 @@ static void move_slot(uint32_t at, int x, int y)
  * The spring's spirit (sprite $308: the game puts him in
  * the spring when a fish is given back, event group $10) is her family.
  * Where a girl's family comes, he does: at the bride's side at the
- * wedding, by the bed at the child's birth, and by the wife in front of
- * the church in the ending. He stands in event slot $17 as a still
- * picture, in the mountain's colours, or hers: OBJ palette 0 at the wedding (they are there,
- * wedding_colours), palette 1 elsewhere (the birth's and the ending's
- * figures leave it free; 0-3 are the ones the town's colour effects leave
- * alone). */
+ * wedding, by the bed at the child's birth, and in the ending waiting in
+ * front of the family's house in the town, as Maria's family does (in the
+ * game the family does not walk with the couple: it waits there). He
+ * stands in event slot $17 as a still picture, in the mountain's colours:
+ * OBJ palette 1 (the birth's and the ending's figures leave it free; 0-3
+ * are the ones the town's colour effects leave alone), or palette 0 with
+ * hers at the wedding (wedding_colours). */
 #define IMP_SLOT 0x0BB46u              /* event slot $17 */
 #define IMP_COLOURS 0xA9DE00           /* file 0x14DE00: the mountain's figures (his, by the spring) */
 enum {
   IMP_SPRITE = 0x308,
-  WIFE_FROM = 0x2E2, WIFE_TO = 0x2E9,  /* the wife's figures in the ending (her palette 3) */
+  FAMILY_HOUSE_X = 206, FAMILY_HOUSE_Y = 182,   /* the ending: in front of the house, where her family waits */
   BEDSIDE_X = 336, BEDSIDE_Y = 120,    /* where a girl's family stands at the birth */
   TOWN_SQUARE = 0x05,
   NO_PALETTE = -1, IMP_PALETTE = 1,
@@ -936,15 +937,10 @@ static bool imp_place(uint8_t *ram, int *x, int *y)
   }
   int map = ram[HM_MAP_ID];
   if (in_childbed(ram) && map >= 0x15 && map <= 0x17) { *x = BEDSIDE_X; *y = BEDSIDE_Y; return true; }
-  if (s_lent_for_ending && map == TOWN_SQUARE)       /* the ending's gathering */
-    for (int n = 1; n < 0x13; n++) {
-      uint32_t at = 0xB586u + 64u * (uint32_t)n;
-      int sprite = slot16(at, SLOT_SPRITE);
-      if (ram[at] && sprite >= WIFE_FROM && sprite <= WIFE_TO) {
-        *x = slot16(at, SLOT_X) + 20; *y = slot16(at, SLOT_Y);
-        return true;
-      }
-    }
+  if (s_lent_for_ending && map == TOWN_SQUARE) {     /* waiting at the family's house */
+    *x = FAMILY_HOUSE_X; *y = FAMILY_HOUSE_Y;
+    return true;
+  }
   return false;
 }
 static void imp_tick(uint8_t *ram)
