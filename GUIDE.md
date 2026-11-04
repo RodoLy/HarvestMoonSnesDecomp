@@ -681,6 +681,17 @@ pregnant, **happiness**, times hit and position.
 - **Children.** The first needs 450 hearts with the wife; the second, 650
   and the first child 90 days old. Both need the house at level 2 and 20
   days of marriage. A child is born 60 days after it is conceived.
+- **The wedding.** A girl's yes (her script in event groups $02 / $03)
+  sets her bit in `$7F:1F66`, `$7F:1F5E` bit 8, and goes to map `$2D`
+  (`Event_TransitionToMap`). Map `$2D` is the town with the wedding: its
+  map routine starts event group `$1E` script 0, which picks the bride by
+  the wife's bit and plays the scene in front of the church (the pastor
+  at the door, the townsfolk as guests, the diary's "We got married
+  today"), then the night, and the player wakes at home. In Maria's
+  branch the bride is slot 1 (sprites $330-$333), the groom slot $0A, the
+  pastor slot 2, the guests slots 3-9. The Harvest Goddess's wedding
+  (native build, `native/goddess.c`) plays this same scene dressed
+  through `g_hm_slot_picture`.
 
 ### 5.9 Money, wood, fodder
 

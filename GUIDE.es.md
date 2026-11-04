@@ -697,6 +697,18 @@ cruzada), mapa, días de preñez, **felicidad**, veces golpeada y posición.
 - **Hijos.** El primero necesita 450 corazones con la esposa; el segundo,
   650 y que el primero tenga 90 días. Los dos necesitan la casa en nivel 2
   y 20 días de casados. Un hijo nace 60 días después de concebido.
+- **La boda.** El sí de una chica (su guion en los grupos de eventos
+  $02 / $03) pone su bit en `$7F:1F66`, el bit 8 de `$7F:1F5E`, y va al
+  mapa `$2D` (`Event_TransitionToMap`). El mapa `$2D` es el pueblo con la
+  boda: su rutina de mapa arranca el guion 0 del grupo `$1E`, que elige a
+  la novia según el bit de la esposa y muestra la escena frente a la
+  iglesia (el cura en la puerta, la gente del pueblo de invitada, el
+  "We got married today" del diario); luego la noche, y el jugador
+  despierta en casa. En la rama de María la novia es el slot 1 (sprites
+  $330-$333), el novio el slot $0A, el cura el slot 2 y los invitados
+  los slots 3-9. La boda con la Diosa de la Cosecha (versión nativa,
+  `native/goddess.c`) es esta misma escena, vestida con
+  `g_hm_slot_picture`.
 
 ### 5.9 Dinero, madera, pasto
 
