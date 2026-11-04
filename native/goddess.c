@@ -421,7 +421,8 @@ static bool wedding(uint8_t *ram)
  * (text $1C3, the Blue Feather for 1,000 G, yes / no) becomes a choice in
  * the game's text box: the Blue Feather (her own sale goes on: answer 0),
  * the Golden Feather for 5,000 G (paid here; then answer 1, her "no" text
- * $2FF kept closed), or no (answer 1, her "no").
+ * $1C5 kept closed), or no (answer 1, her "no"). (Her answer 0 goes on to
+ * the money check, $2FF when it is short, and her sale.)
  *
  * The Golden Feather is the feather tool ($18) in its shed place
  * ($7F1F02 bit 7), golden (GODDESS_GOLDEN_FEATHER, kept in the diary): in
@@ -429,11 +430,14 @@ static bool wedding(uint8_t *ram)
  * piece the player holds up (tiles $80-$91, the tool's, in the player's
  * palette 4) takes a copy of palette 4 with the feather's two blues made
  * gold (OBJ palette 3, in the picture chip, for those frames only). The
- * girls take it as the Blue Feather it is underneath. */
+ * pieces are known by their picture: the feather's four tiles in the ROM
+ * (file 0x64800, 0x64820, 0x64A00, 0x64A20), compared with each piece's
+ * tile in the picture chip's memory. The girls take it as the Blue
+ * Feather it is underneath. */
 enum {
   FEATHER_TOOL = 0x18,
   SELLER_SLOT = 6, SELLER_SCRIPT = 0xBAC5,     /* $B3:BAC5 */
-  SELLER_OFFER = 0x1C3, SELLER_NO = 0x2FF,
+  SELLER_OFFER = 0x1C3, SELLER_NO = 0x1C5,
   SELLER_UNTIL = 17,
   BLUE_BOUGHT = 0x0040,                       /* $7F1F6C */
   GOLDEN_PRICE = 500,                         /* in tens of G: 5,000 G */
@@ -524,13 +528,15 @@ static void shop_draw(uint32_t *dst, int w)
 /* Sundays in town: she is there for the Goddess too */
 static void seller_sunday(void)
 {
-  static int last_map = -1, wait;
+  /* once a visit: half a second after the town comes in (a transition,
+   * $0196 bit $4000, starts each visit), so its own Sunday script has
+   * placed everyone first */
+  static int since = -1;
   int map = g_ram[HM_MAP_ID];
-  if (map != last_map) { last_map = map; wait = 30; }   /* let the town's own script place everyone first */
-  if (wait > 0) { wait--; return; }
-  if (wait < 0 || !offers_gold()) return;
-  wait = -1;                                         /* once a visit */
-  if (map < 4 || map > 7 || g_ram[HM_WEEKDAY] != 0 || g_ram[HM_HOUR] >= SELLER_UNTIL) return;
+  if (map < 4 || map > 7 || (hm_rd16(g_ram, HM_WEATHER_FLAGS) & 0x4000)) { since = 0; return; }
+  if (since < 0 || ++since < 30) return;
+  since = -1;
+  if (!offers_gold() || g_ram[HM_WEEKDAY] != 0 || g_ram[HM_HOUR] >= SELLER_UNTIL) return;
   uint32_t at = 0xB586u + 64u * SELLER_SLOT;
   if (g_ram[at]) return;                             /* there already (or the slot is taken) */
   memset(&g_ram[at], 0, 0x40);
@@ -560,13 +566,28 @@ static void golden_shown(void)
   was = true;
   const uint16_t *p4 = &g_ppu->cgram[128 + 4 * 16];
   for (int i = 0; i < 16; i++) cg[i] = p4[i];
-  cg[6] = p4[1];                                     /* the light blue: the light gold */
-  cg[7] = p4[2];                                     /* the dark blue: the dark gold */
+  cg[6] = 0x237F;                                    /* the light blue: gold (248, 216, 64) */
+  cg[7] = 0x0E38;                                    /* the dark blue: dark gold (192, 136, 24) */
+  static const uint32_t feather[4] = { 0x64800, 0x64820, 0x64A00, 0x64A20 };   /* its tiles, in the ROM */
+  /* only the player's: the first such piece near him on screen (the
+   * player is drawn first; the one on the seller's stall, the Blue
+   * Feather for sale, comes after) */
+  int sx = hm_rd16(g_ram, HM_PLAYER_X) - hm_rd16(g_ram, HM_CAM_X), sy = hm_rd16(g_ram, HM_PLAYER_Y) - hm_rd16(g_ram, HM_CAM_Y);
   for (int i = 0; i < 128; i++) {
     uint16_t w = g_ppu->oam[2 * i + 1];
     int tile = (w & 0xFF) | (w >> 8 & 1) << 8, pal = (w >> 9) & 7;
-    if (pal == 4 && tile >= 0x80 && tile <= 0x91)
-      g_ppu->oam[2 * i + 1] = (uint16_t)((w & ~0x0E00) | GOLD_PALETTE << 9);
+    if (pal != 4) continue;
+    int ox = g_ppu->oam[2 * i] & 0xFF, oy = g_ppu->oam[2 * i] >> 8;
+    if (abs(ox - sx) > 32 || abs(oy - sy) > 32) continue;
+    uint32_t at = (tile < 256 ? PPU_objTileAdr1(g_ppu) : PPU_objTileAdr2(g_ppu)) + (uint32_t)(tile & 0xFF) * 16;
+    const uint16_t *vram = &g_ppu->vram[at & 0x7FFF];
+    bool is_feather = false;
+    for (int k = 0; k < 4 && !is_feather; k++) {
+      const uint8_t *t = &g_rom[feather[k]];
+      is_feather = true;
+      for (int j = 0; j < 16 && is_feather; j++) is_feather = vram[j] == (uint16_t)(t[2 * j] | t[2 * j + 1] << 8);
+    }
+    if (is_feather) { g_ppu->oam[2 * i + 1] = (uint16_t)((w & ~0x0E00) | GOLD_PALETTE << 9); break; }
   }
 }
 
