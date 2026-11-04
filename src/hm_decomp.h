@@ -309,10 +309,6 @@ extern int g_hm_goddess_on;
 extern uint16_t g_hm_goddess_hearts, g_hm_goddess_day;
 extern uint8_t g_hm_goddess_flags;
 extern void (*g_hm_spring_offer)(uint8_t *ram, uint8_t item);
-/* married life (native/goddess.c): set each frame, not saved — where she is
- * today, by the day alone. g_hm_goddess_at_home: a line is due at the house.
- * g_hm_goddess_sparkle: draw the sparkles by the barn (native/main.c). */
-extern int g_hm_goddess_at_home, g_hm_goddess_sparkle;
 /* g_hm_slot_picture: when set, called by UpdateSlotSprite (events.c) with
  * each event slot's address in ram[] before the slot's picture goes to its
  * game object, so the host can dress a slot as someone else (the

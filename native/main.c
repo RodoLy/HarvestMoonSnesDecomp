@@ -1043,7 +1043,7 @@ static void menu_input(UiInput *in, uint16_t *prev, uint32_t *held_frames)
   if (pressed & B_B) in->back = true;
 }
 
-enum { MENU_LAUNCHER, MENU_PAUSE, MENU_WIFE };
+enum { MENU_LAUNCHER, MENU_PAUSE, MENU_WIFE, MENU_GODDESS };
 /* HM_UI_TEST=keys (u d l r A B L R X Y, one every 10 frames; @x,y the
  * pointer there, ! a left click there, ~ a right click) and
  * HM_UI_SHOT=dir: the menus' pictures, for checking them without a screen */
@@ -1082,6 +1082,7 @@ static int run_menu(int kind, bool in_game)
   int result = LA_NONE;
   if (kind == MENU_LAUNCHER) launcher_open(in_game);
   else if (kind == MENU_WIFE) wife_dialog_open();
+  else if (kind == MENU_GODDESS) goddess_dialog_open();
   else pause_open();
   if (in_game) { memcpy(s_bg, s_pixels, (size_t)s_fw * H * 4); s_bg_w = s_fw; }
   set_fast(false);
@@ -1099,6 +1100,11 @@ static int run_menu(int kind, bool in_game)
       bool done = wife_dialog_update(&in);
       memcpy(s_ui, s_bg, (size_t)s_fw * H * 4);
       wife_dialog_draw(s_ui, s_fw);
+      if (done) break;
+    } else if (kind == MENU_GODDESS) {
+      bool done = goddess_dialog_update(&in);
+      memcpy(s_ui, s_bg, (size_t)s_fw * H * 4);
+      goddess_dialog_draw(s_ui, s_fw);
       if (done) break;
     } else if (kind == MENU_PAUSE) {
       if (in.back || in.key == SDL_SCANCODE_M) pause_action('B');
@@ -1205,6 +1211,7 @@ static void end_of_frame(uint8_t *ram)
   if (s_mods) pad = mods_mouse_pad(pad);
   if (s_mods) { bool key = s_bag_key || s_script_bag > 0; if (s_script_bag > 0) s_script_bag--; pad = mods_bag_pad(pad, key); }
   if (s_mods) pad = wife_pad(pad);
+  if (s_mods) pad = goddess_pad(pad);
   native_set_pads(pad, 0);
   if (s_frame % 60 == 0) sram_save();
   if (s_quit) quit_now();
@@ -1232,6 +1239,7 @@ static void end_of_frame(uint8_t *ram)
       if (atol(e) == (long)s_frame) { if (c && c[1] == 'p') s_want_pause = true; else s_want_launcher = true; }
     } }
   if (s_mods && wife_dialog_wanted()) { run_menu(MENU_WIFE, true); native_set_pads(0, 0); }
+  if (s_mods && goddess_dialog_wanted()) { run_menu(MENU_GODDESS, true); native_set_pads(0, 0); }
   if (s_want_pause) {
     s_want_pause = false;
     if (g_cfg.pause_menu && pause_can_open()) { run_menu(MENU_PAUSE, true); native_set_pads(0, 0); }

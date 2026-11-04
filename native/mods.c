@@ -958,33 +958,9 @@ static bool mouse_hud(uint32_t *px, int w)
   ui_vline(x, y, 16, c); ui_vline(x + 15, y, 16, c);
   return true;
 }
-/* married life (native/goddess.c): on her farm days, a few sparkles where
- * she'd be, by the barn's door — not her figure, there is no identified
- * sprite of hers to place there yet. */
-enum { GODDESS_BARN_TX = 20, GODDESS_BARN_TY = 23 };
-static bool goddess_hud(uint32_t *px, int w)
-{
-  if (!g_hm_goddess_sparkle) return false;
-  if (!px) return true;
-  int x = GODDESS_BARN_TX * 16 - hm_rd16(g_ram, HM_CAM_X) + (w - 256) / 2;
-  int y = GODDESS_BARN_TY * 16 - hm_rd16(g_ram, HM_CAM_Y);
-  ui_target(px, w, 224);
-  static unsigned t;
-  t++;
-  static const int dx[6] = { -5, 4, -2, 7, 1, -7 }, dy[6] = { -4, -6, 2, -1, 5, 3 };
-  for (int i = 0; i < 6; i++) {
-    unsigned ph = (t + (unsigned)i * 11) % 48;
-    if (ph >= 36) continue;                          /* off a third of the time: a twinkle */
-    uint32_t c = (ph < 6 || (ph >= 18 && ph < 24)) ? UI_RGB(0xFFFFFF) : UI_RGB(0x9FE0FF);
-    ui_px(x + 8 + dx[i], y + 4 + dy[i] - (int)(ph / 6), c);
-  }
-  return true;
-}
 bool mods_hud(uint32_t *px, int w)
 {
-  bool a = mouse_hud(px, w);    /* the seeds and the bag show in the pause menu, not over the game */
-  bool b = goddess_hud(px, w);
-  return a || b;
+  return mouse_hud(px, w);    /* the seeds and the bag show in the pause menu, not over the game */
 }
 
 /* ── Widescreen (hm_widescreen.c) ───────────────────────────────────────

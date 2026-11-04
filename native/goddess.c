@@ -43,17 +43,28 @@
  * screen needs them, so it is given hers ($A9:E000, the OBJ table's last,
  * which is the elves' too) every frame of the scene.
  *
- * Married life. From then on, which day it is decides where she is: about one day in four,
- * she is at the house; the rest, she is by the farm's barn. Neither is
- * drawn as her — the house day is a line when the player is home, and the
- * farm day is a scatter of sparkles (native/main.c's overlay) where she'd
- * be standing, nothing more. Talking to her is not possible today: there
- * is no identified sprite of hers to place and animate as the wife's is
- * (native/wife.c), so this stays a line and a light, not a figure.
+ * Married life. From then on she is seen, as herself: the game's event
+ * slot $13 (the one it gives a wife) holds her picture ($315 / $316, now
+ * and then the other, as if breathing) running an idle script of the
+ * game's own ($B3:8DED: wait a frame, again), and slot $14 (a child's; she
+ * has none) her sparkles ($317, the ones of her scene at the pond). Where:
+ *   - about one day in four she spends at home: in the house all day;
+ *   - the other days she is by the barn's door from 6:00 until 18:00, and
+ *     at home after that.
+ * Her pictures use OBJ palette 0 and her sparkles palette 3; with her as
+ * the wife there is no other wife or child to need palette 3, so both are
+ * drawn with it (the flip word's palette bits, $06 for her) and it is given
+ * her colours while she is on the map.
+ *
+ * Talking to her: A in front of her opens the game's own text box
+ * (textbox.c: its frame and font, the letters one by one with the game's
+ * letter sound), with her line for the place and the day; talking again
+ * that day brings the next line. Her words are in English, as the game's.
  */
 #include <stdio.h>
 #include <string.h>
 
+#include "ppu.h"
 #include "hm_decomp.h"
 #include "hm_ram.h"
 #include "hm_vars.h"
@@ -62,6 +73,7 @@
 #include "i18n.h"
 #include "host.h"
 #include "goddess.h"
+#include "textbox.h"
 
 #define SALE_TABLE 0x81A094            /* per item 3 bytes: its text, then the money */
 /* GODDESS_HINTED/ENGAGED/MARRIED: goddess.h. Engaged: the wedding is a week
@@ -256,18 +268,16 @@ static bool wedding(uint8_t *ram)
 }
 
 /* ── Married life ─────────────────────────────────────────────────────── */
-enum { BARN_TX = 20, BARN_TY = 22 };               /* in front of the barn's door (native/wife.c) */
-static const char *const kHomeLines[4] = {
-  "The Goddess of Spring: \"I wanted to see how the house looks today.\"",
-  "The Goddess of Spring: \"It's warm in here. I like it.\"",
-  "The Goddess of Spring: \"I'm not used to walls... but I don't mind these.\"",
-  "The Goddess of Spring: \"Tell me about your day, won't you?\"",
-};
-static const char *const kFarmLines[4] = {
-  "The Goddess of Spring: \"The barn's animals are doing well.\"",
-  "The Goddess of Spring: \"I like it out here, close to the ground.\"",
-  "The Goddess of Spring: \"Don't mind the sparkles. They follow me around.\"",
-  "The Goddess of Spring: \"Go on with your work. I'm happy just watching.\"",
+extern Ppu *g_ppu;
+#define HER_SLOT      0x0BA46u     /* event slot $13: $7E:B586 + $40 x $13 (fields: SLOT_*) */
+#define SPARKLE_SLOT  0x0BA86u     /* event slot $14 */
+enum {
+  IDLE_SCRIPT = 0x8DED,            /* $B3:8DED: WaitFrames 1, JumpToInstruction $8DED */
+  SPARKLE_SPRITE = 0x317,
+  HER_PALETTE = 3,                 /* OBJ palette 3: hers while she is on the map */
+  FARM_X = 20 * 16 + 8, FARM_Y = 23 * 16,     /* below the barn's door (tile 20, 21) */
+  HOUSE_X = 0x58, HOUSE_Y = 0x60,              /* by the bed */
+  AWAY_FROM = 18,                  /* her farm days: home from 18:00 */
 };
 
 static bool home_day(void)
@@ -275,37 +285,156 @@ static bool home_day(void)
   unsigned d = ((unsigned)today() + 7919u) * 2654435761u;
   return ((d >> 16) & 3) == 0;                      /* about one day in four */
 }
+static bool slot_runs_idle(uint32_t at)
+{
+  int pc = slot16(at, SLOT_SCRIPT);                  /* somewhere in its two commands (6 bytes) */
+  return g_ram[at] && g_ram[at + SLOT_SCRIPT_BANK] == 0xB3 && pc >= IDLE_SCRIPT && pc < IDLE_SCRIPT + 6;
+}
+/* the slot as one of hers: a picture standing still, its object made by the
+ * game on its next frame (flag $02) */
+static void put(uint32_t at, int number, int sprite, int palette_xor, int x, int y)
+{
+  memset(&g_ram[at], 0, 0x40);
+  g_ram[at + SLOT_IN_USE] = 1;
+  g_ram[at + SLOT_FLAGS] = 0x03;                    /* a picture; make its game object */
+  g_ram[at + SLOT_FRAMES] = 1;
+  g_ram[at + SLOT_SPRITE] = (uint8_t)sprite; g_ram[at + SLOT_SPRITE + 1] = (uint8_t)(sprite >> 8);
+  g_ram[at + SLOT_LAST_SPRITE] = g_ram[at + SLOT_SPRITE]; g_ram[at + SLOT_LAST_SPRITE + 1] = g_ram[at + SLOT_SPRITE + 1];
+  g_ram[at + SLOT_ANIMATION] = (uint8_t)(palette_xor << 1);
+  g_ram[at + SLOT_X] = (uint8_t)x; g_ram[at + SLOT_X + 1] = (uint8_t)(x >> 8);
+  g_ram[at + SLOT_Y] = (uint8_t)y; g_ram[at + SLOT_Y + 1] = (uint8_t)(y >> 8);
+  memcpy(&g_ram[at + SLOT_HOME_X], &g_ram[at + SLOT_X], 4);
+  g_ram[at + SLOT_SCRIPT] = (uint8_t)IDLE_SCRIPT; g_ram[at + SLOT_SCRIPT + 1] = (uint8_t)(IDLE_SCRIPT >> 8);
+  g_ram[at + SLOT_SCRIPT_BANK] = 0xB3;
+  g_ram[at + SLOT_NUMBER] = (uint8_t)number;
+}
+/* gone: the game drops its object (flag $40), and the slot is freed the
+ * frame after */
+static void take_away(uint32_t at)
+{
+  if (!slot_runs_idle(at)) return;
+  if (g_ram[at + SLOT_FLAGS] & 0x40) { g_ram[at + SLOT_IN_USE] = 0; return; }
+  g_ram[at + SLOT_FLAGS] |= 0x40;
+}
+/* her colours in OBJ palette 3: in the colours the game shows ($7F:0D00,
+ * copied to the picture chip's every frame, src/palette.c), the night's
+ * it prepares ($7F:0B00) and the copy itself */
+static void her_colours(void)
+{
+  static const uint32_t to[3] = { 0x10D00, 0x10B00, HM_CGRAM_SHADOW };
+  for (int k = 0; k < 3; k++)
+    for (int i = 0; i < 32; i++)
+      g_ram[to[k] + 256 + HER_PALETTE * 32 + i] = hm_bus_rd8(g_ram, GODDESS_PALETTE + (uint32_t)i);
+  /* and the chip's own: the game sends its copy only when it changes it */
+  if (g_ppu)
+    for (int i = 0; i < 16; i++)
+      g_ppu->cgram[128 + HER_PALETTE * 16 + i] = (uint16_t)(g_ram[HM_CGRAM_SHADOW + 256 + HER_PALETTE * 32 + 2 * i] |
+                                                           g_ram[HM_CGRAM_SHADOW + 256 + HER_PALETTE * 32 + 2 * i + 1] << 8);
+}
+
+/* where she is now: 1 the farm, 2 the house, 0 neither (as the day goes) */
+static int her_place(int map, int hour)
+{
+  bool house = map >= 0x15 && map <= 0x17, farm = map <= 3;
+  bool at_home = home_day() || hour >= AWAY_FROM || hour < 6;
+  if (farm && !at_home) return 1;
+  if (house && at_home) return 2;
+  return 0;
+}
+
+/* her lines: up to 3 pages of up to 3 lines, as they show in the box */
+typedef const char *Page[TEXTBOX_LINES];
+typedef struct { int pages; Page page[3]; } Line;
+static const Line kFarmLines[] = {
+  { 1, { { "The animals in the barn", "are doing well today." } } },
+  { 2, { { "I like it out here,", "close to the ground." }, { "The seeds can hear me", "if I sing to them." } } },
+  { 1, { { "Don't mind the sparkles.", "They follow me around." } } },
+  { 1, { { "Go on with your work,", "dear. I'm happy just", "watching you." } } },
+  { 2, { { "The spring water was", "sweet this morning." }, { "It's a good sign for", "the farm, you know." } } },
+};
+static const Line kHomeLines[] = {
+  { 2, { { "Welcome home, dear!" }, { "I'm not used to walls...", "but I like these ones." } } },
+  { 1, { { "It's warm in here.", "I like it." } } },
+  { 1, { { "Tell me about your day,", "won't you?" } } },
+  { 2, { { "Rest well tonight." }, { "The spring keeps watch", "over the farm while", "you sleep." } } },
+};
+#define COUNT(a) (int)(sizeof (a) / sizeof (a)[0])
+
+static struct {
+  int day, talks;                  /* talks today, for the next line */
+  bool want_dialog;
+  TextboxTalk talk;
+  unsigned frame;
+} G;
+
+/* the player's buttons, before the game reads them: A in front of her
+ * opens her talk (and is kept from the game until let go) */
+uint16_t goddess_pad(uint16_t pad)
+{
+  static uint16_t prev;
+  static bool hold;
+  bool pressed = (pad & B_A) && !(prev & B_A);
+  prev = pad;
+  if (hold) { if (pad & B_A) return (uint16_t)(pad & ~B_A); hold = false; }
+  if (!pressed || !g_cfg.goddess || !(g_hm_goddess_flags & GODDESS_MARRIED) || !slot_runs_idle(HER_SLOT)) return pad;
+  if (!player_free() || (hm_rd16(g_ram, HM_FLAGS_5A) & 0x4000)) return pad;   /* a box is open */
+  static const int ahead[4][2] = { { 0, 16 }, { 0, -16 }, { 16, 0 }, { -16, 0 } };
+  int f = hm_rd16(g_ram, 0xDA) & 3;                  /* the way the player faces */
+  int fx = hm_rd16(g_ram, HM_PLAYER_X) + ahead[f][0], fy = hm_rd16(g_ram, HM_PLAYER_Y) + ahead[f][1];
+  int dx = slot16(HER_SLOT, SLOT_X) - fx, dy = slot16(HER_SLOT, SLOT_Y) - fy;
+  if (dx < -12 || dx > 12 || dy < -12 || dy > 12) return pad;   /* not in front of her */
+  G.want_dialog = true;
+  hold = true;
+  return (uint16_t)(pad & ~B_A);
+}
+
+bool goddess_dialog_wanted(void) { bool b = G.want_dialog; G.want_dialog = false; return b; }
+void goddess_dialog_open(void)
+{
+  if (G.day != today()) { G.day = today(); G.talks = 0; }
+  bool farm = g_ram[HM_MAP_ID] <= 3;
+  const Line *lines = farm ? kFarmLines : kHomeLines;
+  int n = farm ? COUNT(kFarmLines) : COUNT(kHomeLines);
+  unsigned first = ((unsigned)today() * 2654435761u >> 16) % (unsigned)n;
+  const Line *l = &lines[(first + (unsigned)G.talks) % (unsigned)n];
+  G.talks++;
+  memset(&G.talk, 0, sizeof G.talk);
+  G.talk.pages = l->pages;
+  for (int p = 0; p < l->pages; p++)
+    for (int i = 0; i < TEXTBOX_LINES; i++) G.talk.lines[p][i] = l->page[p][i];
+  textbox_talk_open(&G.talk);
+}
+bool goddess_dialog_update(const UiInput *in) { return textbox_talk_update(&G.talk, in); }
+void goddess_dialog_draw(uint32_t *dst, int w) { textbox_talk_draw(&G.talk, dst, w); }
 
 void goddess_married_tick(uint8_t *ram)
 {
-  g_hm_goddess_at_home = false;
-  g_hm_goddess_sparkle = false;
   if (!g_cfg.goddess) return;
-
   if (wedding(ram)) return;
-  if (!(g_hm_goddess_flags & GODDESS_MARRIED)) return;
+  int place = (g_hm_goddess_flags & GODDESS_MARRIED) && hm_diary_loaded(ram) ? her_place(ram[HM_MAP_ID], ram[HM_HOUR]) : 0;
+  if (!place) { take_away(HER_SLOT); take_away(SPARKLE_SLOT); return; }
 
-  static int last_toast_day = -1;
-  bool home = home_day();
-  int map = ram[HM_MAP_ID];
-  bool house = map >= 0x15 && map <= 0x17, farm = map <= 3;
+  int x = place == 1 ? FARM_X : HOUSE_X, y = place == 1 ? FARM_Y : HOUSE_Y;
+  /* the slots are the game's: only empty ones are taken */
+  if (!slot_runs_idle(HER_SLOT)) {
+    if (ram[HER_SLOT]) return;
+    put(HER_SLOT, 0x13, GODDESS_SPRITE, HER_PALETTE ^ 0, x, y);
+  }
+  if (!slot_runs_idle(SPARKLE_SLOT) && !ram[SPARKLE_SLOT])
+    put(SPARKLE_SLOT, 0x14, SPARKLE_SPRITE, 0, x, y - 4);
+  her_colours();
 
-  if (home && house) {
-    g_hm_goddess_at_home = true;
-    if (last_toast_day != today()) {
-      last_toast_day = today();
-      unsigned pick = ((unsigned)today() * 2654435761u >> 16) & 3;
-      host_toast(T(kHomeLines[pick]));
-    }
-  } else if (!home && farm) {
-    g_hm_goddess_sparkle = true;
-    int px = hm_rd16(ram, HM_PLAYER_X), py = hm_rd16(ram, HM_PLAYER_Y);
-    int dx = px - BARN_TX * 16, dy = py - (BARN_TY + 1) * 16;
-    if (last_toast_day != today() && dx * dx + dy * dy < 48 * 48) {
-      last_toast_day = today();
-      unsigned pick = ((unsigned)today() * 2654435761u >> 16) & 3;
-      host_toast(T(kFarmLines[pick]));
-    }
+  /* now and then her other picture, and the sparkles turning */
+  G.frame++;
+  int sprite = (G.frame % 150) < 12 ? GODDESS_SPRITE + 1 : GODDESS_SPRITE;
+  if (slot16(HER_SLOT, SLOT_SPRITE) != sprite) {
+    ram[HER_SLOT + SLOT_SPRITE] = (uint8_t)sprite; ram[HER_SLOT + SLOT_SPRITE + 1] = (uint8_t)(sprite >> 8);
+    ram[HER_SLOT + SLOT_FLAGS] |= 0x04;
+  }
+  if (slot_runs_idle(SPARKLE_SLOT) && G.frame % 24 == 0) {
+    ram[SPARKLE_SLOT + SLOT_ANIMATION] ^= 0x40;      /* mirrored: the sparkles move */
+    ram[SPARKLE_SLOT + SLOT_FLAGS] |= 0x04;
+    ram[SPARKLE_SLOT + SLOT_LAST_SPRITE] ^= 1;       /* so the game redraws it */
   }
 }
 
@@ -315,4 +444,5 @@ void goddess_reset(void)
    * cut short by a reset starts again the next time (its bit is not kept) */
   s_wedding = NO_WEDDING;
   g_hm_slot_picture = NULL;
+  memset(&G, 0, sizeof G);
 }
