@@ -585,6 +585,55 @@ static void draw_filter(SDL_FRect dst)
   SDL_FRect at = { dst.x, dst.y, (float)mw, (float)mh };
   SDL_RenderTexture(s_renderer, s_mask, NULL, &at);
 }
+/* Filter "Smooth": Scale2x (EPX) twice, so 4 times the picture with its
+ * diagonals rounded and its edges kept sharp (no blur across a colour
+ * change), then a soft scale to the screen. */
+static void scale2x(const uint32_t *src, int w, int h, uint32_t *dst)
+{
+  for (int y = 0; y < h; y++)
+    for (int x = 0; x < w; x++) {
+      uint32_t p = src[y * w + x];
+      uint32_t a = y > 0 ? src[(y - 1) * w + x] : p, d = y < h - 1 ? src[(y + 1) * w + x] : p;
+      uint32_t c = x > 0 ? src[y * w + x - 1] : p, b = x < w - 1 ? src[y * w + x + 1] : p;
+      uint32_t e0 = p, e1 = p, e2 = p, e3 = p;
+      if (a != d && c != b) {
+        if (c == a) e0 = c;
+        if (a == b) e1 = b;
+        if (c == d) e2 = c;
+        if (d == b) e3 = b;
+      }
+      uint32_t *o = dst + (size_t)(2 * y) * (2 * w) + 2 * x;
+      o[0] = e0; o[1] = e1; o[2 * w] = e2; o[2 * w + 1] = e3;
+    }
+}
+static SDL_Texture *s_smooth; static int s_smooth_w;
+static bool present_smooth(const void *pixels, int w, SDL_FRect dst, int ow, int oh)
+{
+  static uint32_t *b2, *b4; static int bw;
+  if (w != bw) {
+    free(b2); free(b4);
+    b2 = malloc((size_t)w * H * 4 * 4); b4 = malloc((size_t)w * H * 16 * 4);
+    bw = (b2 && b4) ? w : 0;
+  }
+  if (!bw) return false;
+  if (!s_smooth || s_smooth_w != w) {
+    if (s_smooth) SDL_DestroyTexture(s_smooth);
+    s_smooth = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, w * 4, H * 4);
+    if (!s_smooth) return false;
+    SDL_SetTextureScaleMode(s_smooth, SDL_SCALEMODE_LINEAR);
+    s_smooth_w = w;
+  }
+  scale2x(pixels, w, H, b2);
+  scale2x(b2, w * 2, H * 2, b4);
+  SDL_UpdateTexture(s_smooth, NULL, b4, w * 4 * 4);
+  SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
+  SDL_RenderClear(s_renderer);
+  SDL_RenderTexture(s_renderer, s_smooth, NULL, &dst);
+  if (!s_in_menu) touch_draw(s_renderer, ow, oh, dst);
+  test_shot();
+  SDL_RenderPresent(s_renderer);
+  return true;
+}
 static void present(const void *pixels, int w)
 {
   if (w != s_tex_w) {
@@ -621,6 +670,7 @@ static void present(const void *pixels, int w)
   if (g_cfg.exact_pixels && scale >= 1) scale = (float)k;
   SDL_FRect dst = { (float)(int)((ow - w * scale) / 2), (float)(int)((oh - H * scale) / 2), w * scale, H * scale };
   s_dst = dst;
+  if (g_cfg.filter == 4 && present_smooth(pixels, w, dst, ow, oh)) return;
   SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
   if (s_soft || (float)k == scale) {
     SDL_RenderClear(s_renderer);
