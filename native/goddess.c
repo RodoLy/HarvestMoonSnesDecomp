@@ -15,8 +15,8 @@
  *   disliked    Poison Mushroom
  *   the rest    their sale money (10 to 30)
  *
- * At ten hearts, the Blue Feather proposes — the same item the game's
- * own girls are asked for — rather than a favourite offering.
+ * At ten hearts, the Blue Feather proposes — the same tool the game's
+ * own girls are shown — shown at her pond (see The proposal, below).
  *
  * Hearts go from 0 to 1000 (ten hearts, 100 each, as the girls' in the
  * pause menu) and are kept in the diary (src/save.c, +26 to +2B).
@@ -64,6 +64,9 @@
  * drawn with it (the flip word's palette bits, $06 for her) and it is given
  * her colours while she is on the map.
  *
+ * Everything she says, at the pond too (offerings, the hint, the
+ * proposal), is in the game's own text box with its letter sound.
+ *
  * Talking to her: A in front of her opens the game's own text box
  * (textbox.c: its frame and font, the letters one by one with the game's
  * letter sound), with her line for the place and the day; talking again
@@ -89,7 +92,7 @@
  * after the proposal (the day of the last offering). */
 enum {
   IT_POISON_MUSHROOM = 0x02, IT_FULLMOON_BERRY = 0x05, IT_CAKE = 0x06,
-  IT_LARGE_MILK = 0x17, IT_BLUE_FEATHER = 0x41,
+  IT_LARGE_MILK = 0x17,
 };
 
 static int today(void) { return g_ram[HM_YEAR] * 120 + (g_ram[HM_SEASON] & 3) * 30 + g_ram[HM_DAY]; }
@@ -112,30 +115,60 @@ static void add_hearts(int d)
  * 599, 899, more) and how much she liked the thing (0 disliked, 1 plain,
  * 2 fine, 3 a favourite) */
 static const char *const kLines[4][4] = {
-  { "The Goddess of Spring: \"...Poison? Please don't.\"",
-    "The Goddess of Spring: \"Oh, an offering. Thank you, traveler.\"",
-    "The Goddess of Spring: \"That's a fine thing to give. Thank you.\"",
-    "The Goddess of Spring: \"Oh! This is one of my favourites. How did you know?\"" },
-  { "The Goddess of Spring: \"That's not something I can accept.\"",
-    "The Goddess of Spring: \"You come here often. The pond is glad.\"",
-    "The Goddess of Spring: \"You always bring such nice things.\"",
-    "The Goddess of Spring: \"My favourite! You remembered!\"" },
-  { "The Goddess of Spring: \"...I thought you liked me.\"",
-    "The Goddess of Spring: \"I was hoping you'd come today.\"",
-    "The Goddess of Spring: \"Thank you. I think about your farm a lot.\"",
-    "The Goddess of Spring: \"You spoil me... I'll treasure it.\"" },
-  { "The Goddess of Spring: \"Why would you bring me this?\"",
-    "The Goddess of Spring: \"Seeing you is the best part of my day.\"",
-    "The Goddess of Spring: \"Every time you come, the water shines brighter.\"",
-    "The Goddess of Spring: \"I love it... and I think I love you, too.\"" },
+  { "...Poison? Please don't.",
+    "Oh, an offering. Thank you, traveler.",
+    "That's a fine thing to give. Thank you.",
+    "Oh! This is one of my favourites. How did you know?" },
+  { "That's not something I can accept.",
+    "You come here often. The pond is glad.",
+    "You always bring such nice things.",
+    "My favourite! You remembered!" },
+  { "...I thought you liked me.",
+    "I was hoping you'd come today.",
+    "Thank you. I think about your farm a lot.",
+    "You spoil me... I'll treasure it." },
+  { "Why would you bring me this?",
+    "Seeing you is the best part of my day.",
+    "Every time you come, the water shines brighter.",
+    "I love it... and I think I love you, too." },
 };
+
+/* What she says goes in the game's own text box (textbox.c), as the
+ * game's people talk: each say() is wrapped to the box's width and starts
+ * a page of its own; the box opens at the end of the frame
+ * (goddess_dialog_wanted). */
+static char s_said[6][TEXTBOX_LINES][TEXTBOX_COLUMNS + 1];
+static int s_said_pages;
+static void say(const char *words)
+{
+  int line = 0;
+  const char *p = words;
+  while (*p && s_said_pages < 6) {
+    char *out = s_said[s_said_pages][line];
+    int n = 0;
+    while (*p == ' ') p++;
+    for (;;) {                                       /* whole words while they fit */
+      const char *end = p;
+      while (*end && *end != ' ') end++;
+      int len = (int)(end - p);
+      if (n && n + 1 + len > TEXTBOX_COLUMNS) break;
+      if (!n && len > TEXTBOX_COLUMNS) len = TEXTBOX_COLUMNS;   /* a word longer than a line */
+      if (n) out[n++] = ' ';
+      memcpy(out + n, p, (size_t)len); n += len; out[n] = 0;
+      p += len;
+      while (*p == ' ') p++;
+      if (!*p) break;
+    }
+    if (++line == TEXTBOX_LINES || !*p) { s_said_pages++; line = 0; }
+  }
+}
 
 static void offer(uint8_t *ram, uint8_t item)
 {
   (void)ram;
   if (!g_cfg.goddess || item == 0) return;
   if (g_hm_goddess_flags & GODDESS_ENGAGED) {
-    host_toast(T("The Goddess of Spring: \"I'm getting ready for our wedding. See you soon!\""));
+    say("I'm getting ready for our wedding. See you soon!");
     return;
   }
   int d, like;
@@ -151,31 +184,66 @@ static void offer(uint8_t *ram, uint8_t item)
   }
   }
   if (g_hm_goddess_day == (uint16_t)today()) {
-    host_toast(T("The Goddess of Spring: \"You already brought me something today. Come back tomorrow!\""));
-    return;
-  }
-  /* the proposal: her ten hearts, the house built up once, and the Blue Feather */
-  if (g_hm_goddess_hearts >= 1000 && item == IT_BLUE_FEATHER && (hm_rd16(g_ram, HM_FLAGS_64) & 0x0040) &&
-      !(hm_rd16(g_ram, HM_FLAGS_66) & 0x001F)) {     /* not married to one of the girls */
-    g_hm_goddess_day = (uint16_t)today();
-    g_hm_goddess_flags |= GODDESS_ENGAGED;
-    host_toast(T("The Goddess of Spring: \"A Blue Feather... for me? Yes. Yes, I'll marry you! In a week, in front of the church.\""));
+    say("You already brought me something today. Come back tomorrow!");
     return;
   }
   int tier = g_hm_goddess_hearts < 300 ? 0 : g_hm_goddess_hearts < 600 ? 1 : g_hm_goddess_hearts < 900 ? 2 : 3;
   g_hm_goddess_day = (uint16_t)today();
   add_hearts(d);
-  host_toast(T(kLines[tier][like]));
+  say(kLines[tier][like]);
   if (g_hm_goddess_hearts >= 1000 && !(g_hm_goddess_flags & GODDESS_HINTED)) {
     g_hm_goddess_flags |= GODDESS_HINTED;
-    host_toast(T("The Goddess of Spring: \"...If you ever brought me a Blue Feather, I might say something important.\""));
+    say("...If you ever brought me a Blue Feather, I might say something important.");
   }
+}
+
+/* ── The proposal ───────────────────────────────────────────────────────
+ * The Blue Feather is a tool, not a thing to throw: it is shown (used),
+ * as to the girls. Shown facing her small pond (tile type $F4 in front, on
+ * the mountain), with her ten hearts, the house built up once and no other
+ * wife, it is a yes; the day is kept, the wedding is a week later.
+ * ToolUsedBlueFeather calls feather_used during the game's frame; the
+ * pond is looked at once the frame is over. */
+static bool s_feather_used;
+static void feather_used(void) { s_feather_used = true; }
+
+static bool facing_her_pond(void)
+{
+  int map = g_ram[HM_MAP_ID];
+  if (map < 0x10 || map > 0x13) return false;      /* the mountain, each season */
+  static const int ahead[4][2] = { { 0, 16 }, { 0, -16 }, { 16, 0 }, { -16, 0 } };
+  int f = hm_rd16(g_ram, 0xDA) & 3;                  /* the way the player faces */
+  HmRegs r;
+  memset(&r, 0, sizeof r);
+  r.db = 0x7E;
+  r.a = 2;
+  r.x = (uint16_t)(hm_rd16(g_ram, HM_PLAYER_X) + ahead[f][0]);
+  r.y = (uint16_t)(hm_rd16(g_ram, HM_PLAYER_Y) + ahead[f][1]);
+  hm_GetTileProperty(g_ram, &r);                     /* X = the tile's type */
+  return r.x == 0xF4;
+}
+
+static void propose(void)
+{
+  if (g_hm_goddess_flags & GODDESS_MARRIED) { say("I still have your feather, dear. It's by the pond."); return; }
+  if (g_hm_goddess_flags & GODDESS_ENGAGED) { say("I'm getting ready for our wedding. See you soon!"); return; }
+  if (hm_rd16(g_ram, HM_FLAGS_66) & 0x001F) { say("A Blue Feather...? You already gave your heart to someone. Be good to her."); return; }
+  if (g_hm_goddess_hearts < 1000) { say("A Blue Feather...? How pretty. But we hardly know each other yet."); return; }
+  if (!(hm_rd16(g_ram, HM_FLAGS_64) & 0x0040)) { say("A Blue Feather... for me? Oh... But where would we live? Your house is so small."); return; }
+  g_hm_goddess_day = (uint16_t)today();
+  g_hm_goddess_flags |= GODDESS_ENGAGED;
+  say("A Blue Feather... for me? Yes. Yes, I'll marry you! In a week, at the church.");
 }
 
 void goddess_frame(void)
 {
   g_hm_goddess_on = g_cfg.goddess;
   g_hm_spring_offer = g_cfg.goddess ? offer : NULL;
+  g_hm_feather_used = g_cfg.goddess ? feather_used : NULL;
+  if (s_feather_used) {
+    s_feather_used = false;
+    if (g_cfg.goddess && hm_diary_loaded(g_ram) && facing_her_pond()) propose();
+  }
 }
 
 /* ── The wedding ──────────────────────────────────────────────────────── */
@@ -271,7 +339,7 @@ static bool wedding(uint8_t *ram)
     /* the scene is over (the next morning at home) */
     s_wedding = NO_WEDDING;
     g_hm_slot_picture = NULL;
-    host_toast(T("The Goddess of Spring: \"I'm yours now, for as long as the spring returns.\""));
+    say("I'm yours now, for as long as the spring returns.");
   }
   return true;
 }
@@ -413,9 +481,17 @@ uint16_t goddess_pad(uint16_t pad)
   return (uint16_t)(pad & ~B_A);
 }
 
-bool goddess_dialog_wanted(void) { bool b = G.want_dialog; G.want_dialog = false; return b; }
+bool goddess_dialog_wanted(void) { bool b = G.want_dialog || s_said_pages; G.want_dialog = false; return b; }
 void goddess_dialog_open(void)
 {
+  if (s_said_pages) {                                /* what she just said (an offering, the feather...) */
+    memset(&G.talk, 0, sizeof G.talk);
+    G.talk.pages = s_said_pages;
+    for (int p = 0; p < s_said_pages; p++)
+      for (int i = 0; i < TEXTBOX_LINES; i++) G.talk.lines[p][i] = s_said[p][i][0] ? s_said[p][i] : NULL;
+    textbox_talk_open(&G.talk);
+    return;
+  }
   if (G.day != today()) { G.day = today(); G.talks = 0; }
   bool farm = g_ram[HM_MAP_ID] <= 3;
   const Line *lines = farm ? kFarmLines : kHomeLines;
@@ -429,7 +505,12 @@ void goddess_dialog_open(void)
     for (int i = 0; i < TEXTBOX_LINES; i++) G.talk.lines[p][i] = l->page[p][i];
   textbox_talk_open(&G.talk);
 }
-bool goddess_dialog_update(const UiInput *in) { return textbox_talk_update(&G.talk, in); }
+bool goddess_dialog_update(const UiInput *in)
+{
+  bool over = textbox_talk_update(&G.talk, in);
+  if (over) { s_said_pages = 0; memset(s_said, 0, sizeof s_said); }   /* heard */
+  return over;
+}
 void goddess_dialog_draw(uint32_t *dst, int w) { textbox_talk_draw(&G.talk, dst, w); }
 
 /* a frame of floating: towards the spot, then resting there a while;
@@ -510,4 +591,5 @@ void goddess_reset(void)
   s_wedding = NO_WEDDING;
   g_hm_slot_picture = NULL;
   memset(&G, 0, sizeof G);
+  s_said_pages = 0;
 }

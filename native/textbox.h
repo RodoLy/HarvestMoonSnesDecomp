@@ -25,11 +25,11 @@ int textbox_letters(const char *s);
 typedef struct { int shown, tick; } TextboxPrinter;
 bool textbox_print(TextboxPrinter *p, int total, const UiInput *in);
 
-/* A talk: up to 3 pages of up to 3 lines, each line as the box shows it
+/* A talk: up to 6 pages of up to 3 lines, each line as the box shows it
  * (no wrapping is done; TEXTBOX_COLUMNS letters at most). A turns the page
  * once it is all printed; after the last page the talk is over. */
 typedef struct {
-  const char *lines[3][TEXTBOX_LINES];
+  const char *lines[6][TEXTBOX_LINES];
   int pages, page;
   TextboxPrinter printer;
   unsigned frame;
