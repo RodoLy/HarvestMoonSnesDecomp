@@ -734,18 +734,19 @@ static void take_away(uint32_t at)
 /* her colours in OBJ palette 3: in the colours the game shows ($7F:0D00,
  * copied to the picture chip's every frame, src/palette.c), the night's
  * it prepares ($7F:0B00) and the copy itself */
-static void her_colours(void)
+static void colours_in(int palette, uint32_t from)
 {
   static const uint32_t to[3] = { 0x10D00, 0x10B00, HM_CGRAM_SHADOW };
   for (int k = 0; k < 3; k++)
     for (int i = 0; i < 32; i++)
-      g_ram[to[k] + 256 + HER_PALETTE * 32 + i] = hm_bus_rd8(g_ram, GODDESS_PALETTE + (uint32_t)i);
+      g_ram[to[k] + 256 + palette * 32 + i] = hm_bus_rd8(g_ram, from + (uint32_t)i);
   /* and the chip's own: the game sends its copy only when it changes it */
   if (g_ppu)
     for (int i = 0; i < 16; i++)
-      g_ppu->cgram[128 + HER_PALETTE * 16 + i] = (uint16_t)(g_ram[HM_CGRAM_SHADOW + 256 + HER_PALETTE * 32 + 2 * i] |
-                                                           g_ram[HM_CGRAM_SHADOW + 256 + HER_PALETTE * 32 + 2 * i + 1] << 8);
+      g_ppu->cgram[128 + palette * 16 + i] = (uint16_t)(g_ram[HM_CGRAM_SHADOW + 256 + palette * 32 + 2 * i] |
+                                                       g_ram[HM_CGRAM_SHADOW + 256 + palette * 32 + 2 * i + 1] << 8);
 }
+static void her_colours(void) { colours_in(HER_PALETTE, GODDESS_PALETTE); }
 
 /* the places she floats between (pixels in the map): around the barn's
  * door (tile 20, 21); at midday over the field, south of the fence; at
@@ -904,10 +905,76 @@ static void move_slot(uint32_t at, int x, int y)
   g_ram[at + SLOT_Y] = (uint8_t)y; g_ram[at + SLOT_Y + 1] = (uint8_t)(y >> 8);
 }
 
+/* ── Her family: the Water Imp ────────────────────────────────────────
+ * The spring's spirit (sprite $308: the game puts him in
+ * the spring when a fish is given back, event group $10) is her family.
+ * Where a girl's family comes, he does: at the bride's side at the
+ * wedding, by the bed at the child's birth, and by the wife in front of
+ * the church in the ending. He stands in event slot $17 as a still
+ * picture, in the mountain's colours, or hers: OBJ palette 0 at the wedding (they are there,
+ * wedding_colours), palette 1 elsewhere (the birth's and the ending's
+ * figures leave it free; 0-3 are the ones the town's colour effects leave
+ * alone). */
+#define IMP_SLOT 0x0BB46u              /* event slot $17 */
+#define IMP_COLOURS 0xA9DE00           /* file 0x14DE00: the mountain's figures (his, by the spring) */
+enum {
+  IMP_SPRITE = 0x308,
+  WIFE_FROM = 0x2E2, WIFE_TO = 0x2E9,  /* the wife's figures in the ending (her palette 3) */
+  BEDSIDE_X = 336, BEDSIDE_Y = 120,    /* where a girl's family stands at the birth */
+  TOWN_SQUARE = 0x05,
+  NO_PALETTE = -1, IMP_PALETTE = 1,
+};
+static int s_imp_palette = NO_PALETTE;
+
+static bool imp_place(uint8_t *ram, int *x, int *y)
+{
+  if (s_wedding == WEDDING_ON) {                     /* at the bride's side */
+    uint32_t bride = 0xB586u + 64u * SLOT_BRIDE;
+    if (!ram[bride]) return false;
+    *x = slot16(bride, SLOT_X) + 24; *y = slot16(bride, SLOT_Y);
+    return true;
+  }
+  int map = ram[HM_MAP_ID];
+  if (in_childbed(ram) && map >= 0x15 && map <= 0x17) { *x = BEDSIDE_X; *y = BEDSIDE_Y; return true; }
+  if (s_lent_for_ending && map == TOWN_SQUARE)       /* the ending's gathering */
+    for (int n = 1; n < 0x13; n++) {
+      uint32_t at = 0xB586u + 64u * (uint32_t)n;
+      int sprite = slot16(at, SLOT_SPRITE);
+      if (ram[at] && sprite >= WIFE_FROM && sprite <= WIFE_TO) {
+        *x = slot16(at, SLOT_X) + 20; *y = slot16(at, SLOT_Y);
+        return true;
+      }
+    }
+  return false;
+}
+static void imp_tick(uint8_t *ram)
+{
+  int x, y;
+  if (!hm_diary_loaded(ram) || !imp_place(ram, &x, &y)) {
+    take_away(IMP_SLOT);
+    s_imp_palette = NO_PALETTE;
+    return;
+  }
+  s_imp_palette = s_wedding == WEDDING_ON ? 0 : IMP_PALETTE;
+  if (s_wedding != WEDDING_ON) colours_in(s_imp_palette, IMP_COLOURS);
+  if (!slot_runs_idle(IMP_SLOT)) {
+    if (ram[IMP_SLOT]) return;                       /* the slot is the game's now */
+    put(IMP_SLOT, 0x17, IMP_SPRITE, s_imp_palette, x, y);
+  }
+  if ((ram[IMP_SLOT + SLOT_ANIMATION] >> 1 & 7) != s_imp_palette) {
+    ram[IMP_SLOT + SLOT_ANIMATION] = (uint8_t)((ram[IMP_SLOT + SLOT_ANIMATION] & ~0x0E) | s_imp_palette << 1);
+    ram[IMP_SLOT + SLOT_FLAGS] |= 0x04;
+    ram[IMP_SLOT + SLOT_LAST_SPRITE] ^= 1;           /* so the game redraws it */
+  }
+  move_slot(IMP_SLOT, x, y);
+}
+
 void goddess_married_tick(uint8_t *ram)
 {
   if (!g_cfg.goddess) return;
-  if (wedding(ram)) return;
+  bool wed = wedding(ram);
+  imp_tick(ram);
+  if (wed) return;
   int place = (g_hm_goddess_flags & GODDESS_MARRIED) && hm_diary_loaded(ram) ? her_place(ram[HM_MAP_ID], ram[HM_HOUR]) : 0;
   if (s_lent_for_ending) {                            /* the game's wife till the game ends */
     childbed_colours();
@@ -968,6 +1035,7 @@ void goddess_reset(void)
   s_said_pages = 0;
   s_scene = NO_SCENE;
   s_lent_for_ending = false;                         /* the game starts over: its RAM too */
+  s_imp_palette = NO_PALETTE;
   s_scene_frames = 0;
   s_shop = NO_SHOP;
   s_keep_no_text = false;
