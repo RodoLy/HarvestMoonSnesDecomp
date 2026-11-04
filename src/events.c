@@ -571,6 +571,8 @@ static void object_call(uint8_t *ram, HmRegs *r, uint16_t ret, void (*fn)(uint8_
 
 void hm_UpdateSlotSprite(uint8_t *ram, HmRegs *r)
 {
+  if (g_hm_slot_picture)                         /* the native build's (hm_decomp.h) */
+    g_hm_slot_picture(ram, hm_dp_long(ram, r, HM_EVENT_SLOT, 0) & 0x1FFFF);
   uint8_t flags = slot8(ram, r, SLOT_FLAGS);
   r->a = (uint16_t)((r->a & 0xFF00) | (flags & 0x10));
   if (!(flags & 0x10)) {

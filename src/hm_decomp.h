@@ -313,6 +313,12 @@ extern void (*g_hm_spring_offer)(uint8_t *ram, uint8_t item);
  * today, by the day alone. g_hm_goddess_at_home: a line is due at the house.
  * g_hm_goddess_sparkle: draw the sparkles by the barn (native/main.c). */
 extern int g_hm_goddess_at_home, g_hm_goddess_sparkle;
+/* g_hm_slot_picture: when set, called by UpdateSlotSprite (events.c) with
+ * each event slot's address in ram[] before the slot's picture goes to its
+ * game object, so the host can dress a slot as someone else (the
+ * goddess's wedding, native/goddess.c). It may change the slot's sprite
+ * (+16) and flip (+14) and set flag $04 (+01). Off: the game as it is. */
+extern void (*g_hm_slot_picture)(uint8_t *ram, uint32_t slot);
 extern uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 /* the loops' own entries the host needs (not checked on their own) */
 void hm_IntroDemoCheck(uint8_t *ram, HmRegs *r);    /* intro.c: the demo check */
