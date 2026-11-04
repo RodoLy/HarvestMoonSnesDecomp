@@ -534,6 +534,57 @@ static void test_touch(void)
     SDL_PushEvent(&ev);
   }
 }
+/* The picture's filter (Options > Filter), drawn over the game as a mask
+ * that multiplies it (SDL_BLENDMODE_MOD): scanlines darken the gap between
+ * two of the console's rows; CRT adds an aperture grille (red, green and
+ * blue columns, one each) and a soft darkening towards the corners. The mask
+ * is made once for the picture's size on the screen. */
+static SDL_Texture *s_mask;
+static int s_mask_w, s_mask_h, s_mask_kind;
+static void draw_filter(SDL_FRect dst)
+{
+  int kind = g_cfg.filter;
+  if (kind <= 0 || dst.h < H) return;
+  int mw = (int)(dst.w + 0.5f), mh = (int)(dst.h + 0.5f);
+  if (!s_mask || mw != s_mask_w || mh != s_mask_h || kind != s_mask_kind) {
+    if (s_mask) SDL_DestroyTexture(s_mask);
+    s_mask = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, mw, mh);
+    if (!s_mask) return;
+    SDL_SetTextureBlendMode(s_mask, SDL_BLENDMODE_MOD);
+    SDL_SetTextureScaleMode(s_mask, SDL_SCALEMODE_NEAREST);
+    uint32_t *m = malloc((size_t)mw * mh * 4);
+    if (!m) { SDL_DestroyTexture(s_mask); s_mask = NULL; return; }
+    float rows = dst.h / H;                          /* screen pixels per console row */
+    float depth = kind == 2 ? 0.42f : 0.5f;
+    if (rows < 2.5f) depth *= (rows - 1.0f) / 1.5f;  /* small pictures: lighter lines, no moiré */
+    bool grille = kind == 2 && dst.w / s_tex_w >= 3.0f;
+    for (int y = 0; y < mh; y++) {
+      float g = (y + 0.5f) * H / dst.h, f = g - SDL_floorf(g);
+      float e = SDL_fabsf(f - 0.5f) * 2.0f;           /* 0 in a row's middle, 1 at its edge */
+      float line = 1.0f - depth * e * e * e;
+      float ny = (y + 0.5f) / mh * 2.0f - 1.0f;
+      for (int x = 0; x < mw; x++) {
+        float r = line, gr = line, b = line;
+        if (kind == 2) {
+          if (grille) {
+            int c = x % 3;
+            r *= c == 0 ? 1.0f : 0.82f; gr *= c == 1 ? 1.0f : 0.82f; b *= c == 2 ? 1.0f : 0.82f;
+          }
+          float nx = (x + 0.5f) / mw * 2.0f - 1.0f, d = nx * nx * 0.5f + ny * ny * 0.5f;
+          float v = 1.0f - 0.22f * d * d;
+          r *= v; gr *= v; b *= v;
+        }
+        m[(size_t)y * mw + x] = 0xFF000000u | (uint32_t)(r * 255.0f + 0.5f) << 16 |
+                                (uint32_t)(gr * 255.0f + 0.5f) << 8 | (uint32_t)(b * 255.0f + 0.5f);
+      }
+    }
+    SDL_UpdateTexture(s_mask, NULL, m, mw * 4);
+    free(m);
+    s_mask_w = mw; s_mask_h = mh; s_mask_kind = kind;
+  }
+  SDL_FRect at = { dst.x, dst.y, (float)mw, (float)mh };
+  SDL_RenderTexture(s_renderer, s_mask, NULL, &at);
+}
 static void present(const void *pixels, int w)
 {
   if (w != s_tex_w) {
@@ -556,6 +607,7 @@ static void present(const void *pixels, int w)
   if (s_soft || (float)k == scale) {
     SDL_RenderClear(s_renderer);
     SDL_RenderTexture(s_renderer, s_texture, NULL, &dst);
+    draw_filter(dst);
     if (!s_in_menu) touch_draw(s_renderer, ow, oh, dst);
     test_shot();
     SDL_RenderPresent(s_renderer);
@@ -576,6 +628,7 @@ static void present(const void *pixels, int w)
     SDL_RenderClear(s_renderer);
     SDL_RenderTexture(s_renderer, s_texture, NULL, &dst);
   }
+  draw_filter(dst);
   if (!s_in_menu) touch_draw(s_renderer, ow, oh, dst);
   test_shot();
   SDL_RenderPresent(s_renderer);

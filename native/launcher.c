@@ -46,7 +46,7 @@ enum {
 enum {
   V_FULLSCREEN = 1, V_SCALE, V_PICTURE, V_VSYNC, V_WIDESCREEN, V_SPRITES, V_VOLUME, V_FF, V_LANG,
   V_SHOWLAUNCHER, V_FASTTEXT, V_DAYLEN, V_PAUSE, V_TITLEOPT, V_ENDLESS, V_MONEY, V_STAMINA,
-  V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL, V_CROPS, V_SEEDS, V_MOUSE, V_BAG, V_TOUCH, V_SECOND, V_WIFE, V_CLOTHES,
+  V_CLOCK, V_STOCK, V_BAGS, V_WEATHER, V_PADSEL, V_CROPS, V_SEEDS, V_MOUSE, V_BAG, V_TOUCH, V_SECOND, V_WIFE, V_CLOTHES, V_FILTER,
   V_PACK = 1000,          /* + the mod's place (modpack.c) */
 };
 
@@ -224,6 +224,7 @@ static int get_value(int id)
   case V_TOUCH: return c->touch;
   case V_WIFE: return c->wife_help;
   case V_CLOTHES: return c->wife_clothes;
+  case V_FILTER: return c->filter;
   case V_SECOND: return c->second_screen;
   }
   if (id >= V_PACK) { const ModPack *m = modpack_get(id - V_PACK); return m && m->on; }
@@ -262,6 +263,7 @@ static void set_value(int id, int v)
   case V_TOUCH: c->touch = v; break;
   case V_WIFE: c->wife_help = v; break;
   case V_CLOTHES: c->wife_clothes = v; break;
+  case V_FILTER: c->filter = v; break;
   case V_SECOND: c->second_screen = v; second_apply(); break;
   }
   if (id >= V_PACK) {
@@ -352,6 +354,8 @@ static void build(void)
 #endif
     choice(V_PICTURE, "Picture", "Sharp: as large as the window allows, with no uneven pixels. Exact: whole multiples only, with a border.",
            2, T("Sharp"), T("Exact pixels"));
+    choice(V_FILTER, "Filter", "The look of an old TV. Scanlines: dark lines between the picture's rows. CRT: the lines plus the screen's red, green and blue stripes and its rounded glow.",
+           3, T("Off"), T("Scanlines"), T("CRT"));
     toggle(V_VSYNC, "Vertical sync", "Frames follow the screen's refresh (smoothest on 60 Hz screens). Turned off by itself if the screen cannot keep up.");
     toggle(V_WIDESCREEN, "Widescreen", "Shows more of the map at the sides instead of black bars, as wide as your screen. At a map's edge and in small rooms it looks like the original (4:3).");
     choice(V_SPRITES, "Sprites", "Without limit: no flicker when many things share a line. Console: its limit of 32 sprites a line, as on the SNES.",
@@ -556,7 +560,7 @@ static void activate(Item *it, int dir)
   case A_DEFAULT_OPTIONS: {
     Config d; config_defaults(&d);
     Config *c = &g_cfg;
-    c->fullscreen = d.fullscreen; c->scale = d.scale; c->exact_pixels = d.exact_pixels; c->vsync = d.vsync;
+    c->fullscreen = d.fullscreen; c->scale = d.scale; c->exact_pixels = d.exact_pixels; c->filter = d.filter; c->vsync = d.vsync;
     c->widescreen = d.widescreen; c->sprite_limits = d.sprite_limits; c->volume = d.volume; c->ff_speed = d.ff_speed;
     c->show_launcher = d.show_launcher;
     host_apply_video(); host_apply_sound(); config_save();
