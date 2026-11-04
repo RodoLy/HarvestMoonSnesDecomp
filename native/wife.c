@@ -42,7 +42,7 @@
 #include "config.h"
 #include "i18n.h"
 #include "ui.h"
-#include "gamefont.h"
+#include "textbox.h"
 #include "wife.h"
 
 #define SLOT          0x0BA46u     /* the wife's event slot, $13: $7E:B586 + $40 x $13 (its fields: SLOT_*) */
@@ -97,7 +97,7 @@ static struct {
   /* the dialog */
   bool hop; int hop_len;          /* over a fence: the pixels of the jump */
   int sel, page;
-  int shown, tick;               /* letters printed so far, frames to the next */
+  TextboxPrinter printer;        /* the letters printed so far */
 } W;
 
 static int rd16(uint32_t a) { return g_ram[a] | g_ram[a + 1] << 8; }
@@ -640,7 +640,7 @@ void wife_clean_point(uint8_t *ram, const HmRegs *regs)
 
 /* ── The offer ─────────────────────────────────────────────────────────── */
 bool wife_dialog_wanted(void) { bool b = W.want_dialog; W.want_dialog = false; return b; }
-void wife_dialog_open(void) { W.sel = 0; W.page = 0; W.shown = 0; W.tick = 0; }
+void wife_dialog_open(void) { W.sel = 0; W.page = 0; W.printer.shown = 0; W.printer.tick = 0; }
 
 static const int kDays[3] = { 1, 3, 7 };
 static int s_ox;                       /* where the 256 columns start (widescreen) */
@@ -650,93 +650,27 @@ static void accept(int days)
   g_hm_wife_until = (uint16_t)(start + days - 1);
   W.planned = false;
 }
-/* The game's own text box (as on screen when she talks): 240 x 64 at
- * (8, 151), a lilac and white rounded frame, see-through checks inside
- * (every other pixel dark), white letters in the game's font, three lines
- * 16 apart from (16, 159). Her words are in English, as the game's. */
-#define BOX_LILAC UI_RGB(0x8484B5)
-#define BOX_WHITE UI_RGB(0xFFFFFF)
-#define BOX_DARK  UI_RGB(0x424252)
-static void game_box(int ox)
-{
-  static const char *corner[10] = {
-    "......LLLL", "....LLLWWW", "...LLWWWWW", "..LLWWWWLL", ".LLWWWLL..",
-    ".LWWWL....", "LLWWL.....", "LWWWL.....", "LWWL......", "LWWL......" };
-  static const char edge[4] = { 'L', 'W', 'W', 'L' };
-  int x0 = ox + 8, y0 = 151, w = 240, h = 64;
-  for (int y = y0 + 4; y < y0 + h - 4; y++)          /* the checks */
-    for (int x = x0 + 4; x < x0 + w - 4; x++)
-      if ((x + y) & 1) ui_px(x, y, BOX_DARK);
-  for (int i = 0; i < 4; i++) {                      /* the sides */
-    uint32_t c = edge[i] == 'L' ? BOX_LILAC : BOX_WHITE;
-    ui_hline(x0 + 10, y0 + i, w - 20, c); ui_hline(x0 + 10, y0 + h - 1 - i, w - 20, c);
-    ui_vline(x0 + i, y0 + 10, h - 20, c); ui_vline(x0 + w - 1 - i, y0 + 10, h - 20, c);
-  }
-  for (int j = 0; j < 10; j++)                       /* the corners, mirrored */
-    for (int i = 0; i < 10; i++) {
-      char k = corner[j][i];
-      if (k == '.') {
-        if (j >= 4 && i >= 4 && j + i >= 9) {           /* inside: checks */
-          if ((x0 + i + y0 + j) & 1) ui_px(x0 + i, y0 + j, BOX_DARK);
-          if ((x0 + w - 1 - i + y0 + j) & 1) ui_px(x0 + w - 1 - i, y0 + j, BOX_DARK);
-          if ((x0 + i + y0 + h - 1 - j) & 1) ui_px(x0 + i, y0 + h - 1 - j, BOX_DARK);
-          if ((x0 + w - 1 - i + y0 + h - 1 - j) & 1) ui_px(x0 + w - 1 - i, y0 + h - 1 - j, BOX_DARK);
-        }
-        continue;
-      }
-      uint32_t c = k == 'L' ? BOX_LILAC : BOX_WHITE;
-      ui_px(x0 + i, y0 + j, c); ui_px(x0 + w - 1 - i, y0 + j, c);
-      ui_px(x0 + i, y0 + h - 1 - j, c); ui_px(x0 + w - 1 - i, y0 + h - 1 - j, c);
-    }
-}
-/* the letters come one by one, as the game prints them (one each 4 frames,
- * each frame while A is held, $84:CF38): `*left` is how many may still be
- * drawn */
-static void box_text(int x, int y, const char *t, int *left)
-{
-  char part[64];
-  size_t n = 0;
-  const char *p = t;
-  while (*p && *left > 0 && n < sizeof part - 4) {
-    const char *q = p;
-    ui_utf8_next(&q);
-    while (p < q) part[n++] = *p++;
-    (*left)--;
-  }
-  part[n] = 0;
-  gamefont_text_box(x, y, part, BOX_WHITE, BOX_DARK);
-}
-static void box_line(int ox, int line, const char *t, int *left) { box_text(ox + 16, 159 + 16 * line, t, left); }
+/* Her words are in the game's own text box (textbox.c), in English as the
+ * game's. */
 static const char *const kAnswer[3] = { "Leave the farm to me,", "darling! I'll do half the", "work every morning." };
 static const char *const kAsk[2] = { "Darling, may I help you", "on the farm?" };
 /* the choices, on the third line: a white arrow before the one chosen */
 static const char *const kOpts[4] = { "1 day", "3 days", "1 week", "No" };
 static int opt_x(int i) { static const int at[4] = { 1, 8, 16, 24 }; return 16 + 8 * at[i]; }
 
-static int letters(const char *s) { int n = 0; while (*s) { ui_utf8_next(&s); n++; } return n; }
 static int page_letters(void)
 {
   int n = 0;
-  if (W.page == 1) for (int i = 0; i < 3; i++) n += letters(kAnswer[i]);
+  if (W.page == 1) for (int i = 0; i < 3; i++) n += textbox_letters(kAnswer[i]);
   else {
-    for (int i = 0; i < 2; i++) n += letters(kAsk[i]);
-    for (int i = 0; i < 4; i++) n += letters(kOpts[i]);
+    for (int i = 0; i < 2; i++) n += textbox_letters(kAsk[i]);
+    for (int i = 0; i < 4; i++) n += textbox_letters(kOpts[i]);
   }
   return n;
 }
 bool wife_dialog_update(const UiInput *in)
 {
-  if (W.shown < page_letters()) {                    /* still printing */
-    bool quick = g_cfg.fast_text || (in->held & B_A) || (in->held & B_B);
-    if (quick || ++W.tick >= 4) {
-      W.tick = 0; W.shown++;
-      /* the game's letter sound, as its own text boxes play it (at most
-       * every 4th letter when the text runs fast, as it does there) */
-      static int n;
-      if (!quick || (++n & 3) == 0) host_text_sound();
-    }
-    return false;
-  }
+  if (!textbox_print(&W.printer, page_letters(), in)) return false;   /* still printing */
   if (W.page == 1) return in->accept || in->back || in->click || in->rclick;
   int n = 4;
   if (in->pressed & (B_UP | B_LEFT)) W.sel = (W.sel + n - 1) % n;
@@ -754,7 +688,7 @@ chosen:
   if (W.sel < 3) accept(kDays[W.sel]);
   else W.declined = true;                            /* "No": not again today */
   W.page = W.sel < 3 ? 1 : 2;
-  W.shown = 0; W.tick = 0;
+  W.printer.shown = 0; W.printer.tick = 0;
   return W.page == 2;
 }
 void wife_dialog_draw(uint32_t *dst, int w)
@@ -762,18 +696,18 @@ void wife_dialog_draw(uint32_t *dst, int w)
   ui_target(dst, w, 224);
   int ox = (w - 256) / 2;
   s_ox = ox;
-  game_box(ox);
-  int left = W.shown;
+  textbox_frame(ox);
+  int left = W.printer.shown;
   if (W.page == 1) {
-    for (int i = 0; i < 3; i++) box_line(ox, i, kAnswer[i], &left);
+    for (int i = 0; i < 3; i++) textbox_line(ox, i, kAnswer[i], &left);
     return;
   }
-  for (int i = 0; i < 2; i++) box_line(ox, i, kAsk[i], &left);
+  for (int i = 0; i < 2; i++) textbox_line(ox, i, kAsk[i], &left);
   for (int i = 0; i < 4; i++) {
-    box_text(ox + opt_x(i), 191, kOpts[i], &left);
-    if (i == W.sel && W.shown >= page_letters()) {     /* the arrow, once all is printed */
+    textbox_text(ox + opt_x(i), 191, kOpts[i], &left);
+    if (i == W.sel && W.printer.shown >= page_letters()) {     /* the arrow, once all is printed */
       int ax = ox + opt_x(i) - 7, ay = 191 + 6;
-      for (int k = 0; k < 4; k++) ui_vline(ax + k, ay + k, 7 - 2 * k, BOX_WHITE);
+      for (int k = 0; k < 4; k++) ui_vline(ax + k, ay + k, 7 - 2 * k, UI_RGB(0xFFFFFF));
     }
   }
 }
