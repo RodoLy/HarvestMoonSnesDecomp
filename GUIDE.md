@@ -688,6 +688,13 @@ pregnant, **happiness**, times hit and position.
   only with a girl's bit. The native build's Goddess has her children
   through it: `g_hm_night_wife` lends her Maria's bit and love for that
   routine only (`native/goddess.c`).
+- **The ending** (summer 30 of the third year, `StartEnding`, event group
+  `$2E`) also goes by the wife's bit: the wife walks with the player
+  through the farm and the town (her figures $2E2-$2E9 in OBJ palette 3,
+  the same as in bed), her family waits at their house, and the last
+  scene is the two of them on the hill. The native build lends the
+  Goddess Maria's bit for that day, and her family is the Water Imp
+  (sprite $308, the spring's spirit of event group $10).
 - **The wedding.** A girl's yes (her script in event groups $02 / $03)
   sets her bit in `$7F:1F66`, `$7F:1F5E` bit 8, and goes to map `$2D`
   (`Event_TransitionToMap`). Map `$2D` is the town with the wedding: its

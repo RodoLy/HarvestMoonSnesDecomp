@@ -704,6 +704,13 @@ cruzada), mapa, días de preñez, **felicidad**, veces golpeada y posición.
   y su familia los slots 4 / 6, solo con el bit de una chica. La Diosa de
   la versión nativa tiene sus hijos así: `g_hm_night_wife` le presta el
   bit y el cariño de María solo para esa rutina (`native/goddess.c`).
+- **El final** (verano 30 del tercer año, `StartEnding`, grupo de eventos
+  `$2E`) también va por el bit de la esposa: ella camina con el jugador
+  por la granja y el pueblo (sus figuras $2E2-$2E9 en la paleta OBJ 3,
+  las mismas que en cama), su familia espera en su casa y la última
+  escena es la de los dos en la colina. La versión nativa le presta a la
+  Diosa el bit de María ese día, y su familia es el Water Imp (sprite
+  $308, el espíritu del manantial del grupo de eventos $10).
 - **La boda.** El sí de una chica (su guion en los grupos de eventos
   $02 / $03) pone su bit en `$7F:1F66`, el bit 8 de `$7F:1F5E`, y va al
   mapa `$2D` (`Event_TransitionToMap`). El mapa `$2D` es el pueblo con la
