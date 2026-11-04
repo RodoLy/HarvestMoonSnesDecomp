@@ -15,8 +15,9 @@
  *   disliked    Poison Mushroom
  *   the rest    their sale money (10 to 30)
  *
- * At ten hearts, the Blue Feather proposes — the same tool the game's
- * own girls are shown — shown at her pond (see The proposal, below).
+ * At ten hearts, a feather proposes, shown at her pond (see The proposal,
+ * below): not the Blue Feather the girls are shown, but the Golden
+ * Feather, sold by the same woman for more (see The Golden Feather).
  *
  * Hearts go from 0 to 1000 (ten hearts, 100 each, as the girls' in the
  * pause menu) and are kept in the diary (src/save.c, +26 to +2B).
@@ -85,7 +86,10 @@
 #include "i18n.h"
 #include "host.h"
 #include "goddess.h"
+
+extern Ppu *g_ppu;
 #include "textbox.h"
+#include "ui.h"
 
 #define SALE_TABLE 0x81A094            /* per item 3 bytes: its text, then the money */
 /* GODDESS_HINTED/ENGAGED/MARRIED: goddess.h. Engaged: the wedding is a week
@@ -193,7 +197,7 @@ static void offer(uint8_t *ram, uint8_t item)
   say(kLines[tier][like]);
   if (g_hm_goddess_hearts >= 1000 && !(g_hm_goddess_flags & GODDESS_HINTED)) {
     g_hm_goddess_flags |= GODDESS_HINTED;
-    say("...If you ever brought me a Blue Feather, I might say something important.");
+    say("...If you ever showed me a Golden Feather here, I might say something important.");
   }
 }
 
@@ -222,8 +226,12 @@ static int slot16(uint32_t at, int field);          /* below, with the wedding *
 static void dress(uint32_t at, int sprite, bool flip, int palette_xor);
 static enum { NO_SCENE, SCENE_STARTED, SCENE_TALKING } s_scene;
 
+static bool shop_text(uint8_t *ram, uint16_t text);   /* The Golden Feather, below */
+static void seller_sunday(void);
+static void golden_shown(void);
 static bool scene_text(uint8_t *ram, uint16_t text)
 {
+  if (shop_text(ram, text)) return true;
   if (s_scene != SCENE_STARTED || text != POND_SCENE_TEXT) return false;
   ram[HM_ANSWER] = NO_ANSWER;
   s_scene = SCENE_TALKING;                           /* her words, held until now, may show */
@@ -271,12 +279,16 @@ static void propose(void)
 {
   if (g_hm_goddess_flags & GODDESS_MARRIED) { say("I still have your feather, dear. It's by the pond."); return; }
   if (g_hm_goddess_flags & GODDESS_ENGAGED) { say("I'm getting ready for our wedding. See you soon!"); return; }
-  if (hm_rd16(g_ram, HM_FLAGS_66) & 0x001F) { say("A Blue Feather...? You already gave your heart to someone. Be good to her."); return; }
-  if (g_hm_goddess_hearts < 1000) { say("A Blue Feather...? How pretty. But we hardly know each other yet."); return; }
-  if (!(hm_rd16(g_ram, HM_FLAGS_64) & 0x0040)) { say("A Blue Feather... for me? Oh... But where would we live? Your house is so small."); return; }
+  if (hm_rd16(g_ram, HM_FLAGS_66) & 0x001F) { say("A feather...? You already gave your heart to someone. Be good to her."); return; }
+  if (g_hm_goddess_hearts < 1000) { say("A feather...? How pretty. But we hardly know each other yet."); return; }
+  if (!(g_hm_goddess_flags & GODDESS_GOLDEN_FEATHER)) {
+    say("A Blue Feather...? It's lovely, but it's for the girls in town. A goddess's feather shines like gold.");
+    return;
+  }
+  if (!(hm_rd16(g_ram, HM_FLAGS_64) & 0x0040)) { say("A Golden Feather... for me? Oh... But where would we live? Your house is so small."); return; }
   g_hm_goddess_day = (uint16_t)today();
   g_hm_goddess_flags |= GODDESS_ENGAGED;
-  say("A Blue Feather... for me? Yes. Yes, I'll marry you! In a week, at the church.");
+  say("A Golden Feather... for me? Yes. Yes, I'll marry you! In a week, at the church.");
 }
 
 void goddess_frame(void)
@@ -285,6 +297,7 @@ void goddess_frame(void)
   g_hm_spring_offer = g_cfg.goddess ? offer : NULL;
   g_hm_feather_used = g_cfg.goddess ? feather_used : NULL;
   g_hm_script_text = g_cfg.goddess ? scene_text : NULL;
+  if (g_cfg.goddess && hm_diary_loaded(g_ram)) { seller_sunday(); golden_shown(); }
   if (s_feather_used) {
     s_feather_used = false;
     if (g_cfg.goddess && hm_diary_loaded(g_ram) && facing_her_pond() && s_scene == NO_SCENE) {
@@ -398,8 +411,166 @@ static bool wedding(uint8_t *ram)
   return true;
 }
 
+/* ── The Golden Feather ─────────────────────────────────────────────────
+ * Sold by the woman who sells the Blue Feather: on Sundays in town, until
+ * 17:00 (event slot 6, script $B3:BAC5, started by the town's Sunday
+ * script, group $03, once the house is built up and a girl has 250
+ * hearts, while the Blue Feather is not bought, $7F1F6C bit 6). Once the
+ * Goddess has her ten hearts, the woman is there on Sundays all the same
+ * (put in her slot here if the town's script did not), and her offer
+ * (text $1C3, the Blue Feather for 1,000 G, yes / no) becomes a choice in
+ * the game's text box: the Blue Feather (her own sale goes on: answer 0),
+ * the Golden Feather for 5,000 G (paid here; then answer 1, her "no" text
+ * $2FF kept closed), or no (answer 1, her "no").
+ *
+ * The Golden Feather is the feather tool ($18) in its shed place
+ * ($7F1F02 bit 7), golden (GODDESS_GOLDEN_FEATHER, kept in the diary): in
+ * the pause menu it is named so and drawn gold, and when it is shown, the
+ * piece the player holds up (tiles $80-$91, the tool's, in the player's
+ * palette 4) takes a copy of palette 4 with the feather's two blues made
+ * gold (OBJ palette 3, in the picture chip, for those frames only). The
+ * girls take it as the Blue Feather it is underneath. */
+enum {
+  FEATHER_TOOL = 0x18,
+  SELLER_SLOT = 6, SELLER_SCRIPT = 0xBAC5,     /* $B3:BAC5 */
+  SELLER_OFFER = 0x1C3, SELLER_NO = 0x2FF,
+  SELLER_UNTIL = 17,
+  BLUE_BOUGHT = 0x0040,                       /* $7F1F6C */
+  GOLDEN_PRICE = 500,                         /* in tens of G: 5,000 G */
+  FEATHER_PLACE = 2, FEATHER_BIT = 0x80,      /* $7F1F00 + 2, its shed place */
+  GOLD_PALETTE = 3,
+};
+static enum { NO_SHOP, SHOP_ASKED, SHOP_OPEN } s_shop;
+static bool s_keep_no_text;                  /* her "no" after a golden sale: not said */
+static int s_shop_sel;
+static TextboxPrinter s_shop_printer;
+static const char *s_shop_lines[2] = { "A feather for your love?", "Blue 1000G, golden 5000G." };
+static const char *const kShopOpts[3] = { "Blue", "Golden", "No" };
+
+bool goddess_golden_feather(void) { return g_cfg.goddess && (g_hm_goddess_flags & GODDESS_GOLDEN_FEATHER); }
+static bool blue_bought(void) { return hm_rd16(g_ram, HM_FLAGS_6C) & BLUE_BOUGHT; }
+static bool offers_gold(void)
+{
+  return g_cfg.goddess && g_hm_goddess_hearts >= 1000 && !(g_hm_goddess_flags & GODDESS_GOLDEN_FEATHER);
+}
+
+static bool shop_text(uint8_t *ram, uint16_t text)
+{
+  if (text == SELLER_NO && s_keep_no_text) { s_keep_no_text = false; return true; }
+  if (text != SELLER_OFFER || !offers_gold()) return false;
+  ram[HM_ANSWER] = 1;                                /* "no", unless chosen otherwise */
+  s_shop = SHOP_ASKED;
+  return true;
+}
+
+static void sell_golden(void)
+{
+  uint32_t money = hm_rd24(g_ram, HM_MONEY);
+  if (money < GOLDEN_PRICE) { say("Oh, dear. You don't have enough money for it."); return; }
+  money -= GOLDEN_PRICE;
+  g_ram[HM_MONEY] = (uint8_t)money; g_ram[HM_MONEY + 1] = (uint8_t)(money >> 8); g_ram[HM_MONEY + 2] = (uint8_t)(money >> 16);
+  g_hm_goddess_flags |= GODDESS_GOLDEN_FEATHER;
+  /* the feather tool in the shed, unless it is already in hand or in the backpack */
+  if (g_ram[HM_TOOL_SELECTED] != FEATHER_TOOL && g_ram[HM_TOOL_BACKPACK] != FEATHER_TOOL)
+    g_ram[HM_SHED_ITEMS + FEATHER_PLACE] |= FEATHER_BIT;
+  s_keep_no_text = true;
+  say("Here you are. A Golden Feather, it shines like spring water. It's in your tool shed.");
+}
+
+/* her choice, drawn as the wife's offer is: two lines, the choices on the third */
+static int shop_opt_x(int i) { static const int at[3] = { 1, 7, 15 }; return 16 + 8 * at[i]; }
+static bool shop_opt_ok(int i) { return i != 0 || !blue_bought(); }
+static int shop_letters(void)
+{
+  int n = textbox_letters(s_shop_lines[0]) + textbox_letters(s_shop_lines[1]);
+  for (int i = 0; i < 3; i++) if (shop_opt_ok(i)) n += textbox_letters(kShopOpts[i]);
+  return n;
+}
+static void shop_open(void)
+{
+  s_shop = SHOP_OPEN;
+  s_shop_sel = 1;                                    /* the golden one */
+  s_shop_printer.shown = s_shop_printer.tick = 0;
+}
+static bool shop_update(const UiInput *in)
+{
+  if (!textbox_print(&s_shop_printer, shop_letters(), in)) return false;
+  if (in->pressed & (B_LEFT | B_UP)) do s_shop_sel = (s_shop_sel + 2) % 3; while (!shop_opt_ok(s_shop_sel));
+  if (in->pressed & (B_RIGHT | B_DOWN)) do s_shop_sel = (s_shop_sel + 1) % 3; while (!shop_opt_ok(s_shop_sel));
+  if (in->back || in->rclick) s_shop_sel = 2;
+  else if (!(in->accept || in->click)) return false;
+  s_shop = NO_SHOP;
+  if (s_shop_sel == 0) g_ram[HM_ANSWER] = 0;         /* her own sale of the Blue Feather goes on */
+  else if (s_shop_sel == 1) sell_golden();           /* answer 1: her "no" path, kept quiet */
+  return true;
+}
+static void shop_draw(uint32_t *dst, int w)
+{
+  ui_target(dst, w, 224);
+  int ox = (w - 256) / 2;
+  textbox_frame(ox);
+  int left = s_shop_printer.shown;
+  for (int i = 0; i < 2; i++) textbox_line(ox, i, s_shop_lines[i], &left);
+  for (int i = 0; i < 3; i++) {
+    if (!shop_opt_ok(i)) continue;
+    textbox_text(ox + shop_opt_x(i), 191, kShopOpts[i], &left);
+    if (i == s_shop_sel && s_shop_printer.shown >= shop_letters()) {   /* the arrow, once all is printed */
+      int ax = ox + shop_opt_x(i) - 7, ay = 191 + 6;
+      for (int k = 0; k < 4; k++) ui_vline(ax + k, ay + k, 7 - 2 * k, UI_RGB(0xFFFFFF));
+    }
+  }
+}
+
+/* Sundays in town: she is there for the Goddess too */
+static void seller_sunday(void)
+{
+  static int last_map = -1, wait;
+  int map = g_ram[HM_MAP_ID];
+  if (map != last_map) { last_map = map; wait = 30; }   /* let the town's own script place everyone first */
+  if (wait > 0) { wait--; return; }
+  if (wait < 0 || !offers_gold()) return;
+  wait = -1;                                         /* once a visit */
+  if (map < 4 || map > 7 || g_ram[HM_WEEKDAY] != 0 || g_ram[HM_HOUR] >= SELLER_UNTIL) return;
+  uint32_t at = 0xB586u + 64u * SELLER_SLOT;
+  if (g_ram[at]) return;                             /* there already (or the slot is taken) */
+  memset(&g_ram[at], 0, 0x40);
+  g_ram[at + SLOT_IN_USE] = 1;
+  g_ram[at + SLOT_FRAMES] = 1;
+  g_ram[at + SLOT_SCRIPT] = (uint8_t)SELLER_SCRIPT; g_ram[at + SLOT_SCRIPT + 1] = (uint8_t)(SELLER_SCRIPT >> 8);
+  g_ram[at + SLOT_SCRIPT_BANK] = 0xB3;
+  g_ram[at + SLOT_NUMBER] = SELLER_SLOT;
+}
+
+/* the feather held up, golden: the tool's piece in a golden copy of the
+ * player's palette, in the picture chip, while it is shown */
+static void golden_shown(void)
+{
+  static bool was;
+  bool now = g_ppu && goddess_golden_feather() && g_ram[HM_TOOL_SELECTED] == FEATHER_TOOL &&
+             hm_rd16(g_ram, HM_PLAYER_ACTION) == 0x0A;        /* using the tool in hand */
+  if (!g_ppu) return;
+  uint16_t *cg = &g_ppu->cgram[128 + GOLD_PALETTE * 16];
+  if (!now) {
+    if (was)                                         /* palette 3 back as the game has it */
+      for (int i = 0; i < 16; i++)
+        cg[i] = (uint16_t)(g_ram[HM_CGRAM_SHADOW + 256 + GOLD_PALETTE * 32 + 2 * i] | g_ram[HM_CGRAM_SHADOW + 256 + GOLD_PALETTE * 32 + 2 * i + 1] << 8);
+    was = false;
+    return;
+  }
+  was = true;
+  const uint16_t *p4 = &g_ppu->cgram[128 + 4 * 16];
+  for (int i = 0; i < 16; i++) cg[i] = p4[i];
+  cg[6] = p4[1];                                     /* the light blue: the light gold */
+  cg[7] = p4[2];                                     /* the dark blue: the dark gold */
+  for (int i = 0; i < 128; i++) {
+    uint16_t w = g_ppu->oam[2 * i + 1];
+    int tile = (w & 0xFF) | (w >> 8 & 1) << 8, pal = (w >> 9) & 7;
+    if (pal == 4 && tile >= 0x80 && tile <= 0x91)
+      g_ppu->oam[2 * i + 1] = (uint16_t)((w & ~0x0E00) | GOLD_PALETTE << 9);
+  }
+}
+
 /* ── Married life ─────────────────────────────────────────────────────── */
-extern Ppu *g_ppu;
 #define HER_SLOT      0x0BA46u     /* event slot $13: $7E:B586 + $40 x $13 (fields: SLOT_*) */
 #define SPARKLE_SLOT  0x0BA86u     /* event slot $14 */
 enum {
@@ -537,6 +708,7 @@ uint16_t goddess_pad(uint16_t pad)
 
 bool goddess_dialog_wanted(void)
 {
+  if (s_shop == SHOP_ASKED) return true;
   if (s_scene == SCENE_STARTED) return false;       /* she is still coming out of the water */
   if (s_scene == SCENE_TALKING) s_scene = NO_SCENE;
   bool b = G.want_dialog || s_said_pages;
@@ -545,6 +717,7 @@ bool goddess_dialog_wanted(void)
 }
 void goddess_dialog_open(void)
 {
+  if (s_shop == SHOP_ASKED) { shop_open(); return; }
   if (s_said_pages) {                                /* what she just said (an offering, the feather...) */
     memset(&G.talk, 0, sizeof G.talk);
     G.talk.pages = s_said_pages;
@@ -568,11 +741,20 @@ void goddess_dialog_open(void)
 }
 bool goddess_dialog_update(const UiInput *in)
 {
+  if (s_shop == SHOP_OPEN) {
+    if (!shop_update(in)) return false;
+    if (!s_said_pages) return true;                  /* the Blue Feather, or no */
+    textbox_talk_open(&G.talk);                      /* what the golden sale says, next */
+    G.talk.pages = s_said_pages;
+    for (int p = 0; p < s_said_pages; p++)
+      for (int i = 0; i < TEXTBOX_LINES; i++) G.talk.lines[p][i] = s_said[p][i][0] ? s_said[p][i] : NULL;
+    return false;
+  }
   bool over = textbox_talk_update(&G.talk, in);
   if (over) { s_said_pages = 0; memset(s_said, 0, sizeof s_said); }   /* heard */
   return over;
 }
-void goddess_dialog_draw(uint32_t *dst, int w) { textbox_talk_draw(&G.talk, dst, w); }
+void goddess_dialog_draw(uint32_t *dst, int w) { if (s_shop == SHOP_OPEN) shop_draw(dst, w); else textbox_talk_draw(&G.talk, dst, w); }
 
 /* a frame of floating: towards the spot, then resting there a while;
  * never while the player is close */
@@ -655,4 +837,6 @@ void goddess_reset(void)
   s_said_pages = 0;
   s_scene = NO_SCENE;
   s_scene_frames = 0;
+  s_shop = NO_SHOP;
+  s_keep_no_text = false;
 }

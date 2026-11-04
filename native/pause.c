@@ -38,6 +38,7 @@
 #include "ui.h"
 #include "i18n.h"
 #include "pause.h"
+#include "goddess.h"
 #include "config.h"
 #include "mods.h"
 
@@ -71,6 +72,7 @@ static const char *tool_name(uint8_t id)
   if (id == 0) return T("(nothing)");
   if (id == 0x19) return T("Chicken Feed");
   if (id == 0x1A) return T("Cow Feed");
+  if (id == 0x18 && goddess_golden_feather()) return T("Golden Feather");   /* the Goddess's (goddess.c) */
   for (int i = 0; i < NTOOLS; i++) if (kTools[i].id == id) return T(kTools[i].name);
   return "?";
 }
@@ -134,6 +136,14 @@ static void tool_icon(int x, int y, uint8_t id)
 {
   uint32_t px[256];
   if (id >= 1 && id <= 0x1A && (mods_item_sprite((uint8_t)(0x29 + id), 3, px) || mods_item_sprite((uint8_t)(0x29 + id), 0, px))) {
+    if (id == 0x18 && goddess_golden_feather())      /* the Golden Feather: its blues made gold */
+      for (int k = 0; k < 256; k++) {
+        uint32_t c = px[k];
+        int r = c >> 16 & 0xFF, g = c >> 8 & 0xFF, b = c & 0xFF;
+        if (!c || b <= r || b <= g) continue;
+        int l = (r + g + b * 2) / 4;                 /* its lightness, 0-255 */
+        px[k] = UI_RGB((uint32_t)(l + 96 > 255 ? 255 : l + 96) << 16 | (uint32_t)(l + 64 > 255 ? 255 : l + 64) << 8 | (uint32_t)(l / 3));
+      }
     for (int j = 0; j < 16; j++)
       for (int i = 0; i < 16; i++) if (px[j * 16 + i]) ui_px(x + i, y + j, px[j * 16 + i]);
     return;
