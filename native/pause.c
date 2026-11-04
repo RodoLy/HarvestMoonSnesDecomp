@@ -11,7 +11,7 @@
  * Drawn at the console's resolution, 256x224, so its pixels are the game's
  * size: a checkered floor, wooden frames with parchment inside, pixel type
  * and 16x16 item icons (ui.c). The girls' faces are the game's own sprites,
- * read from your ROM when the menu opens (kGirls).
+ * read from your ROM when the menu opens (kFaces); the Goddess is a sixth.
  *
  * Pages (L / R):
  *   Tools   the hand and backpack at the top, the tool shed as a grid.
@@ -209,36 +209,41 @@ static void action_y(void)   /* put the hand (or the selected bag) item away */
   char m[96]; snprintf(m, sizeof m, T("Put away: %s"), tool_name(id)); say(m);
 }
 
-/* ── The girls' faces: the game's own sprites, read from your ROM ────── */
-/* Front-facing frame of each girl in the NPC sprite sheet ($8F:8000, file
- * 0x78000: 4bpp tiles, 16 per 0x200-byte row; a frame is 2 tiles wide, its
- * top two rows are the head) and her sprite palette ($A9:DE20.., the game's
- * OBJ palette table). Found by watching the flower festival: talking to each
- * girl raised exactly one heart counter, and the tiles she was drawn with
- * matched these ROM bytes. Hearts order: Maria, Ann, Nina, Ellen, Eve. */
-static const struct { uint32_t frame, palette; } kGirls[5] = {
+/* ── The faces: the game's own sprites, read from your ROM ───────────── */
+/* Front-facing frame of each one in the NPC sprite sheets ($8F:8000 on,
+ * file 0x78000: 4bpp tiles, 16 per 0x200-byte row; a frame is 2 tiles
+ * wide, its top two rows are the head) and the sprite palette it is drawn
+ * with ($A9:DE20.., the game's OBJ palette table). The girls were found by
+ * watching the flower festival: talking to each girl raised exactly one
+ * heart counter, and the tiles she was drawn with matched these ROM bytes.
+ * The Goddess is her praying frame (the scene at her pond), a few rows
+ * below the townsfolk, with the table's last palette: green hair, white
+ * dress. Hearts order: Maria, Ann, Nina, Ellen, Eve, then the Goddess. */
+enum { FACES = 6, FACE_GODDESS = 5 };
+static const struct { uint32_t frame, palette; } kFaces[FACES] = {
   { 0x078200, 0x14DE20 },   /* Maria: blue hair */
   { 0x078B00, 0x14DE20 },   /* Ann: orange ponytail */
   { 0x07B2C0, 0x14DE40 },   /* Nina: pink hair */
   { 0x07A280, 0x14DE80 },   /* Ellen: brown hair */
   { 0x07A3C0, 0x14DE40 },   /* Eve: blonde */
+  { 0x088C00, 0x14E000 },   /* the Goddess: green hair, white dress */
 };
-static uint32_t s_face[5][16 * 16];
+static uint32_t s_face[FACES][16 * 16];
 static bool s_faces_ok;
 
 static void load_faces(void)
 {
   if (s_faces_ok || !g_rom) return;
-  for (int g = 0; g < 5; g++) {
+  for (int g = 0; g < FACES; g++) {
     uint32_t pal[16];
     for (int i = 0; i < 16; i++) {
-      uint16_t v = g_rom[kGirls[g].palette + i * 2] | g_rom[kGirls[g].palette + i * 2 + 1] << 8;
+      uint16_t v = g_rom[kFaces[g].palette + i * 2] | g_rom[kFaces[g].palette + i * 2 + 1] << 8;
       uint32_t r = (v & 31) << 3, gg = ((v >> 5) & 31) << 3, b = ((v >> 10) & 31) << 3;
       pal[i] = i ? (0xFF000000u | r << 16 | gg << 8 | b | (r >> 5) << 16 | (gg >> 5) << 8 | (b >> 5)) : 0;
     }
     for (int ty = 0; ty < 2; ty++)
       for (int tx = 0; tx < 2; tx++) {
-        const uint8_t *t = g_rom + kGirls[g].frame + ty * 0x200 + tx * 0x20;
+        const uint8_t *t = g_rom + kFaces[g].frame + ty * 0x200 + tx * 0x20;
         for (int y = 0; y < 8; y++)
           for (int x = 0; x < 8; x++) {
             int b = 7 - x;
@@ -465,26 +470,6 @@ static uint32_t heart_colour(unsigned v)
   return tier[7];
 }
 
-/* the goddess's row (goddess.c): an original emblem — a drop of spring
- * water crowned with flowers, sparkles around it — in place of a portrait */
-static void goddess_emblem(int x, int y, int cx, int cy, int cs)    /* clipped to (cx, cy, cs x cs) */
-{
-  static const char *const art[16] = {
-    "..*..........*..", "....P.Y.P.Y.P...", "...PYPGPYPGPYP..", "....GGGGGGGGG...",
-    ".......BB.......", "......BLLB......", ".....BLWLLB.....", "....BLWLLLLB....",
-    "....BLLLLLLB....", "...BLLLLLLLLB...", "...BLLLLLLLDB...", "...BLLLLLLDDB..*",
-    "....BLLLLDDB....", ".*...BBDDDB.....", "......BBBB......", "................" };
-  for (int j = 0; j < 16; j++)
-    for (int i = 0; i < 16; i++) {
-      char c = art[j][i];
-      if (c == '.' || x + i < cx || y + j < cy || x + i >= cx + cs || y + j >= cy + cs) continue;
-      uint32_t col = c == 'B' ? C_BLUE_DARK : c == 'L' ? UI_RGB(0x7FB8F0) : c == 'D' ? C_BLUE
-                   : c == 'W' ? C_CREAM : c == 'P' ? UI_RGB(0xF27AA8) : c == 'Y' ? C_GOLD
-                   : c == 'G' ? C_GREEN : UI_RGB(0xFFF4A0);
-      ui_px(x + i, y + j, col);
-    }
-}
-
 static void draw_hearts(int x, int y)
 {
   static const char *names[5] = { "Maria", "Ann", "Nina", "Ellen", "Eve" };
@@ -500,12 +485,10 @@ static void draw_hearts(int x, int y)
     ui_rect(x, ry, fs, fs, C_WOOD_EDGE);
     ui_rect(x + 1, ry + 1, fs - 2, fs - 2, C_PAPER_DARK);
     int cut = (18 - fs) / 2;                         /* six rows: the pictures lose a pixel each side */
-    if (i == 5) {
-      goddess_emblem(x + 1 - cut, ry + 1 - cut, x + 1, ry + 1, fs - 2);
-    } else if (s_faces_ok)
+    if (s_faces_ok)
       for (int j = 0; j < fs - 2; j++)
         for (int k = 0; k < fs - 2; k++) ui_px(x + 1 + k, ry + 1 + j, s_face[i][(j + cut) * 16 + k + cut]);
-    ui_text(UI_BODY, x + 24, ry + ty, i < 5 ? T(names[i]) : T("Goddess"), C_INK);
+    ui_text(UI_BODY, x + 24, ry + ty, i < FACE_GODDESS ? T(names[i]) : T("Goddess"), C_INK);
     unsigned full = (v + 50) / 100;
     uint32_t col = heart_colour(v);
     for (int h = 0; h < 10; h++) ui_heart(x + 76 + h * 9, ry + hy, col, (unsigned)h < full);
