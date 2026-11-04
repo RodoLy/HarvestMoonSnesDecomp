@@ -46,11 +46,19 @@
  * Married life. From then on she is seen, as herself: the game's event
  * slot $13 (the one it gives a wife) holds her picture ($315 / $316, now
  * and then the other, as if breathing) running an idle script of the
- * game's own ($B3:8DED: wait a frame, again), and slot $14 (a child's; she
- * has none) her sparkles ($317, the ones of her scene at the pond). Where:
+ * game's own ($B3:8DED: wait a frame, again). Where:
  *   - about one day in four she spends at home: in the house all day;
  *   - the other days she is by the barn's door from 6:00 until 18:00, and
- *     at home after that.
+ *     at home after that;
+ *   - and on those days, at midday (11:00 to 15:00, when the wives go to
+ *     their chores: Maria sweeps), she has her own: she floats over the
+ *     field and blesses it, with the sparkles of her scene at the pond
+ *     ($317, in slot $14, a child's: she has none). Only then.
+ * She is a goddess: she does not walk, she floats. She bobs up and down
+ * (a pixel or two, slowly) and glides from one of a few places to another
+ * (around the barn's door; at home: the bed, the
+ * table, the TV), resting a while at each. She
+ * keeps still while the player is close, so she can be talked to.
  * Her pictures use OBJ palette 0 and her sparkles palette 3; with her as
  * the wife there is no other wife or child to need palette 3, so both are
  * drawn with it (the flip word's palette bits, $06 for her) and it is given
@@ -62,6 +70,7 @@
  * that day brings the next line. Her words are in English, as the game's.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ppu.h"
@@ -275,8 +284,12 @@ enum {
   IDLE_SCRIPT = 0x8DED,            /* $B3:8DED: WaitFrames 1, JumpToInstruction $8DED */
   SPARKLE_SPRITE = 0x317,
   HER_PALETTE = 3,                 /* OBJ palette 3: hers while she is on the map */
-  FARM_X = 20 * 16 + 8, FARM_Y = 23 * 16,     /* below the barn's door (tile 20, 21) */
-  HOUSE_X = 0x58, HOUSE_Y = 0x60,              /* by the bed */
+  GLIDE_SUBPIXELS = 16,            /* positions are kept in 1/16 pixels */
+  GLIDE_SPEED = 6,                 /* 6/16 of a pixel a frame: slow */
+  REST_FRAMES = 300,               /* 5 seconds at each place, more or less */
+  BOB_PERIOD = 96,                 /* up and down every 1.6 s */
+  NEAR_PLAYER = 40,                /* closer than this, she keeps still */
+  HOBBY_FROM = 11, HOBBY_TO = 15,  /* her midday blessing of the field */
   AWAY_FROM = 18,                  /* her farm days: home from 18:00 */
 };
 
@@ -332,6 +345,14 @@ static void her_colours(void)
                                                            g_ram[HM_CGRAM_SHADOW + 256 + HER_PALETTE * 32 + 2 * i + 1] << 8);
 }
 
+/* the places she floats between (pixels in the map): around the barn's
+ * door (tile 20, 21); at midday over the field, south of the fence; at
+ * home the bed, above the table, the TV */
+typedef struct { int x, y; } Spot;
+static const Spot kFarmSpots[] = { { 20 * 16 + 8, 23 * 16 }, { 23 * 16, 25 * 16 }, { 18 * 16, 24 * 16 }, { 21 * 16, 26 * 16 } };
+static const Spot kFieldSpots[] = { { 20 * 16, 34 * 16 }, { 24 * 16, 35 * 16 }, { 17 * 16, 36 * 16 } };
+static const Spot kHouseSpots[] = { { 0x58, 0x60 }, { 0x88, 0x78 }, { 0xBC, 0x60 }, { 0x70, 0x90 } };
+
 /* where she is now: 1 the farm, 2 the house, 0 neither (as the day goes) */
 static int her_place(int map, int hour)
 {
@@ -361,6 +382,10 @@ static const Line kHomeLines[] = {
 #define COUNT(a) (int)(sizeof (a) / sizeof (a)[0])
 
 static struct {
+  int place;                       /* where she was put (her_place), 0 none */
+  bool hobby;                      /* blessing the field (midday, her farm days) */
+  int x, y;                        /* where she floats, in 1/16 pixels */
+  int spot, rest;                  /* the place she floats to; frames still resting */
   int day, talks;                  /* talks today, for the next line */
   bool want_dialog;
   TextboxTalk talk;
@@ -407,31 +432,71 @@ void goddess_dialog_open(void)
 bool goddess_dialog_update(const UiInput *in) { return textbox_talk_update(&G.talk, in); }
 void goddess_dialog_draw(uint32_t *dst, int w) { textbox_talk_draw(&G.talk, dst, w); }
 
+/* a frame of floating: towards the spot, then resting there a while;
+ * never while the player is close */
+static void glide(const Spot *spots, int n)
+{
+  int px = hm_rd16(g_ram, HM_PLAYER_X) * GLIDE_SUBPIXELS, py = hm_rd16(g_ram, HM_PLAYER_Y) * GLIDE_SUBPIXELS;
+  int near = NEAR_PLAYER * GLIDE_SUBPIXELS;
+  if (abs(px - G.x) < near && abs(py - G.y) < near) return;
+  if (G.rest > 0) { G.rest--; return; }
+  int tx = spots[G.spot].x * GLIDE_SUBPIXELS, ty = spots[G.spot].y * GLIDE_SUBPIXELS;
+  int dx = tx - G.x, dy = ty - G.y;
+  if (abs(dx) <= GLIDE_SPEED && abs(dy) <= GLIDE_SPEED) {   /* there: rest, then any other one */
+    G.x = tx; G.y = ty;
+    G.rest = REST_FRAMES + (int)(G.frame % 120);
+    G.spot = (G.spot + 1 + (int)(G.frame % (unsigned)(n - 1))) % n;
+    return;
+  }
+  /* a straight line, the longer way at full speed */
+  if (abs(dx) >= abs(dy)) { G.x += dx > 0 ? GLIDE_SPEED : -GLIDE_SPEED; G.y += dy * GLIDE_SPEED / abs(dx); }
+  else { G.y += dy > 0 ? GLIDE_SPEED : -GLIDE_SPEED; G.x += dx * GLIDE_SPEED / abs(dy); }
+}
+static void move_slot(uint32_t at, int x, int y)
+{
+  g_ram[at + SLOT_X] = (uint8_t)x; g_ram[at + SLOT_X + 1] = (uint8_t)(x >> 8);
+  g_ram[at + SLOT_Y] = (uint8_t)y; g_ram[at + SLOT_Y + 1] = (uint8_t)(y >> 8);
+}
+
 void goddess_married_tick(uint8_t *ram)
 {
   if (!g_cfg.goddess) return;
   if (wedding(ram)) return;
   int place = (g_hm_goddess_flags & GODDESS_MARRIED) && hm_diary_loaded(ram) ? her_place(ram[HM_MAP_ID], ram[HM_HOUR]) : 0;
-  if (!place) { take_away(HER_SLOT); take_away(SPARKLE_SLOT); return; }
+  if (!place) { take_away(HER_SLOT); take_away(SPARKLE_SLOT); G.place = 0; return; }
 
-  int x = place == 1 ? FARM_X : HOUSE_X, y = place == 1 ? FARM_Y : HOUSE_Y;
-  /* the slots are the game's: only empty ones are taken */
-  if (!slot_runs_idle(HER_SLOT)) {
-    if (ram[HER_SLOT]) return;
-    put(HER_SLOT, 0x13, GODDESS_SPRITE, HER_PALETTE ^ 0, x, y);
+  bool hobby = place == 1 && ram[HM_HOUR] >= HOBBY_FROM && ram[HM_HOUR] < HOBBY_TO;
+  const Spot *spots = hobby ? kFieldSpots : place == 1 ? kFarmSpots : kHouseSpots;
+  int n = hobby ? COUNT(kFieldSpots) : place == 1 ? COUNT(kFarmSpots) : COUNT(kHouseSpots);
+  if (hobby != G.hobby) { G.hobby = hobby; G.spot = 0; G.rest = 0; }   /* off to the field, or back */
+  if (G.place != place || !slot_runs_idle(HER_SLOT)) {    /* she arrives: at her first place */
+    if (!slot_runs_idle(HER_SLOT) && ram[HER_SLOT]) return;   /* the slot is the game's now */
+    G.place = place;
+    G.x = spots[0].x * GLIDE_SUBPIXELS; G.y = spots[0].y * GLIDE_SUBPIXELS;
+    G.spot = 1; G.rest = REST_FRAMES;
+    if (!slot_runs_idle(HER_SLOT)) put(HER_SLOT, 0x13, GODDESS_SPRITE, HER_PALETTE ^ 0, spots[0].x, spots[0].y);
   }
-  if (!slot_runs_idle(SPARKLE_SLOT) && !ram[SPARKLE_SLOT])
-    put(SPARKLE_SLOT, 0x14, SPARKLE_SPRITE, 0, x, y - 4);
+  if (!hobby) take_away(SPARKLE_SLOT);              /* the sparkles: only at her blessing */
+  else if (!slot_runs_idle(SPARKLE_SLOT) && !ram[SPARKLE_SLOT])
+    put(SPARKLE_SLOT, 0x14, SPARKLE_SPRITE, 0, G.x / GLIDE_SUBPIXELS, G.y / GLIDE_SUBPIXELS - 4);
   her_colours();
 
-  /* now and then her other picture, and the sparkles turning */
   G.frame++;
+  glide(spots, n);
+  /* floating: a slow wave of a pixel or two */
+  static const int8_t wave[16] = { 0, 0, 1, 1, 2, 2, 2, 1, 1, 0, 0, -1, -1, -1, -1, 0 };
+  int bob = wave[(G.frame * 16 / BOB_PERIOD) % 16];
+  int x = G.x / GLIDE_SUBPIXELS, y = G.y / GLIDE_SUBPIXELS - 2 - bob;   /* a little off the ground */
+  move_slot(HER_SLOT, x, y);
+  if (hobby && slot_runs_idle(SPARKLE_SLOT)) move_slot(SPARKLE_SLOT, x, y - 4);
+
+  /* now and then her other picture, and the sparkles turning */
   int sprite = (G.frame % 150) < 12 ? GODDESS_SPRITE + 1 : GODDESS_SPRITE;
   if (slot16(HER_SLOT, SLOT_SPRITE) != sprite) {
     ram[HER_SLOT + SLOT_SPRITE] = (uint8_t)sprite; ram[HER_SLOT + SLOT_SPRITE + 1] = (uint8_t)(sprite >> 8);
     ram[HER_SLOT + SLOT_FLAGS] |= 0x04;
   }
-  if (slot_runs_idle(SPARKLE_SLOT) && G.frame % 24 == 0) {
+  if (hobby && slot_runs_idle(SPARKLE_SLOT) && G.frame % 24 == 0) {
     ram[SPARKLE_SLOT + SLOT_ANIMATION] ^= 0x40;      /* mirrored: the sparkles move */
     ram[SPARKLE_SLOT + SLOT_FLAGS] |= 0x04;
     ram[SPARKLE_SLOT + SLOT_LAST_SPRITE] ^= 1;       /* so the game redraws it */
