@@ -203,7 +203,51 @@ static void offer(uint8_t *ram, uint8_t item)
  * the mountain), with her ten hearts, the house built up once and no other
  * wife, it is a yes; the day is kept, the wedding is a week later.
  * ToolUsedBlueFeather calls feather_used during the game's frame; the
- * pond is looked at once the frame is over. */
+ * pond is looked at once the frame is over.
+ *
+ * She comes out to answer, in the game's own scene: the one the axe calls
+ * at her pond (event group $17, script 0, slot 0). Its helper (slot 1)
+ * rises out of the water as her ($315), with her sparkles (slot 2), waits
+ * half a second and starts its text ($31E: her greeting and the gold axe's
+ * question); then the answer picks what follows (0 / 1, texts $31F /
+ * $320), and either way she goes back ($316) and the scene ends. Here that
+ * text is not opened (g_hm_script_text): her answer to the feather is said
+ * in its place, in the game's text box, and the answer is left as neither
+ * 0 nor 1, so the scene goes straight to her leaving. The gold axe that
+ * floats up and down to the player meanwhile (slot 2, $B4:8E94 / 8EAE) is
+ * her sparkles instead ($317, moved to her palette 0 by the flip word),
+ * in this scene only: the axe's own is left as it is. */
+enum { POND_SCENE_GROUP = 0x17, POND_SCENE_TEXT = 0x31E, NO_ANSWER = 0xFF, POND_SPARKLES = 0x317 };
+static int slot16(uint32_t at, int field);          /* below, with the wedding */
+static void dress(uint32_t at, int sprite, bool flip, int palette_xor);
+static enum { NO_SCENE, SCENE_STARTED, SCENE_TALKING } s_scene;
+
+static bool scene_text(uint8_t *ram, uint16_t text)
+{
+  if (s_scene != SCENE_STARTED || text != POND_SCENE_TEXT) return false;
+  ram[HM_ANSWER] = NO_ANSWER;
+  s_scene = SCENE_TALKING;                           /* her words, held until now, may show */
+  return true;
+}
+static int s_scene_frames;                           /* the scene's frames: its sparkles, while it lasts */
+static void scene_picture(uint8_t *ram, uint32_t at)
+{
+  (void)ram;
+  if (!s_scene_frames || g_ram[at + SLOT_SCRIPT_BANK] != 0xB4) return;
+  int pc = slot16(at, SLOT_SCRIPT);
+  if (pc >= 0x8E94 && pc < 0x8EC5) dress(at, POND_SPARKLES, false, 3);   /* the gold axe's scripts */
+}
+static void call_her_out(void)
+{
+  HmRegs r;
+  memset(&r, 0, sizeof r);
+  r.db = 0x7E;
+  r.a = 0; r.x = POND_SCENE_GROUP; r.y = 0;          /* slot 0, as the axe starts it */
+  hm_StartEventScriptLong(g_ram, &r);
+  s_scene = SCENE_STARTED;
+  s_scene_frames = 1;
+  g_hm_slot_picture = scene_picture;
+}
 static bool s_feather_used;
 static void feather_used(void) { s_feather_used = true; }
 
@@ -240,10 +284,20 @@ void goddess_frame(void)
   g_hm_goddess_on = g_cfg.goddess;
   g_hm_spring_offer = g_cfg.goddess ? offer : NULL;
   g_hm_feather_used = g_cfg.goddess ? feather_used : NULL;
+  g_hm_script_text = g_cfg.goddess ? scene_text : NULL;
   if (s_feather_used) {
     s_feather_used = false;
-    if (g_cfg.goddess && hm_diary_loaded(g_ram) && facing_her_pond()) propose();
+    if (g_cfg.goddess && hm_diary_loaded(g_ram) && facing_her_pond() && s_scene == NO_SCENE) {
+      propose();                                     /* her words, said when she is out */
+      call_her_out();
+    }
   }
+  if (s_scene_frames && ++s_scene_frames > 900) {   /* the scene is long over (15 s): the axe's is the game's again */
+    s_scene_frames = 0;
+    if (g_hm_slot_picture == scene_picture) g_hm_slot_picture = NULL;
+  }
+  static int waited;                                 /* her text never came (the scene cut short): give up */
+  if (s_scene == SCENE_STARTED) { if (++waited > 600) s_scene = NO_SCENE; } else waited = 0;
 }
 
 /* ── The wedding ──────────────────────────────────────────────────────── */
@@ -481,7 +535,14 @@ uint16_t goddess_pad(uint16_t pad)
   return (uint16_t)(pad & ~B_A);
 }
 
-bool goddess_dialog_wanted(void) { bool b = G.want_dialog || s_said_pages; G.want_dialog = false; return b; }
+bool goddess_dialog_wanted(void)
+{
+  if (s_scene == SCENE_STARTED) return false;       /* she is still coming out of the water */
+  if (s_scene == SCENE_TALKING) s_scene = NO_SCENE;
+  bool b = G.want_dialog || s_said_pages;
+  G.want_dialog = false;
+  return b;
+}
 void goddess_dialog_open(void)
 {
   if (s_said_pages) {                                /* what she just said (an offering, the feather...) */
@@ -592,4 +653,6 @@ void goddess_reset(void)
   g_hm_slot_picture = NULL;
   memset(&G, 0, sizeof G);
   s_said_pages = 0;
+  s_scene = NO_SCENE;
+  s_scene_frames = 0;
 }
