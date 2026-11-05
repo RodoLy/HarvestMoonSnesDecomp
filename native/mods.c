@@ -23,6 +23,7 @@
 #include "i18n.h"
 #include "wife.h"
 #include "goddess.h"
+#include "suitors.h"
 
 extern Ppu *g_ppu;
 
@@ -1156,6 +1157,7 @@ void mods_reset(void)
 {
   wife_reset();
   goddess_reset();
+  suitors_reset();
   memset(&s_cheat, 0, sizeof s_cheat);
   memset(&s_qol, 0, sizeof s_qol);
   memset(&s_end, 0, sizeof s_end);
@@ -1178,5 +1180,6 @@ void mods_frame(uint8_t *ram)
   wife_frame(ram);
   goddess_frame();
   goddess_married_tick(ram);
+  suitors_frame();
   if (g_ppu) { title_frame(); ws_frame(); crops_frame(); }
 }
