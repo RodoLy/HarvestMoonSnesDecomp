@@ -59,5 +59,5 @@ Apagado de fábrica, con su propia opción en `config.ini`, como `HarvestGoddess
 
 ## Para seguir en otra sesión
 
-Abre esta rama (`harvest-goddess` de RodoLy/HarvestMoonSnesDecomp) y pide
-que primero lea `docs/suitors/PLAN.es.md`.
+Abre la rama `male-suitors` (que sale de `harvest-goddess`) de
+RodoLy/HarvestMoonSnesDecomp y pide que primero lea `docs/suitors/PLAN.es.md`.

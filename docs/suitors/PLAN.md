@@ -58,5 +58,5 @@ Off by default, with its own option in `config.ini`, like `HarvestGoddess`.
 
 ## To continue in another session
 
-Open this branch (`harvest-goddess` of RodoLy/HarvestMoonSnesDecomp)
-and ask to read `docs/suitors/PLAN.md` first.
+Open the `male-suitors` branch (started from `harvest-goddess`) of
+RodoLy/HarvestMoonSnesDecomp and ask to read `docs/suitors/PLAN.md` first.
