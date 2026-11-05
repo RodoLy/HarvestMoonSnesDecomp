@@ -229,6 +229,7 @@ static enum { NO_SCENE, SCENE_STARTED, SCENE_TALKING } s_scene;
 static bool shop_text(uint8_t *ram, uint16_t text);   /* The Golden Feather, below */
 static void seller_sunday(void);
 static void golden_shown(void);
+static void bride_lift(void);                         /* the wedding, below */
 static void night_wife(uint8_t *ram, bool done);   /* Children, below */
 static void lend_for_ending(uint8_t *ram);
 static bool scene_text(uint8_t *ram, uint16_t text)
@@ -301,6 +302,7 @@ void goddess_frame(void)
   g_hm_script_text = g_cfg.goddess ? scene_text : NULL;
   g_hm_night_wife = g_cfg.goddess ? night_wife : NULL;
   if (g_cfg.goddess && hm_diary_loaded(g_ram)) { seller_sunday(); golden_shown(); lend_for_ending(g_ram); }
+  if (g_cfg.goddess) bride_lift();
   if (s_feather_used) {
     s_feather_used = false;
     if (g_cfg.goddess && hm_diary_loaded(g_ram) && facing_her_pond() && s_scene == NO_SCENE) {
@@ -368,6 +370,27 @@ static void wedding_picture(uint8_t *ram, uint32_t at)
 static void wedding_colours(void)              /* OBJ palette 0: hers */
 {
   for (int i = 0; i < 32; i++) g_ram[HM_CGRAM_SHADOW + 256 + i] = hm_bus_rd8(g_ram, GODDESS_PALETTE + (uint32_t)i);
+}
+/* Her figure stands 4 pixels lower in its frame than the bride's she
+ * replaces: next to the groom her head and feet were under his. Lifted in
+ * the picture chip's object list, after the game made it and before the
+ * frame is drawn: the bride's own pieces only (around her slot, palette 0;
+ * the elves stand farther off, the Water Imp beside her on the right). */
+enum { BRIDE_LIFT = 4 };
+static void bride_lift(void)
+{
+  if (s_wedding != WEDDING_ON || !g_ppu) return;
+  uint32_t bride = 0xB586u + 64u * SLOT_BRIDE;
+  int sprite = slot16(bride, SLOT_SPRITE);
+  if (!g_ram[bride] || (sprite != GODDESS_SPRITE && sprite != GODDESS_SPRITE + 1)) return;
+  int sx = slot16(bride, SLOT_X) - hm_rd16(g_ram, HM_CAM_X), sy = slot16(bride, SLOT_Y) - hm_rd16(g_ram, HM_CAM_Y);
+  for (int i = 0; i < 128; i++) {
+    uint16_t pos = g_ppu->oam[2 * i], attr = g_ppu->oam[2 * i + 1];
+    int x = pos & 0xFF, y = pos >> 8;
+    if (((attr >> 9) & 7) != 0 || y >= 224) continue;
+    if (x < sx - 16 || x > sx + 8 || y < sy - 40 || y > sy + 8) continue;
+    g_ppu->oam[2 * i] = (uint16_t)(x | (y - BRIDE_LIFT) << 8);
+  }
 }
 /* every frame; true while the wedding is being started or played */
 static bool wedding(uint8_t *ram)
