@@ -309,6 +309,17 @@ extern int g_hm_goddess_on;
 extern uint16_t g_hm_goddess_hearts, g_hm_goddess_day;
 extern uint8_t g_hm_goddess_flags;
 extern void (*g_hm_spring_offer)(uint8_t *ram, uint8_t item);
+/* g_hm_suitors_on: the men of the town who can be courted (native/suitors.c)
+ * are on. Each one's word: bits 0-9 his love (0-1000), bit 10 talked to
+ * today, bit 11 given something today, bits 12-15 for later (the
+ * proposal, the wedding). g_hm_suitor_day: the day those "today" bits are
+ * for (year x 120 + season x 30 + day, its low byte). Kept in the saved
+ * game's unused +1B-+1F and +2C-+2D, with +5F = $5B, by SaveGameSlot /
+ * LoadGameSlot. */
+enum { HM_SUITORS = 3 };
+extern int g_hm_suitors_on;
+extern uint16_t g_hm_suitor[HM_SUITORS];
+extern uint8_t g_hm_suitor_day;
 /* g_hm_feather_used: called when the Blue Feather is used (shown), by
  * ToolUsedBlueFeather (toolused.c), after the game's own work: the native
  * build's goddess takes it as a proposal at her pond. */
