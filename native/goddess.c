@@ -630,7 +630,8 @@ enum {
   BOB_PERIOD = 96,                 /* up and down every 1.6 s */
   NEAR_PLAYER = 40,                /* closer than this, she keeps still */
   HOBBY_FROM = 11, HOBBY_TO = 15,  /* her midday blessing of the field */
-  AWAY_FROM = 18,                  /* her farm days: home from 18:00 */
+  OUT_FROM = 9,                    /* at home in the morning, as the wives; out at 9:00 */
+  AWAY_FROM = 18,                  /* and home again from 18:00 (all day when it rains or snows) */
 };
 
 /* ── Children ─────────────────────────────────────────────────────────
@@ -718,11 +719,6 @@ static void childbed_colours(void)
   }
 }
 
-static bool home_day(void)
-{
-  unsigned d = ((unsigned)today() + 7919u) * 2654435761u;
-  return ((d >> 16) & 3) == 0;                      /* about one day in four */
-}
 static bool slot_runs_idle(uint32_t at)
 {
   int pc = slot16(at, SLOT_SCRIPT);                  /* somewhere in its two commands (6 bytes) */
@@ -771,21 +767,27 @@ static void colours_in(int palette, uint32_t from)
 }
 static void her_colours(void) { colours_in(HER_PALETTE, GODDESS_PALETTE); }
 
-/* the places she floats between (pixels in the map): around the barn's
- * door (tile 20, 21); at midday over the field, south of the fence; at
- * home the bed, above the table, the TV */
+/* where she floats (pixels in the map): out on the farm, between places
+ * around the barn's door (tile 20, 21); at midday over the field, south
+ * of the fence; at home in one place by the table, as a wife keeps to hers */
 typedef struct { int x, y; } Spot;
 static const Spot kFarmSpots[] = { { 20 * 16 + 8, 23 * 16 }, { 23 * 16, 25 * 16 }, { 18 * 16, 24 * 16 }, { 21 * 16, 26 * 16 } };
 static const Spot kFieldSpots[] = { { 20 * 16, 34 * 16 }, { 24 * 16, 35 * 16 }, { 17 * 16, 36 * 16 } };
-static const Spot kHouseSpots[] = { { 0x58, 0x60 }, { 0x88, 0x78 }, { 0xBC, 0x60 }, { 0x70, 0x90 } };
+static const Spot kHouseSpots[] = { { 0x60, 0x62 } };
+/* the doors she goes out and comes in by: the house's, inside, and the house's on the farm */
+static const Spot kHouseDoor = { 0x78, 0xC0 }, kFarmDoor = { 0x148, 0x1C0 };
 
 /* where she is now: 1 the farm, 2 the house, 0 neither (as the day goes) */
+static bool bad_weather(void)
+{
+  return hm_rd16(g_ram, HM_WEATHER_FLAGS) & (0x0002 | 0x0008);   /* rain, snow (as maptiles.c reads them) */
+}
 static int her_place(int map, int hour)
 {
   bool house = map >= 0x15 && map <= 0x17, farm = map <= 3;
-  bool at_home = home_day() || hour >= AWAY_FROM || hour < 6;
-  if (farm && !at_home) return 1;
-  if (house && at_home) return 2;
+  bool out = !bad_weather() && hour >= OUT_FROM && hour < AWAY_FROM;
+  if (farm && out) return 1;
+  if (house && !out) return 2;
   return 0;
 }
 
@@ -820,6 +822,8 @@ static const Line kMotherLines[] = {
 
 static struct {
   int place;                       /* where she was put (her_place), 0 none */
+  int map;                         /* the map of the last frame */
+  bool leaving;                    /* off to the door, to go out or home */
   bool hobby;                      /* blessing the field (midday, her farm days) */
   int x, y;                        /* where she floats, in 1/16 pixels */
   int spot, rest;                  /* the place she floats to; frames still resting */
@@ -915,12 +919,21 @@ static void glide(const Spot *spots, int n)
   if (abs(dx) <= GLIDE_SPEED && abs(dy) <= GLIDE_SPEED) {   /* there: rest, then any other one */
     G.x = tx; G.y = ty;
     G.rest = REST_FRAMES + (int)(G.frame % 120);
-    G.spot = (G.spot + 1 + (int)(G.frame % (unsigned)(n - 1))) % n;
+    if (n > 1) G.spot = (G.spot + 1 + (int)(G.frame % (unsigned)(n - 1))) % n;
     return;
   }
   /* a straight line, the longer way at full speed */
   if (abs(dx) >= abs(dy)) { G.x += dx > 0 ? GLIDE_SPEED : -GLIDE_SPEED; G.y += dy * GLIDE_SPEED / abs(dx); }
   else { G.y += dy > 0 ? GLIDE_SPEED : -GLIDE_SPEED; G.x += dx * GLIDE_SPEED / abs(dy); }
+}
+/* straight to a door, whoever is in the way; true once there */
+static bool glide_to(Spot to)
+{
+  int tx = to.x * GLIDE_SUBPIXELS, ty = to.y * GLIDE_SUBPIXELS, dx = tx - G.x, dy = ty - G.y;
+  if (abs(dx) <= GLIDE_SPEED && abs(dy) <= GLIDE_SPEED) { G.x = tx; G.y = ty; return true; }
+  if (abs(dx) >= abs(dy)) { G.x += dx > 0 ? GLIDE_SPEED : -GLIDE_SPEED; G.y += dy * GLIDE_SPEED / abs(dx); }
+  else { G.y += dy > 0 ? GLIDE_SPEED : -GLIDE_SPEED; G.x += dx * GLIDE_SPEED / abs(dy); }
+  return false;
 }
 static void move_slot(uint32_t at, int x, int y)
 {
@@ -987,50 +1000,15 @@ static void imp_tick(uint8_t *ram)
   move_slot(IMP_SLOT, x, y);
 }
 
-void goddess_married_tick(uint8_t *ram)
+/* her figure where G says, floating: a slow wave of a pixel or two, now
+ * and then her other picture; the sparkles over her at her blessing */
+static void float_frame(uint8_t *ram, bool hobby)
 {
-  if (!g_cfg.goddess) return;
-  bool wed = wedding(ram);
-  imp_tick(ram);
-  if (wed) return;
-  int place = (g_hm_goddess_flags & GODDESS_MARRIED) && hm_diary_loaded(ram) ? her_place(ram[HM_MAP_ID], ram[HM_HOUR]) : 0;
-  if (s_lent_for_ending) {                            /* the game's wife till the game ends */
-    childbed_colours();
-    take_away(HER_SLOT); take_away(SPARKLE_SLOT); G.place = 0;
-    return;
-  }
-  if (in_childbed(ram)) {                             /* in bed, the game's wife: not floating about */
-    if (ram[HM_MAP_ID] >= 0x15 && ram[HM_MAP_ID] <= 0x17) childbed_colours();
-    place = 0;
-  }
-  if (!place) { take_away(HER_SLOT); take_away(SPARKLE_SLOT); G.place = 0; return; }
-
-  bool hobby = place == 1 && ram[HM_HOUR] >= HOBBY_FROM && ram[HM_HOUR] < HOBBY_TO;
-  const Spot *spots = hobby ? kFieldSpots : place == 1 ? kFarmSpots : kHouseSpots;
-  int n = hobby ? COUNT(kFieldSpots) : place == 1 ? COUNT(kFarmSpots) : COUNT(kHouseSpots);
-  if (hobby != G.hobby) { G.hobby = hobby; G.spot = 0; G.rest = 0; }   /* off to the field, or back */
-  if (G.place != place || !slot_runs_idle(HER_SLOT)) {    /* she arrives: at her first place */
-    if (!slot_runs_idle(HER_SLOT) && ram[HER_SLOT]) return;   /* the slot is the game's now */
-    G.place = place;
-    G.x = spots[0].x * GLIDE_SUBPIXELS; G.y = spots[0].y * GLIDE_SUBPIXELS;
-    G.spot = 1; G.rest = REST_FRAMES;
-    if (!slot_runs_idle(HER_SLOT)) put(HER_SLOT, 0x13, GODDESS_SPRITE, HER_PALETTE ^ 0, spots[0].x, spots[0].y);
-  }
-  if (!hobby) take_away(SPARKLE_SLOT);              /* the sparkles: only at her blessing */
-  else if (!slot_runs_idle(SPARKLE_SLOT) && !ram[SPARKLE_SLOT])
-    put(SPARKLE_SLOT, 0x14, SPARKLE_SPRITE, 0, G.x / GLIDE_SUBPIXELS, G.y / GLIDE_SUBPIXELS - 4);
-  her_colours();
-
-  G.frame++;
-  glide(spots, n);
-  /* floating: a slow wave of a pixel or two */
   static const int8_t wave[16] = { 0, 0, 1, 1, 2, 2, 2, 1, 1, 0, 0, -1, -1, -1, -1, 0 };
   int bob = wave[(G.frame * 16 / BOB_PERIOD) % 16];
   int x = G.x / GLIDE_SUBPIXELS, y = G.y / GLIDE_SUBPIXELS - 2 - bob;   /* a little off the ground */
   move_slot(HER_SLOT, x, y);
   if (hobby && slot_runs_idle(SPARKLE_SLOT)) move_slot(SPARKLE_SLOT, x, y - 4);
-
-  /* now and then her other picture, and the sparkles turning */
   int sprite = (G.frame % 150) < 12 ? GODDESS_SPRITE + 1 : GODDESS_SPRITE;
   if (slot16(HER_SLOT, SLOT_SPRITE) != sprite) {
     ram[HER_SLOT + SLOT_SPRITE] = (uint8_t)sprite; ram[HER_SLOT + SLOT_SPRITE + 1] = (uint8_t)(sprite >> 8);
@@ -1041,6 +1019,72 @@ void goddess_married_tick(uint8_t *ram)
     ram[SPARKLE_SLOT + SLOT_FLAGS] |= 0x04;
     ram[SPARKLE_SLOT + SLOT_LAST_SPRITE] ^= 1;       /* so the game redraws it */
   }
+}
+
+/* Her day, as a wife's: at home in the morning (in one place, floating),
+ * out on the farm from 9:00 (blessing the field at midday), home again
+ * from 18:00; at home all day when it rains or snows. The clock stops
+ * indoors, so she is never seen going out of the house. When her hour comes with the player on her map,
+ * she floats to the door and goes, or comes in by it; otherwise she is
+ * simply where she should be when he gets there. */
+void goddess_married_tick(uint8_t *ram)
+{
+  if (!g_cfg.goddess) return;
+  bool wed = wedding(ram);
+  imp_tick(ram);
+  if (wed) return;
+  int map = ram[HM_MAP_ID];
+  bool same_map = map == G.map;
+  G.map = map;
+  int place = (g_hm_goddess_flags & GODDESS_MARRIED) && hm_diary_loaded(ram) ? her_place(map, ram[HM_HOUR]) : 0;
+  if (s_lent_for_ending) {                            /* the game's wife till the game ends */
+    childbed_colours();
+    take_away(HER_SLOT); take_away(SPARKLE_SLOT); G.place = 0; G.leaving = false;
+    return;
+  }
+  if (in_childbed(ram)) {                             /* in bed, the game's wife: not floating about */
+    if (map >= 0x15 && map <= 0x17) childbed_colours();
+    take_away(HER_SLOT); take_away(SPARKLE_SLOT); G.place = 0; G.leaving = false;
+    return;
+  }
+  Spot door = map <= 3 ? kFarmDoor : kHouseDoor;
+
+  /* her hour to go, with the player here: to the door first */
+  if (!place && G.place && same_map && slot_runs_idle(HER_SLOT)) G.leaving = true;
+  if (G.leaving) {
+    if (place || !same_map || !slot_runs_idle(HER_SLOT)) G.leaving = false;   /* the player went off, or she stays */
+    else {
+      take_away(SPARKLE_SLOT);
+      her_colours();
+      G.frame++;
+      if (glide_to(door)) { take_away(HER_SLOT); G.place = 0; G.leaving = false; return; }
+      float_frame(ram, false);
+      return;
+    }
+  }
+  if (!place) { take_away(HER_SLOT); take_away(SPARKLE_SLOT); G.place = 0; return; }
+
+  bool hobby = place == 1 && ram[HM_HOUR] >= HOBBY_FROM && ram[HM_HOUR] < HOBBY_TO;
+  const Spot *spots = hobby ? kFieldSpots : place == 1 ? kFarmSpots : kHouseSpots;
+  int n = hobby ? COUNT(kFieldSpots) : place == 1 ? COUNT(kFarmSpots) : COUNT(kHouseSpots);
+  if (hobby != G.hobby) { G.hobby = hobby; G.spot = 0; G.rest = 0; }   /* off to the field, or back */
+  if (G.place != place || !slot_runs_idle(HER_SLOT)) {    /* she arrives */
+    if (!slot_runs_idle(HER_SLOT) && ram[HER_SLOT]) return;   /* the slot is the game's now */
+    bool by_the_door = G.place == 0 && same_map;     /* her hour came with the player here */
+    G.place = place;
+    Spot from = by_the_door ? door : spots[0];
+    G.x = from.x * GLIDE_SUBPIXELS; G.y = from.y * GLIDE_SUBPIXELS;
+    G.spot = by_the_door ? 0 : 1 % n; G.rest = by_the_door ? 0 : REST_FRAMES;
+    if (!slot_runs_idle(HER_SLOT)) put(HER_SLOT, 0x13, GODDESS_SPRITE, HER_PALETTE ^ 0, from.x, from.y);
+  }
+  if (!hobby) take_away(SPARKLE_SLOT);              /* the sparkles: only at her blessing */
+  else if (!slot_runs_idle(SPARKLE_SLOT) && !ram[SPARKLE_SLOT])
+    put(SPARKLE_SLOT, 0x14, SPARKLE_SPRITE, 0, G.x / GLIDE_SUBPIXELS, G.y / GLIDE_SUBPIXELS - 4);
+  her_colours();
+  G.frame++;
+  if (n > 1) glide(spots, n);
+  else glide_to(spots[0]);                          /* home: her one place (or on her way to it) */
+  float_frame(ram, hobby);
 }
 
 void goddess_reset(void)
