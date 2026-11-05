@@ -187,6 +187,7 @@ void config_load(void)
         else if (!strcmp(k, "wifehelps")) c->wife_help = yes(v);
         else if (!strcmp(k, "wifeoldclothes")) c->wife_clothes = yes(v);
         else if (!strcmp(k, "harvestgoddess")) c->goddess = yes(v);
+        else if (!strcmp(k, "malesuitors")) c->male_suitors = yes(v);
       } else if (!strcmp(section, "[cheats]")) {
         if (!strcmp(k, "money")) c->money = yes(v);
         else if (!strcmp(k, "stamina")) c->stamina = yes(v);
@@ -227,8 +228,8 @@ void config_save(void)
     fprintf(f, "\n[Video]\nFullscreen = %d\nScale = %d\nVSync = %d\nSpriteLimits = %d\nWidescreen = %d\nExactPixels = %d\nSmoothPixels = %d\n# Filter: 0 none, 1 scanlines, 2 CRT, 3 green\nFilter = %d\n\n",
             c->fullscreen, c->scale, c->vsync, c->sprite_limits, c->widescreen, c->exact_pixels, c->smooth, c->filter);
     fprintf(f, "[Sound]\nVolume = %d\n\n", c->volume);
-    fprintf(f, "[Improvements]\nFastText = %d\nDayLength = %d\nPauseMenu = %d\nTitleOptions = %d\nEndless = %d\nWalkThroughCrops = %d\nOneSeedAtATime = %d\nMouseControls = %d\nCropBag = %d\nWifeHelps = %d\nWifeOldClothes = %d\nHarvestGoddess = %d\n\n",
-            c->fast_text, c->day_length, c->pause_menu, c->title_options, c->endless, c->walk_crops, c->single_seed, c->mouse, c->crop_bag, c->wife_help, c->wife_clothes, c->goddess);
+    fprintf(f, "[Improvements]\nFastText = %d\nDayLength = %d\nPauseMenu = %d\nTitleOptions = %d\nEndless = %d\nWalkThroughCrops = %d\nOneSeedAtATime = %d\nMouseControls = %d\nCropBag = %d\nWifeHelps = %d\nWifeOldClothes = %d\nHarvestGoddess = %d\nMaleSuitors = %d\n\n",
+            c->fast_text, c->day_length, c->pause_menu, c->title_options, c->endless, c->walk_crops, c->single_seed, c->mouse, c->crop_bag, c->wife_help, c->wife_clothes, c->goddess, c->male_suitors);
     fprintf(f, "[Cheats]\nMoney = %d\nStamina = %d\nFreezeClock = %d\nStock = %d\nBags = %d\nWeather = %d\n\n",
             c->money, c->stamina, c->freeze_clock, c->stock, c->bags, c->weather);
     fprintf(f, "[Touch]\n# Controls: 0 shown when the screen is touched, 1 always, 2 never\nControls = %d\nSecondScreen = %d\n\n",
