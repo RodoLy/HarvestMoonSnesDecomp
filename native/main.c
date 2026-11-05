@@ -426,20 +426,6 @@ static void poll_events(void)
       } else if (k >= SDLK_F1 && k <= SDLK_F10) {
         int slot = (int)(k - SDLK_F1) + 1;
         if (ev.key.mod & SDL_KMOD_SHIFT) s_save_slot = slot; else s_load_slot = slot;
-      } else if (k == SDLK_F12 && g_cfg.goddess && hm_diary_loaded(g_ram)) {
-        /* test keys for the Goddess mod (local-only; not in a retail build) */
-        if (ev.key.mod & SDL_KMOD_SHIFT) {
-          g_hm_goddess_flags = (uint8_t)((g_hm_goddess_flags & ~GODDESS_ENGAGED) | GODDESS_MARRIED);
-          host_toast(T("[Test] Married now. The day decides home or the farm."));
-        } else {
-          g_hm_goddess_hearts = 1000;
-          g_hm_goddess_day = 0xFFFF;                       /* so today's offer isn't "already came" */
-          hm_wr16(g_ram, HM_FLAGS_64, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_64) | 0x0040));
-          hm_wr16(g_ram, HM_FLAGS_6A, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_6A) | 0x0020));  /* the quake: her rock is gone */
-          g_ram[HM_ITEM] = 0x41;                             /* the Blue Feather, in hand */
-          hm_wr16(g_ram, 0xD2, (uint16_t)(hm_rd16(g_ram, 0xD2) | 0x0010));  /* carrying it */
-          host_toast(T("[Test] 1000 hearts, house built, her pond open, Blue Feather in hand."));
-        }
       }
       break;
     }
