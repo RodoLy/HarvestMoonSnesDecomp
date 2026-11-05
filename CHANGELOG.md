@@ -2,6 +2,10 @@
 
 *Español abajo.*
 
+## Unreleased (branch `male-suitors`)
+
+- **Male suitors** (an improvement, off by default; first step): **Eve's fan**, the young man in the bar, can be courted as the girls are. Talk to him, or hold something in front of him and press A to give it: the first talk and the first gift of the day raise his hearts (his favourites, Wild Grapes, Fish and Cake, much more; weeds and the Poison Mushroom take love away). He answers in the game's own text box, by how much he likes you. His hearts are kept in the diary. The proposal, the wedding and married life come next ([the plan](docs/suitors/PLAN.md)).
+
 ## Unreleased (branch `harvest-goddess`)
 
 - **The Goddess of Spring** (an improvement, off by default): offerings at her small pond on the mountain raise her hearts (her favourites, the dear things, much more); at ten hearts, with the house built up, a **Golden Feather** (sold for 5,000 G by the Blue Feather's seller, on Sundays in town; held up in gold) **shown at her pond** calls her out of the water, in the game's own scene (the one the axe calls there, with her sparkles instead of the gold axe), and gets a yes (everything she says is in the game's own text box, with its letter sound). **A week later the wedding plays in front of the church** — the game's own wedding scene, with her as the bride (her original sprite) and the **seven Harvest Sprites as the guests**. Married, she is there as herself, **floating** (a goddess does not walk), with a wife's day: at home in the morning, in one place by the table; out on the farm from 9:00, around the barn's door, going out and coming in by the house's door; home again at 18:00, and all day when it rains or snows; at midday she has her own chore, blessing the field with the sparkles of her pond scene. **Talk to her** and she answers in the game's own text box, letter by letter with its sound. With the house at its second extension she can **have children**, by the game's own rules and scenes: she is the wife in bed on the birth's days (with her green hair), and has her own lines while expecting and as a mother. Her family is the **Water Imp**, the spring's spirit (his own sprite from the ROM): he comes to the wedding and to the birth, and in the ending he waits in front of the family's house, as a wife's family does. In the **game's ending** she is the wife who walks with you through the town and on the hill. Her **face from the ROM** and her hearts are in the pause menu's Hearts tab.
@@ -34,6 +38,10 @@ cheats. Built on your own computer with `build.bat`.
 ---
 
 # Cambios
+
+## Sin publicar (rama `male-suitors`)
+
+- **Pretendientes hombres** (una mejora, apagada de fábrica; primer paso): **el fan de Eve**, el joven del bar, se puede cortejar como a las chicas. Háblale, o ponte frente a él con algo en las manos y presiona A para regalárselo: la primera plática y el primer regalo de cada día le suben los corazones (sus favoritos, Wild Grapes, Fish y Cake, mucho más; la hierba y el Poison Mushroom le bajan el cariño). Contesta en la caja de texto del propio juego, según cuánto le gustas. Sus corazones se guardan en el diario. La propuesta, la boda y la vida de casados vienen después ([el plan](docs/suitors/PLAN.es.md)).
 
 ## Sin publicar (rama `harvest-goddess`)
 

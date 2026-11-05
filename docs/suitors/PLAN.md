@@ -4,8 +4,13 @@
 
 A planned improvement for the native build, after the Harvest Goddess
 (`native/goddess.c`): single men of the town the player can court and
-marry, the same way as the girls. Nothing is built yet; this file is
-where the work starts.
+marry, the same way as the girls.
+
+**Done so far:** step 1 (hearts and gifts) for Eve's fan, in
+`native/suitors.c`, with its own option (`MaleSuitors` in `config.ini`,
+"Male suitors" in the launcher). It builds, but it **has not been tried in
+the game yet**: the first test is to go to the bar at night, talk to him
+and give him something (see "To try it" at the end).
 
 ## What was found
 
@@ -60,3 +65,19 @@ Off by default, with its own option in `config.ini`, like `HarvestGoddess`.
 
 Open the `male-suitors` branch (started from `harvest-goddess`) of
 RodoLy/HarvestMoonSnesDecomp and ask to read `docs/suitors/PLAN.md` first.
+
+## To try it
+
+1. Turn on "Male suitors" in the launcher's improvements.
+2. Go to the bar at night. Press A in front of Eve's fan: his line comes
+   in the game's text box (not his own "I'm a fan of Eve's" any more).
+3. Pick up Wild Grapes, a Fish or a Cake and press A in front of him: it
+   leaves your hands and he is very happy. A second gift the same day stays
+   in your hands.
+4. Save, load: his love is kept (there is no hearts row for him yet in
+   the pause menu; it can be added next, with his face).
+
+If A in front of him does nothing different, his sprite numbers or the
+bar's map number ($1E) are not the ones read from the RAM dumps: they are
+at the top of `native/suitors.c` (`kSuitors`).
+

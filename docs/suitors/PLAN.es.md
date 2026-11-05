@@ -5,7 +5,13 @@
 Una mejora planeada para la versión nativa, después de la Diosa de la
 Cosecha (`native/goddess.c`): hombres solteros del pueblo a los que el
 jugador puede cortejar y con los que se puede casar, igual que con las
-chicas. Todavía no hay nada construido; aquí empieza el trabajo.
+chicas.
+
+**Hecho hasta ahora:** el paso 1 (corazones y regalos) para el fan de Eve,
+en `native/suitors.c`, con su propia opción (`MaleSuitors` en `config.ini`,
+"Pretendientes hombres" en el lanzador). Compila, pero **todavía no se ha
+probado en el juego**: la primera prueba es ir al bar de noche, hablarle y
+regalarle algo (ver "Para probarlo" al final).
 
 ## Lo que se encontró
 
@@ -61,3 +67,19 @@ Apagado de fábrica, con su propia opción en `config.ini`, como `HarvestGoddess
 
 Abre la rama `male-suitors` (que sale de `harvest-goddess`) de
 RodoLy/HarvestMoonSnesDecomp y pide que primero lea `docs/suitors/PLAN.es.md`.
+
+## Para probarlo
+
+1. Activa "Pretendientes hombres" en las mejoras del lanzador.
+2. Ve al bar de noche. Presiona A frente al fan de Eve: su frase sale en
+   la caja de texto del juego (ya no su "I'm a fan of Eve's").
+3. Recoge unas Wild Grapes, un Fish o un Cake y presiona A frente a él: se
+   va de tus manos y se pone muy contento. Un segundo regalo el mismo día
+   se queda en tus manos.
+4. Guarda y carga: su cariño se conserva (todavía no tiene fila de
+   corazones en el menú de pausa; se puede agregar después, con su cara).
+
+Si A frente a él no hace nada distinto, sus números de sprite o el número
+de mapa del bar ($1E) no son los que se leyeron de los volcados de RAM:
+están al principio de `native/suitors.c` (`kSuitors`).
+
