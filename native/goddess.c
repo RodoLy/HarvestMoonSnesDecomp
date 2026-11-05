@@ -931,8 +931,8 @@ static void move_slot(uint32_t at, int x, int y)
 /* ── Her family: the Water Imp ────────────────────────────────────────
  * The spring's spirit (sprite $308: the game puts him in
  * the spring when a fish is given back, event group $10) is her family.
- * Where a girl's family comes, he does: at the bride's side at the
- * wedding, by the bed at the child's birth, and in the ending waiting in
+ * Where a girl's family comes, he does: among the guests at the
+ * wedding (standing still, between the elves on the right), by the bed at the child's birth, and in the ending waiting in
  * front of the family's house in the town, as Maria's family does (in the
  * game the family does not walk with the couple: it waits there). He
  * stands in event slot $17 as a still picture, in the mountain's colours:
@@ -943,6 +943,7 @@ static void move_slot(uint32_t at, int x, int y)
 #define IMP_COLOURS 0xA9DE00           /* file 0x14DE00: the mountain's figures (his, by the spring) */
 enum {
   IMP_SPRITE = 0x308,
+  WEDDING_GUEST_X = 424, WEDDING_GUEST_Y = 224,   /* the wedding: on the right, between the elves */
   FAMILY_HOUSE_X = 206, FAMILY_HOUSE_Y = 182,   /* the ending: in front of the house, where her family waits */
   BEDSIDE_X = 336, BEDSIDE_Y = 120,    /* where a girl's family stands at the birth */
   TOWN_SQUARE = 0x05,
@@ -952,10 +953,8 @@ static int s_imp_palette = NO_PALETTE;
 
 static bool imp_place(uint8_t *ram, int *x, int *y)
 {
-  if (s_wedding == WEDDING_ON) {                     /* at the bride's side */
-    uint32_t bride = 0xB586u + 64u * SLOT_BRIDE;
-    if (!ram[bride]) return false;
-    *x = slot16(bride, SLOT_X) + 24; *y = slot16(bride, SLOT_Y);
+  if (s_wedding == WEDDING_ON) {                     /* among the guests, as the family stands */
+    *x = WEDDING_GUEST_X; *y = WEDDING_GUEST_Y;
     return true;
   }
   int map = ram[HM_MAP_ID];
