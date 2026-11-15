@@ -5,6 +5,7 @@
 ## Unreleased
 
 - **RecompLauncher**: every download has a `recomplauncher.json`, so [RecompLauncher](https://recomplauncher.com) can install the game, check your ROM and start it, with fullscreen, widescreen, window size, v-sync and sprite flicker on the game's page. The program takes the ROM as `--game <path>` too (as before, a path on its own works the same).
+- **Controllers in the launcher**: its bottom line names the connected pad's own buttons for choosing and going back, and the window comes to the front at start, so a pad works right away when another program opens the game.
 
 ## 0.2.0-beta
 
@@ -38,6 +39,7 @@ cheats. Built on your own computer with `build.bat`.
 ## Sin publicar
 
 - **RecompLauncher**: cada descarga trae un `recomplauncher.json`, para que [RecompLauncher](https://recomplauncher.com) pueda instalar el juego, revisar tu ROM y arrancarlo, con pantalla completa, panorámica, tamaño de ventana, v-sync y parpadeo de sprites en la página del juego. El programa también acepta la ROM como `--game <ruta>` (como antes, la ruta sola funciona igual).
+- **Controles en el lanzador**: la línea de abajo dice qué botones del control conectado eligen y regresan, y la ventana se pone al frente al abrir, para que el control funcione de inmediato cuando otro programa abre el juego.
 
 ## 0.2.0-beta
 

@@ -45,6 +45,8 @@ the game straight away, with fullscreen, widescreen and window size on the
 game's page. The file that tells it how is
 [`recomplauncher.json`](recomplauncher.json), in every download. By hand,
 the same start is `HarvestMoonNative --no-launcher --game "path/to/rom.sfc"`.
+With only a controller: **L3** (or Guide) opens the game's own menu, the
+line at its bottom names your pad's buttons for choosing and going back.
 
 > [!NOTE]
 > **The first time, your computer or phone will warn you: that is

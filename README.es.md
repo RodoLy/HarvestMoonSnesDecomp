@@ -45,6 +45,8 @@ juego directo, con pantalla completa, panorámica y tamaño de ventana en la
 página del juego. El archivo que le dice cómo es
 [`recomplauncher.json`](recomplauncher.json), en cada descarga. A mano, el
 mismo arranque es `HarvestMoonNative --no-launcher --game "ruta/a/rom.sfc"`.
+Solo con control: **L3** (o Guía) abre el menú del juego, y la línea de
+abajo dice qué botones de tu control eligen y regresan.
 
 > [!NOTE]
 > **La primera vez tu computadora o teléfono te va a advertir: es normal.**
