@@ -74,7 +74,7 @@ jobs:
         run: |
           N=HarvestMoon-$V-Windows
           mkdir -p "$N/mods"
-          cp b/HarvestMoonNative.exe HOW_TO_PLAY.txt LICENSE README.md README.es.md "$N/"
+          cp b/HarvestMoonNative.exe HOW_TO_PLAY.txt LICENSE README.md README.es.md recomplauncher.json "$N/"
           cp docs/MODS.md docs/MODS.es.md "$N/mods/"
           zip -q -r "$N.zip" "$N"
       - uses: actions/upload-artifact@v4
@@ -102,7 +102,7 @@ jobs:
         run: |
           N=HarvestMoon-$V-Linux
           mkdir -p "$N/mods"
-          cp b/HarvestMoonNative HOW_TO_PLAY.txt LICENSE README.md README.es.md "$N/"
+          cp b/HarvestMoonNative HOW_TO_PLAY.txt LICENSE README.md README.es.md recomplauncher.json "$N/"
           cp docs/MODS.md docs/MODS.es.md "$N/mods/"
           tar -czf "$N.tar.gz" "$N"
       - uses: actions/upload-artifact@v4
@@ -124,7 +124,7 @@ jobs:
         run: |
           N=HarvestMoon-$V-Mac
           mkdir -p "$N/mods"
-          cp b/HarvestMoonNative HOW_TO_PLAY.txt LICENSE README.md README.es.md "$N/"
+          cp b/HarvestMoonNative HOW_TO_PLAY.txt LICENSE README.md README.es.md recomplauncher.json "$N/"
           cp docs/MODS.md docs/MODS.es.md "$N/mods/"
           printf '#!/bin/bash\n# Double-click to play / Doble clic para jugar.\ncd "$(dirname "$0")" && exec ./HarvestMoonNative "$@"\n' > "$N/Harvest Moon.command"
           chmod +x "$N/Harvest Moon.command" "$N/HarvestMoonNative"
