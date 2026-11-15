@@ -1502,6 +1502,7 @@ int main(int argc, char **argv)
       return 1;
     }
     window_icon();
+    SDL_RaiseWindow(s_window);   /* started by another program (RecompLauncher): in front, so the pad reaches it */
     /* the pace: on a 60 Hz screen, the game at the screen's own rate (each
      * frame shown once, evenly; the sound follows, 0.16 % off at most),
      * with vsync unless it is turned off; on other screens, our own clock */
