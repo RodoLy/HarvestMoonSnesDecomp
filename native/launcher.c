@@ -721,6 +721,22 @@ static void hit(int x, int y, int w, int h, int i)
   if (L.nhits < (int)(sizeof L.hits / sizeof L.hits[0])) L.hits[L.nhits++] = (struct Hit){ x, y, w, h, i };
 }
 
+/* the line at the bottom: with a gamepad in use, its own names for the
+ * buttons that choose and go back (the SNES A and B, wherever they are on
+ * that pad), so a player who came with only a controller (RecompLauncher,
+ * a TV) knows which ones; long generic names keep the plain line */
+static const char *nav_hint(void)
+{
+  static char line[160];
+  SDL_GamepadButton choose = g_cfg.pad[0], back = g_cfg.pad[1];   /* kButtons: A, then B */
+  if (host_gamepad_current() < 0 || choose == SDL_GAMEPAD_BUTTON_INVALID || back == SDL_GAMEPAD_BUTTON_INVALID)
+    return T("A / Enter: choose  ·  B / Esc: back  ·  < >: change");
+  const char *c = host_gamepad_label(choose), *b = host_gamepad_label(back);
+  if (strlen(c) > 8 || strlen(b) > 8) return T("A / Enter: choose  ·  B / Esc: back  ·  < >: change");
+  snprintf(line, sizeof line, T("%s: choose  ·  %s: back  ·  < >: change"), c, b);
+  return line;
+}
+
 static void textbox(const char *desc, const char *hint)
 {
   int x = s_ox + 4;
@@ -918,7 +934,7 @@ void launcher_draw(uint32_t *dst, int w, int h, const uint32_t *game, uint32_t f
   L.nhits = 0; L.ntabhits = 0;
   build();
   if (L.sel[L.page] >= L.nitems) L.sel[L.page] = L.nitems ? L.nitems - 1 : 0;
-  const char *hint = T("A / Enter: choose  ·  B / Esc: back  ·  < >: change");
+  const char *hint = nav_hint();
   switch (L.page) {
   case P_MAIN: draw_main(); break;
   case P_GAMES: {
