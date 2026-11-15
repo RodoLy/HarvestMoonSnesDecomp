@@ -1,0 +1,76 @@
+{
+  "format": 1,
+  "name": "Harvest Moon (SNES) Native",
+  "repo": "RodoLy/HarvestMoonSnesDecomp",
+  "game": {
+    "kind": "iso",
+    "label": "Your Harvest Moon (USA) SNES ROM (.sfc or .smc, not zipped)",
+    "dumps": [
+      { "name": "USA", "size": 2097152, "crc32": "f829129e" }
+    ]
+  },
+  "start": {
+    "program": ["HarvestMoonNative.exe", "HarvestMoonNative"],
+    "args": ["--no-launcher", "--game", "{game}"]
+  },
+  "folders": {
+    "logs": [{ "path": "{install}" }]
+  },
+  "settings": [
+    {
+      "id": "fullscreen",
+      "label": "Fullscreen",
+      "help": "Start in fullscreen instead of the game's own setting.",
+      "in": "args",
+      "choices": [
+        { "label": "Game's setting", "args": [] },
+        { "label": "Fullscreen", "args": ["--fullscreen"] }
+      ]
+    },
+    {
+      "id": "widescreen",
+      "label": "Widescreen",
+      "help": "Show more of the farm and town at the sides, as wide as the screen.",
+      "in": "args",
+      "choices": [
+        { "label": "Game's setting", "args": [] },
+        { "label": "Widescreen", "args": ["--widescreen"] }
+      ]
+    },
+    {
+      "id": "scale",
+      "label": "Window size",
+      "help": "How many times the SNES picture is enlarged in a window.",
+      "in": "args",
+      "choices": [
+        { "label": "Game's setting", "args": [] },
+        { "label": "2x", "args": ["--scale", "2"] },
+        { "label": "3x", "args": ["--scale", "3"] },
+        { "label": "4x", "args": ["--scale", "4"] },
+        { "label": "5x", "args": ["--scale", "5"] }
+      ]
+    },
+    {
+      "id": "vsync",
+      "label": "V-sync",
+      "help": "Turn it off only if the game stutters on your screen.",
+      "in": "args",
+      "advanced": true,
+      "choices": [
+        { "label": "Game's setting", "args": [] },
+        { "label": "Off", "args": ["--no-vsync"] }
+      ]
+    },
+    {
+      "id": "sprite_limits",
+      "label": "Sprite flicker",
+      "help": "The SNES's own limit of sprites per line, with its flicker.",
+      "in": "args",
+      "advanced": true,
+      "choices": [
+        { "label": "Game's setting", "args": [] },
+        { "label": "Like the console", "args": ["--sprite-limits"] }
+      ]
+    }
+  ]
+}
