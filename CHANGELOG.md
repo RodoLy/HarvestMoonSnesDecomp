@@ -2,6 +2,10 @@
 
 *Español abajo.*
 
+## Unreleased
+
+- **RecompLauncher**: every download has a `recomplauncher.json`, so [RecompLauncher](https://recomplauncher.com) can install the game, check your ROM and start it, with fullscreen, widescreen, window size, v-sync and sprite flicker on the game's page. The program takes the ROM as `--game <path>` too (as before, a path on its own works the same).
+
 ## 0.2.0-beta
 
 - **Ready-made downloads** for Windows, Mac (Apple Silicon and Intel), Linux and **Android** — no need to build anything.
@@ -30,6 +34,10 @@ cheats. Built on your own computer with `build.bat`.
 ---
 
 # Cambios
+
+## Sin publicar
+
+- **RecompLauncher**: cada descarga trae un `recomplauncher.json`, para que [RecompLauncher](https://recomplauncher.com) pueda instalar el juego, revisar tu ROM y arrancarlo, con pantalla completa, panorámica, tamaño de ventana, v-sync y parpadeo de sprites en la página del juego. El programa también acepta la ROM como `--game <ruta>` (como antes, la ruta sola funciona igual).
 
 ## 0.2.0-beta
 

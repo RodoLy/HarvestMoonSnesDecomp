@@ -11,6 +11,8 @@ Computed with `python3 tools/progress.py --decomp ../HM-Decomp` over the HM-Deco
 ![platform: Windows / macOS / Linux / Android](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Windows%20ARM64%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)
 ![ROM: not included](https://img.shields.io/badge/ROM-not%20included-red)
 
+[![Get it on RecompLauncher](https://recomplauncher.com/assets/press/launcher/badge-dark.svg)](https://recomplauncher.com)
+
 The whole game rewritten, routine by routine, as C a person can read and
 change, and **playable on that C alone**. Every routine was checked against
 the original byte for byte (the whole memory, the CPU registers and the DMA
@@ -36,6 +38,13 @@ DasK) and is a sister project of
 | **Mac** (macOS 11+) | [**HarvestMoon-0.2.0-beta-Mac.zip**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Mac.zip): unzip, double-click `Harvest Moon.command` | `build_mac.command` |
 | **Android** 8+ | [**HarvestMoon-0.2.0-beta-Android.apk**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Android.apk): open it on the device to install it | `build_android.bat` (on Windows) |
 | **Linux** (x86_64) | [**HarvestMoon-0.2.0-beta-Linux.tar.gz**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Linux.tar.gz): unpack, run `./HarvestMoonNative` | [see below](#building-and-checking) |
+
+**Or from [RecompLauncher](https://recomplauncher.com)** (Windows, Mac,
+Linux): it installs the game, asks for your ROM once, checks it and starts
+the game straight away, with fullscreen, widescreen and window size on the
+game's page. The file that tells it how is
+[`recomplauncher.json`](recomplauncher.json), in every download. By hand,
+the same start is `HarvestMoonNative --no-launcher --game "path/to/rom.sfc"`.
 
 > [!NOTE]
 > **The first time, your computer or phone will warn you: that is
