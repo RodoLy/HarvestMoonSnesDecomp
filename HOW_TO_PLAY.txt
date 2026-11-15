@@ -1,4 +1,4 @@
-Harvest Moon (SNES) - native build, v0.2.0 beta
+Harvest Moon (SNES) - native build, v1.0.0
 ===============================================
 
 The game runs on its code rewritten in C. No ROM and nothing taken from
@@ -42,11 +42,11 @@ A gamepad works too. Everything can be changed in Controls.
 
 The source, and scripts to build it yourself:
 https://github.com/RodoLy/HarvestMoonSnesDecomp
-This is a beta: please report problems in the repository's Issues.
+Found a problem? Please report it in the repository's Issues.
 
 ----------------------------------------------------------------------
 
-Harvest Moon (SNES) - version nativa, v0.2.0 beta
+Harvest Moon (SNES) - version nativa, v1.0.0
 
 El juego corre sobre su codigo reescrito en C. No incluye la ROM ni nada
 sacado de ella: necesitas tu propia copia legal de Harvest Moon (USA). La
@@ -89,4 +89,4 @@ Tambien funciona un mando. Todo se puede cambiar en Controles.
 
 El codigo, y los scripts para compilarlo tu:
 https://github.com/RodoLy/HarvestMoonSnesDecomp
-Es una beta: reporta los problemas en los Issues del repositorio.
+¿Encontraste un problema? Repórtalo en los Issues del repositorio.

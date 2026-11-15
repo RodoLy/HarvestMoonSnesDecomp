@@ -2,8 +2,12 @@
 
 *Español abajo.*
 
-## Unreleased
+## 1.0.0
 
+The first full version: the whole game on its code rewritten in C, on Windows, Mac, Linux and Android.
+
+- **Picture filters** (Options → Filter): scanlines, CRT, and green (four shades, as on the first handheld screens).
+- **Smooth pixels** (Options → Picture): a soft, rounded look (Scale2x twice, then a soft scale); it goes with any filter.
 - **RecompLauncher**: every download has a `recomplauncher.json`, so [RecompLauncher](https://recomplauncher.com) can install the game, check your ROM and start it, with fullscreen, widescreen, window size, v-sync and sprite flicker on the game's page. The program takes the ROM as `--game <path>` too (as before, a path on its own works the same).
 - **Controllers in the launcher**: its bottom line names the connected pad's own buttons for choosing and going back, and the window comes to the front at start, so a pad works right away when another program opens the game.
 
@@ -36,8 +40,12 @@ cheats. Built on your own computer with `build.bat`.
 
 # Cambios
 
-## Sin publicar
+## 1.0.0
 
+La primera versión completa: todo el juego sobre su código reescrito en C, en Windows, Mac, Linux y Android.
+
+- **Filtros de imagen** (Opciones → Filtro): Scanlines (líneas de barrido), CRT y Verde (cuatro tonos, como las primeras pantallas portátiles).
+- **Píxeles suaves** (Opciones → Imagen): un aspecto suave y redondeado (Scale2x dos veces y luego un escalado suave); va con cualquier filtro.
 - **RecompLauncher**: cada descarga trae un `recomplauncher.json`, para que [RecompLauncher](https://recomplauncher.com) pueda instalar el juego, revisar tu ROM y arrancarlo, con pantalla completa, panorámica, tamaño de ventana, v-sync y parpadeo de sprites en la página del juego. El programa también acepta la ROM como `--game <ruta>` (como antes, la ruta sola funciona igual).
 - **Controles en el lanzador**: la línea de abajo dice qué botones del control conectado eligen y regresan, y la ventana se pone al frente al abrir, para que el control funcione de inmediato cuando otro programa abre el juego.
 

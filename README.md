@@ -30,14 +30,14 @@ DasK) and is a sister project of
 > ROM and nothing taken from it is included: the first time, the program
 > asks for your copy, checks it and remembers it. Please don't ask for ROMs.
 
-**[⬇ Download v0.2.0-beta](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/tag/v0.2.0-beta)** (all versions: [Releases](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases)) · What's new: [CHANGELOG.md](CHANGELOG.md)
+**[⬇ Download v1.0.0](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/tag/v1.0.0)** (all versions: [Releases](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases)) · What's new: [CHANGELOG.md](CHANGELOG.md)
 
 | | Download | Or build it yourself |
 |---|---|---|
-| **Windows** 10/11 | [**HarvestMoon-0.2.0-beta-Windows.zip**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Windows.zip): unzip, open `HarvestMoonNative.exe` | `build.bat` |
-| **Mac** (macOS 11+) | [**HarvestMoon-0.2.0-beta-Mac.zip**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Mac.zip): unzip, double-click `Harvest Moon.command` | `build_mac.command` |
-| **Android** 8+ | [**HarvestMoon-0.2.0-beta-Android.apk**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Android.apk): open it on the device to install it | `build_android.bat` (on Windows) |
-| **Linux** (x86_64) | [**HarvestMoon-0.2.0-beta-Linux.tar.gz**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v0.2.0-beta/HarvestMoon-0.2.0-beta-Linux.tar.gz): unpack, run `./HarvestMoonNative` | [see below](#building-and-checking) |
+| **Windows** 10/11 | [**HarvestMoon-1.0.0-Windows.zip**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v1.0.0/HarvestMoon-1.0.0-Windows.zip): unzip, open `HarvestMoonNative.exe` | `build.bat` |
+| **Mac** (macOS 11+) | [**HarvestMoon-1.0.0-Mac.zip**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v1.0.0/HarvestMoon-1.0.0-Mac.zip): unzip, double-click `Harvest Moon.command` | `build_mac.command` |
+| **Android** 8+ | [**HarvestMoon-1.0.0-Android.apk**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v1.0.0/HarvestMoon-1.0.0-Android.apk): open it on the device to install it | `build_android.bat` (on Windows) |
+| **Linux** (x86_64) | [**HarvestMoon-1.0.0-Linux.tar.gz**](https://github.com/RodoLy/HarvestMoonSnesDecomp/releases/download/v1.0.0/HarvestMoon-1.0.0-Linux.tar.gz): unpack, run `./HarvestMoonNative` | [see below](#building-and-checking) |
 
 **Or from [RecompLauncher](https://recomplauncher.com)** (Windows, Mac,
 Linux): it installs the game, asks for your ROM once, checks it and starts
