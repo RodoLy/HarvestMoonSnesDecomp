@@ -19,8 +19,8 @@ android {
         applicationId "io.github.rodriloy.harvestmoon"
         minSdk 26
         targetSdk 35
-        versionCode 2
-        versionName "0.2.0-beta"
+        versionCode 3
+        versionName "1.0.0"
         externalNativeBuild {
             cmake {
                 arguments "-DANDROID_STL=c++_static", "-DHM_SDL3_SOURCE_DIR=${sdlDir}"
