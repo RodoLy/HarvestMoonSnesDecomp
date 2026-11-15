@@ -1450,6 +1450,7 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[i], "--mods")) cli_mods = true;
     else if (!strcmp(argv[i], "--widescreen")) cli_ws = true;
     else if (!strcmp(argv[i], "--wav") && i + 1 < argc) s_wav = fopen(argv[++i], "wb");
+    else if (!strcmp(argv[i], "--game") && i + 1 < argc) rom_arg = argv[++i];   /* the ROM, named (as RecompLauncher passes it) */
     else if (argv[i][0] != '-') rom_arg = argv[i];
   }
   if (s_headless && !cli_mods) {
