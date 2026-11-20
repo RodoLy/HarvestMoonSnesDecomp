@@ -642,16 +642,53 @@ static void festival_tick(void)
     put(n, kSuitors[who].front, false, kGuestSpots[who][0], kGuestSpots[who][1]);
   }
 }
+/* The dance itself: both turn round and round together, a quarter turn
+ * every 12 frames (front, side, back, the other side), stepping as they
+ * go, for four turns; then the music stops and the words come. Nobody
+ * moves meanwhile. His picture is set in the game's own sprite update
+ * (g_hm_slot_picture, below), so it works for the game's people and ours. */
+enum { DANCE_QUARTER = 12, DANCE_FRAMES = DANCE_QUARTER * 16 };
+static struct { bool on; int frames, who, slot; uint16_t sprite; uint8_t animation; } D;
 static void dance_answer(int choice)
 {
   if (choice) { say("Oh... okay. Maybe next time."); return; }
   s_danced_day = today();
   add_love(s_dance_who, DANCE_LOVE);
+  uint32_t at = SLOT_AT(D.slot);
+  D.sprite = (uint16_t)slot16(at, SLOT_SPRITE); D.animation = g_ram[at + SLOT_ANIMATION];
+  D.on = true; D.frames = 0; D.who = s_dance_who;
+}
+static void dance_tick(void)
+{
+  if (!D.on) return;
+  static const uint8_t player_turn[4] = { 1, 3, 0, 2 };   /* up, left, down, right: facing him first */
+  hm_wr16(g_ram, HM_PLAYER_DIRECTION, player_turn[(D.frames / DANCE_QUARTER) % 4]);
+  if (++D.frames < DANCE_FRAMES && festival_map()) return;
+  D.on = false;                                      /* the music stops */
+  uint32_t at = SLOT_AT(D.slot);
+  set16(at, SLOT_SPRITE, D.sprite);
+  g_ram[at + SLOT_ANIMATION] = D.animation;
+  g_ram[at + SLOT_FLAGS] |= 0x04;
+  hm_wr16(g_ram, HM_PLAYER_DIRECTION, 1);
   say("You dance together until the music stops. Everyone is watching, but you only see each other.");
 }
-static void ask_to_dance(int who)
+/* his picture while dancing (from the picture hook): true when it was set */
+static bool dance_picture(uint32_t at)
+{
+  if (!D.on || at != SLOT_AT(D.slot)) return false;
+  const Suitor *s = &kSuitors[D.who];
+  int quarter = (D.frames / DANCE_QUARTER) % 4;       /* front, side (left), back, side (right) */
+  int base = quarter == 0 ? s->front : quarter == 2 ? s->back : s->side;
+  int sprite = base + (D.frames / (DANCE_QUARTER / 2)) % 2;
+  set16(at, SLOT_SPRITE, sprite);
+  g_ram[at + SLOT_ANIMATION] = (uint8_t)((g_ram[at + SLOT_ANIMATION] & ~0x40) | (quarter == 3 ? 0x40 : 0));
+  g_ram[at + SLOT_FLAGS] |= 0x04;
+  return true;
+}
+static void ask_to_dance(int who, int slot)
 {
   s_dance_who = who;
+  D.slot = slot;
   say(who == husband() ? "Shall we dance, dear? Like the day we met." : "The music is starting... Would you dance with me?");
   ask("Dance with him?", "Yes", "Not now", dance_answer);
 }
@@ -938,10 +975,12 @@ static void ending_tick(void)
   s_lent_for_ending = true;
   hm_wr16(g_ram, HM_FLAGS_66, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_66) | LENT_WIFE));
 }
-/* g_hm_slot_picture while the wedding or the ending is on: Maria is him */
+/* g_hm_slot_picture while the wedding or the ending is on (Maria is him),
+ * and while dancing (dance_picture) */
 static void dressed(uint8_t *ram, uint32_t at)
 {
   if (s_prev_picture && s_prev_picture != dressed) s_prev_picture(ram, at);
+  if (dance_picture(at)) return;
   int who = s_wedding != NO_WEDDING ? (g_hm_suitor_wed & WED_WHO) - 1 : s_lent_for_ending ? husband() : -1;
   if (who < 0 || who >= HM_SUITORS) return;
   const Suitor *s = &kSuitors[who];
@@ -960,6 +999,7 @@ static void dressed(uint8_t *ram, uint32_t at)
 /* ── The player's A ───────────────────────────────────────────────────── */
 uint16_t suitors_pad(uint16_t pad)
 {
+  if (D.on) return 0;                                /* dancing: nobody walks away */
   static uint16_t prev;
   static bool hold;
   bool pressed = (pad & B_A) && !(prev & B_A);
@@ -967,13 +1007,14 @@ uint16_t suitors_pad(uint16_t pad)
   if (hold) { if (pad & B_A) return (uint16_t)(pad & ~B_A); hold = false; }
   if (!pressed || !g_cfg.male_suitors || !player_free(true)) return pad;
   if (today() == 1) return pad;                      /* the first day: the shipper's own lesson, as the game has it */
-  int who = suitor_in_front(NULL);
+  int slot = -1;
+  int who = suitor_in_front(&slot);
   if (who < 0) return pad;
   bool holding = hm_rd16(g_ram, HM_GAME_STATE) & 0x0002;
   uint8_t it = g_ram[HM_ITEM_ON_HAND];
   if (holding && it) give(who, it);
   else if (holding) return pad;
-  else if (festival_map() && s_danced_day != today()) ask_to_dance(who);
+  else if (festival_map() && s_danced_day != today()) ask_to_dance(who, slot);
   else talk(who);
   hold = true;
   return (uint16_t)(pad & ~B_A);
@@ -1058,7 +1099,7 @@ void suitors_frame(void)
   /* the game's hooks, shared with the Goddess (goddess.c sets hers first, every frame) */
   if (g_hm_feather_used != feather_used) { s_prev_feather = g_hm_feather_used; g_hm_feather_used = feather_used; }
   if (g_hm_night_wife != suitors_night) { s_prev_night = g_hm_night_wife; g_hm_night_wife = suitors_night; }
-  bool dressing = s_wedding != NO_WEDDING || s_lent_for_ending;
+  bool dressing = s_wedding != NO_WEDDING || s_lent_for_ending || D.on;
   if (dressing && g_hm_slot_picture != dressed) { s_prev_picture = g_hm_slot_picture; g_hm_slot_picture = dressed; }
   if (!dressing && g_hm_slot_picture == dressed) { g_hm_slot_picture = s_prev_picture; s_prev_picture = NULL; }
 
@@ -1072,6 +1113,7 @@ void suitors_frame(void)
   }
   event_tick();
   festival_tick();
+  dance_tick();
   wedding_tick();
   married_tick();
   adoption_tick();
@@ -1087,6 +1129,7 @@ void suitors_reset(void)
   s_want_dialog = false;
   E.state = EV_NONE; E.who = -1; E.day = -1; E.next_day_said = -1; E.end_day = false;
   s_danced_day = -1;
+  memset(&D, 0, sizeof D);
   s_wedding = NO_WEDDING;
   s_lent_for_ending = false;
   s_adoption_due = false;
