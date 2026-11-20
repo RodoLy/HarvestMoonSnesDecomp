@@ -30,7 +30,7 @@ mal** (dibujados con la paleta de la Diosa); las formas y poses son las reales.
 | El fan de Eve: **el Visitor** (también llamado Reporter o "Lonely Bachelor") | $269-$26F (saco claro, corbata roja): todas las poses | el bar de noche, mapa $1E | le dicen "Lonely Bachelor"; texto $120, de noche en el bar: "Good evening. I'm a fan of Eve's, you know." |
 | Los carpinteros (hermanos) | $25A-$264 (también cargando madera y con el martillo) | la montaña, mapa $10; su casa, mapa $2B | textos $128/$129: "We are carpenters"; viven juntos y no mencionan esposa (el juego no lo dice) |
 | El papá de Ann | $296-$29C (pelo café, pechera azul): de frente, de espalda, de lado, caminando y hablando, todas | la tienda de herramientas | viudo (textos $1DC, $246) |
-| Un repartidor | $270-$274 (rubio, camisa blanca, chaleco oscuro): todas las poses; de noche se sienta en el bar y da consejos ("You can't use the tool when you lose your stamina..."). Es uno de los dos repartidores: falta ver si es el aprendiz (texto $117/$118: "I'm a trainee of shipping too... With grit!") o el jefe; el otro (rubio, con gorra) no está entre $250 y $2E1 | la granja (recoge lo enviado) | — |
+| Los repartidores (dos, solteros los dos) | uno es $270-$274 (rubio, camisa blanca, chaleco oscuro: todas las poses; de noche en el bar da consejos: "You can't use the tool when you lose your stamina..."); el otro (rubio, camisa blanca, gorra; de noche en el bar: "Even if you put shipping goods in the box at night...") no está entre $250 y $2E1: falta encontrar su sprite y ver sus poses. Uno de ellos es el aprendiz (texto $117/$118: "I'm a trainee of shipping too... With grit!") | la granja (recogen lo enviado); de noche, el bar | solteros |
 
 **Quién es quién** se comparó con los nombres de las hojas de The Spriters
 Resource (Harvest Moon, SNES: "Reporter", "Shipping Workers", "Tool Shop
@@ -42,7 +42,7 @@ protagonista**, no el papá de Ann; y $269-$274 no es una sola persona: $269-$26
 `native/suitors.c` ya usa solo $269-$26F para el fan de Eve.
 
 Primer paso acordado: **el fan de Eve y uno de los carpinteros**; luego el
-papá de Ann, y el repartidor si se confirma soltero.
+papá de Ann y los dos repartidores (el segundo cuando se encuentre su sprite).
 
 ### Descartados
 

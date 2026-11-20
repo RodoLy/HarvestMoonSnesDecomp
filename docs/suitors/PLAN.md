@@ -29,7 +29,7 @@ from RAM dumps on every map at 11:00 and 19:00).
 | Eve's fan: **the Visitor** (also called the Reporter or the "Lonely Bachelor") | $269-$26F (light jacket, red tie): all the poses | the bar at night, map $1E | called the "Lonely Bachelor"; text $120, at night in the bar: "Good evening. I'm a fan of Eve's, you know." |
 | The carpenters (brothers) | $25A-$264 (also carrying wood, with the hammer) | the mountain, map $10; their house, map $2B | texts $128/$129: "We are carpenters"; live together, no wife mentioned (the game never says) |
 | Ann's father | $296-$29C (brown hair, blue bib): front, back, side, walking and talking, all of them | the tool shop | a widower (texts $1DC, $246) |
-| A shipping worker | $270-$274 (blond, white shirt, dark vest): all the poses; at night he sits in the bar and gives tips ("You can't use the tool when you lose your stamina..."). One of the two shippers: whether he is the trainee (text $117/$118: "I'm a trainee of shipping too... With grit!") or the boss is still to be seen; the other (blond, with a cap) is not among $250-$2E1 | the farm (collects what is shipped) | — |
+| The shipping workers (two, both single) | one is $270-$274 (blond, white shirt, dark vest: all the poses; at night in the bar he gives tips: "You can't use the tool when you lose your stamina..."); the other (blond, white shirt, cap; at night in the bar: "Even if you put shipping goods in the box at night...") is not among $250-$2E1: his sprite and poses are still to be found. One of them is the trainee (text $117/$118: "I'm a trainee of shipping too... With grit!") | the farm (they collect what is shipped); at night, the bar | both single |
 
 **Who is who** was checked against the sheet names on The Spriters Resource
 (Harvest Moon, SNES: "Reporter", "Shipping Workers", "Tool Shop Owner",
@@ -41,7 +41,7 @@ nothing was copied from them. That corrected what was here before: $28F-$295
 `native/suitors.c` now uses only $269-$26F for Eve's fan.
 
 The first step agreed: **Eve's fan and one of the carpenters**; then Ann's
-father, and the shipping worker if he turns out single.
+father and both shipping workers (the second once his sprite is found).
 
 ### Ruled out
 
