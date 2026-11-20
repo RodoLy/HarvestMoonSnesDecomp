@@ -27,25 +27,22 @@ mal** (dibujados con la paleta de la Diosa); las formas y poses son las reales.
 
 | Quién | Sprites | Dónde | Por qué soltero |
 |---|---|---|---|
-| El fan de Eve | $269-$26F **o** $270-$274: el rango $269-$274 son **dos personas** (ver abajo); falta ver cuál está en el bar | el bar, mapa $1E (slot 4) | texto $120: "Good evening. I'm a fan of Eve's, you know." |
+| El fan de Eve: **el Visitor** (también llamado Reporter o "Lonely Bachelor") | $269-$26F (saco claro, corbata roja): todas las poses | el bar de noche, mapa $1E | le dicen "Lonely Bachelor"; texto $120, de noche en el bar: "Good evening. I'm a fan of Eve's, you know." |
 | Los carpinteros (hermanos) | $25A-$264 (también cargando madera y con el martillo) | la montaña, mapa $10; su casa, mapa $2B | textos $128/$129: "We are carpenters"; viven juntos y no mencionan esposa (el juego no lo dice) |
 | El papá de Ann | $296-$29C (pelo café, pechera azul): de frente, de espalda, de lado, caminando y hablando, todas | la tienda de herramientas | viudo (textos $1DC, $246) |
-| El reportero | $269-$26F (saco claro, corbata roja): todas las poses | — | el juego no le da esposa |
-| Un repartidor | $270-$274 (rubio, camisa blanca, chaleco oscuro): todas las poses. Es uno de los dos repartidores: falta ver si es el aprendiz (texto $117/$118: "I'm a trainee of shipping too... With grit!") o el jefe; el otro (rubio, con gorra) no está entre $250 y $2E1 | la granja (recoge lo enviado) | — |
+| Un repartidor | $270-$274 (rubio, camisa blanca, chaleco oscuro): todas las poses; de noche se sienta en el bar y da consejos ("You can't use the tool when you lose your stamina..."). Es uno de los dos repartidores: falta ver si es el aprendiz (texto $117/$118: "I'm a trainee of shipping too... With grit!") o el jefe; el otro (rubio, con gorra) no está entre $250 y $2E1 | la granja (recoge lo enviado) | — |
 
 **Quién es quién** se comparó con los nombres de las hojas de The Spriters
 Resource (Harvest Moon, SNES: "Reporter", "Shipping Workers", "Tool Shop
 Owner", "Mayor", "Parents", "Bartender", "Fisherman"), solo mirándolas: no se
 copió nada de ellas. Así se corrigió lo de antes: $28F-$295 (bigote) es el
 **alcalde**, no el repartidor; $2D9-$2DE y $2DF-$2E1 son **los papás del
-protagonista**, no el papá de Ann; y $269-$274 no es una sola persona.
+protagonista**, no el papá de Ann; y $269-$274 no es una sola persona: $269-$26F es el Visitor (el fan de Eve) y $270-$274 un repartidor.
 
-**Ojo con `native/suitors.c`:** el fan de Eve está puesto como $269-$274, que
-abarca al reportero y al repartidor. Hay que dejarle solo su rango cuando se
-confirme cuál es.
+`native/suitors.c` ya usa solo $269-$26F para el fan de Eve.
 
 Primer paso acordado: **el fan de Eve y uno de los carpinteros**; luego el
-papá de Ann, y el reportero y el repartidor si se confirman solteros.
+papá de Ann, y el repartidor si se confirma soltero.
 
 ### Descartados
 

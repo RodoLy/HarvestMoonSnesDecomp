@@ -26,25 +26,22 @@ from RAM dumps on every map at 11:00 and 19:00).
 
 | Who | Sprites | Where | Why single |
 |---|---|---|---|
-| Eve's fan | $269-$26F **or** $270-$274: the range $269-$274 is **two people** (see below); which one is in the bar is still to be seen | the bar, map $1E (slot 4) | text $120: "Good evening. I'm a fan of Eve's, you know." |
+| Eve's fan: **the Visitor** (also called the Reporter or the "Lonely Bachelor") | $269-$26F (light jacket, red tie): all the poses | the bar at night, map $1E | called the "Lonely Bachelor"; text $120, at night in the bar: "Good evening. I'm a fan of Eve's, you know." |
 | The carpenters (brothers) | $25A-$264 (also carrying wood, with the hammer) | the mountain, map $10; their house, map $2B | texts $128/$129: "We are carpenters"; live together, no wife mentioned (the game never says) |
 | Ann's father | $296-$29C (brown hair, blue bib): front, back, side, walking and talking, all of them | the tool shop | a widower (texts $1DC, $246) |
-| The reporter | $269-$26F (light jacket, red tie): all the poses | — | the game gives him no wife |
-| A shipping worker | $270-$274 (blond, white shirt, dark vest): all the poses. One of the two shippers: whether he is the trainee (text $117/$118: "I'm a trainee of shipping too... With grit!") or the boss is still to be seen; the other (blond, with a cap) is not among $250-$2E1 | the farm (collects what is shipped) | — |
+| A shipping worker | $270-$274 (blond, white shirt, dark vest): all the poses; at night he sits in the bar and gives tips ("You can't use the tool when you lose your stamina..."). One of the two shippers: whether he is the trainee (text $117/$118: "I'm a trainee of shipping too... With grit!") or the boss is still to be seen; the other (blond, with a cap) is not among $250-$2E1 | the farm (collects what is shipped) | — |
 
 **Who is who** was checked against the sheet names on The Spriters Resource
 (Harvest Moon, SNES: "Reporter", "Shipping Workers", "Tool Shop Owner",
 "Mayor", "Parents", "Bartender", "Fisherman"), only by looking at them:
 nothing was copied from them. That corrected what was here before: $28F-$295
 (moustache) is the **mayor**, not the shipper; $2D9-$2DE and $2DF-$2E1 are
-**the hero's parents**, not Ann's father; and $269-$274 is not one person.
+**the hero's parents**, not Ann's father; and $269-$274 is not one person: $269-$26F is the Visitor (Eve's fan) and $270-$274 a shipping worker.
 
-**Mind `native/suitors.c`:** Eve's fan is set as $269-$274, which covers the
-reporter and the shipping worker too. It must keep only his own range once
-it is known which one he is.
+`native/suitors.c` now uses only $269-$26F for Eve's fan.
 
 The first step agreed: **Eve's fan and one of the carpenters**; then Ann's
-father, and the reporter and the shipping worker if they turn out single.
+father, and the shipping worker if he turns out single.
 
 ### Ruled out
 
