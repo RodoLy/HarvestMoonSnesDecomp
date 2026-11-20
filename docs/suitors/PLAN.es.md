@@ -60,17 +60,22 @@ papá de Ann, y el reportero y el repartidor si se confirman solteros.
 
 1. Corazones y regalos: sus cosas favoritas, sus frases según los
    corazones, en la caja de texto del propio juego (`native/textbox.c`).
-2. Propuesta: la Blue Feather (`g_hm_feather_used`), con las condiciones
+2. Sus eventos especiales, como los de las chicas: escenas propias que
+   pasan al llegar a ciertos corazones (por ejemplo, ir a buscarte a la
+   granja o encontrarse en la montaña), con sus frases y sus poses.
+3. Bailar en los festivales: en los festivales donde se invita a una chica a
+   bailar, poder invitarlo a él, con lo que eso suma de corazones.
+4. Propuesta: la Blue Feather (`g_hm_feather_used`), con las condiciones
    del juego (corazones, la casa ampliada).
-3. Boda: la escena del juego (grupo de eventos $1E, mapa $2D) con él
+5. Boda: la escena del juego (grupo de eventos $1E, mapa $2D) con él
    vestido en el slot de la novia mediante `g_hm_slot_picture`, como la Diosa.
-4. Vida de casados: el día de un esposo (en casa en la mañana, afuera desde
+6. Vida de casados: el día de un esposo (en casa en la mañana, afuera desde
    las 9:00, en casa a las 18:00), caminando con sus propias poses (no flota).
-5. Hijos: el juego solo tiene un parto; para dos hombres, una escena de
+7. Hijos: el juego solo tiene un parto; para dos hombres, una escena de
    **adopción** propia (por ejemplo, los duendes de la cosecha traen un
    bebé); después los hijos crecen con el sistema del juego
    (`hm_WifePregnancyAndChildren`).
-6. El final: prestar el bit de esposa el último día, como con la Diosa
+8. El final, con él en lugar de la chica: prestar el bit de esposa el último día, como con la Diosa
    (`lend_for_ending`), y vestir las figuras de la esposa como él.
 
 Apagado de fábrica, con su propia opción en `config.ini`, como `HarvestGoddess`.

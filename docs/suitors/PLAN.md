@@ -59,16 +59,21 @@ father, and the reporter and the shipping worker if they turn out single.
 
 1. Hearts and gifts: his favourite things, his lines by hearts, in the
    game's own text box (`native/textbox.c`).
-2. Proposal: the Blue Feather (`g_hm_feather_used`), with the game's
+2. His special events, like the girls': scenes of his own that happen at
+   certain hearts (for example, coming to find you on the farm or meeting
+   on the mountain), with his lines and his poses.
+3. Dancing at the festivals: at the festivals where a girl can be asked to
+   dance, asking him instead, with the hearts that brings.
+4. Proposal: the Blue Feather (`g_hm_feather_used`), with the game's
    conditions (hearts, the house extended).
-3. Wedding: the game's scene (event group $1E, map $2D) with him dressed
+5. Wedding: the game's scene (event group $1E, map $2D) with him dressed
    in the bride's slot through `g_hm_slot_picture`, as the Goddess.
-4. Married life: a husband's day (home in the morning, out from 9:00,
+6. Married life: a husband's day (home in the morning, out from 9:00,
    home at 18:00), walking with his own poses (not floating).
-5. Children: the game only has a birth; for two men, an **adoption**
+7. Children: the game only has a birth; for two men, an **adoption**
    scene of its own (for example, the Harvest Sprites bring a baby);
    the children then grow with the game's system (`hm_WifePregnancyAndChildren`).
-6. The ending: lend the wife's bit for the last day, as the Goddess
+8. The ending, with him in the girl's place: lend the wife's bit for the last day, as the Goddess
    (`lend_for_ending`), and dress the wife's figures as him.
 
 Off by default, with its own option in `config.ini`, like `HarvestGoddess`.
