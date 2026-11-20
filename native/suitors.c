@@ -342,6 +342,44 @@ static bool near_player(int x, int y, int d)
   return abs(hm_rd16(g_ram, HM_PLAYER_X) - x) < d && abs(hm_rd16(g_ram, HM_PLAYER_Y) - y) < d;
 }
 
+/* Free ground, as the game's own collision sees it (collision.c, and the
+ * wife's help in wife.c): the tile under a point is free when its property
+ * blocks no part of it; the doors' tiles ($C0-$CF) are left alone. A person
+ * stands on his feet: the point (x, y) and 6 pixels to each side must be
+ * free, and nobody else may be standing within 14 pixels. */
+static int map_w(void) { uint8_t c = g_ram[HM_MAP_WIDTH]; return c == 1 ? 16 : c == 2 ? 32 : 64; }
+static uint32_t tile_props(void) { return (uint32_t)(g_ram[HM_TILE_PROPS] | g_ram[HM_TILE_PROPS + 1] << 8 | g_ram[HM_TILE_PROPS_BANK] << 16); }
+static bool free_point(int x, int y)
+{
+  int tx = x >> 4, ty = y >> 4, w = map_w();
+  if (x < 16 || y < 16 || tx >= w - 1 || ty >= 63) return false;
+  uint8_t t = g_ram[HM_MAP_TILES + ty * w + tx];
+  if (t >= 0xC0 && t <= 0xCF) return false;
+  return !(hm_bus_rd8(g_ram, tile_props() + 4u * t + 2) & 0x1F);
+}
+static bool someone_at(int x, int y, int except)
+{
+  for (int n = 0; n < SLOT_COUNT; n++) {
+    uint32_t at = SLOT_AT(n);
+    if (n == except || !g_ram[at] || (g_ram[at + SLOT_FLAGS] & 0x40)) continue;
+    if (abs(slot16(at, SLOT_X) - x) < 14 && abs(slot16(at, SLOT_Y) - y) < 14) return true;
+  }
+  return abs(hm_rd16(g_ram, HM_PLAYER_X) - x) < 14 && abs(hm_rd16(g_ram, HM_PLAYER_Y) - y) < 14;
+}
+static bool free_ground(int x, int y) { return free_point(x - 6, y) && free_point(x + 6, y) && free_point(x, y - 4); }
+/* the free place nearest to (x, y), looked for in rings 8 pixels apart, up
+ * to 64 pixels away; (x, y) itself when nothing is free */
+static void nearest_free(int *x, int *y, int except)
+{
+  for (int r = 0; r <= 64; r += 8)
+    for (int dy = -r; dy <= r; dy += 8)
+      for (int dx = -r; dx <= r; dx += 8) {
+        if (abs(dx) != r && abs(dy) != r) continue;         /* the ring only */
+        int nx = *x + dx, ny = *y + dy;
+        if (free_ground(nx, ny) && !someone_at(nx, ny, except)) { *x = nx; *y = ny; return; }
+      }
+}
+
 /* the slot as a still picture of ours, made by the game on its next frame
  * (as goddess.c's put): an idle script of the game's own, $B3:8DED */
 enum { IDLE_SCRIPT = 0x8DED };
@@ -353,6 +391,7 @@ static bool ours(uint32_t at)
 static void put(int number, int sprite, bool flip, int x, int y)
 {
   uint32_t at = SLOT_AT(number);
+  nearest_free(&x, &y, number);                      /* never on a fence, a stump or someone */
   memset(&g_ram[at], 0, 0x40);
   g_ram[at + SLOT_IN_USE] = 1;
   g_ram[at + SLOT_FLAGS] = 0x03;                    /* a picture; make its game object */
@@ -720,13 +759,24 @@ static int his_place(void)
   return 0;
 }
 /* a step towards (tx, ty); true once there */
-static bool walk_to(int tx, int ty)
+/* A step towards (tx, ty), along the longer way first, the other when that
+ * one is blocked (free_ground): 1 there, 0 a step taken, -1 blocked both ways.
+ * `through` skips the checks (the last steps into the door). */
+static int walk_to(int tx, int ty, bool through)
 {
   int dx = tx - H.x, dy = ty - H.y;
-  if (!dx && !dy) return true;
-  if (abs(dx) > abs(dy)) { H.x += dx > 0 ? WALK_SPEED : -WALK_SPEED; H.dir = dx > 0 ? 3 : 2; }
-  else { H.y += dy > 0 ? WALK_SPEED : -WALK_SPEED; H.dir = dy > 0 ? 0 : 1; }
-  return false;
+  if (!dx && !dy) return 1;
+  int sx = dx > 0 ? WALK_SPEED : -WALK_SPEED, sy = dy > 0 ? WALK_SPEED : -WALK_SPEED;
+  bool x_first = abs(dx) > abs(dy);
+  for (int k = 0; k < 2; k++, x_first = !x_first) {
+    if (x_first ? !dx : !dy) continue;
+    int nx = H.x + (x_first ? sx : 0), ny = H.y + (x_first ? 0 : sy);
+    if (!through && !free_ground(nx, ny)) continue;
+    H.x = nx; H.y = ny;
+    H.dir = x_first ? (sx > 0 ? 3 : 2) : (sy > 0 ? 0 : 1);
+    return 0;
+  }
+  return -1;
 }
 static void his_picture(int who, bool walking)
 {
@@ -755,7 +805,9 @@ static void married_tick(void)
     if (place || !same_map) H.leaving = false;
     else {
       H.frame++;
-      if (walk_to(door.x, door.y)) { take_away(HUSBAND_SLOT); H.place = 0; H.leaving = false; return; }
+      if (walk_to(door.x, door.y, abs(H.x - door.x) + abs(H.y - door.y) < 40) != 0) {   /* in (or stuck): gone */
+        take_away(HUSBAND_SLOT); H.place = 0; H.leaving = false; return;
+      }
       his_picture(who, true);
       return;
     }
@@ -771,6 +823,8 @@ static void married_tick(void)
     H.x = from.x; H.y = from.y; H.dir = 0;
     H.spot = by_the_door ? 0 : 1 % n; H.rest = by_the_door ? 0 : REST_FRAMES;
     put(HUSBAND_SLOT, kSuitors[who].front, false, H.x, H.y);
+    H.x = slot16(SLOT_AT(HUSBAND_SLOT), SLOT_X);     /* where put() found free ground */
+    H.y = slot16(SLOT_AT(HUSBAND_SLOT), SLOT_Y);
   }
   H.frame++;
   bool walking = false;
@@ -778,11 +832,16 @@ static void married_tick(void)
     int px = hm_rd16(g_ram, HM_PLAYER_X), py = hm_rd16(g_ram, HM_PLAYER_Y);
     if (abs(px - H.x) > abs(py - H.y)) H.dir = px > H.x ? 3 : 2; else H.dir = py > H.y ? 0 : 1;
   } else if (H.rest > 0) H.rest--;
-  else if (walk_to(spots[H.spot].x, spots[H.spot].y)) {
-    H.rest = REST_FRAMES + (int)(H.frame % 120);
-    H.dir = 0;
-    if (n > 1) H.spot = (H.spot + 1 + (int)(H.frame % (unsigned)(n - 1))) % n;
-  } else walking = true;
+  else {
+    Spot to = spots[H.spot];
+    nearest_free(&to.x, &to.y, HUSBAND_SLOT);         /* the spot, or the free ground nearest it */
+    int step = walk_to(to.x, to.y, false);
+    if (step != 0) {                                 /* there, or blocked: rest, then another spot */
+      H.rest = REST_FRAMES + (int)(H.frame % 120);
+      H.dir = 0;
+      if (n > 1) H.spot = (H.spot + 1 + (int)(H.frame % (unsigned)(n - 1))) % n;
+    } else walking = true;
+  }
   his_picture(who, walking);
 }
 
