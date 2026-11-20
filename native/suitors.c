@@ -4,8 +4,8 @@
  * and what was found about them: docs/suitors/PLAN.md.
  *
  * This is the first step: hearts and gifts, for the first suitor, Eve's
- * fan (the young man with short hair in the bar, map $1E, sprites
- * $269-$274; text $120: "Good evening. I'm a fan of Eve's, you know.").
+ * fan: the Visitor, also called the Reporter or the Lonely Bachelor (light
+ * jacket, red tie; in the bar at night, map $1E, sprites $269-$26F; text $120: "Good evening. I'm a fan of Eve's, you know.").
  * The proposal, the wedding and married life come later, with the same
  * pieces as the Goddess's (goddess.c).
  *
@@ -69,8 +69,9 @@ typedef struct {
 } Suitor;
 
 static const Suitor kSuitors[] = {
-  { /* Eve's fan, in the bar */
-    0x269, 0x274, 0x1E,
+  { /* Eve's fan, in the bar: the Visitor (the Reporter, the "Lonely
+     * Bachelor"), light jacket and red tie. $270-$274 is someone else */
+    0x269, 0x26F, 0x1E,
     { 0x03, 0x07, 0x06 },              /* Wild Grapes, Fish, Cake */
     { 0x02, 0x09, 0x0A, 0x0B, 0x0C },  /* Poison Mushroom, the weeds */
     { { "Good evening. I come here every night to hear Eve sing.",
