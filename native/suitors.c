@@ -689,13 +689,17 @@ static void festival_tick(void)
     put(n, kSuitors[who].front, false, kGuestSpots[who][0], kGuestSpots[who][1]);
   }
 }
-/* The dance itself: both turn round and round together, a quarter turn
- * every 12 frames (front, side, back, the other side), stepping as they
- * go, for four turns; then the music stops and the words come. Nobody
- * moves meanwhile. His picture is set in the game's own sprite update
- * (g_hm_slot_picture, below), so it works for the game's people and ours. */
-enum { DANCE_QUARTER = 12, DANCE_FRAMES = DANCE_QUARTER * 16 };
-static struct { bool on; int frames, who, slot; uint16_t sprite; uint8_t animation; } D;
+/* The dance itself, as the festival's own couples dance (watched in a
+ * test: the mayor and his wife, Ann's father and his partner): side by
+ * side, 16 pixels apart, facing each other; every so often both turn to
+ * the front, and they step a little apart and back together. He stands at
+ * the player's right; the player turns as the game's own scenes turn him
+ * (Event_SetPlayerDirection: the facing, the turn and the animation). Nobody
+ * else moves meanwhile; then the music stops and the words come. */
+enum { DANCE_BEAT = 24, DANCE_BEATS = 10, DANCE_FRAMES = DANCE_BEAT * DANCE_BEATS };
+/* each beat: 0 facing each other, 1 both to the front, 2 a step apart (facing) */
+static const uint8_t kDanceBeat[DANCE_BEATS] = { 0, 0, 1, 0, 2, 0, 1, 0, 2, 0 };
+static struct { bool on; int frames, who, slot, px, py; uint16_t sprite, x, y; uint8_t animation; } D;
 static void dance_answer(int choice)
 {
   if (choice) { say("Oh... okay. Maybe next time."); return; }
@@ -703,32 +707,40 @@ static void dance_answer(int choice)
   add_love(s_dance_who, DANCE_LOVE);
   uint32_t at = SLOT_AT(D.slot);
   D.sprite = (uint16_t)slot16(at, SLOT_SPRITE); D.animation = g_ram[at + SLOT_ANIMATION];
+  D.x = (uint16_t)slot16(at, SLOT_X); D.y = (uint16_t)slot16(at, SLOT_Y);
+  D.px = hm_rd16(g_ram, HM_PLAYER_X); D.py = hm_rd16(g_ram, HM_PLAYER_Y);
   D.on = true; D.frames = 0; D.who = s_dance_who;
 }
+static int dance_beat(void) { return kDanceBeat[(D.frames / DANCE_BEAT) % DANCE_BEATS]; }
 static void dance_tick(void)
 {
   if (!D.on) return;
-  static const uint8_t player_turn[4] = { 1, 3, 0, 2 };   /* up, left, down, right: facing him first */
-  hm_wr16(g_ram, HM_PLAYER_DIRECTION, player_turn[(D.frames / DANCE_QUARTER) % 4]);
+  if (D.frames % DANCE_BEAT == 0) {                  /* the player turns as the game's scenes turn him */
+    uint16_t facing = dance_beat() == 1 ? 0 : 2;     /* (Event_SetPlayerDirection): the front, or him */
+    hm_wr16(g_ram, HM_PLAYER_DIRECTION, facing);
+    hm_wr16(g_ram, HM_PLAYER_TURN, facing);
+    hm_wr16(g_ram, HM_ANIM_REQUEST, facing);
+  }
   if (++D.frames < DANCE_FRAMES && festival_map()) return;
-  D.on = false;                                      /* the music stops */
+  D.on = false;                                      /* the music stops: he goes back to where he was */
   uint32_t at = SLOT_AT(D.slot);
-  set16(at, SLOT_SPRITE, D.sprite);
+  set16(at, SLOT_SPRITE, D.sprite); set16(at, SLOT_X, D.x); set16(at, SLOT_Y, D.y);
   g_ram[at + SLOT_ANIMATION] = D.animation;
   g_ram[at + SLOT_FLAGS] |= 0x04;
-  hm_wr16(g_ram, HM_PLAYER_DIRECTION, 1);
   say("You dance together until the music stops. Everyone is watching, but you only see each other.");
 }
-/* his picture while dancing (from the picture hook): true when it was set */
+/* his picture and place while dancing (from the picture hook): true when set */
 static bool dance_picture(uint32_t at)
 {
   if (!D.on || at != SLOT_AT(D.slot)) return false;
   const Suitor *s = &kSuitors[D.who];
-  int quarter = (D.frames / DANCE_QUARTER) % 4;       /* front, side (left), back, side (right) */
-  int base = quarter == 0 ? s->front : quarter == 2 ? s->back : s->side;
-  int sprite = base + (D.frames / (DANCE_QUARTER / 2)) % 2;
+  int beat = dance_beat(), step = (D.frames / (DANCE_BEAT / 2)) % 2;
+  int sprite = beat == 1 ? s->front + step : s->side + step;   /* the side looks left: at the player */
+  int apart = beat == 2 && (D.frames % DANCE_BEAT) >= DANCE_BEAT / 4 && (D.frames % DANCE_BEAT) < DANCE_BEAT * 3 / 4 ? 6 : 0;
   set16(at, SLOT_SPRITE, sprite);
-  g_ram[at + SLOT_ANIMATION] = (uint8_t)((g_ram[at + SLOT_ANIMATION] & ~0x40) | (quarter == 3 ? 0x40 : 0));
+  set16(at, SLOT_X, D.px + 16 + apart);
+  set16(at, SLOT_Y, D.py);
+  g_ram[at + SLOT_ANIMATION] = (uint8_t)(g_ram[at + SLOT_ANIMATION] & ~0x40);
   g_ram[at + SLOT_FLAGS] |= 0x04;
   return true;
 }
