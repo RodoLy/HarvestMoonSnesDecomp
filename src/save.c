@@ -21,8 +21,9 @@
  *   (+1B-+2D and +52-+5F: unused. The native build's "one seed at a
  *   time" keeps its seeds in +20 = $5E and +21-+25, its crop bag in
  *   +52-+5A, with +5B = $BA; the wife's help, the last day she helps,
- *   in +5C-+5D, with +5E = $A7. Its suitors: the day in +1B, their love
- *   words in +1C-+1F and +2C-+2D, with +5F = $5B.)
+ *   in +5C-+5D, with +5E = $A7. Its suitors: the day in +1B, each one's
+ *   love / 4 in +1C-+1F, their "today" bits in +2C, +2D kept for the
+ *   wedding, with +5F = $5C.)
  *
  * The checksum is the 16-bit sum of the slot's 2048 words, taken with +2E
  * and +2F-+30 at 0.
@@ -40,10 +41,12 @@
 #define WIFE_MARK     0xA7
 #define GODDESS_AT    0x26        /* the native build's goddess: +26-+27 hearts, +28-+29 day, +2A flags, +2B = $D9 */
 #define GODDESS_MARK  0xD9
-#define SUITORS_DAY_AT 0x1B       /* the native build's suitors: +1B the day, */
-#define SUITORS_MARK_AT 0x5F      /* +1C-+1F the first two, +2C-+2D the third, +5F = $5B */
-#define SUITORS_MARK  0x5B
-static const uint16_t SUITOR_AT[HM_SUITORS] = { 0x1C, 0x1E, 0x2C };
+#define SUITORS_DAY_AT  0x1B      /* the native build's suitors: +1B the day, */
+#define SUITORS_LOVE_AT 0x1C      /* +1C-+1F each one's love / 4, */
+#define SUITORS_TODAY_AT 0x2C     /* +2C their "today" bits (two each), */
+#define SUITORS_MARK_AT 0x5F      /* +5F = $5C ($5B: the first, three-suitor layout, not read) */
+#define SUITORS_MARK    0x5C
+#define SUITOR_TODAY    0x0C00    /* g_hm_suitor: talked to, given something (bits 10, 11) */
 #define BAG_MARK      0xBA
 #define SLOT_2        0x701000    /* SRAM: the second slot */
 
@@ -307,11 +310,13 @@ void hm_SaveGameSlot(uint8_t *ram, HmRegs *r)
     sram_w8(ram, r, GODDESS_AT + 5, GODDESS_MARK);
   }
   if (g_hm_suitors_on) {                              /* the native build's suitors */
+    uint8_t today = 0;
     sram_w8(ram, r, SUITORS_DAY_AT, g_hm_suitor_day);
     for (int i = 0; i < HM_SUITORS; i++) {
-      sram_w8(ram, r, SUITOR_AT[i], (uint8_t)g_hm_suitor[i]);
-      sram_w8(ram, r, (uint16_t)(SUITOR_AT[i] + 1), (uint8_t)(g_hm_suitor[i] >> 8));
+      sram_w8(ram, r, (uint16_t)(SUITORS_LOVE_AT + i), (uint8_t)((g_hm_suitor[i] & 0x3FF) / 4));
+      today |= (uint8_t)(((g_hm_suitor[i] & SUITOR_TODAY) >> 10) << (2 * i));
     }
+    sram_w8(ram, r, SUITORS_TODAY_AT, today);
     sram_w8(ram, r, SUITORS_MARK_AT, SUITORS_MARK);
   }
   if (g_hm_wife_on) {                                 /* the native build's wife's help */
@@ -533,8 +538,9 @@ void hm_LoadGameSlot(uint8_t *ram, HmRegs *r)
 #define SB(at) hm_bus_rd8(ram, hm_dp_long(ram, r, SLOT_PTR, (uint16_t)(at)))
     bool marked = SB(SUITORS_MARK_AT) == SUITORS_MARK;
     g_hm_suitor_day = marked ? SB(SUITORS_DAY_AT) : 0;
+    uint8_t today = marked ? SB(SUITORS_TODAY_AT) : 0;
     for (int i = 0; i < HM_SUITORS; i++)
-      g_hm_suitor[i] = marked ? (uint16_t)(SB(SUITOR_AT[i]) | SB(SUITOR_AT[i] + 1) << 8) : 0;
+      g_hm_suitor[i] = marked ? (uint16_t)(SB(SUITORS_LOVE_AT + i) * 4 | ((today >> (2 * i)) & 3) << 10) : 0;
 #undef SB
   }
   if (g_hm_wife_on) {                                 /* the native build's wife's help */
