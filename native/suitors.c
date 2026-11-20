@@ -835,8 +835,26 @@ static void wedding_tick(void)
  * can be talked to. In the game's wife slot, $13. */
 typedef struct { int x, y; } Spot;
 static const Spot kFarmSpots[] = { { 184, 380 }, { 168, 450 }, { 88, 450 }, { 104, 388 } };   /* around the house's front */
-static const Spot kHouseSpots[] = { { 0x60, 0x62 }, { 0x90, 0x70 } };
-static const Spot kHouseDoor = { 0x78, 0xC0 }, kFarmDoor = { 136, 352 };   /* the house's door, on the farm */
+/* The house has three sizes (maps $15, $16, $17: built, extended once,
+ * twice), each with its door somewhere else: the door is where the player
+ * stands when he has just come in (house_door_tick), until then the size's
+ * likely place (the visitor of the original's birth comes in at (128, 200)
+ * in the largest). His places at home are around it, each moved to the
+ * nearest free ground. */
+static Spot s_house_door[3] = { { 0x78, 0xC0 }, { 0x78, 0xC0 }, { 128, 200 } };
+static const Spot kHouseSpots[] = { { 0, -56 }, { -40, -72 }, { 40, -72 }, { 0, -104 } };   /* from the door */
+static const Spot kFarmDoor = { 136, 352 };   /* the house's door, on the farm */
+static Spot house_door(void) { int m = g_ram[HM_MAP_ID]; return s_house_door[m >= 0x15 && m <= 0x17 ? m - 0x15 : 0]; }
+static void house_door_tick(void)
+{
+  static int map_was = -1; static bool learned;
+  int map = g_ram[HM_MAP_ID];
+  if (map != map_was) { map_was = map; learned = false; }
+  if (learned || !in_house() || !(hm_rd16(g_ram, HM_FLAGS_5A) & 0x8000) || g_ram[HM_INPUT_STATE] != 1) return;
+  learned = true;
+  int x = hm_rd16(g_ram, HM_PLAYER_X), y = hm_rd16(g_ram, HM_PLAYER_Y);
+  if (y >= 160) s_house_door[map - 0x15] = (Spot){ x, y };   /* came in by the door (not woken up in bed) */
+}
 enum { OUT_FROM = 9, HOME_FROM = 18, WALK_SPEED = 1, STEP_FRAMES = 10, REST_FRAMES = 240 };
 static struct {
   int place;                                   /* 1 the farm, 2 the house, 0 neither */
@@ -895,7 +913,7 @@ static void married_tick(void)
     return;
   }
   int place = his_place();
-  Spot door = map <= 3 ? kFarmDoor : kHouseDoor;
+  Spot door = map <= 3 ? kFarmDoor : house_door();
   if (!place && H.place && same_map && ours(SLOT_AT(HUSBAND_SLOT))) H.leaving = true;   /* his hour to go */
   if (H.leaving) {
     if (place || !same_map) H.leaving = false;
@@ -909,7 +927,9 @@ static void married_tick(void)
     }
   }
   if (!place) { take_away(HUSBAND_SLOT); H.place = 0; return; }
-  const Spot *spots = place == 1 ? kFarmSpots : kHouseSpots;
+  Spot home[COUNT(kHouseSpots)];
+  for (int i = 0; i < COUNT(kHouseSpots); i++) home[i] = (Spot){ house_door().x + kHouseSpots[i].x, house_door().y + kHouseSpots[i].y };
+  const Spot *spots = place == 1 ? kFarmSpots : home;
   int n = place == 1 ? COUNT(kFarmSpots) : COUNT(kHouseSpots);
   if (H.place != place || !ours(SLOT_AT(HUSBAND_SLOT))) {   /* he arrives */
     if (!ours(SLOT_AT(HUSBAND_SLOT)) && g_ram[SLOT_AT(HUSBAND_SLOT)]) return;   /* the slot is the game's now */
@@ -952,8 +972,9 @@ static void married_tick(void)
 enum { BIRTH_DAYS = 0x0010, ELF_FRONT = 0x309, BABY_SPRITE = 0x300, MOST_GIRL_LOVE = 999 };
 static void (*s_prev_night)(uint8_t *ram, bool done);
 static bool s_lent_for_night;
-static uint16_t s_marias_love;
+static uint16_t s_marias_love, s_children_before;
 static bool s_adoption_due;
+static bool s_talk_of_child;                         /* a child on its way: he talks of it (adoption_tick) */
 static void suitors_night(uint8_t *ram, bool done)
 {
   if (s_prev_night) s_prev_night(ram, done);
@@ -966,10 +987,12 @@ static void suitors_night(uint8_t *ram, bool done)
     s_lent_for_night = who >= 0 && !a_wife();
     if (!s_lent_for_night) return;
     s_marias_love = hm_rd16(ram, HM_HEARTS_BASE);
+    s_children_before = hm_rd16(ram, HM_FLAGS_6E) & 0x000C;
     hm_wr16(ram, HM_FLAGS_66, (uint16_t)(hm_rd16(ram, HM_FLAGS_66) | LENT_WIFE));
     hm_wr16(ram, HM_HEARTS_BASE, (uint16_t)(love(who) < MOST_GIRL_LOVE ? love(who) : MOST_GIRL_LOVE));
   } else if (s_lent_for_night) {
     s_lent_for_night = false;
+    if ((hm_rd16(ram, HM_FLAGS_6E) & 0x000C) != s_children_before) s_talk_of_child = true;   /* a child on its way */
     hm_wr16(ram, HM_FLAGS_66, (uint16_t)(hm_rd16(ram, HM_FLAGS_66) & ~LENT_WIFE));
     hm_wr16(ram, HM_HEARTS_BASE, s_marias_love);
     if (hm_rd16(ram, HM_FLAGS_6E) & BIRTH_DAYS) {    /* a child: adopted, not born */
@@ -978,41 +1001,74 @@ static void suitors_night(uint8_t *ram, bool done)
     }
   }
 }
-static struct { int stage; unsigned frames; } A;
+/* As the original's birth (watched in a test: the largest house, the
+ * wife in bed, a visitor coming in at the door): the Harvest Sprites come
+ * in by the house's door, two of them hopping with the baby between them,
+ * up to the room; they talk, the husband takes the baby, and they hop out
+ * the way they came. From then on the child is the game's own (the house
+ * shows it once it is 60 days old: src/mapevents.c, the family at home).
+ * The morning after the night the game counts a child on its way, the
+ * husband says what he has been thinking, as a wife tells her news. */
+enum { HOP_IN = 40, HOP = 8 };
+static struct { int stage; unsigned frames; int x, y; } A;
+static void sprites_at(int dy)
+{
+  int hop = (A.frames / HOP) % 2 ? -2 : 0;
+  set16(SLOT_AT(VISITOR_SLOT), SLOT_X, A.x - 14); set16(SLOT_AT(VISITOR_SLOT), SLOT_Y, A.y + dy + hop);
+  set16(SLOT_AT(HELPER_SLOT), SLOT_X, A.x + 14);  set16(SLOT_AT(HELPER_SLOT), SLOT_Y, A.y + dy - hop - 2);
+  set16(SLOT_AT(BABY_SLOT), SLOT_X, A.x);         set16(SLOT_AT(BABY_SLOT), SLOT_Y, A.y + dy - 4);
+}
 static void adoption_tick(void)
 {
   int who = husband();
-  if (who < 0) { s_adoption_due = false; A.stage = 0; return; }
+  if (who < 0) { s_adoption_due = s_talk_of_child = false; A.stage = 0; return; }
   if (hm_rd16(g_ram, HM_FLAGS_6E) & BIRTH_DAYS) {   /* a birth the night did not see (a loaded diary) */
     hm_wr16(g_ram, HM_FLAGS_6E, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_6E) & ~BIRTH_DAYS));
     s_adoption_due = true;
   }
+  if (s_talk_of_child && (on_farm() || in_house()) && player_free(false) && !A.stage) {
+    s_talk_of_child = false;
+    say("I've been thinking... This house is big enough now, and there's so much love in it. What if we gave a home to a child who has none?");
+    say("The Harvest Sprites know every little one in the valley. I'll ask them. It may take a season.");
+    return;
+  }
   if (!s_adoption_due && !A.stage) return;
   if (!in_house()) { if (A.stage) { take_away(HELPER_SLOT); take_away(VISITOR_SLOT); take_away(BABY_SLOT); A.stage = 0; } return; }
   switch (A.stage) {
-  case 0:                                            /* at the door: two Harvest Sprites and a baby */
+  case 0:                                            /* a knock: they come in by the door */
     if (!player_free(false)) return;
-    put(VISITOR_SLOT, ELF_FRONT, false, kHouseDoor.x - 24, kHouseDoor.y - 32);
-    put(HELPER_SLOT, ELF_FRONT, true, kHouseDoor.x + 24, kHouseDoor.y - 32);
-    put(BABY_SLOT, BABY_SPRITE, false, kHouseDoor.x - 8, kHouseDoor.y - 32);
-    A.stage = 1; A.frames = 0;
+    A.x = house_door().x; A.y = house_door().y; A.frames = 0;
+    put(VISITOR_SLOT, ELF_FRONT, false, A.x - 14, A.y);
+    put(HELPER_SLOT, ELF_FRONT, true, A.x + 14, A.y);
+    put(BABY_SLOT, BABY_SPRITE, false, A.x, A.y);
+    sprites_at(0);
+    g_ram[HM_INPUT_STATE] = HELD_INPUT;             /* the player waits, as in the game's scenes */
+    A.stage = 1;
     return;
-  case 1:                                            /* the box holds six pages: two talks */
-    if (++A.frames < 60) return;
-    say("Knock, knock! The Harvest Sprites stand at the door, holding something wrapped in leaves.");
+  case 1:                                            /* hopping in */
+    g_ram[HM_INPUT_STATE] = HELD_INPUT;
+    A.frames++;
+    sprites_at(-(int)(A.frames / 2 < HOP_IN ? A.frames / 2 : HOP_IN));
+    if (A.frames / 2 < HOP_IN) return;
+    say("Knock, knock! The Harvest Sprites come in, holding something wrapped in leaves.");
     say("\"We heard there's a farm here with a lot of love and no baby. This little one has no family. Will you take care of it?\"");
+    g_ram[HM_INPUT_STATE] = 1;
     A.stage = 2;
     return;
   case 2:
     if (s_said_pages) return;
+    take_away(BABY_SLOT);                            /* in his arms */
     say(kSuitors[who].name[0] == 'V' ? "Your husband takes the baby in his arms. \"...I'll write this little one a song every day.\""
                                      : "Your husband takes the baby in his arms, very carefully. \"Hello, little one. Welcome home.\"");
     say("The Harvest Sprites wave goodbye and hop away into the fields.");
-    A.stage = 3;
+    A.stage = 3; A.frames = 0;
     return;
-  case 3:
+  case 3:                                            /* hopping out */
     if (s_said_pages) return;
-    take_away(VISITOR_SLOT); take_away(HELPER_SLOT); take_away(BABY_SLOT);
+    A.frames++;
+    sprites_at(-HOP_IN + (int)(A.frames / 2));
+    if (A.frames / 2 < HOP_IN) return;
+    take_away(VISITOR_SLOT); take_away(HELPER_SLOT);
     s_adoption_due = false;
     A.stage = 0;
     return;
@@ -1175,6 +1231,7 @@ void suitors_frame(void)
   festival_tick();
   dance_tick();
   wedding_tick();
+  house_door_tick();
   married_tick();
   adoption_tick();
   ending_tick();
