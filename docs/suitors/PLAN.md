@@ -28,15 +28,15 @@ from RAM dumps on every map at 11:00 and 19:00).
 |---|---|---|---|
 | Eve's fan | $269-$274 (young man, short hair) | the bar, map $1E (slot 4) | text $120: "Good evening. I'm a fan of Eve's, you know." |
 | The carpenters (brothers) | $25A-$264 (also carrying wood, with the hammer) | the mountain, map $10; their house, map $2B | texts $128/$129: "We are carpenters"; live together, no wife mentioned (the game never says) |
-| The bartender | $285; his other poses (walking, back, side) still to be confirmed: behind the counter he may only have the front one | the bar, map $1E | no wife in the game; Eve is his niece (text $11E: "she is my niece"), which does not stop him |
-| Ann's father | not found yet (he stands in the tool shop) | the tool shop | a widower (texts $1DC, $246) |
-| The shipping trainee | not confirmed yet; most likely $28F-$299 (young man, blue shirt, the most poses) | — | text $117/$118: "I'm a trainee of shipping too... With grit!" |
+| Ann's father | not confirmed yet; by his look most likely $2D9-$2DE (moustache, white shirt, vest): front, side and walking, arms crossed, but **no back pose** (it would have to be drawn) | the tool shop | a widower (texts $1DC, $246) |
+| The shipping trainee | by his look $296-$29C (young man in the shipper's blue shirt, no moustache): front, back, side, walking and talking, all of them. $28F-$295, with the moustache, is most likely the shipper himself | — | text $117/$118: "I'm a trainee of shipping too... With grit!" |
 
 The first step agreed: **Eve's fan and one of the carpenters**, then the
-bartender, Ann's father and the trainee once their sprites are confirmed.
+trainee, and Ann's father if his sprite is confirmed.
 
 ### Ruled out
 
+- The bartender ($285-$287): only drawn from the front, behind the counter (wiping a glass); no back, side or walking poses, so he could not walk, marry or live on the farm without new drawings.
 - Ellen's father ($2A4, the drunk: "hic").
 - The mayor (Maria's father): married.
 - The angler ($265): an old man with a cane (text $12B).
