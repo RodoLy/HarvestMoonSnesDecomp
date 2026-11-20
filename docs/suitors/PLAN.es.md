@@ -146,10 +146,11 @@ RodoLy/HarvestMoonSnesDecomp y pide que primero lea `docs/suitors/PLAN.es.md`.
    noche). Con uno de sus favoritos en las manos, presiona A: se va de tus
    manos. En el menú de pausa, la página de Corazones muestra los suyos con
    Arriba / Abajo.
-3. **Evento de corazón.** Con cinco corazones (500), una mañana de buen
-   clima que no sea festival, alguien te espera junto a la puerta. Háblale,
-   ve a donde te dice y acércate a él: su escena, una pregunta, y el día
-   termina. A la mañana siguiente hay algo en la granja. Para el papá de
+3. **Evento de corazón.** Con cinco corazones (500), en un día de visitas
+   (2-7, 13-17, 25-28, como las de las chicas en el juego) de buen clima y
+   sin festival, la primera vez que sales de la casa (6:00): te quedas en
+   la puerta y alguien sube por el camino hacia ti. Ve a donde te dice y
+   acércate a él: su escena, una pregunta, y el día termina. A la mañana siguiente hay algo en la granja. Para el papá de
    Ann, lleva una flor.
 4. **Baile.** En el Festival de las Flores o el de la Cosecha, presiona A
    frente a él.
@@ -159,7 +160,9 @@ RodoLy/HarvestMoonSnesDecomp y pide que primero lea `docs/suitors/PLAN.es.md`.
 6. **Vida de casados.** Está en casa en la mañana y en la noche, en la
    granja de 9:00 a 18:00 (en casa si llueve), caminando con sus propias
    poses.
-7. **El bebé.** Con la cuenta del propio juego (su cariño, los días de
-   casados, la casa), la noche en que nacería un hijo, los Duendes de la
-   Cosecha traen uno a la casa la próxima vez que estés en casa.
+7. **El bebé.** Como en el juego: su cariño (450), 20 días de casados y la
+   casa ampliada dos veces. La mañana después de la noche en que el juego
+   cuenta un hijo en camino, él habla de adoptar; 60 días después los
+   Duendes de la Cosecha entran por la puerta con el bebé, y desde entonces
+   es el propio hijo del juego, en la casa.
 8. **El final** (verano 30 del tercer año): lo recorre contigo.

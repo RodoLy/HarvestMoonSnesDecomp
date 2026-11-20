@@ -139,9 +139,11 @@ RodoLy/HarvestMoonSnesDecomp and ask to read `docs/suitors/PLAN.md` first.
    tool shop), the two shipping workers (the bar, at night). Hold one of his
    favourites and press A: it leaves your hands. The pause menu's Hearts
    page shows theirs with Up / Down.
-3. **Heart event.** At five hearts (500), on a morning of good weather that
-   is not a festival, someone waits by your door. Talk to them, go where
-   they say, walk up to him: his scene, a choice, and the day ends. The
+3. **Heart event.** At five hearts (500), on a visitor day (2-7, 13-17,
+   25-28, as the girls' in the game) of good weather and no festival, the
+   first time you step out of the house (6:00): you stay at the door and
+   someone walks up the path to you. Go where they say, walk up to him:
+   his scene, a choice, and the day ends. The
    next morning there is something on the farm. For Ann's father, carry a
    Flower.
 4. **Dance.** At the Flower or Harvest Festival, press A in front of him.
@@ -150,7 +152,9 @@ RodoLy/HarvestMoonSnesDecomp and ask to read `docs/suitors/PLAN.md` first.
    next time you step onto the farm.
 6. **Married life.** He is at home in the morning and at night, on the farm
    from 9:00 to 18:00 (at home when it rains), walking with his own poses.
-7. **The baby.** With the game's own counting (his love, days married, the
-   house), the night a child would be born, the Harvest Sprites bring one
-   to the house the next time you are home.
+7. **The baby.** As the game's own: his love (450), 20 days married and the
+   house extended twice. The morning after the night the game counts a
+   child on its way, he talks of adopting; 60 days later the Harvest
+   Sprites come in by the door with the baby, and from then on it is the
+   game's own child, in the house.
 8. **The ending** (summer 30 of the third year): he walks it with you.
