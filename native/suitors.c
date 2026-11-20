@@ -241,7 +241,7 @@ static const Suitor kSuitors[HM_SUITORS] = {
  * Wrapped to the box's width, a page each say(); the box opens at the end
  * of the frame. A question may follow the pages: two answers on the
  * box's last line, as the game's own choices. */
-enum { PAGES = 8 };
+enum { PAGES = 6 };   /* as many as the box takes (textbox.h) */
 static char s_said[PAGES][TEXTBOX_LINES][TEXTBOX_COLUMNS + 1];
 static int s_said_pages;
 static bool s_want_dialog;
@@ -835,16 +835,20 @@ static void adoption_tick(void)
     put(BABY_SLOT, BABY_SPRITE, false, kHouseDoor.x - 8, kHouseDoor.y - 32);
     A.stage = 1; A.frames = 0;
     return;
-  case 1:
+  case 1:                                            /* the box holds six pages: two talks */
     if (++A.frames < 60) return;
     say("Knock, knock! The Harvest Sprites stand at the door, holding something wrapped in leaves.");
     say("\"We heard there's a farm here with a lot of love and no baby. This little one has no family. Will you take care of it?\"");
-    say(kSuitors[who].name[0] == 'V' ? "Your husband takes the baby in his arms. \"...I'll write this little one a song every day.\""
-                                     : "Your husband takes the baby in his arms, very carefully. \"Hello, little one. Welcome home.\"");
-    say("The Harvest Sprites wave goodbye and hop away into the fields.");
     A.stage = 2;
     return;
   case 2:
+    if (s_said_pages) return;
+    say(kSuitors[who].name[0] == 'V' ? "Your husband takes the baby in his arms. \"...I'll write this little one a song every day.\""
+                                     : "Your husband takes the baby in his arms, very carefully. \"Hello, little one. Welcome home.\"");
+    say("The Harvest Sprites wave goodbye and hop away into the fields.");
+    A.stage = 3;
+    return;
+  case 3:
     if (s_said_pages) return;
     take_away(VISITOR_SLOT); take_away(HELPER_SLOT); take_away(BABY_SLOT);
     s_adoption_due = false;
