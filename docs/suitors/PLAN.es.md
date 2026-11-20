@@ -30,14 +30,14 @@ mal** (dibujados con la paleta de la Diosa); las formas y poses son las reales.
 | El fan de Eve | $269-$274 (joven de pelo corto) | el bar, mapa $1E (slot 4) | texto $120: "Good evening. I'm a fan of Eve's, you know." |
 | Los carpinteros (hermanos) | $25A-$264 (también cargando madera y con el martillo) | la montaña, mapa $10; su casa, mapa $2B | textos $128/$129: "We are carpenters"; viven juntos y no mencionan esposa (el juego no lo dice) |
 | El cantinero | $285; sus otras poses (caminando, de espalda, de lado) faltan por confirmar: detrás de la barra puede que solo tenga la de frente | el bar, mapa $1E | no tiene esposa en el juego; Eve es su sobrina (texto $11E: "she is my niece"), lo que no lo impide |
+| El papá de Ann | sin encontrar todavía (está en la tienda de herramientas) | la tienda de herramientas | viudo (textos $1DC, $246) |
 | El aprendiz de repartidor | sin confirmar; lo más probable $28F-$299 (joven de camisa azul, el de más poses) | — | texto $117/$118: "I'm a trainee of shipping too... With grit!" |
 
 Primer paso acordado: **el fan de Eve y uno de los carpinteros**; luego el
-cantinero y el aprendiz, cuando se confirmen sus sprites.
+cantinero, el papá de Ann y el aprendiz, cuando se confirmen sus sprites.
 
 ### Descartados
 
-- El papá de Ann (tienda de herramientas): viudo (textos $1DC, $246).
 - El papá de Ellen ($2A4, el borracho: "hic").
 - El alcalde (papá de María): casado.
 - El pescador ($265): un señor mayor con bastón (texto $12B).
