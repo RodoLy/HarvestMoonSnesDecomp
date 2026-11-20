@@ -385,7 +385,7 @@ static void show(int number, int sprite, bool flip)
 
 /* Our slots: the game's own people use the first ones on each map; the
  * wife's is $13 (goddess.c), the children's $14 and $15. */
-enum { HUSBAND_SLOT = 0x13, VISITOR_SLOT = 0x16, HELPER_SLOT = 0x17, BABY_SLOT = 0x1A, GUEST_SLOT = 0x1B };   /* guests: $1B-$1F */
+enum { HUSBAND_SLOT = 0x13, VISITOR_SLOT = 0x18, HELPER_SLOT = 0x19, BABY_SLOT = 0x1A,   /* the dog takes $16 */ GUEST_SLOT = 0x1B };   /* guests: $1B-$1F */
 
 /* ── 2. Talking and gifts ─────────────────────────────────────────────── */
 static bool listed(const uint8_t *list, int n, uint8_t item)
