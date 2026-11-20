@@ -64,9 +64,36 @@ father and both shipping workers (the second once his sprite is found).
 
 1. Hearts and gifts: his favourite things, his lines by hearts, in the
    game's own text box (`native/textbox.c`).
-2. His special events, like the girls': scenes of his own that happen at
-   certain hearts (for example, coming to find you on the farm or meeting
-   on the mountain), with his lines and his poses.
+2. His heart event (approved), like the girls': at a certain love, on a day
+   of good weather and no festival, **someone comes to your farm to tell
+   you**; you go and help, and solving it ends the day (the game's are like
+   that: Maria runs away, Ellen loses P-Chan, Eve's grandfather is hurt in
+   the cave, Ann loses her weather vane, Nina does not come back from the
+   cave). Once each:
+   - **Eve's fan:** Eve comes, worried: "My regular fan didn't come last
+     night, and he never misses a night." He is on the mountain, by the lake,
+     with a notebook: he was writing a song, not for Eve, for you.
+   - **The carpenter:** his brother comes running: "My brother went up to
+     cut wood and hasn't come down!" He is in the mountain's woods, a twisted
+     ankle under some logs; you help him down. The next day he leaves you an
+     oak stool.
+   - **Ann's father:** Ann comes: "My dad went out this morning and hasn't
+     come back." He is at his wife's grave, by the church: he tells you
+     about her, and if you bring a Flower you leave it beside his (the most
+     love); "staying a while" also raises it; "leaving" neither raises nor
+     lowers it. The next day Ann: "My dad came home happy yesterday... do
+     you know why?" If the game has no graves, a small headstone drawn by us
+     by the church.
+   - **The shipping worker in the vest:** the one with the cap comes: "My
+     partner lost the bag with the day's payments, and if it doesn't turn
+     up they'll fire him!" It is somewhere on his route (in town, behind a
+     fence); he thanks you watching the sunset.
+
+   **One carpenter only:** both brothers share the pictures; only one is a
+   suitor (he says the new lines) and the other keeps his own. They will be
+   told apart by their slot, their place or their original line ($128 /
+   $129), whichever the test's log shows is surest. Today `native/suitors.c`
+   still takes both as one.
 3. Dancing at the festivals: at the festivals where a girl can be asked to
    dance, asking him instead, with the hearts that brings.
 4. Proposal: the Blue Feather (`g_hm_feather_used`), with the game's

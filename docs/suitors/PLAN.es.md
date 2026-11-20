@@ -65,9 +65,36 @@ papá de Ann y los dos repartidores (el segundo cuando se encuentre su sprite).
 
 1. Corazones y regalos: sus cosas favoritas, sus frases según los
    corazones, en la caja de texto del propio juego (`native/textbox.c`).
-2. Sus eventos especiales, como los de las chicas: escenas propias que
-   pasan al llegar a ciertos corazones (por ejemplo, ir a buscarte a la
-   granja o encontrarse en la montaña), con sus frases y sus poses.
+2. Su evento de corazón (aprobado), como los de las chicas: al llegar a
+   cierto cariño, un día de buen clima y sin festival, **alguien llega a tu
+   granja a avisarte**; vas a ayudar, y al resolverlo el día termina (así son
+   los del juego: Maria se escapa, Ellen pierde a P-Chan, el abuelo de Eve se
+   lastima en la cueva, Ann pierde su veleta, Nina no vuelve de la cueva).
+   Una vez cada uno:
+   - **El fan de Eve:** Eve llega preocupada: "Mi fan de siempre no vino
+     anoche, y él nunca falta." Está en la montaña, junto al lago, con un
+     cuaderno: escribía una canción, no para Eve, para ti.
+   - **El carpintero:** su hermano llega corriendo: "¡Mi hermano subió a
+     cortar madera y no ha bajado!" Está en el bosque de la montaña, con un
+     tobillo torcido bajo unos troncos; lo ayudas a bajar. Al día siguiente
+     te deja un banquito de roble.
+   - **El papá de Ann:** Ann llega: "Mi papá salió en la mañana y no ha
+     vuelto." Está en la tumba de su esposa, junto a la iglesia: te cuenta de
+     ella, y si llevas un Flower lo dejas junto a las suyas (lo que más
+     sube); "quedarte un rato" también sube; "irte" no sube ni baja. Al día
+     siguiente Ann: "Mi papá llegó contento ayer... ¿sabes por qué?". Si el
+     juego no tiene tumbas, una lápida pequeña dibujada por nosotros junto a
+     la iglesia.
+   - **El repartidor de chaleco:** el de gorra llega: "¡Mi compañero perdió
+     la bolsa con los pagos del día, y si no aparece lo corren!" Está en algún
+     lugar de su ruta (en el pueblo, detrás de una cerca); él te da las
+     gracias viendo el atardecer.
+
+   **Un solo carpintero:** los dos hermanos tienen el mismo dibujo; solo uno
+   es pretendiente (dice las frases nuevas) y el otro sigue con las suyas. Se
+   distinguirán por su slot, su lugar o su frase original ($128 / $129), lo
+   que el log de la prueba muestre más seguro. Hoy `native/suitors.c` todavía
+   toma a los dos como uno.
 3. Bailar en los festivales: en los festivales donde se invita a una chica a
    bailar, poder invitarlo a él, con lo que eso suma de corazones.
 4. Propuesta: la Blue Feather (`g_hm_feather_used`), con las condiciones
