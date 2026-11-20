@@ -480,7 +480,10 @@ static int suitor_in_front(int *slot)
  * night comes, as when the player goes to bed). The next morning there is
  * something on the farm. Once each: g_hm_suitor_events. */
 enum { CALL_FROM = 6, CALL_TO = 12 };          /* the morning: the hours someone may come */
-static const int kDoorX = 0x148, kDoorY = 0x1C0;   /* the house's door, on the farm */
+/* where the player comes out of the house, on the farm (walked out in a test:
+ * the door is above, the stepping stones below); whoever comes waits beside
+ * them, to the right, and talks as soon as the player is out */
+static const int kOutX = 136, kOutY = 360, kWaitX = 168, kWaitY = 376;
 static struct {
   enum { EV_NONE, EV_CALLING, EV_CALLED, EV_FOUND, EV_OVER } state;
   int who;
@@ -522,13 +525,13 @@ static void event_tick(void)
     int who = event_due();
     if (who < 0 || g_ram[SLOT_AT(VISITOR_SLOT)]) return;
     E.who = who; E.state = EV_CALLING; E.day = today(); E.end_day = false;
-    put(VISITOR_SLOT, kSuitors[who].event.messenger, false, kDoorX, kDoorY + 32);
+    put(VISITOR_SLOT, kSuitors[who].event.messenger, false, kWaitX, kWaitY);
     return;
   }
   case EV_CALLING:                                   /* they wait by the door until the player comes */
     if (!on_farm()) return;
-    if (!ours(SLOT_AT(VISITOR_SLOT))) put(VISITOR_SLOT, kSuitors[E.who].event.messenger, false, kDoorX, kDoorY + 32);
-    if (near_player(kDoorX, kDoorY + 32, 40) && player_free(true)) {
+    if (!ours(SLOT_AT(VISITOR_SLOT))) put(VISITOR_SLOT, kSuitors[E.who].event.messenger, false, kWaitX, kWaitY);
+    if (near_player(kOutX, kOutY + 16, 40) && player_free(true)) {
       say(kSuitors[E.who].event.call);
       E.state = EV_CALLED;
     }
@@ -696,9 +699,9 @@ static void wedding_tick(void)
  * mirrored to go right. He keeps still while the player is close, so he
  * can be talked to. In the game's wife slot, $13. */
 typedef struct { int x, y; } Spot;
-static const Spot kFarmSpots[] = { { 20 * 16 + 8, 23 * 16 }, { 23 * 16, 25 * 16 }, { 18 * 16, 24 * 16 }, { 21 * 16, 26 * 16 } };   /* as the Goddess's */
+static const Spot kFarmSpots[] = { { 184, 380 }, { 168, 450 }, { 88, 450 }, { 104, 388 } };   /* around the house's front */
 static const Spot kHouseSpots[] = { { 0x60, 0x62 }, { 0x90, 0x70 } };
-static const Spot kHouseDoor = { 0x78, 0xC0 }, kFarmDoor = { 0x148, 0x1C0 };
+static const Spot kHouseDoor = { 0x78, 0xC0 }, kFarmDoor = { 136, 352 };   /* the house's door, on the farm */
 enum { OUT_FROM = 9, HOME_FROM = 18, WALK_SPEED = 1, STEP_FRAMES = 10, REST_FRAMES = 240 };
 static struct {
   int place;                                   /* 1 the farm, 2 the house, 0 neither */
