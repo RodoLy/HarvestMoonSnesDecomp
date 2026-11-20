@@ -12,6 +12,7 @@
  * size: a checkered floor, wooden frames with parchment inside, pixel type
  * and 16x16 item icons (ui.c). The girls' faces are the game's own sprites,
  * read from your ROM when the menu opens (kFaces); the Goddess is a sixth.
+ * With the male suitors on, up and down on the hearts page show theirs.
  *
  * Pages (L / R):
  *   Tools   the hand and backpack at the top, the tool shed as a grid.
@@ -39,6 +40,7 @@
 #include "i18n.h"
 #include "pause.h"
 #include "goddess.h"
+#include "suitors.h"
 #include "config.h"
 #include "mods.h"
 
@@ -51,6 +53,7 @@ static struct {
   int cx, cy;            /* tools cursor: cy -1 = the top slots (cx 0 hand, 1 bag) */
   char message[96];      /* the tools page's feedback line */
   bool live;             /* drawn for a second screen while the game goes on */
+  int page;              /* hearts: 0 the girls, 1 the suitors (when on) */
 } s;
 
 /* ── Game data ───────────────────────────────────────────────────────── */
@@ -229,8 +232,10 @@ static void action_y(void)   /* put the hand (or the selected bag) item away */
  * The Goddess is her praying frame (the scene at her pond), a few rows
  * below the townsfolk, with the table's last palette: green hair, white
  * dress. Hearts order: Maria, Ann, Nina, Ellen, Eve, then the Goddess. */
-enum { FACES = 6, FACE_GODDESS = 5 };
-static const struct { uint32_t frame, palette; } kFaces[FACES] = {
+/* The suitors are found the same way (native/suitors.c, suitors_face):
+ * their front frames, all with the table's fifth palette. */
+enum { GIRL_FACES = 6, FACE_GODDESS = 5, FACES = GIRL_FACES + 5 };
+static struct { uint32_t frame, palette; } kFaces[FACES] = {
   { 0x078200, 0x14DE20 },   /* Maria: blue hair */
   { 0x078B00, 0x14DE20 },   /* Ann: orange ponytail */
   { 0x07B2C0, 0x14DE40 },   /* Nina: pink hair */
@@ -244,6 +249,8 @@ static bool s_faces_ok;
 static void load_faces(void)
 {
   if (s_faces_ok || !g_rom) return;
+  for (int i = 0; i < suitors_count() && GIRL_FACES + i < FACES; i++)
+    kFaces[GIRL_FACES + i].frame = suitors_face(i), kFaces[GIRL_FACES + i].palette = 0x14DE80;
   for (int g = 0; g < FACES; g++) {
     uint32_t pal[16];
     for (int i = 0; i < 16; i++) {
@@ -480,8 +487,31 @@ static uint32_t heart_colour(unsigned v)
   return tier[7];
 }
 
+static void draw_suitors(int x, int y)
+{
+  load_faces();
+  int rows = suitors_count(), step = 19;
+  for (int i = 0; i < rows; i++) {
+    int ry = y + i * step;
+    unsigned v = (unsigned)suitors_love(i);
+    ui_rect(x, ry, 18, 18, C_WOOD_EDGE);
+    ui_rect(x + 1, ry + 1, 16, 16, C_PAPER_DARK);
+    if (s_faces_ok)
+      for (int j = 0; j < 16; j++)
+        for (int k = 0; k < 16; k++) ui_px(x + 1 + k, ry + 1 + j, s_face[GIRL_FACES + i][j * 16 + k]);
+    ui_text(UI_BODY, x + 24, ry + 13, T(suitors_name(i)), suitors_is_husband(i) ? C_RED : C_INK);
+    unsigned full = (v + 50) / 100;
+    uint32_t col = heart_colour(v);
+    for (int h = 0; h < 10; h++) ui_heart(x + 76 + h * 9, ry + 6, col, (unsigned)h < full);
+    char num[8]; snprintf(num, sizeof num, "%u", v);
+    ui_text_r(UI_SMALL, x + 236, ry + 12, num, C_INK_SOFT);
+    if (i < rows - 1) ui_hline(x + 22, ry + step - 1, 214, C_PAPER_LINE);
+  }
+}
+
 static void draw_hearts(int x, int y)
 {
+  if (s.page && g_cfg.male_suitors) { draw_suitors(x, y); return; }
   static const char *names[5] = { "Maria", "Ann", "Nina", "Ellen", "Eve" };
   load_faces();
   int rows = g_cfg.goddess ? 6 : 5, step = rows == 6 ? 16 : 19;
@@ -676,9 +706,13 @@ static void draw_textbox(void)
     ui_text(UI_SMALL, x, 205, help, C_INK_SOFT);
   } else if (s.tab == 3) {
     animal_details(x);
+  } else if (s.tab == 1 && s.page && g_cfg.male_suitors) {
+    ui_text(UI_SMALL, x, 192, T("Marks: 500 heart event · 1000 Blue Feather"), C_INK);
+    ui_text(UI_SMALL, x, 201, T("Up / Down  the girls"), C_INK_SOFT);
   } else if (s.tab == 1) {
     ui_text(UI_SMALL, x, 192, T("Marks: 200 heart event · 450 first child ·"), C_INK);
-    ui_text(UI_SMALL, x, 201, T("650 second child · maximum 999"), C_INK);
+    ui_text(UI_SMALL, x, 201, g_cfg.male_suitors ? T("650 second child · Up / Down  the men")
+                                                 : T("650 second child · maximum 999"), C_INK);
   } else {
     char d[96];
     snprintf(d, sizeof d, T("%s, %s %u, Year %u"), T(kDays[g_ram[HM_WEEKDAY] % 7]),
@@ -711,6 +745,7 @@ static void render(void)
 static void move(int dx, int dy)
 {
   if (s.tab == 3) { animals_move(dx, dy); return; }
+  if (s.tab == 1 && dy && g_cfg.male_suitors) { s.page ^= 1; return; }
   if (s.tab != 0) { if (dx) s.tab = (s.tab + ntabs() + dx) % ntabs(); return; }
   s.message[0] = 0;
   if (dy) {
