@@ -61,7 +61,7 @@ papá de Ann y los dos repartidores (el segundo cuando se encuentre su sprite).
 - El cazador ($27D): abuelo de Eve.
 - El padre de la iglesia ($2A5); los vendedores ambulantes (no viven en el pueblo).
 
-## Cómo se construiría (las mismas piezas que la Diosa)
+## Cómo está hecho (las mismas piezas que la Diosa): todo listo
 
 1. Corazones y regalos: sus cosas favoritas, sus frases según los
    corazones, en la caja de texto del propio juego (`native/textbox.c`).
@@ -90,11 +90,9 @@ papá de Ann y los dos repartidores (el segundo cuando se encuentre su sprite).
      lugar de su ruta (en el pueblo, detrás de una cerca); él te da las
      gracias viendo el atardecer.
 
-   **Un solo carpintero:** los dos hermanos tienen el mismo dibujo; solo uno
-   es pretendiente (dice las frases nuevas) y el otro sigue con las suyas. Se
-   distinguirán por su slot, su lugar o su frase original ($128 / $129), lo
-   que el log de la prueba muestre más seguro. Hoy `native/suitors.c` todavía
-   toma a los dos como uno.
+   **Un solo carpintero:** los hermanos tienen el mismo dibujo; solo uno es
+   pretendiente (dice las frases nuevas) y los demás siguen con las suyas
+   (cómo se distingue: más abajo).
 3. Bailar en los festivales: en los festivales donde se invita a una chica a
    bailar, poder invitarlo a él, con lo que eso suma de corazones.
 4. Propuesta: la Blue Feather (`g_hm_feather_used`), con las condiciones
@@ -112,6 +110,28 @@ papá de Ann y los dos repartidores (el segundo cuando se encuentre su sprite).
 
 Apagado de fábrica, con su propia opción en `config.ini`, como `HarvestGoddess`.
 
+## El quinto: el aprendiz
+
+El repartidor de gorra ($276-$27B, con todas sus poses) es el aprendiz del
+de chaleco, y también soltero. Su evento de corazón: el de chaleco llega a
+la granja ("mi aprendiz fue a entregar a la montaña y no ha vuelto"); está
+perdido en el camino de la montaña, y lo acompañas de regreso (o te burlas
+de él).
+
+**Un solo carpintero:** es el que tiene su propio guion (banco $B3,
+$EE81-$EEA5: el que dice el texto $128), en `kSuitors` como `script_from` /
+`script_to`. Los otros dos conservan lo suyo.
+
+## Dónde pasa cada evento de corazón
+
+| Pretendiente | Quién viene | Dónde está él |
+|---|---|---|
+| Fan de Eve | Eve | el lago de la montaña, junto a la cerca, mirando el agua |
+| Carpintero | su hermano | el bosque de la montaña, junto a los troncos |
+| Papá de Ann | Ann | las tumbas junto a la iglesia, mirándolas |
+| Repartidor (chaleco) | el aprendiz | el pueblo, junto a la cerca del camino |
+| Aprendiz (gorra) | el repartidor | el camino de la montaña, pasando el árbol grande |
+
 ## Para seguir en otra sesión
 
 Abre la rama `male-suitors` (que sale de `harvest-goddess`) de
@@ -120,15 +140,26 @@ RodoLy/HarvestMoonSnesDecomp y pide que primero lea `docs/suitors/PLAN.es.md`.
 ## Para probarlo
 
 1. Activa "Pretendientes hombres" en las mejoras del lanzador.
-2. Presiona A frente a cada uno: el fan de Eve (el bar, de noche), el
-   carpintero (la montaña), el papá de Ann (la tienda de herramientas) y el
-   repartidor de chaleco (el bar, de noche). Su frase sale en la caja de
-   texto del juego, en lugar de la suya de siempre.
-3. Recoge uno de sus favoritos (la tabla de arriba) y presiona A frente a
-   él: se va de tus manos y se pone muy contento. Un segundo regalo el mismo
-   día se queda en tus manos.
-4. Guarda y carga: su cariño se conserva (todavía no tienen fila de
-   corazones en el menú de pausa; se puede agregar después, con su cara).
-
-Si A frente a alguno no hace nada distinto, sus números de sprite no son
-los que dice aquí: están al principio de `native/suitors.c` (`kSuitors`).
+2. **Corazones y regalos.** Presiona A frente a cada uno: el fan de Eve (el
+   bar, de noche), el carpintero (la montaña, junto a su casa), el papá de
+   Ann (la tienda de herramientas), los dos repartidores (el bar, de
+   noche). Con uno de sus favoritos en las manos, presiona A: se va de tus
+   manos. En el menú de pausa, la página de Corazones muestra los suyos con
+   Arriba / Abajo.
+3. **Evento de corazón.** Con cinco corazones (500), una mañana de buen
+   clima que no sea festival, alguien te espera junto a la puerta. Háblale,
+   ve a donde te dice y acércate a él: su escena, una pregunta, y el día
+   termina. A la mañana siguiente hay algo en la granja. Para el papá de
+   Ann, lleva una flor.
+4. **Baile.** En el Festival de las Flores o el de la Cosecha, presiona A
+   frente a él.
+5. **Propuesta.** Diez corazones (1000), la casa ampliada una vez y nadie
+   más: usa la Pluma Azul frente a él. La boda es una semana después, la
+   próxima vez que pises la granja.
+6. **Vida de casados.** Está en casa en la mañana y en la noche, en la
+   granja de 9:00 a 18:00 (en casa si llueve), caminando con sus propias
+   poses.
+7. **El bebé.** Con la cuenta del propio juego (su cariño, los días de
+   casados, la casa), la noche en que nacería un hijo, los Duendes de la
+   Cosecha traen uno a la casa la próxima vez que estés en casa.
+8. **El final** (verano 30 del tercer año): lo recorre contigo.

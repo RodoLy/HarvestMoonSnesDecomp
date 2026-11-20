@@ -60,7 +60,7 @@ father and both shipping workers (the second once his sprite is found).
 - The hunter ($27D): Eve's grandfather.
 - The priest ($2A5); the hawker and the peddler (they do not live in town).
 
-## How it would be built (same pieces as the Goddess)
+## How it is built (same pieces as the Goddess) — all done
 
 1. Hearts and gifts: his favourite things, his lines by hearts, in the
    game's own text box (`native/textbox.c`).
@@ -90,10 +90,9 @@ father and both shipping workers (the second once his sprite is found).
      fence); he thanks you watching the sunset.
 
    **One carpenter only:** both brothers share the pictures; only one is a
-   suitor (he says the new lines) and the other keeps his own. They will be
-   told apart by their slot, their place or their original line ($128 /
-   $129), whichever the test's log shows is surest. Today `native/suitors.c`
-   still takes both as one.
+   suitor (he says the new lines) and the others keep their own. He is the
+   one whose script is his (bank $B3, $EE81-$EEA5: the one who says text
+   $128), in `kSuitors` as `script_from` / `script_to`.
 3. Dancing at the festivals: at the festivals where a girl can be asked to
    dance, asking him instead, with the hearts that brings.
 4. Proposal: the Blue Feather (`g_hm_feather_used`), with the game's
@@ -110,6 +109,23 @@ father and both shipping workers (the second once his sprite is found).
 
 Off by default, with its own option in `config.ini`, like `HarvestGoddess`.
 
+## The fifth: the trainee
+
+The shipping worker with the cap ($276-$27B, all poses) is the vest one's
+trainee, single as well. His heart event: the vest one comes to the farm
+("my trainee went to deliver to the mountain and never came back"); he is
+lost on the mountain path, and you walk him back (or tease him).
+
+## Where each heart event happens
+
+| Suitor | Who comes | Where he is |
+|---|---|---|
+| Eve's fan | Eve | the mountain lake, by the fence, looking at the water |
+| Carpenter | his brother | the mountain woods, by the logs |
+| Ann's father | Ann | the graves beside the church, looking at them |
+| Shipper (vest) | the trainee | the town, by the fence on the road |
+| Trainee (cap) | the shipper | the mountain path, past the big tree |
+
 ## To continue in another session
 
 Open the `male-suitors` branch (started from `harvest-goddess`) of
@@ -118,16 +134,23 @@ RodoLy/HarvestMoonSnesDecomp and ask to read `docs/suitors/PLAN.md` first.
 ## To try it
 
 1. Turn on "Male suitors" in the launcher's improvements.
-2. Press A in front of each: Eve's fan (the bar, at night), the carpenter
-   (the mountain), Ann's father (the tool shop) and the shipping worker in
-   the vest (the bar, at night). His line comes in the game's text box,
-   instead of his usual one.
-3. Pick up one of his favourites (the table above) and press A in front of
-   him: it leaves your hands and he is very happy. A second gift the same
-   day stays in your hands.
-4. Save, load: his love is kept (there is no hearts row for them yet in
-   the pause menu; it can be added next, with their faces).
-
-If A in front of one of them does nothing different, his sprite numbers are
-not the ones written here: they are at the top of `native/suitors.c`
-(`kSuitors`).
+2. **Hearts and gifts.** Press A in front of each: Eve's fan (the bar, at
+   night), the carpenter (the mountain, by his house), Ann's father (the
+   tool shop), the two shipping workers (the bar, at night). Hold one of his
+   favourites and press A: it leaves your hands. The pause menu's Hearts
+   page shows theirs with Up / Down.
+3. **Heart event.** At five hearts (500), on a morning of good weather that
+   is not a festival, someone waits by your door. Talk to them, go where
+   they say, walk up to him: his scene, a choice, and the day ends. The
+   next morning there is something on the farm. For Ann's father, carry a
+   Flower.
+4. **Dance.** At the Flower or Harvest Festival, press A in front of him.
+5. **Proposal.** Ten hearts (1000), the house extended once, nobody else:
+   use the Blue Feather in front of him. The wedding is a week later, the
+   next time you step onto the farm.
+6. **Married life.** He is at home in the morning and at night, on the farm
+   from 9:00 to 18:00 (at home when it rains), walking with his own poses.
+7. **The baby.** With the game's own counting (his love, days married, the
+   house), the night a child would be born, the Harvest Sprites bring one
+   to the house the next time you are home.
+8. **The ending** (summer 30 of the third year): he walks it with you.

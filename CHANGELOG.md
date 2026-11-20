@@ -4,7 +4,15 @@
 
 ## Unreleased (branch `male-suitors`)
 
-- **Male suitors** (an improvement, off by default; first step): four men can be courted as the girls are: **Eve's fan** (the Visitor, in the bar at night), **a carpenter**, **Ann's father** and **a shipping worker**. Talk to one, or hold something in front of him and press A to give it: the first talk and the first gift of the day raise his hearts (each has his favourites, worth much more; weeds and the Poison Mushroom take love away). He answers in the game's own text box, by how much he likes you. Their hearts are kept in the diary. The proposal, the wedding and married life come next ([the plan](docs/suitors/PLAN.md)).
+- **Male suitors** (an improvement, off by default): five men can be courted as the girls are: **Eve's fan** (the Visitor), **a carpenter** (only the one by his house on the mountain), **Ann's father** and **the two shipping workers**.
+  - **Hearts and gifts:** talk to one, or hold something in front of him and press A to give it; each has his favourites. He answers in the game's own text box, by how much he likes you. The pause menu's Hearts page shows theirs, with their faces, on Up / Down.
+  - **Heart event** at five hearts, in the game's way: someone comes to your farm to ask for help (Eve, his brother, Ann, the other shipper), you find him (the mountain lake, the woods, the graves by the church, the town, the mountain path), a choice, and the day ends. The next morning something is left on the farm.
+  - **Festivals:** at the Flower and Harvest festivals, ask him to dance.
+  - **Proposal** with the Blue Feather at ten hearts, and **the wedding** a week later: the game's own scene, with him beside you.
+  - **Married life:** at home in the mornings and nights, on the farm by day, walking with his own poses.
+  - **Adoption:** when the game would have a child born, the Harvest Sprites bring a baby to the house.
+  - **The ending** with him in the wife's place.
+  - Their love, heart events and the wedding are kept in the diary ([the plan](docs/suitors/PLAN.md)).
 
 ## Unreleased (branch `harvest-goddess`)
 
@@ -41,7 +49,15 @@ cheats. Built on your own computer with `build.bat`.
 
 ## Sin publicar (rama `male-suitors`)
 
-- **Pretendientes hombres** (una mejora, apagada de fábrica; primer paso): cuatro hombres se pueden cortejar como a las chicas: **el fan de Eve** (el Visitor, en el bar de noche), **un carpintero**, **el papá de Ann** y **un repartidor**. Háblale a uno, o ponte frente a él con algo en las manos y presiona A para regalárselo: la primera plática y el primer regalo de cada día le suben los corazones (cada uno tiene sus favoritos, que valen mucho más; la hierba y el Poison Mushroom le bajan el cariño). Contesta en la caja de texto del propio juego, según cuánto le gustas. Sus corazones se guardan en el diario. La propuesta, la boda y la vida de casados vienen después ([el plan](docs/suitors/PLAN.es.md)).
+- **Pretendientes hombres** (una mejora, apagada de fábrica): cinco hombres se pueden cortejar como a las chicas: **el fan de Eve** (el Visitor), **un carpintero** (solo el que está junto a su casa en la montaña), **el papá de Ann** y **los dos repartidores**.
+  - **Corazones y regalos:** háblale a uno, o ponte frente a él con algo en las manos y presiona A para regalárselo; cada uno tiene sus favoritos. Contesta en la caja de texto del propio juego, según cuánto le gustas. En el menú de pausa, la página de Corazones muestra los suyos, con su cara, con Arriba / Abajo.
+  - **Evento de corazón** con cinco corazones, como en el juego: alguien llega a tu granja a pedir ayuda (Eve, su hermano, Ann, el otro repartidor), lo encuentras (el lago de la montaña, el bosque, las tumbas junto a la iglesia, el pueblo, el camino de la montaña), una pregunta, y el día termina. A la mañana siguiente hay algo en la granja.
+  - **Festivales:** en el de las Flores y el de la Cosecha, invítalo a bailar.
+  - **Propuesta** con la Pluma Azul a los diez corazones, y **la boda** una semana después: la escena del propio juego, con él a tu lado.
+  - **Vida de casados:** en casa en las mañanas y las noches, en la granja de día, caminando con sus propias poses.
+  - **Adopción:** cuando en el juego nacería un hijo, los Duendes de la Cosecha traen un bebé a la casa.
+  - **El final** con él en el lugar de la esposa.
+  - Su cariño, sus eventos y la boda se guardan en el diario ([el plan](docs/suitors/PLAN.es.md)).
 
 ## Sin publicar (rama `harvest-goddess`)
 
