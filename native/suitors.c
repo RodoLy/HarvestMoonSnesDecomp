@@ -328,7 +328,7 @@ static bool player_free(bool holding_is_fine)
          (holding_is_fine || g_ram[HM_ITEM_ON_HAND] == 0) &&
          !(state & (0x0010 | 0x0800)) &&                              /* the dog, carried */
          !(hm_rd16(g_ram, HM_FLAGS_60) & 0x0006) &&                   /* the hot spring */
-         !(hm_rd16(g_ram, HM_FLAGS_5A) & 0x4000);                     /* a box is open */
+         (hm_rd16(g_ram, HM_FLAGS_5A) & 0xC000) == 0x8000;            /* faded in, no box open */
 }
 static void player_ahead(int *x, int *y)
 {
@@ -503,9 +503,13 @@ static void event_answer(int choice)
   say(e->answer[choice]);
   E.end_day = true;
 }
+enum { SETTLE_FRAMES = 60 };                   /* a map just entered: let it be seen a moment first */
 static void event_tick(void)
 {
+  static int map_was = -1, settled;
   int map = g_ram[HM_MAP_ID];
+  if (map != map_was) { map_was = map; settled = 0; }
+  if (settled < SETTLE_FRAMES) { settled++; return; }
   /* the next morning: what came of it */
   if (E.day >= 0 && today() == E.day + 1 && E.next_day_said != today() && on_farm() && player_free(false)) {
     E.next_day_said = today();
