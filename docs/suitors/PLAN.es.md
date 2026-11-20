@@ -27,20 +27,32 @@ mal** (dibujados con la paleta de la Diosa); las formas y poses son las reales.
 
 | Quién | Sprites | Dónde | Por qué soltero |
 |---|---|---|---|
-| El fan de Eve | $269-$274 (joven de pelo corto) | el bar, mapa $1E (slot 4) | texto $120: "Good evening. I'm a fan of Eve's, you know." |
+| El fan de Eve | $269-$26F **o** $270-$274: el rango $269-$274 son **dos personas** (ver abajo); falta ver cuál está en el bar | el bar, mapa $1E (slot 4) | texto $120: "Good evening. I'm a fan of Eve's, you know." |
 | Los carpinteros (hermanos) | $25A-$264 (también cargando madera y con el martillo) | la montaña, mapa $10; su casa, mapa $2B | textos $128/$129: "We are carpenters"; viven juntos y no mencionan esposa (el juego no lo dice) |
-| El papá de Ann | sin confirmar; por su aspecto lo más probable $2D9-$2DE (bigote, camisa blanca, chaleco): de frente, de lado y caminando, de brazos cruzados, pero **sin pose de espalda** (habría que dibujarla) | la tienda de herramientas | viudo (textos $1DC, $246) |
-| El aprendiz de repartidor | sin confirmar: quizá $296-$29C (joven, pechera azul sobre camisa café; de frente, de espalda, de lado, caminando y hablando, todas), pero su ropa no es la del repartidor. $28F-$295 (bigote, chaqueta azul, bandana roja al cuello, correa cruzada) parece el repartidor mismo. Falta confirmarlo en el juego | — | texto $117/$118: "I'm a trainee of shipping too... With grit!" |
+| El papá de Ann | $296-$29C (pelo café, pechera azul): de frente, de espalda, de lado, caminando y hablando, todas | la tienda de herramientas | viudo (textos $1DC, $246) |
+| El reportero | $269-$26F (saco claro, corbata roja): todas las poses | — | el juego no le da esposa |
+| Un repartidor | $270-$274 (rubio, camisa blanca, chaleco oscuro): todas las poses. Es uno de los dos repartidores: falta ver si es el aprendiz (texto $117/$118: "I'm a trainee of shipping too... With grit!") o el jefe; el otro (rubio, con gorra) no está entre $250 y $2E1 | la granja (recoge lo enviado) | — |
+
+**Quién es quién** se comparó con los nombres de las hojas de The Spriters
+Resource (Harvest Moon, SNES: "Reporter", "Shipping Workers", "Tool Shop
+Owner", "Mayor", "Parents", "Bartender", "Fisherman"), solo mirándolas: no se
+copió nada de ellas. Así se corrigió lo de antes: $28F-$295 (bigote) es el
+**alcalde**, no el repartidor; $2D9-$2DE y $2DF-$2E1 son **los papás del
+protagonista**, no el papá de Ann; y $269-$274 no es una sola persona.
+
+**Ojo con `native/suitors.c`:** el fan de Eve está puesto como $269-$274, que
+abarca al reportero y al repartidor. Hay que dejarle solo su rango cuando se
+confirme cuál es.
 
 Primer paso acordado: **el fan de Eve y uno de los carpinteros**; luego el
-aprendiz, y el papá de Ann si se confirma su sprite.
+papá de Ann, y el reportero y el repartidor si se confirman solteros.
 
 ### Descartados
 
 - El cantinero ($285-$287): solo está dibujado de frente, detrás de la barra (limpiando un vaso); no tiene poses de espalda, de lado ni caminando, así que no podría caminar, casarse ni vivir en la granja sin dibujos nuevos.
 - El papá de Ellen ($2A4, el borracho: "hic").
-- El alcalde (papá de María): casado.
-- El pescador ($265): un señor mayor con bastón (texto $12B).
+- El alcalde ($28F-$295, el del bigote; papá de María): casado.
+- El pescador ($265-$268): solo está dibujado sentado pescando, de frente (lo que trae es una caña, no un bastón); no tiene poses de espalda, de lado ni caminando.
 - El cazador ($27D): abuelo de Eve.
 - El padre de la iglesia ($2A5); los vendedores ambulantes (no viven en el pueblo).
 
