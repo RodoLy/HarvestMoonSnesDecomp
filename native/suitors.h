@@ -13,3 +13,10 @@ bool suitors_dialog_wanted(void);            /* he was just spoken to */
 void suitors_dialog_open(void);
 bool suitors_dialog_update(const UiInput *in);   /* true: the talk is over */
 void suitors_dialog_draw(uint32_t *dst, int w);
+
+/* for the pause menu's second page of hearts (pause.c) */
+int suitors_count(void);
+const char *suitors_name(int who);
+int suitors_love(int who);                   /* 0-1000 */
+uint32_t suitors_face(int who);              /* his head's tiles in the ROM */
+bool suitors_is_husband(int who);

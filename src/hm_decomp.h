@@ -310,17 +310,18 @@ extern uint16_t g_hm_goddess_hearts, g_hm_goddess_day;
 extern uint8_t g_hm_goddess_flags;
 extern void (*g_hm_spring_offer)(uint8_t *ram, uint8_t item);
 /* g_hm_suitors_on: the men of the town who can be courted (native/suitors.c)
- * are on. Each one's word: bits 0-9 his love (0-1000, always a multiple of
- * 4), bit 10 talked to today, bit 11 given something today. g_hm_suitor_day:
- * the day those "today" bits are for (year x 120 + season x 30 + day, its
- * low byte). The diary has only six free bytes for them, so SaveGameSlot /
- * LoadGameSlot keep each love as one byte (love / 4) in +1C-+1F, the
- * "today" bits of all four in +2C, the day in +1B; +2D is kept for the
- * wedding; +5F = $5C. */
-enum { HM_SUITORS = 4 };
+ * are on. g_hm_suitor: each one's love, 0-1000 in steps of 4 (the rest of
+ * the word is the host's, for the day: not saved). g_hm_suitor_events: bit
+ * n, suitor n's heart event is over. g_hm_suitor_wed: bits 0-2 who is the
+ * husband or the fiance (suitor + 1, 0 nobody), bit 3 engaged, bit 4
+ * married, bits 5-7 the nights left until the wedding. The diary keeps them
+ * in its free bytes (SaveGameSlot / LoadGameSlot): each love / 4 in
+ * +1B-+1F, the events in +2C, the wedding in +2D, with +5F = $5D. Nothing
+ * of the day is kept: the diary is written at night, the day is over. */
+enum { HM_SUITORS = 5 };
 extern int g_hm_suitors_on;
 extern uint16_t g_hm_suitor[HM_SUITORS];
-extern uint8_t g_hm_suitor_day;
+extern uint8_t g_hm_suitor_events, g_hm_suitor_wed;
 /* g_hm_feather_used: called when the Blue Feather is used (shown), by
  * ToolUsedBlueFeather (toolused.c), after the game's own work: the native
  * build's goddess takes it as a proposal at her pond. */

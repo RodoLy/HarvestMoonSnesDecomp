@@ -21,9 +21,8 @@
  *   (+1B-+2D and +52-+5F: unused. The native build's "one seed at a
  *   time" keeps its seeds in +20 = $5E and +21-+25, its crop bag in
  *   +52-+5A, with +5B = $BA; the wife's help, the last day she helps,
- *   in +5C-+5D, with +5E = $A7. Its suitors: the day in +1B, each one's
- *   love / 4 in +1C-+1F, their "today" bits in +2C, +2D kept for the
- *   wedding, with +5F = $5C.)
+ *   in +5C-+5D, with +5E = $A7. Its suitors: each one's love / 4 in
+ *   +1B-+1F, their heart events in +2C, the wedding in +2D, with +5F = $5D.)
  *
  * The checksum is the 16-bit sum of the slot's 2048 words, taken with +2E
  * and +2F-+30 at 0.
@@ -41,12 +40,11 @@
 #define WIFE_MARK     0xA7
 #define GODDESS_AT    0x26        /* the native build's goddess: +26-+27 hearts, +28-+29 day, +2A flags, +2B = $D9 */
 #define GODDESS_MARK  0xD9
-#define SUITORS_DAY_AT  0x1B      /* the native build's suitors: +1B the day, */
-#define SUITORS_LOVE_AT 0x1C      /* +1C-+1F each one's love / 4, */
-#define SUITORS_TODAY_AT 0x2C     /* +2C their "today" bits (two each), */
-#define SUITORS_MARK_AT 0x5F      /* +5F = $5C ($5B: the first, three-suitor layout, not read) */
-#define SUITORS_MARK    0x5C
-#define SUITOR_TODAY    0x0C00    /* g_hm_suitor: talked to, given something (bits 10, 11) */
+#define SUITORS_LOVE_AT 0x1B      /* the native build's suitors: +1B-+1F each one's love / 4, */
+#define SUITORS_EVENTS_AT 0x2C    /* +2C their heart events, */
+#define SUITORS_WED_AT  0x2D      /* +2D the wedding, */
+#define SUITORS_MARK_AT 0x5F      /* +5F = $5D (earlier layouts, $5B and $5C, are not read) */
+#define SUITORS_MARK    0x5D
 #define BAG_MARK      0xBA
 #define SLOT_2        0x701000    /* SRAM: the second slot */
 
@@ -310,13 +308,10 @@ void hm_SaveGameSlot(uint8_t *ram, HmRegs *r)
     sram_w8(ram, r, GODDESS_AT + 5, GODDESS_MARK);
   }
   if (g_hm_suitors_on) {                              /* the native build's suitors */
-    uint8_t today = 0;
-    sram_w8(ram, r, SUITORS_DAY_AT, g_hm_suitor_day);
-    for (int i = 0; i < HM_SUITORS; i++) {
+    for (int i = 0; i < HM_SUITORS; i++)
       sram_w8(ram, r, (uint16_t)(SUITORS_LOVE_AT + i), (uint8_t)((g_hm_suitor[i] & 0x3FF) / 4));
-      today |= (uint8_t)(((g_hm_suitor[i] & SUITOR_TODAY) >> 10) << (2 * i));
-    }
-    sram_w8(ram, r, SUITORS_TODAY_AT, today);
+    sram_w8(ram, r, SUITORS_EVENTS_AT, g_hm_suitor_events);
+    sram_w8(ram, r, SUITORS_WED_AT, g_hm_suitor_wed);
     sram_w8(ram, r, SUITORS_MARK_AT, SUITORS_MARK);
   }
   if (g_hm_wife_on) {                                 /* the native build's wife's help */
@@ -537,10 +532,9 @@ void hm_LoadGameSlot(uint8_t *ram, HmRegs *r)
   if (g_hm_suitors_on) {                              /* the native build's suitors */
 #define SB(at) hm_bus_rd8(ram, hm_dp_long(ram, r, SLOT_PTR, (uint16_t)(at)))
     bool marked = SB(SUITORS_MARK_AT) == SUITORS_MARK;
-    g_hm_suitor_day = marked ? SB(SUITORS_DAY_AT) : 0;
-    uint8_t today = marked ? SB(SUITORS_TODAY_AT) : 0;
-    for (int i = 0; i < HM_SUITORS; i++)
-      g_hm_suitor[i] = marked ? (uint16_t)(SB(SUITORS_LOVE_AT + i) * 4 | ((today >> (2 * i)) & 3) << 10) : 0;
+    for (int i = 0; i < HM_SUITORS; i++) g_hm_suitor[i] = marked ? (uint16_t)(SB(SUITORS_LOVE_AT + i) * 4) : 0;
+    g_hm_suitor_events = marked ? SB(SUITORS_EVENTS_AT) : 0;
+    g_hm_suitor_wed = marked ? SB(SUITORS_WED_AT) : 0;
 #undef SB
   }
   if (g_hm_wife_on) {                                 /* the native build's wife's help */
@@ -615,7 +609,7 @@ void hm_NewGameSetup(uint8_t *ram, HmRegs *r)
   memset(g_hm_bag, 0, sizeof g_hm_bag);                 /* and crop bag */
   g_hm_wife_until = 0;                                  /* and the wife's help */
   g_hm_goddess_hearts = g_hm_goddess_day = 0; g_hm_goddess_flags = 0;   /* and the goddess */
-  memset(g_hm_suitor, 0, sizeof g_hm_suitor); g_hm_suitor_day = 0;     /* and the suitors */
+  memset(g_hm_suitor, 0, sizeof g_hm_suitor); g_hm_suitor_events = g_hm_suitor_wed = 0;   /* and the suitors */
   for (unsigned i = 0; i < sizeof FIELDS / sizeof FIELDS[0]; i++) {
     const Field *f = &FIELDS[i];
     uint32_t to = f->data_bank ? db_addr(r, (uint16_t)f->from) : f->from;

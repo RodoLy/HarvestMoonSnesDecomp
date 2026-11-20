@@ -129,7 +129,7 @@ uint8_t g_hm_goddess_flags;
 void (*g_hm_spring_offer)(uint8_t *ram, uint8_t item);
 int g_hm_suitors_on;
 uint16_t g_hm_suitor[HM_SUITORS];
-uint8_t g_hm_suitor_day;
+uint8_t g_hm_suitor_events, g_hm_suitor_wed;
 void (*g_hm_feather_used)(void);
 bool (*g_hm_script_text)(uint8_t *ram, uint16_t text);
 void (*g_hm_slot_picture)(uint8_t *ram, uint32_t slot);
