@@ -30,7 +30,7 @@ mal** (dibujados con la paleta de la Diosa); las formas y poses son las reales.
 | El fan de Eve | $269-$274 (joven de pelo corto) | el bar, mapa $1E (slot 4) | texto $120: "Good evening. I'm a fan of Eve's, you know." |
 | Los carpinteros (hermanos) | $25A-$264 (también cargando madera y con el martillo) | la montaña, mapa $10; su casa, mapa $2B | textos $128/$129: "We are carpenters"; viven juntos y no mencionan esposa (el juego no lo dice) |
 | El papá de Ann | sin confirmar; por su aspecto lo más probable $2D9-$2DE (bigote, camisa blanca, chaleco): de frente, de lado y caminando, de brazos cruzados, pero **sin pose de espalda** (habría que dibujarla) | la tienda de herramientas | viudo (textos $1DC, $246) |
-| El aprendiz de repartidor | por su aspecto $296-$29C (joven con la camisa azul del repartidor, sin bigote): de frente, de espalda, de lado, caminando y hablando, todas. $28F-$295, el del bigote, lo más probable es que sea el repartidor mismo | — | texto $117/$118: "I'm a trainee of shipping too... With grit!" |
+| El aprendiz de repartidor | sin confirmar: quizá $296-$29C (joven, pechera azul sobre camisa café; de frente, de espalda, de lado, caminando y hablando, todas), pero su ropa no es la del repartidor. $28F-$295 (bigote, chaqueta azul, bandana roja al cuello, correa cruzada) parece el repartidor mismo. Falta confirmarlo en el juego | — | texto $117/$118: "I'm a trainee of shipping too... With grit!" |
 
 Primer paso acordado: **el fan de Eve y uno de los carpinteros**; luego el
 aprendiz, y el papá de Ann si se confirma su sprite.

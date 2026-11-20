@@ -29,7 +29,7 @@ from RAM dumps on every map at 11:00 and 19:00).
 | Eve's fan | $269-$274 (young man, short hair) | the bar, map $1E (slot 4) | text $120: "Good evening. I'm a fan of Eve's, you know." |
 | The carpenters (brothers) | $25A-$264 (also carrying wood, with the hammer) | the mountain, map $10; their house, map $2B | texts $128/$129: "We are carpenters"; live together, no wife mentioned (the game never says) |
 | Ann's father | not confirmed yet; by his look most likely $2D9-$2DE (moustache, white shirt, vest): front, side and walking, arms crossed, but **no back pose** (it would have to be drawn) | the tool shop | a widower (texts $1DC, $246) |
-| The shipping trainee | by his look $296-$29C (young man in the shipper's blue shirt, no moustache): front, back, side, walking and talking, all of them. $28F-$295, with the moustache, is most likely the shipper himself | — | text $117/$118: "I'm a trainee of shipping too... With grit!" |
+| The shipping trainee | not confirmed: maybe $296-$29C (young, blue bib over a brown shirt; front, back, side, walking and talking, all of them), but his clothes are not the shipper's. $28F-$295 (moustache, blue jacket, red bandana at the neck, a strap across) looks like the shipper himself. To confirm in the game | — | text $117/$118: "I'm a trainee of shipping too... With grit!" |
 
 The first step agreed: **Eve's fan and one of the carpenters**, then the
 trainee, and Ann's father if his sprite is confirmed.
