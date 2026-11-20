@@ -967,8 +967,8 @@ static void married_tick(void)
  * that routine only, Maria's bit and love are lent to him (as goddess.c
  * does for the Goddess). The nights until the wedding are counted here
  * too. When the child "is born" ($7F1F6E bit $10, the days the wife would
- * be in bed), there is no bed: the bit is cleared and, the next time the
- * player is home, the Harvest Sprites bring the baby. */
+ * be in bed), there is no bed: the next time the player is home, the
+ * Harvest Sprites bring the baby, and only then the bit is cleared. */
 enum { BIRTH_DAYS = 0x0010, ELF_FRONT = 0x309, BABY_SPRITE = 0x300, MOST_GIRL_LOVE = 999 };
 static void (*s_prev_night)(uint8_t *ram, bool done);
 static bool s_lent_for_night;
@@ -995,10 +995,8 @@ static void suitors_night(uint8_t *ram, bool done)
     if ((hm_rd16(ram, HM_FLAGS_6E) & 0x000C) != s_children_before) s_talk_of_child = true;   /* a child on its way */
     hm_wr16(ram, HM_FLAGS_66, (uint16_t)(hm_rd16(ram, HM_FLAGS_66) & ~LENT_WIFE));
     hm_wr16(ram, HM_HEARTS_BASE, s_marias_love);
-    if (hm_rd16(ram, HM_FLAGS_6E) & BIRTH_DAYS) {    /* a child: adopted, not born */
-      hm_wr16(ram, HM_FLAGS_6E, (uint16_t)(hm_rd16(ram, HM_FLAGS_6E) & ~BIRTH_DAYS));
-      s_adoption_due = true;
-    }
+    if (hm_rd16(ram, HM_FLAGS_6E) & BIRTH_DAYS) s_adoption_due = true;   /* a child: adopted, not born (the bit stays,
+                                                     * kept in the diary, until the Harvest Sprites have come) */
   }
 }
 /* As the original's birth (watched in a test: the largest house, the
@@ -1022,10 +1020,7 @@ static void adoption_tick(void)
 {
   int who = husband();
   if (who < 0) { s_adoption_due = s_talk_of_child = false; A.stage = 0; return; }
-  if (hm_rd16(g_ram, HM_FLAGS_6E) & BIRTH_DAYS) {   /* a birth the night did not see (a loaded diary) */
-    hm_wr16(g_ram, HM_FLAGS_6E, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_6E) & ~BIRTH_DAYS));
-    s_adoption_due = true;
-  }
+  if (hm_rd16(g_ram, HM_FLAGS_6E) & BIRTH_DAYS) s_adoption_due = true;   /* also from a loaded diary */
   if (s_talk_of_child && (on_farm() || in_house()) && player_free(false) && !A.stage) {
     s_talk_of_child = false;
     say("I've been thinking... This house is big enough now, and there's so much love in it. What if we gave a home to a child who has none?");
@@ -1069,6 +1064,7 @@ static void adoption_tick(void)
     sprites_at(-HOP_IN + (int)(A.frames / 2));
     if (A.frames / 2 < HOP_IN) return;
     take_away(VISITOR_SLOT); take_away(HELPER_SLOT);
+    hm_wr16(g_ram, HM_FLAGS_6E, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_6E) & ~BIRTH_DAYS));   /* done */
     s_adoption_due = false;
     A.stage = 0;
     return;
