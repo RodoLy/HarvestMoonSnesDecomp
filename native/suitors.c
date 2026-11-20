@@ -237,6 +237,21 @@ static const Suitor kSuitors[HM_SUITORS] = {
       "There's a crate by your door with a big drawing of you on it, and the words: \"My hero. Never give up!\"" } },
 };
 
+/* At the festivals, before the dance: what each says (the Flower Festival,
+ * the Harvest Festival), as the town's people have their festival lines. */
+static const char *const kFestival[HM_SUITORS][2] = {
+  { "Eve's singing tonight too, but I wanted to see the flowers. And you.",
+    "Harvest time! I wrote a little song about pumpkins. Don't laugh." },
+  { "We built the stage last night. Don't jump on it too hard.",
+    "Good harvest this year? Then the barn I'll build you next will be full." },
+  { "My wife loved this festival. Ann's wearing her ribbon today.",
+    "Ann made the stew this year. Try it, then tell her it's better than mine." },
+  { "No shipping today! Even I get a day off for the flowers.",
+    "All the crops of the valley went through my hands this year. Yours were the best." },
+  { "My boss said I could come! I've never seen so many flowers.",
+    "I carried all the pumpkins up here by myself. Never give up!" },
+};
+
 /* ── What they say ──────────────────────────────────────────────────────
  * Wrapped to the box's width, a page each say(); the box opens at the end
  * of the frame. A question may follow the pages: two answers on the
@@ -419,6 +434,10 @@ static void show(int number, int sprite, bool flip)
   if (slot16(at, SLOT_SPRITE) == sprite && !!(g_ram[at + SLOT_ANIMATION] & 0x40) == flip) return;
   set16(at, SLOT_SPRITE, sprite);
   g_ram[at + SLOT_ANIMATION] = (uint8_t)((g_ram[at + SLOT_ANIMATION] & ~0x40) | (flip ? 0x40 : 0));
+  if (g_ram[at + SLOT_FLAGS] & 0x02) {              /* not on screen yet: it is made with this picture */
+    set16(at, SLOT_LAST_SPRITE, sprite);
+    return;
+  }
   g_ram[at + SLOT_FLAGS] |= 0x04;                   /* the picture changed */
 }
 
@@ -550,15 +569,35 @@ static void event_answer(int choice)
   E.end_day = true;
 }
 enum { SETTLE_FRAMES = 60 };                   /* a map just entered: let it be seen a moment first */
+/* The player held still while someone walks up, as the game's own scenes
+ * hold him (Event_DisablePlayerControl: game state bit $4000 off, the
+ * script's buttons and wait cleared); everybody else keeps moving. Given
+ * back only if it was ours to give. (Not the input state 2: that is "a
+ * text box is waiting", and it stops every person on the map.) */
+static bool s_holding;
+static void hold_player(void)
+{
+  if (!s_holding && !(hm_rd16(g_ram, HM_GAME_STATE) & 0x4000)) return;   /* a scene of the game's holds him */
+  s_holding = true;
+  hm_wr16(g_ram, HM_GAME_STATE, (uint16_t)(hm_rd16(g_ram, HM_GAME_STATE) & ~0x4000));
+  hm_wr16(g_ram, HM_SCRIPT_BUTTONS, 0);
+  hm_wr16(g_ram, HM_WAIT_FRAMES, 0);
+}
+static void release_player(void)
+{
+  if (!s_holding) return;
+  s_holding = false;
+  hm_wr16(g_ram, HM_GAME_STATE, (uint16_t)(hm_rd16(g_ram, HM_GAME_STATE) | 0x4000));
+}
 /* As the game's own visits (the farm's map events, src/mapevents.c: at
  * 6:00:00 on a visitor day; watched in a test with Maria's): the time
  * stands still indoors, so the first step out of the house in the morning
- * is at 6:00:00; the game holds the player at the door (its input state
- * $019A = 2, as during its own scenes) and whoever comes walks up the
+ * is at 6:00:00; the player is held at the door (hold_player) and
+ * whoever comes walks up the
  * stone path from below the screen, about a pixel a frame, stops 16
  * pixels in front, and talks; then walks back the way they came. Walking: two frames each way, the back
  * ones (front + 2) going up, the front ones going down. */
-enum { MESSENGER_FROM = 112, MESSENGER_STOP = 16, MESSENGER_STEP = 8, MESSENGER_WAIT = 180, HELD_INPUT = 2 };
+enum { MESSENGER_FROM = 112, MESSENGER_STOP = 16, MESSENGER_STEP = 8, MESSENGER_WAIT = 180 };
 static struct { int x, y, to_y, frames; bool going, gone; } M;
 static void messenger_show(bool up)
 {
@@ -578,7 +617,7 @@ static void event_tick(void)
       !bad_weather() && !special_day() && E.day != today() && visitor_day() &&
       g_ram[HM_HOUR] == 6 && g_ram[HM_MINUTES] == 0) {
     int who = event_due();
-    if (who >= 0) { E.who = who; E.state = EV_ARRIVING; E.day = today(); E.end_day = false; memset(&M, 0, sizeof M); g_ram[HM_INPUT_STATE] = HELD_INPUT; }
+    if (who >= 0) { E.who = who; E.state = EV_ARRIVING; E.day = today(); E.end_day = false; memset(&M, 0, sizeof M); hold_player(); }
   }
   if (settled < SETTLE_FRAMES && E.state != EV_ARRIVING) { settled++; return; }
   if (settled < SETTLE_FRAMES) settled++;
@@ -591,17 +630,17 @@ static void event_tick(void)
   case EV_NONE:
     return;
   case EV_ARRIVING:                                  /* they come walking up the path */
-    if (!on_farm()) { E.state = EV_NONE; E.day = -1; return; }
+    if (!on_farm()) { release_player(); E.state = EV_NONE; E.day = -1; return; }
     /* (the player keeps facing the way he came out: down the path) */
     if (!M.going) {
-      g_ram[HM_INPUT_STATE] = HELD_INPUT;           /* the player waits at the door */
+      hold_player();                                 /* the player waits at the door */
       if (settled < SETTLE_FRAMES || !(hm_rd16(g_ram, HM_FLAGS_5A) & 0x8000)) return;   /* until the farm is all in */
       for (int n = 1; n < HUSBAND_SLOT; n++)         /* a visit of the game's own this morning (its people: */
         if (g_ram[SLOT_AT(n)] && !ours(SLOT_AT(n))) {   /* the first slots): ours another day */
-          g_ram[HM_INPUT_STATE] = 1; E.state = EV_NONE; E.day = -1; return;
+          release_player(); E.state = EV_NONE; E.day = -1; return;
         }
       if (g_ram[SLOT_AT(VISITOR_SLOT)]) {            /* taken: never keep the player waiting for long */
-        if (++M.frames > MESSENGER_WAIT) { g_ram[HM_INPUT_STATE] = 1; E.state = EV_NONE; E.day = -1; }
+        if (++M.frames > MESSENGER_WAIT) { release_player(); E.state = EV_NONE; E.day = -1; }
         return;
       }
       M.x = hm_rd16(g_ram, HM_PLAYER_X);
@@ -613,11 +652,11 @@ static void event_tick(void)
       return;
     }
     M.to_y = hm_rd16(g_ram, HM_PLAYER_Y) + MESSENGER_STOP;
-    g_ram[HM_INPUT_STATE] = HELD_INPUT;
+    hold_player();
     if (M.y > M.to_y) { M.y--; M.frames++; messenger_show(true); return; }
     show(VISITOR_SLOT, kSuitors[E.who].event.messenger, false);   /* there: facing the player */
     say(kSuitors[E.who].event.call);
-    g_ram[HM_INPUT_STATE] = 1;                       /* the box holds the game now; then the player is free */
+    release_player();                              /* the box holds the game now; then the player is free */
     E.state = EV_CALLED;
     M.frames = 0;
     return;
@@ -1042,17 +1081,17 @@ static void adoption_tick(void)
     put(HELPER_SLOT, ELF_FRONT, true, A.x + 14, A.y);
     put(BABY_SLOT, BABY_SPRITE, false, A.x, A.y);
     sprites_at(0);
-    g_ram[HM_INPUT_STATE] = HELD_INPUT;             /* the player waits, as in the game's scenes */
+    hold_player();                                 /* the player waits, as in the game's scenes */
     A.stage = 1;
     return;
   case 1:                                            /* hopping in */
-    g_ram[HM_INPUT_STATE] = HELD_INPUT;
+    hold_player();
     A.frames++;
     sprites_at(-(int)(A.frames / 2 < HOP_IN ? A.frames / 2 : HOP_IN));
     if (A.frames / 2 < HOP_IN) return;
     say("Knock, knock! The Harvest Sprites come in, holding something wrapped in leaves.");
     say("\"We heard there's a farm here with a lot of love and no baby. This little one has no family. Will you take care of it?\"");
-    g_ram[HM_INPUT_STATE] = 1;
+    release_player();
     A.stage = 2;
     return;
   case 2:
@@ -1131,7 +1170,10 @@ uint16_t suitors_pad(uint16_t pad)
   uint8_t it = g_ram[HM_ITEM_ON_HAND];
   if (holding && it) give(who, it);
   else if (holding) return pad;
-  else if (festival_map() && s_danced_day != today()) ask_to_dance(who, slot);
+  else if (festival_map() && !(g_hm_suitor[who] & TALKED)) {   /* the festival: his line for it */
+    say(kFestival[who][g_ram[HM_MAP_ID] == HARVEST_FESTIVAL]);
+    g_hm_suitor[who] |= TALKED; add_love(who, TALK_LOVE);
+  }
   else talk(who);
   hold = true;
   return (uint16_t)(pad & ~B_A);
