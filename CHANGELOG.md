@@ -4,7 +4,7 @@
 
 ## Unreleased (branch `male-suitors`)
 
-- **Male suitors** (an improvement, off by default; first step): **Eve's fan**, the young man in the bar, can be courted as the girls are. Talk to him, or hold something in front of him and press A to give it: the first talk and the first gift of the day raise his hearts (his favourites, Wild Grapes, Fish and Cake, much more; weeds and the Poison Mushroom take love away). He answers in the game's own text box, by how much he likes you. His hearts are kept in the diary. The proposal, the wedding and married life come next ([the plan](docs/suitors/PLAN.md)).
+- **Male suitors** (an improvement, off by default; first step): four men can be courted as the girls are: **Eve's fan** (the Visitor, in the bar at night), **a carpenter**, **Ann's father** and **a shipping worker**. Talk to one, or hold something in front of him and press A to give it: the first talk and the first gift of the day raise his hearts (each has his favourites, worth much more; weeds and the Poison Mushroom take love away). He answers in the game's own text box, by how much he likes you. Their hearts are kept in the diary. The proposal, the wedding and married life come next ([the plan](docs/suitors/PLAN.md)).
 
 ## Unreleased (branch `harvest-goddess`)
 
@@ -41,7 +41,7 @@ cheats. Built on your own computer with `build.bat`.
 
 ## Sin publicar (rama `male-suitors`)
 
-- **Pretendientes hombres** (una mejora, apagada de fábrica; primer paso): **el fan de Eve**, el joven del bar, se puede cortejar como a las chicas. Háblale, o ponte frente a él con algo en las manos y presiona A para regalárselo: la primera plática y el primer regalo de cada día le suben los corazones (sus favoritos, Wild Grapes, Fish y Cake, mucho más; la hierba y el Poison Mushroom le bajan el cariño). Contesta en la caja de texto del propio juego, según cuánto le gustas. Sus corazones se guardan en el diario. La propuesta, la boda y la vida de casados vienen después ([el plan](docs/suitors/PLAN.es.md)).
+- **Pretendientes hombres** (una mejora, apagada de fábrica; primer paso): cuatro hombres se pueden cortejar como a las chicas: **el fan de Eve** (el Visitor, en el bar de noche), **un carpintero**, **el papá de Ann** y **un repartidor**. Háblale a uno, o ponte frente a él con algo en las manos y presiona A para regalárselo: la primera plática y el primer regalo de cada día le suben los corazones (cada uno tiene sus favoritos, que valen mucho más; la hierba y el Poison Mushroom le bajan el cariño). Contesta en la caja de texto del propio juego, según cuánto le gustas. Sus corazones se guardan en el diario. La propuesta, la boda y la vida de casados vienen después ([el plan](docs/suitors/PLAN.es.md)).
 
 ## Sin publicar (rama `harvest-goddess`)
 

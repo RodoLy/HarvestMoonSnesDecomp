@@ -7,11 +7,19 @@ Cosecha (`native/goddess.c`): hombres solteros del pueblo a los que el
 jugador puede cortejar y con los que se puede casar, igual que con las
 chicas.
 
-**Hecho hasta ahora:** el paso 1 (corazones y regalos) para el fan de Eve,
-en `native/suitors.c`, con su propia opción (`MaleSuitors` en `config.ini`,
-"Pretendientes hombres" en el lanzador). Compila, pero **todavía no se ha
-probado en el juego**: la primera prueba es ir al bar de noche, hablarle y
-regalarle algo (ver "Para probarlo" al final).
+**Hecho hasta ahora:** el paso 1 (corazones y regalos) para cuatro: el fan
+de Eve (el Visitor), un carpintero, el papá de Ann y el repartidor de
+chaleco, en `native/suitors.c`, con su propia opción (`MaleSuitors` en
+`config.ini`, "Pretendientes hombres" en el lanzador). El diario guarda a
+los cuatro (su cariño / 4, un byte cada uno; ver `src/save.c`). Compila,
+pero **todavía no se ha probado en el juego** (ver "Para probarlo" al final).
+
+| Quién | Le encanta | No le gusta |
+|---|---|---|
+| El fan de Eve (el Visitor) | Wild Grapes, Fish, Cake | la hierba, Poison Mushroom |
+| Un carpintero | Large Milk, Corn, Mushroom | Flower, los perfumes, Poison Mushroom |
+| El papá de Ann | Potato, Egg, Herb | la hierba, Poison Mushroom |
+| El repartidor de chaleco | Tomato, Tropical Fruit, Large Milk | la hierba, Poison Mushroom |
 
 ## Lo que se encontró
 
@@ -85,15 +93,15 @@ RodoLy/HarvestMoonSnesDecomp y pide que primero lea `docs/suitors/PLAN.es.md`.
 ## Para probarlo
 
 1. Activa "Pretendientes hombres" en las mejoras del lanzador.
-2. Ve al bar de noche. Presiona A frente al fan de Eve: su frase sale en
-   la caja de texto del juego (ya no su "I'm a fan of Eve's").
-3. Recoge unas Wild Grapes, un Fish o un Cake y presiona A frente a él: se
-   va de tus manos y se pone muy contento. Un segundo regalo el mismo día
-   se queda en tus manos.
-4. Guarda y carga: su cariño se conserva (todavía no tiene fila de
+2. Presiona A frente a cada uno: el fan de Eve (el bar, de noche), el
+   carpintero (la montaña), el papá de Ann (la tienda de herramientas) y el
+   repartidor de chaleco (el bar, de noche). Su frase sale en la caja de
+   texto del juego, en lugar de la suya de siempre.
+3. Recoge uno de sus favoritos (la tabla de arriba) y presiona A frente a
+   él: se va de tus manos y se pone muy contento. Un segundo regalo el mismo
+   día se queda en tus manos.
+4. Guarda y carga: su cariño se conserva (todavía no tienen fila de
    corazones en el menú de pausa; se puede agregar después, con su cara).
 
-Si A frente a él no hace nada distinto, sus números de sprite o el número
-de mapa del bar ($1E) no son los que se leyeron de los volcados de RAM:
-están al principio de `native/suitors.c` (`kSuitors`).
-
+Si A frente a alguno no hace nada distinto, sus números de sprite no son
+los que dice aquí: están al principio de `native/suitors.c` (`kSuitors`).
