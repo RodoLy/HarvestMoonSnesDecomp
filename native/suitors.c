@@ -424,7 +424,9 @@ static void show(int number, int sprite, bool flip)
 
 /* Our slots: the game's own people use the first ones on each map; the
  * wife's is $13 (goddess.c), the children's $14 and $15. */
-enum { HUSBAND_SLOT = 0x13, VISITOR_SLOT = 0x18, HELPER_SLOT = 0x19, BABY_SLOT = 0x1A,   /* the dog takes $16 */ GUEST_SLOT = 0x1B };   /* guests: $1B-$1F */
+/* the dog takes $16; the Goddess (goddess.c) her imp $17 and her sparkles $18;
+ * the festival guests $1B-$1F are only on the festival maps */
+enum { HUSBAND_SLOT = 0x13, VISITOR_SLOT = 0x1C, HELPER_SLOT = 0x1D, BABY_SLOT = 0x1E, GUEST_SLOT = 0x1B };
 
 /* ── 2. Talking and gifts ─────────────────────────────────────────────── */
 static bool listed(const uint8_t *list, int n, uint8_t item)
@@ -556,7 +558,7 @@ enum { SETTLE_FRAMES = 60 };                   /* a map just entered: let it be 
  * stone path from below the screen, about a pixel a frame, stops 16
  * pixels in front, and talks; then walks back the way they came. Walking: two frames each way, the back
  * ones (front + 2) going up, the front ones going down. */
-enum { MESSENGER_FROM = 112, MESSENGER_STOP = 16, MESSENGER_STEP = 8, HELD_INPUT = 2 };
+enum { MESSENGER_FROM = 112, MESSENGER_STOP = 16, MESSENGER_STEP = 8, MESSENGER_WAIT = 180, HELD_INPUT = 2 };
 static struct { int x, y, to_y, frames; bool going, gone; } M;
 static void messenger_show(bool up)
 {
@@ -594,11 +596,14 @@ static void event_tick(void)
     if (!M.going) {
       g_ram[HM_INPUT_STATE] = HELD_INPUT;           /* the player waits at the door */
       if (settled < SETTLE_FRAMES || !(hm_rd16(g_ram, HM_FLAGS_5A) & 0x8000)) return;   /* until the farm is all in */
-      for (int n = 1; n < SLOT_COUNT; n++)           /* a visit of the game's own this morning: ours another day */
-        if (g_ram[SLOT_AT(n)] && n != 0x16 && !ours(SLOT_AT(n))) {
+      for (int n = 1; n < HUSBAND_SLOT; n++)         /* a visit of the game's own this morning (its people: */
+        if (g_ram[SLOT_AT(n)] && !ours(SLOT_AT(n))) {   /* the first slots): ours another day */
           g_ram[HM_INPUT_STATE] = 1; E.state = EV_NONE; E.day = -1; return;
         }
-      if (g_ram[SLOT_AT(VISITOR_SLOT)]) return;
+      if (g_ram[SLOT_AT(VISITOR_SLOT)]) {            /* taken: never keep the player waiting for long */
+        if (++M.frames > MESSENGER_WAIT) { g_ram[HM_INPUT_STATE] = 1; E.state = EV_NONE; E.day = -1; }
+        return;
+      }
       M.x = hm_rd16(g_ram, HM_PLAYER_X);
       M.y = hm_rd16(g_ram, HM_PLAYER_Y) + MESSENGER_FROM;
       M.to_y = hm_rd16(g_ram, HM_PLAYER_Y) + MESSENGER_STOP;
