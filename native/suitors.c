@@ -519,18 +519,20 @@ static int suitor_in_front(int *slot)
  * night comes, as when the player goes to bed). The next morning there is
  * something on the farm. Once each: g_hm_suitor_events. */
 enum { CALL_FROM = 6, CALL_TO = 12 };          /* the morning: the hours someone may come */
-/* where the player comes out of the house, on the farm (walked out in a test:
- * the door is above, the stepping stones below); whoever comes waits beside
- * them, to the right, and talks as soon as the player is out */
-static const int kOutX = 136, kOutY = 360, kWaitX = 168, kWaitY = 376;
 static struct {
-  enum { EV_NONE, EV_CALLING, EV_CALLED, EV_FOUND, EV_OVER } state;
+  enum { EV_NONE, EV_ARRIVING, EV_CALLED, EV_FOUND, EV_OVER } state;
   int who;
   int day;                                     /* the day it happened (the next one says what came of it) */
   int next_day_said;                           /* that day's line was said */
   bool end_day;                                /* the day ends once the box is closed */
 } E = { EV_NONE, -1, -1, -1, false };
 
+/* the game's visitor days (mapevents.c, visitor_day): 2-7, 13-17, 25-28 */
+static bool visitor_day(void)
+{
+  int d = g_ram[HM_DAY];
+  return (d >= 2 && d <= 7) || (d >= 13 && d <= 17) || (d >= 25 && d <= 28);
+}
 static int event_due(void)
 {
   if (husband() >= 0 || (g_hm_suitor_wed & WED_ENGAGED)) return -1;
@@ -546,38 +548,83 @@ static void event_answer(int choice)
   E.end_day = true;
 }
 enum { SETTLE_FRAMES = 60 };                   /* a map just entered: let it be seen a moment first */
+/* As the game's own visits (the farm's map events, src/mapevents.c: at
+ * 6:00:00 on a visitor day; watched in a test with Maria's): the time
+ * stands still indoors, so the first step out of the house in the morning
+ * is at 6:00:00; the game holds the player at the door (its input state
+ * $019A = 2, as during its own scenes) and whoever comes walks up the
+ * stone path from below the screen, about a pixel a frame, stops 16
+ * pixels in front, and talks; then walks back the way they came. Walking: two frames each way, the back
+ * ones (front + 2) going up, the front ones going down. */
+enum { MESSENGER_FROM = 112, MESSENGER_STOP = 16, MESSENGER_STEP = 8, HELD_INPUT = 2 };
+static struct { int x, y, to_y, frames; bool going, gone; } M;
+static void messenger_show(bool up)
+{
+  int front = kSuitors[E.who].event.messenger;
+  show(VISITOR_SLOT, front + (up ? 2 : 0) + (M.frames / MESSENGER_STEP) % 2, false);
+  set16(SLOT_AT(VISITOR_SLOT), SLOT_X, M.x);
+  set16(SLOT_AT(VISITOR_SLOT), SLOT_Y, M.y);
+}
+static bool player_held(void) { return E.state == EV_ARRIVING; }
 static void event_tick(void)
 {
-  static int map_was = -1, settled;
+  static int map_was = -1, came_from = -1, settled;
   int map = g_ram[HM_MAP_ID];
-  if (map != map_was) { map_was = map; settled = 0; }
-  if (settled < SETTLE_FRAMES) { settled++; return; }
+  if (map != map_was) { came_from = map_was; map_was = map; settled = 0; }
+  /* out of the house, onto the farm, on a morning someone is coming: hold the player at once */
+  if (E.state == EV_NONE && on_farm() && came_from >= 0x15 && came_from <= 0x17 && settled == 0 &&
+      !bad_weather() && !special_day() && E.day != today() && visitor_day() &&
+      g_ram[HM_HOUR] == 6 && g_ram[HM_MINUTES] == 0) {
+    int who = event_due();
+    if (who >= 0) { E.who = who; E.state = EV_ARRIVING; E.day = today(); E.end_day = false; memset(&M, 0, sizeof M); g_ram[HM_INPUT_STATE] = HELD_INPUT; }
+  }
+  if (settled < SETTLE_FRAMES && E.state != EV_ARRIVING) { settled++; return; }
+  if (settled < SETTLE_FRAMES) settled++;
   /* the next morning: what came of it */
   if (E.day >= 0 && today() == E.day + 1 && E.next_day_said != today() && on_farm() && player_free(false)) {
     E.next_day_said = today();
     say(kSuitors[E.who >= 0 ? E.who : 0].event.next_day);
   }
   switch (E.state) {
-  case EV_NONE: {
-    if (!on_farm() || bad_weather() || special_day() || E.day == today()) return;
-    if (g_ram[HM_HOUR] < CALL_FROM || g_ram[HM_HOUR] >= CALL_TO || !player_free(true)) return;
-    int who = event_due();
-    if (who < 0 || g_ram[SLOT_AT(VISITOR_SLOT)]) return;
-    E.who = who; E.state = EV_CALLING; E.day = today(); E.end_day = false;
-    put(VISITOR_SLOT, kSuitors[who].event.messenger, false, kWaitX, kWaitY);
+  case EV_NONE:
     return;
-  }
-  case EV_CALLING:                                   /* they wait by the door until the player comes */
-    if (!on_farm()) return;
-    if (!ours(SLOT_AT(VISITOR_SLOT))) put(VISITOR_SLOT, kSuitors[E.who].event.messenger, false, kWaitX, kWaitY);
-    if (near_player(kOutX, kOutY + 16, 40) && player_free(true)) {
-      say(kSuitors[E.who].event.call);
-      E.state = EV_CALLED;
+  case EV_ARRIVING:                                  /* they come walking up the path */
+    if (!on_farm()) { E.state = EV_NONE; E.day = -1; return; }
+    /* (the player keeps facing the way he came out: down the path) */
+    if (!M.going) {
+      g_ram[HM_INPUT_STATE] = HELD_INPUT;           /* the player waits at the door */
+      if (settled < SETTLE_FRAMES || !(hm_rd16(g_ram, HM_FLAGS_5A) & 0x8000)) return;   /* until the farm is all in */
+      for (int n = 1; n < SLOT_COUNT; n++)           /* a visit of the game's own this morning: ours another day */
+        if (g_ram[SLOT_AT(n)] && n != 0x16 && !ours(SLOT_AT(n))) {
+          g_ram[HM_INPUT_STATE] = 1; E.state = EV_NONE; E.day = -1; return;
+        }
+      if (g_ram[SLOT_AT(VISITOR_SLOT)]) return;
+      M.x = hm_rd16(g_ram, HM_PLAYER_X);
+      M.y = hm_rd16(g_ram, HM_PLAYER_Y) + MESSENGER_FROM;
+      M.to_y = hm_rd16(g_ram, HM_PLAYER_Y) + MESSENGER_STOP;
+      M.going = true;
+      put(VISITOR_SLOT, kSuitors[E.who].event.messenger + 2, false, M.x, M.y);
+      messenger_show(true);                          /* exactly there: below the screen, on the path */
+      return;
     }
+    M.to_y = hm_rd16(g_ram, HM_PLAYER_Y) + MESSENGER_STOP;
+    g_ram[HM_INPUT_STATE] = HELD_INPUT;
+    if (M.y > M.to_y) { M.y--; M.frames++; messenger_show(true); return; }
+    show(VISITOR_SLOT, kSuitors[E.who].event.messenger, false);   /* there: facing the player */
+    say(kSuitors[E.who].event.call);
+    g_ram[HM_INPUT_STATE] = 1;                       /* the box holds the game now; then the player is free */
+    E.state = EV_CALLED;
+    M.frames = 0;
     return;
   case EV_CALLED: {                                  /* off they go; he is where he is */
     const HeartEvent *e = &kSuitors[E.who].event;
-    if (on_farm() && !s_said_pages) take_away(VISITOR_SLOT);
+    if (on_farm() && !M.gone && ours(SLOT_AT(VISITOR_SLOT))) {   /* heard: back down the path */
+      if (s_said_pages) return;
+      if (M.frames++ < MESSENGER_FROM) { M.y++; messenger_show(false); return; }
+      take_away(VISITOR_SLOT);
+      M.gone = true;
+      return;
+    }
     if (today() != E.day) { E.state = EV_NONE; return; }   /* never found: another day */
     if (map < e->map_from || map > e->map_to) return;
     const Suitor *s = &kSuitors[E.who];
@@ -1000,6 +1047,7 @@ static void dressed(uint8_t *ram, uint32_t at)
 uint16_t suitors_pad(uint16_t pad)
 {
   if (D.on) return 0;                                /* dancing: nobody walks away */
+  if (player_held()) return 0;                       /* someone is coming: the player waits (as the game holds him) */
   static uint16_t prev;
   static bool hold;
   bool pressed = (pad & B_A) && !(prev & B_A);
