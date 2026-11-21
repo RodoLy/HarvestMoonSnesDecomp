@@ -788,6 +788,12 @@ static void partner_tick(void)
 {
   if (!P.asked || s_said_pages) return;
   P.asked = false;
+  /* The dance's script finds the partner by the festival's marks of the
+   * five girls ($7F1F74 bits 0-4, cleared as each is talked to; the one
+   * chosen keeps hers): the first one marked dances, in her own script
+   * (B3:FBD7 for the first). So the first is marked alone, and she is him
+   * (partner_picture). */
+  hm_wr16(g_ram, 0x11F74, (uint16_t)((hm_rd16(g_ram, 0x11F74) & ~0x001F) | 0x0001));
   g_ram[HM_TRANSITION_MAP] = g_ram[HM_MAP_ID];      /* the square again: the dance */
   hm_wr16(g_ram, HM_WEATHER_FLAGS, (uint16_t)(hm_rd16(g_ram, HM_WEATHER_FLAGS) | 0x4000));
 }
