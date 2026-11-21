@@ -767,17 +767,6 @@ static void festival_tick(void)
   }
   if (!fest) { if (map_was >= 0) for (int i = 0; i < HM_SUITORS; i++) take_away(GUEST_SLOT + i); map_was = -1; return; }
   if (map_was != map) { map_was = map; return; }      /* a frame later: the game's people are placed */
-  /* The mayor waits in the nook by the gramophone, and his wife's script
-   * puts her at its opening, (120, 248), where she stops the player (the
-   * game's own; the same without this mod). So that he can be reached for
-   * the dance, she is made one that can be passed, as the game's command
-   * MakeSlotPassable does (+00 |= 2: collision.c lets the player by). */
-  for (int n = 1; n < HUSBAND_SLOT; n++) {
-    uint32_t at = SLOT_AT(n);
-    if (g_ram[at] && slot16(at, SLOT_X) == 120 && slot16(at, SLOT_Y) == 248 && g_ram[at + SLOT_SCRIPT_BANK] == 0xB3 &&
-        slot16(at, SLOT_SCRIPT) >= 0xF200 && slot16(at, SLOT_SCRIPT) < 0xF320)
-      g_ram[at + SLOT_IN_USE] |= 0x02;
-  }
   for (int who = 0; who < HM_SUITORS; who++) {
     int n = GUEST_SLOT + who;
     if (ours(SLOT_AT(n)) || g_ram[SLOT_AT(n)]) continue;
