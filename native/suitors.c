@@ -519,13 +519,15 @@ static int who_in_slot(uint32_t at)
   for (int who = 0; who < HM_SUITORS; who++) if (is_him(at, who)) return who;
   return -1;
 }
+static bool festival_map(void);
 /* the suitor in front of the player (and his slot), or -1 */
 static int suitor_in_front(int *slot)
 {
   int fx, fy;
   player_ahead(&fx, &fy);
   for (int n = 0; n < SLOT_COUNT; n++) {
-    if (n == VISITOR_SLOT || n == HELPER_SLOT || n == BABY_SLOT) continue;   /* the ones who come, not him */
+    if (!festival_map() && (n == VISITOR_SLOT || n == HELPER_SLOT || n == BABY_SLOT)) continue;   /* the ones who come, not him
+                                                     * (at the festivals these slots are the men brought there) */
     uint32_t at = SLOT_AT(n);
     int who = who_in_slot(at);
     if (who < 0) continue;
