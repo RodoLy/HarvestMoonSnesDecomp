@@ -343,6 +343,12 @@ extern void (*g_hm_slot_picture)(uint8_t *ram, uint32_t slot);
  * not know about (the goddess's children, native/goddess.c). Off: the game
  * as it is. */
 extern void (*g_hm_night_wife)(uint8_t *ram, bool done);
+/* g_hm_map_events: when set, called by StartMapEvents (mapevents.c) just
+ * before the routine of the map being entered (done = false) and just after
+ * it (done = true), so the host can have the game place someone it does
+ * not know about as one it does (the male suitors' husband as the wife,
+ * native/suitors.c). Off: the game as it is. */
+extern void (*g_hm_map_events)(uint8_t *ram, bool done);
 extern uint16_t (*g_hm_year_suffix)(uint16_t x, uint16_t rom_value);
 /* the loops' own entries the host needs (not checked on their own) */
 void hm_IntroDemoCheck(uint8_t *ram, HmRegs *r);    /* intro.c: the demo check */

@@ -1282,8 +1282,10 @@ void hm_StartMapEvents(uint8_t *ram, HmRegs *r)
   r->c = 0;
   r->x = r->a;
   if (map < 0x60) {
+    if (g_hm_map_events) g_hm_map_events(ram, false);        /* host: before and after */
     hm_push8(ram, r, 0xCA); hm_push8(ram, r, 0xA7);          /* JSR ($CAA9,X) */
     MAP_EVENTS[map](ram, r);
     hm_pull8(ram, r); hm_pull8(ram, r);
+    if (g_hm_map_events) g_hm_map_events(ram, true);
   }
 }
