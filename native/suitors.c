@@ -182,7 +182,7 @@ static const Suitor kSuitors[HM_SUITORS] = {
       { "...Thank you. It's easier to talk to her with you here.", "Of course. I'll stay a little longer." },
       { 120, 0 },
       "You lay your Flower beside his. He looks at it for a long time. \"...She loved these. Thank you.\"",
-      "Ann stops you on the road: \"My dad came home happy yesterday... do you know why?\"" } },
+      "My dad came home happy yesterday... humming, even. Do you know why?" } },
 
   { "Shipper",                          /* the one in the vest, in charge of shipping */
     0x270, 0x275, 0, 0, 0x270, 0x272, 0x274, 0x07D540,
@@ -251,6 +251,10 @@ static const char *const kFestival[HM_SUITORS][2] = {
   { "My boss said I could come! I've never seen so many flowers.",
     "I carried all the pumpkins up here by myself. Never give up!" },
 };
+
+/* The next morning: who comes up the path to say it (as the day before),
+ * or 0 when it is something left at the door (said as it is found). */
+static const int kNextMorningBy[HM_SUITORS] = { 0, 0, 0x226 /* Ann */, 0, 0 };
 
 /* ── What they say ──────────────────────────────────────────────────────
  * Wrapped to the box's width, a page each say(); the box opens at the end
@@ -598,10 +602,10 @@ static void release_player(void)
  * pixels in front, and talks; then walks back the way they came. Walking: two frames each way, the back
  * ones (front + 2) going up, the front ones going down. */
 enum { MESSENGER_FROM = 112, MESSENGER_STOP = 16, MESSENGER_STEP = 8, MESSENGER_WAIT = 180 };
-static struct { int x, y, to_y, frames; bool going, gone; } M;
+static struct { int x, y, to_y, frames, sprite; const char *words; bool going, gone, next_morning; } M;
 static void messenger_show(bool up)
 {
-  int front = kSuitors[E.who].event.messenger;
+  int front = M.sprite;
   show(VISITOR_SLOT, front + (up ? 2 : 0) + (M.frames / MESSENGER_STEP) % 2, false);
   set16(SLOT_AT(VISITOR_SLOT), SLOT_X, M.x);
   set16(SLOT_AT(VISITOR_SLOT), SLOT_Y, M.y);
@@ -616,13 +620,26 @@ static void event_tick(void)
   if (E.state == EV_NONE && on_farm() && came_from >= 0x15 && came_from <= 0x17 && settled == 0 &&
       !bad_weather() && !special_day() && E.day != today() && visitor_day() &&
       g_ram[HM_HOUR] == 6 && g_ram[HM_MINUTES] == 0) {
-    int who = event_due();
-    if (who >= 0) { E.who = who; E.state = EV_ARRIVING; E.day = today(); E.end_day = false; memset(&M, 0, sizeof M); hold_player(); }
+    if (E.who >= 0 && today() == E.day + 1 && kNextMorningBy[E.who] && E.next_day_said != today()) {
+      E.next_day_said = today();                     /* the next morning: someone comes to say what came of it */
+      memset(&M, 0, sizeof M);
+      M.sprite = kNextMorningBy[E.who]; M.words = kSuitors[E.who].event.next_day; M.next_morning = true;
+      E.state = EV_ARRIVING; hold_player();
+    } else {
+      int who = event_due();
+      if (who >= 0) {
+        E.who = who; E.state = EV_ARRIVING; E.day = today(); E.end_day = false;
+        memset(&M, 0, sizeof M);
+        M.sprite = kSuitors[who].event.messenger; M.words = kSuitors[who].event.call;
+        hold_player();
+      }
+    }
   }
   if (settled < SETTLE_FRAMES && E.state != EV_ARRIVING) { settled++; return; }
   if (settled < SETTLE_FRAMES) settled++;
-  /* the next morning: what came of it */
-  if (E.day >= 0 && today() == E.day + 1 && E.next_day_said != today() && on_farm() && player_free(false)) {
+  /* the next morning: what came of it, found at the door (unless someone comes to say it) */
+  if (E.day >= 0 && E.who >= 0 && !kNextMorningBy[E.who] && today() == E.day + 1 && E.next_day_said != today() &&
+      on_farm() && player_free(false)) {
     E.next_day_said = today();
     say(kSuitors[E.who >= 0 ? E.who : 0].event.next_day);
   }
@@ -630,32 +647,32 @@ static void event_tick(void)
   case EV_NONE:
     return;
   case EV_ARRIVING:                                  /* they come walking up the path */
-    if (!on_farm()) { release_player(); E.state = EV_NONE; E.day = -1; return; }
+    if (!on_farm()) { release_player(); E.state = EV_NONE; if (!M.next_morning) E.day = -1; return; }
     /* (the player keeps facing the way he came out: down the path) */
     if (!M.going) {
       hold_player();                                 /* the player waits at the door */
       if (settled < SETTLE_FRAMES || !(hm_rd16(g_ram, HM_FLAGS_5A) & 0x8000)) return;   /* until the farm is all in */
       for (int n = 1; n < HUSBAND_SLOT; n++)         /* a visit of the game's own this morning (its people: */
         if (g_ram[SLOT_AT(n)] && !ours(SLOT_AT(n))) {   /* the first slots): ours another day */
-          release_player(); E.state = EV_NONE; E.day = -1; return;
+          release_player(); E.state = EV_NONE; if (!M.next_morning) E.day = -1; return;
         }
       if (g_ram[SLOT_AT(VISITOR_SLOT)]) {            /* taken: never keep the player waiting for long */
-        if (++M.frames > MESSENGER_WAIT) { release_player(); E.state = EV_NONE; E.day = -1; }
+        if (++M.frames > MESSENGER_WAIT) { release_player(); E.state = EV_NONE; if (!M.next_morning) E.day = -1; }
         return;
       }
       M.x = hm_rd16(g_ram, HM_PLAYER_X);
       M.y = hm_rd16(g_ram, HM_PLAYER_Y) + MESSENGER_FROM;
       M.to_y = hm_rd16(g_ram, HM_PLAYER_Y) + MESSENGER_STOP;
       M.going = true;
-      put(VISITOR_SLOT, kSuitors[E.who].event.messenger + 2, false, M.x, M.y);
+      put(VISITOR_SLOT, M.sprite + 2, false, M.x, M.y);
       messenger_show(true);                          /* exactly there: below the screen, on the path */
       return;
     }
     M.to_y = hm_rd16(g_ram, HM_PLAYER_Y) + MESSENGER_STOP;
     hold_player();
     if (M.y > M.to_y) { M.y--; M.frames++; messenger_show(true); return; }
-    show(VISITOR_SLOT, kSuitors[E.who].event.messenger, false);   /* there: facing the player */
-    say(kSuitors[E.who].event.call);
+    show(VISITOR_SLOT, M.sprite, false);            /* there: facing the player */
+    say(M.words);
     release_player();                              /* the box holds the game now; then the player is free */
     E.state = EV_CALLED;
     M.frames = 0;
@@ -667,8 +684,10 @@ static void event_tick(void)
       if (M.frames++ < MESSENGER_FROM) { M.y++; messenger_show(false); return; }
       take_away(VISITOR_SLOT);
       M.gone = true;
+      if (M.next_morning) E.state = EV_NONE;       /* said: nothing more to it */
       return;
     }
+    if (M.next_morning) { if (!on_farm()) E.state = EV_NONE; return; }
     if (today() != E.day) { E.state = EV_NONE; return; }   /* never found: another day */
     if (map < e->map_from || map > e->map_to) return;
     const Suitor *s = &kSuitors[E.who];
