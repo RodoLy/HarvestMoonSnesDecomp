@@ -150,16 +150,22 @@ RodoLy/HarvestMoonSnesDecomp and ask to read `docs/suitors/PLAN.md` first.
    (autumn 12, after the stew), once the mayor says to pick a partner,
    press A in front of him: he answers and dances with you in the couples'
    dance, in the girl's place (his love goes up, not hers).
-5. **Proposal.** Ten hearts (1000), the house extended once, nobody else:
+5. **The Star Night** (winter 24). The day before, talk to him (with three
+   hearts) and he says where he will be: Eve's fan and the two shipping
+   workers at the church, Ann's father and the carpenter at the bar. That
+   morning, pick that place, as in the game; there, talk to him: the
+   game's own line first (the night ends once everybody there was talked
+   to), then his, and his love goes up as the girl's of the place does.
+6. **Proposal.** Ten hearts (1000), the house extended once, nobody else:
    use the Blue Feather in front of him. The wedding is a week later, the
    next time you step onto the farm.
-6. **Married life.** He keeps the wife's own days, run by the game's own
+7. **Married life.** He keeps the wife's own days, run by the game's own
    scripts: at home in the morning, out from 11:00 to 15:00, at the stove at
    18:00, on the farm at work at 11:00, 13:00 and 20:00; he appears in his
    place as she does, and only walks when "Wife helps" has him doing a
    chore. His love keeps him at home (the wife's leaves below 200; his is
    never lent lower).
-7. **The baby.** As the game's own: his love (450), 20 days married and the
+8. **The baby.** As the game's own: his love (450), 20 days married and the
    house extended twice. The morning after the night the game counts a
    child on its way, he talks of adopting; 60 days later, when you wake up,
    two Harvest Sprites knock and come in by the door with the baby, talk,
@@ -167,4 +173,4 @@ RodoLy/HarvestMoonSnesDecomp and ask to read `docs/suitors/PLAN.md` first.
    lay it there, say goodbye and leave by the door. Then you name the baby
    on the game's names screen, as after a birth, and from then on it is the
    game's own child, in the crib. Nobody comes or goes but by the door.
-8. **The ending** (summer 30 of the third year): he walks it with you.
+9. **The ending** (summer 30 of the third year): he walks it with you.

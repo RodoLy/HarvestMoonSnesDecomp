@@ -156,16 +156,22 @@ RodoLy/HarvestMoonSnesDecomp y pide que primero lea `docs/suitors/PLAN.es.md`.
    Cosecha (otoño 12, después del guiso), cuando el alcalde dice que elijas
    pareja, presiona A frente a él: te contesta y baila contigo en el baile
    de parejas, en el lugar de la chica (sube su cariño, no el de ella).
-5. **Propuesta.** Diez corazones (1000), la casa ampliada una vez y nadie
+5. **La Noche de Estrellas** (invierno 24). El día anterior háblale (con
+   tres corazones) y te dice dónde va a estar: el fan de Eve y los dos
+   repartidores en la iglesia, el papá de Ann y el carpintero en el bar.
+   Esa mañana elige ese lugar, como en el juego; ahí háblale: primero su
+   frase del propio juego (la noche termina cuando hablaste con todos los
+   de ahí), luego la suya, y su cariño sube como el de la chica del lugar.
+6. **Propuesta.** Diez corazones (1000), la casa ampliada una vez y nadie
    más: usa la Pluma Azul frente a él. La boda es una semana después, la
    próxima vez que pises la granja.
-6. **Vida de casados.** Lleva los mismos días que la esposa, con los
+7. **Vida de casados.** Lleva los mismos días que la esposa, con los
    propios scripts del juego: en casa en la mañana, fuera de 11:00 a 15:00,
    en la estufa a las 18:00, trabajando en la granja a las 11:00, 13:00 y
    20:00; aparece en su lugar como ella, y solo camina cuando "La esposa
    ayuda" lo pone a hacer una tarea. Su cariño lo mantiene en casa (la
    esposa se va con menos de 200; el de él nunca se presta más bajo).
-7. **El bebé.** Como en el juego: su cariño (450), 20 días de casados y la
+8. **El bebé.** Como en el juego: su cariño (450), 20 días de casados y la
    casa ampliada dos veces. La mañana después de la noche en que el juego
    cuenta un hijo en camino, él habla de adoptar; 60 días después, al
    despertar, dos Duendes de la Cosecha tocan y entran por la puerta con el
@@ -174,4 +180,4 @@ RodoLy/HarvestMoonSnesDecomp y pide que primero lea `docs/suitors/PLAN.es.md`.
    puerta. Luego le pones nombre al bebé en la pantalla de nombres del
    juego, como después de un nacimiento, y desde entonces es el propio hijo
    del juego, en la cuna. Nadie llega ni se va si no es por la puerta.
-8. **El final** (verano 30 del tercer año): lo recorre contigo.
+9. **El final** (verano 30 del tercer año): lo recorre contigo.
