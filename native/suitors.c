@@ -45,6 +45,7 @@
 #include "textbox.h"
 #include "ui.h"
 #include "suitors.h"
+#include "wife.h"
 
 extern Ppu *g_ppu;
 
@@ -480,7 +481,7 @@ static bool take_from_hands(uint8_t it)
 static void talk(int who)
 {
   const Suitor *s = &kSuitors[who];
-  if (who == husband()) { say(s->home[on_farm() ? 1 : 0]); return; }
+  if (who == husband()) { say(s->home[on_farm() ? 1 : 0]); wife_talked_to(); return; }
   say(s->talk[tier(who)][(g_hm_suitor[who] & TALKED) ? 1 : 0]);   /* the second line once talked to today */
   if (!(g_hm_suitor[who] & TALKED)) { g_hm_suitor[who] |= TALKED; add_love(who, TALK_LOVE); }
 }
@@ -890,23 +891,31 @@ static void wedding_tick(void)
 }
 
 /* ── 7. Married life ────────────────────────────────────────────────────
- * His day, as a wife's: at home in the morning, out on the farm from 9:00
- * (walking between a few places around the house and the field), home
- * again from 18:00; at home all day when it rains or snows. He walks with
- * his own pictures: front, back and side, two frames each, the side
- * mirrored to go right. He keeps still while the player is close, so he
- * can be talked to. In the game's wife slot, $13. */
+ * As the game's own wife (watched in tests, her scripts traced: group $43
+ * in the house, $44 on the farm, $7F1F66 telling whose): the scripts put
+ * her straight in her place by the hour (PlaceSlot, never walking): in the
+ * kitchen in the morning, at her chores at (360, 360) on the farm about
+ * midday, home again in the afternoon and night, by the stove at 18:00.
+ *
+ * For him, the game runs Maria's: as a map comes in (the house, the farm,
+ * the tool shed; g_hm_map_events), Maria's bit and his love as hers are
+ * lent for the map's routine only, so the game places "the wife" in slot
+ * $13, and given back at once (Maria goes on with her own life in town).
+ * Her pictures there are his (wife_picture, from the picture hook). So he
+ * is where she would be, when she would be, as still as she is; he walks
+ * only helping on the farm, with "the wife helps" (wife.c, which takes him
+ * as the wife: wife_stand_in).
+ *
+ * The night the child is born the game would have the wife in bed ($7F1F6E
+ * bit $10, group $1F as the house comes in): not for him; the Harvest
+ * Sprites come instead (the children, below). */
 typedef struct { int x, y; } Spot;
-static const Spot kFarmSpots[] = { { 184, 380 }, { 168, 450 }, { 88, 450 }, { 104, 388 } };   /* around the house's front */
 /* The house has three sizes (maps $15, $16, $17: built, extended once,
  * twice), each with its door somewhere else: the door is where the player
  * stands when he has just come in (house_door_tick), until then the size's
  * likely place (the visitor of the original's birth comes in at (128, 200)
- * in the largest). His places at home are around it, each moved to the
- * nearest free ground. */
+ * in the largest). */
 static Spot s_house_door[3] = { { 0x78, 0xC0 }, { 0x78, 0xC0 }, { 128, 200 } };
-static const Spot kHouseSpots[] = { { 0, -56 }, { -40, -72 }, { 40, -72 }, { 0, -104 } };   /* from the door */
-static const Spot kFarmDoor = { 136, 352 };   /* the house's door, on the farm */
 static Spot house_door(void) { int m = g_ram[HM_MAP_ID]; return s_house_door[m >= 0x15 && m <= 0x17 ? m - 0x15 : 0]; }
 static void house_door_tick(void)
 {
@@ -918,110 +927,73 @@ static void house_door_tick(void)
   int x = hm_rd16(g_ram, HM_PLAYER_X), y = hm_rd16(g_ram, HM_PLAYER_Y);
   if (y >= 160) s_house_door[map - 0x15] = (Spot){ x, y };   /* came in by the door (not woken up in bed) */
 }
-enum { OUT_FROM = 9, HOME_FROM = 18, WALK_SPEED = 1, STEP_FRAMES = 10, REST_FRAMES = 240 };
-static struct {
-  int place;                                   /* 1 the farm, 2 the house, 0 neither */
-  int map;
-  int x, y, spot, rest, dir;                   /* where he is; the spot he walks to; resting; facing */
-  bool leaving;
-  unsigned frame;
-} H;
-
-static int his_place(void)
+enum { STAND_IN = 0 /* Maria's scripts */, LEAST_WIFE_LOVE = 200, MOST_GIRL_LOVE = 999 };
+static bool home_map(int map) { return map <= 3 || (map >= 0x15 && map <= 0x17) || map == 0x2C; }
+static bool married_to_him(void) { return husband() >= 0 && !a_wife() && s_wedding == NO_WEDDING && !s_lent_for_ending; }
+static struct { bool lent; uint16_t flags66, flags6e, hearts, age; uint32_t age_at; } L;
+/* the child the Sprites are to bring: the second if there is one (60 days
+ * from its start: born, for the game), else the first; its age's address */
+enum { BIRTH_DAYS = 0x0010, FIRST_CHILD = 0x0004, SECOND_CHILD = 0x0008, BORN_AT = 60 };
+static uint32_t newborn_age(void)
 {
-  int map = g_ram[HM_MAP_ID];
-  bool out = !bad_weather() && g_ram[HM_HOUR] >= OUT_FROM && g_ram[HM_HOUR] < HOME_FROM;
-  if (map <= 3 && out) return 1;
-  if (map >= 0x15 && map <= 0x17 && !out) return 2;
-  return 0;
+  uint16_t kids = hm_rd16(g_ram, HM_FLAGS_6E);
+  if ((kids & SECOND_CHILD) && hm_rd16(g_ram, HM_KID2_AGE) >= BORN_AT) return HM_KID2_AGE;
+  return (kids & FIRST_CHILD) ? HM_KID1_AGE : 0;
 }
-/* a step towards (tx, ty); true once there */
-/* A step towards (tx, ty), along the longer way first, the other when that
- * one is blocked (free_ground): 1 there, 0 a step taken, -1 blocked both ways.
- * `through` skips the checks (the last steps into the door). */
-static int walk_to(int tx, int ty, bool through)
+static void (*s_prev_map_events)(uint8_t *ram, bool done);
+static void suitors_map_events(uint8_t *ram, bool done)
 {
-  int dx = tx - H.x, dy = ty - H.y;
-  if (!dx && !dy) return 1;
-  int sx = dx > 0 ? WALK_SPEED : -WALK_SPEED, sy = dy > 0 ? WALK_SPEED : -WALK_SPEED;
-  bool x_first = abs(dx) > abs(dy);
-  for (int k = 0; k < 2; k++, x_first = !x_first) {
-    if (x_first ? !dx : !dy) continue;
-    int nx = H.x + (x_first ? sx : 0), ny = H.y + (x_first ? 0 : sy);
-    if (!through && !free_ground(nx, ny)) continue;
-    H.x = nx; H.y = ny;
-    H.dir = x_first ? (sx > 0 ? 3 : 2) : (sy > 0 ? 0 : 1);
-    return 0;
+  if (!done) {
+    if (s_prev_map_events) s_prev_map_events(ram, false);
+    L.lent = g_cfg.male_suitors && married_to_him() && home_map(ram[HM_MAP_ID]);
+    if (!L.lent) return;
+    L.flags66 = hm_rd16(ram, HM_FLAGS_66); L.flags6e = hm_rd16(ram, HM_FLAGS_6E); L.hearts = hm_rd16(ram, HM_HEARTS_BASE);
+    int l = love(husband());                         /* never below 200: the wife's scripts would have her leave */
+    hm_wr16(ram, HM_FLAGS_66, (uint16_t)(L.flags66 | (1u << STAND_IN)));
+    hm_wr16(ram, HM_HEARTS_BASE, (uint16_t)(l < LEAST_WIFE_LOVE ? LEAST_WIFE_LOVE : l > MOST_GIRL_LOVE ? MOST_GIRL_LOVE : l));
+    hm_wr16(ram, HM_FLAGS_6E, (uint16_t)(L.flags6e & ~BIRTH_DAYS));   /* no wife in bed: his child is adopted */
+    L.age_at = (L.flags6e & BIRTH_DAYS) ? newborn_age() : 0;   /* and not in the crib before the Sprites bring it */
+    if (L.age_at) { L.age = hm_rd16(ram, L.age_at); hm_wr16(ram, L.age_at, BORN_AT - 1); }
+    return;
+  }
+  if (L.lent) {
+    L.lent = false;
+    hm_wr16(ram, HM_FLAGS_66, L.flags66);
+    hm_wr16(ram, HM_HEARTS_BASE, L.hearts);
+    hm_wr16(ram, HM_FLAGS_6E, (uint16_t)((hm_rd16(ram, HM_FLAGS_6E) & ~BIRTH_DAYS) | (L.flags6e & BIRTH_DAYS)));
+    if (L.age_at) hm_wr16(ram, L.age_at, L.age);
+  }
+  if (s_prev_map_events) s_prev_map_events(ram, true);
+}
+/* the wife's slot, run by her scripts ($B5:8000-$A1FF, as wife.c's) */
+static bool wife_slot(uint32_t at)
+{
+  int pc = slot16(at, SLOT_SCRIPT);
+  return at == SLOT_AT(HUSBAND_SLOT) && g_ram[at] && g_ram[at + SLOT_SCRIPT_BANK] == 0xB5 && pc >= 0x8000 && pc < 0xA200;
+}
+/* her pictures as his. The wife's set ($2E2-$2F7): front, back, side, two
+ * each, then her gestures (as the front), her chores at $2EC (as his side,
+ * at work) and her stove at $2F0 (his back to the room); and Maria's own
+ * ($21E-$225, "her old clothes" of wife.c): front, back, side. -1: not hers */
+static int wife_picture(const Suitor *s, int sprite)
+{
+  if (sprite >= 0x2E2 && sprite <= 0x2F7) {
+    int k = sprite - 0x2E2;
+    int base = k < 2 ? s->front : k < 4 ? s->back : k < 6 ? s->side : k < 10 ? s->front : k < 14 ? s->side : s->back;
+    return base + (k & 1);
+  }
+  if (sprite >= 0x21E && sprite <= 0x225) {
+    static const int8_t kind[8] = { 0, 0, 1, 1, 2, 2, 1, 2 };
+    int k = sprite - 0x21E;
+    return (kind[k] == 0 ? s->front : kind[k] == 1 ? s->back : s->side) + (k < 6 ? (k & 1) : 0);
   }
   return -1;
 }
-static void his_picture(int who, bool walking)
-{
-  const Suitor *s = &kSuitors[who];
-  int step = walking && (H.frame / STEP_FRAMES) % 2;
-  int base = H.dir == 0 ? s->front : H.dir == 1 ? s->back : s->side;
-  show(HUSBAND_SLOT, base + step, H.dir == 3);       /* the side looks left: mirrored for right */
-  set16(SLOT_AT(HUSBAND_SLOT), SLOT_X, H.x);
-  set16(SLOT_AT(HUSBAND_SLOT), SLOT_Y, H.y);
-}
+/* every frame: wife.c takes him as the wife */
 static void married_tick(void)
 {
-  int who = husband();
-  int map = g_ram[HM_MAP_ID];
-  bool same_map = map == H.map;
-  H.map = map;
-  if (who < 0 || s_wedding != NO_WEDDING || s_lent_for_ending || !hm_diary_loaded(g_ram)) {
-    if (ours(SLOT_AT(HUSBAND_SLOT))) take_away(HUSBAND_SLOT);
-    H.place = 0; H.leaving = false;
-    return;
-  }
-  int place = his_place();
-  Spot door = map <= 3 ? kFarmDoor : house_door();
-  if (!place && H.place && same_map && ours(SLOT_AT(HUSBAND_SLOT))) H.leaving = true;   /* his hour to go */
-  if (H.leaving) {
-    if (place || !same_map) H.leaving = false;
-    else {
-      H.frame++;
-      if (walk_to(door.x, door.y, abs(H.x - door.x) + abs(H.y - door.y) < 40) != 0) {   /* in (or stuck): gone */
-        take_away(HUSBAND_SLOT); H.place = 0; H.leaving = false; return;
-      }
-      his_picture(who, true);
-      return;
-    }
-  }
-  if (!place) { take_away(HUSBAND_SLOT); H.place = 0; return; }
-  Spot home[COUNT(kHouseSpots)];
-  for (int i = 0; i < COUNT(kHouseSpots); i++) home[i] = (Spot){ house_door().x + kHouseSpots[i].x, house_door().y + kHouseSpots[i].y };
-  const Spot *spots = place == 1 ? kFarmSpots : home;
-  int n = place == 1 ? COUNT(kFarmSpots) : COUNT(kHouseSpots);
-  if (H.place != place || !ours(SLOT_AT(HUSBAND_SLOT))) {   /* he arrives */
-    if (!ours(SLOT_AT(HUSBAND_SLOT)) && g_ram[SLOT_AT(HUSBAND_SLOT)]) return;   /* the slot is the game's now */
-    bool by_the_door = H.place == 0 && same_map;
-    H.place = place;
-    Spot from = by_the_door ? door : spots[0];
-    H.x = from.x; H.y = from.y; H.dir = 0;
-    H.spot = by_the_door ? 0 : 1 % n; H.rest = by_the_door ? 0 : REST_FRAMES;
-    put(HUSBAND_SLOT, kSuitors[who].front, false, H.x, H.y);
-    H.x = slot16(SLOT_AT(HUSBAND_SLOT), SLOT_X);     /* where put() found free ground */
-    H.y = slot16(SLOT_AT(HUSBAND_SLOT), SLOT_Y);
-  }
-  H.frame++;
-  bool walking = false;
-  if (near_player(H.x, H.y, 32)) {                   /* the player is here: he turns and waits */
-    int px = hm_rd16(g_ram, HM_PLAYER_X), py = hm_rd16(g_ram, HM_PLAYER_Y);
-    if (abs(px - H.x) > abs(py - H.y)) H.dir = px > H.x ? 3 : 2; else H.dir = py > H.y ? 0 : 1;
-  } else if (H.rest > 0) H.rest--;
-  else {
-    Spot to = spots[H.spot];
-    nearest_free(&to.x, &to.y, HUSBAND_SLOT);         /* the spot, or the free ground nearest it */
-    int step = walk_to(to.x, to.y, false);
-    if (step != 0) {                                 /* there, or blocked: rest, then another spot */
-      H.rest = REST_FRAMES + (int)(H.frame % 120);
-      H.dir = 0;
-      if (n > 1) H.spot = (H.spot + 1 + (int)(H.frame % (unsigned)(n - 1))) % n;
-    } else walking = true;
-  }
-  his_picture(who, walking);
+  if (married_to_him()) wife_stand_in(STAND_IN, love(husband()) > MOST_GIRL_LOVE ? MOST_GIRL_LOVE : love(husband()));
+  else wife_stand_in(-1, 0);
 }
 
 /* ── 8. The children ────────────────────────────────────────────────────
@@ -1032,7 +1004,7 @@ static void married_tick(void)
  * too. When the child "is born" ($7F1F6E bit $10, the days the wife would
  * be in bed), there is no bed: the next time the player is home, the
  * Harvest Sprites bring the baby, and only then the bit is cleared. */
-enum { BIRTH_DAYS = 0x0010, ELF_FRONT = 0x309, BABY_SPRITE = 0x300, MOST_GIRL_LOVE = 999 };
+enum { ELF_FRONT = 0x309, BABY_SPRITE = 0x300 };
 static void (*s_prev_night)(uint8_t *ram, bool done);
 static bool s_lent_for_night;
 static uint16_t s_marias_love, s_children_before;
@@ -1063,21 +1035,56 @@ static void suitors_night(uint8_t *ram, bool done)
   }
 }
 /* As the original's birth (watched in a test: the largest house, the
- * wife in bed, a visitor coming in at the door): the Harvest Sprites come
- * in by the house's door, two of them hopping with the baby between them,
- * up to the room; they talk, the husband takes the baby, and they hop out
- * the way they came. From then on the child is the game's own (the house
- * shows it once it is 60 days old: src/mapevents.c, the family at home).
+ * wife in bed, a visitor coming in at the door, then the names screen for
+ * the baby), with the Harvest Sprites instead. Until they have come, the
+ * game's child is kept out of the crib (its age lent a day short to the
+ * map's events, suitors_map_events). Then: a knock, and two of them come
+ * in by the house's door, hopping, the baby between them; they talk; they
+ * hop on to the crib ((390, 152) in the house extended twice, the only one
+ * children are born in), the camera going along with them as the game's
+ * scenes move it (Event_MapScrolling), and lay the baby in it, as the game
+ * shows its child ($301); they say goodbye and hop back out by the door,
+ * the way they came, the camera back on the player. Then the baby's name,
+ * on the game's names screen (as after the birth: $099F = 5 or 6), and
+ * back in the house the baby in the crib is the game's own child.
+ * Nobody comes or goes but by the door.
  * The morning after the night the game counts a child on its way, the
  * husband says what he has been thinking, as a wife tells her news. */
-enum { HOP_IN = 40, HOP = 8 };
-static struct { int stage; unsigned frames; int x, y; } A;
-static void sprites_at(int dy)
+enum { HOP = 8, ROOM = 40, CRIB_X = 390, CRIB_Y = 152, BABY_IN_CRIB = 0x301, NAME_FIRST_CHILD = 5 };
+static struct { int stage; unsigned frames; int x, y, tx, ty, panned; bool camera_along; } A;
+/* the two of them (and the baby they carry) a step towards (A.tx, A.ty): true once there */
+static bool hop_on(bool carrying)
 {
+  A.frames++;
+  if (A.x != A.tx) A.x += A.x < A.tx ? 1 : -1;
+  if (A.y != A.ty) A.y += A.y < A.ty ? 1 : -1;
   int hop = (A.frames / HOP) % 2 ? -2 : 0;
-  set16(SLOT_AT(VISITOR_SLOT), SLOT_X, A.x - 14); set16(SLOT_AT(VISITOR_SLOT), SLOT_Y, A.y + dy + hop);
-  set16(SLOT_AT(HELPER_SLOT), SLOT_X, A.x + 14);  set16(SLOT_AT(HELPER_SLOT), SLOT_Y, A.y + dy - hop - 2);
-  set16(SLOT_AT(BABY_SLOT), SLOT_X, A.x);         set16(SLOT_AT(BABY_SLOT), SLOT_Y, A.y + dy - 4);
+  set16(SLOT_AT(VISITOR_SLOT), SLOT_X, A.x - 14); set16(SLOT_AT(VISITOR_SLOT), SLOT_Y, A.y + hop);
+  set16(SLOT_AT(HELPER_SLOT), SLOT_X, A.x + 14);  set16(SLOT_AT(HELPER_SLOT), SLOT_Y, A.y - hop - 2);
+  if (carrying) { set16(SLOT_AT(BABY_SLOT), SLOT_X, A.x); set16(SLOT_AT(BABY_SLOT), SLOT_Y, A.y - 4); }
+  return A.x == A.tx && A.y == A.ty;
+}
+/* the camera moving by itself, a pixel a frame, as Event_MapScrolling has
+ * it ($087C, $087E, $0880; AutoMapScrolling): by `by` pixels (within the
+ * map) */
+static int pan_camera(int by)
+{
+  int at = hm_rd16(g_ram, HM_CAMERA_X), lo = hm_rd16(g_ram, HM_CAM_MIN_X), hi = hm_rd16(g_ram, HM_CAM_MAX_X);
+  if (at + by > hi) by = hi - at;
+  if (at + by < lo) by = lo - at;
+  if (by > 255) by = 255;
+  if (by < -255) by = -255;
+  hm_wr16(g_ram, HM_CAMERA_SPEED_X, (uint16_t)(by < 0 ? -1 : 1));
+  hm_wr16(g_ram, HM_CAMERA_SPEED_Y, 0);
+  g_ram[HM_CAMERA_FRAMES] = (uint8_t)(by < 0 ? -by : by);
+  return by;
+}
+static void adoption_over(void)
+{
+  take_away(HELPER_SLOT); take_away(VISITOR_SLOT); take_away(BABY_SLOT);
+  if (A.camera_along) { A.camera_along = false; pan_camera(-A.panned); }
+  release_player();
+  A.stage = 0;
 }
 static void adoption_tick(void)
 {
@@ -1091,43 +1098,67 @@ static void adoption_tick(void)
     return;
   }
   if (!s_adoption_due && !A.stage) return;
-  if (!in_house()) { if (A.stage) { take_away(HELPER_SLOT); take_away(VISITOR_SLOT); take_away(BABY_SLOT); A.stage = 0; } return; }
+  if (!in_house()) {                                 /* the house left before the end: they come again next time */
+    if (A.stage) adoption_over();
+    return;
+  }
   switch (A.stage) {
   case 0:                                            /* a knock: they come in by the door */
     if (!player_free(false)) return;
-    A.x = house_door().x; A.y = house_door().y; A.frames = 0;
+    A.x = house_door().x; A.y = house_door().y + 8; A.frames = 0; A.camera_along = false;
     put(VISITOR_SLOT, ELF_FRONT, false, A.x - 14, A.y);
     put(HELPER_SLOT, ELF_FRONT, true, A.x + 14, A.y);
-    put(BABY_SLOT, BABY_SPRITE, false, A.x, A.y);
-    sprites_at(0);
+    put(BABY_SLOT, BABY_SPRITE, false, A.x, A.y - 4);
+    A.tx = A.x; A.ty = A.y - ROOM;
     hold_player();                                 /* the player waits, as in the game's scenes */
     A.stage = 1;
     return;
   case 1:                                            /* hopping in */
     hold_player();
-    A.frames++;
-    sprites_at(-(int)(A.frames / 2 < HOP_IN ? A.frames / 2 : HOP_IN));
-    if (A.frames / 2 < HOP_IN) return;
+    if (!hop_on(true)) return;
     say("Knock, knock! The Harvest Sprites come in, holding something wrapped in leaves.");
     say("\"We heard there's a farm here with a lot of love and no baby. This little one has no family. Will you take care of it?\"");
-    release_player();
+    A.tx = CRIB_X; A.ty = CRIB_Y + 24;
     A.stage = 2;
     return;
-  case 2:
+  case 2:                                            /* on to the crib, the camera along */
+    hold_player();
     if (s_said_pages) return;
-    take_away(BABY_SLOT);                            /* in his arms */
-    say(kSuitors[who].name[0] == 'V' ? "Your husband takes the baby in his arms. \"...I'll write this little one a song every day.\""
-                                     : "Your husband takes the baby in his arms, very carefully. \"Hello, little one. Welcome home.\"");
-    say("The Harvest Sprites wave goodbye and hop away into the fields.");
-    A.stage = 3; A.frames = 0;
+    if (!A.camera_along) { A.camera_along = true; A.panned = pan_camera(CRIB_X + 40 - 256 - hm_rd16(g_ram, HM_CAMERA_X)); }
+    if (!hop_on(true)) return;
+    put(BABY_SLOT, BABY_IN_CRIB, false, CRIB_X, CRIB_Y);   /* in the crib, as the game shows its child */
+    set16(SLOT_AT(BABY_SLOT), SLOT_X, CRIB_X); set16(SLOT_AT(BABY_SLOT), SLOT_Y, CRIB_Y);   /* (put keeps people off furniture) */
+    say("The Harvest Sprites lay the little one in the crib, very gently.");
+    say(kSuitors[who].name[0] == 'V' ? "Your husband leans over the crib. \"...I'll write this little one a song every day.\""
+                                     : "Your husband leans over the crib. \"Hello, little one. Welcome home.\"");
+    say("The Harvest Sprites wave goodbye.");
+    A.tx = house_door().x; A.ty = house_door().y - ROOM;
+    A.stage = 3;
     return;
-  case 3:                                            /* hopping out */
+  case 3:                                            /* back to the door, the camera back on the player... */
+    hold_player();
     if (s_said_pages) return;
-    A.frames++;
-    sprites_at(-HOP_IN + (int)(A.frames / 2));
-    if (A.frames / 2 < HOP_IN) return;
+    if (A.camera_along) { A.camera_along = false; pan_camera(-A.panned); }
+    if (!hop_on(false)) return;
+    A.ty = house_door().y + 8;
+    A.stage = 4;
+    return;
+  case 4:                                            /* ...and out by it */
+    hold_player();
+    if (!hop_on(false)) return;
     take_away(VISITOR_SLOT); take_away(HELPER_SLOT);
-    hm_wr16(g_ram, HM_FLAGS_6E, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_6E) & ~BIRTH_DAYS));   /* done */
+    say("\"What shall we call our little one?\"");
+    A.stage = 5;
+    return;
+  case 5:                                            /* the name, and the baby is the game's child */
+    if (s_said_pages) return;
+    release_player();
+    g_ram[HM_NAME_FOR] = (uint8_t)(NAME_FIRST_CHILD + (newborn_age() == HM_KID2_AGE));
+    g_ram[HM_TRANSITION_MAP] = g_ram[HM_MAP_ID];   /* back here after the names screen */
+    hm_wr16(g_ram, HM_TRANSITION_X, hm_rd16(g_ram, HM_PLAYER_X));
+    hm_wr16(g_ram, HM_TRANSITION_Y, hm_rd16(g_ram, HM_PLAYER_Y));
+    hm_wr16(g_ram, HM_WEATHER_FLAGS, (uint16_t)(hm_rd16(g_ram, HM_WEATHER_FLAGS) | 0x2000));   /* GameLoop: the names screen */
+    hm_wr16(g_ram, HM_FLAGS_6E, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_6E) & ~BIRTH_DAYS));   /* the child is home */
     s_adoption_due = false;
     A.stage = 0;
     return;
@@ -1141,7 +1172,6 @@ static void adoption_tick(void)
  * day (the ending ends the game), and wherever the scenes show the wife
  * (her pictures in the ending, $2E2-$2EF, coloured by the girl) they
  * show him: front, back and side as she faces, in his own colours. */
-enum { ENDING_WIFE = 0x2E2, ENDING_WIFE_LAST = 0x2EF };   /* the wife in the ending, whoever she is */
 static bool ending_day(void) { return g_ram[HM_YEAR] == 2 && g_ram[HM_SEASON] == 1 && g_ram[HM_DAY] == 30; }
 static void ending_tick(void)
 {
@@ -1150,20 +1180,25 @@ static void ending_tick(void)
   hm_wr16(g_ram, HM_FLAGS_66, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_66) | LENT_WIFE));
 }
 /* g_hm_slot_picture while the wedding or the ending is on (Maria is him),
- * and while dancing (partner_picture) */
+ * while dancing (partner_picture), and while married (the wife's slot) */
 static void dressed(uint8_t *ram, uint32_t at)
 {
   if (s_prev_picture && s_prev_picture != dressed) s_prev_picture(ram, at);
   if (partner_picture(at)) return;
+  if (married_to_him() && wife_slot(at)) {          /* the wife the game places is him */
+    int to = wife_picture(&kSuitors[husband()], slot16(at, SLOT_SPRITE));
+    if (to < 0) return;
+    set16(at, SLOT_SPRITE, to);
+    g_ram[at + SLOT_ANIMATION] &= (uint8_t)~0x0E;    /* his own colours, not hers */
+    g_ram[at + SLOT_FLAGS] |= 0x04;
+    return;
+  }
   int who = s_wedding != NO_WEDDING ? (g_hm_suitor_wed & WED_WHO) - 1 : s_lent_for_ending ? husband() : -1;
   if (who < 0 || who >= HM_SUITORS) return;
   const Suitor *s = &kSuitors[who];
   int sprite = slot16(at, SLOT_SPRITE), to = -1;
   if (sprite >= BRIDE_SPRITES && sprite < BRIDE_SPRITES + 4) to = s->front + (sprite >= BRIDE_SPRITES + 2);
-  else if (s_lent_for_ending && sprite >= ENDING_WIFE && sprite <= ENDING_WIFE_LAST) {
-    int k = sprite - ENDING_WIFE;                    /* front x2, back x2, side x2, then her own gestures */
-    to = (k < 2 ? s->front : k < 4 ? s->back : k < 6 ? s->side : s->front) + (k & 1);
-  }
+  else if (s_lent_for_ending) to = wife_picture(s, sprite);   /* the wife of the ending's scenes */
   if (to < 0) return;
   g_ram[at + SLOT_SPRITE] = (uint8_t)to; g_ram[at + SLOT_SPRITE + 1] = (uint8_t)(to >> 8);
   g_ram[at + SLOT_ANIMATION] &= (uint8_t)~0x0E;      /* his own colours, not hers */
@@ -1286,7 +1321,7 @@ void suitors_frame(void)
 {
   static int day = -1;
   g_hm_suitors_on = g_cfg.male_suitors;              /* the diary keeps them (src/save.c) */
-  if (!g_cfg.male_suitors || !hm_diary_loaded(g_ram)) return;
+  if (!g_cfg.male_suitors || !hm_diary_loaded(g_ram)) { wife_stand_in(-1, 0); return; }
   if (day != today()) {                              /* a new day: nobody talked to or given anything yet */
     day = today();
     for (int i = 0; i < HM_SUITORS; i++) g_hm_suitor[i] &= (uint16_t)~(TALKED | GIFTED | DANCED);
@@ -1294,7 +1329,8 @@ void suitors_frame(void)
   /* the game's hooks, shared with the Goddess (goddess.c sets hers first, every frame) */
   if (g_hm_feather_used != feather_used) { s_prev_feather = g_hm_feather_used; g_hm_feather_used = feather_used; }
   if (g_hm_night_wife != suitors_night) { s_prev_night = g_hm_night_wife; g_hm_night_wife = suitors_night; }
-  bool dressing = s_wedding != NO_WEDDING || s_lent_for_ending || (P.who >= 0 && P.on);
+  if (g_hm_map_events != suitors_map_events) { s_prev_map_events = g_hm_map_events; g_hm_map_events = suitors_map_events; }
+  bool dressing = s_wedding != NO_WEDDING || s_lent_for_ending || (P.who >= 0 && P.on) || married_to_him();
   if (dressing && g_hm_slot_picture != dressed) { s_prev_picture = g_hm_slot_picture; g_hm_slot_picture = dressed; }
   if (!dressing && g_hm_slot_picture == dressed) { g_hm_slot_picture = s_prev_picture; s_prev_picture = NULL; }
 
@@ -1329,7 +1365,6 @@ void suitors_reset(void)
   s_wedding = NO_WEDDING;
   s_lent_for_ending = false;
   s_adoption_due = false;
-  memset(&H, 0, sizeof H);
   memset(&A, 0, sizeof A);
   if (g_hm_slot_picture == dressed) g_hm_slot_picture = s_prev_picture;
 }
