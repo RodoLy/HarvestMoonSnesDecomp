@@ -735,22 +735,34 @@ static void event_tick(void)
  * (map $08 reloaded), the couples dancing, and the partner in slot 7 at
  * the player's side, facing him ($7F1F7B = 2 during it).
  *
+ * The Harvest Festival (map $09, autumn 12) has the same dance after its
+ * stew, with two differences (its scripts in bank $B4): the mayor's "pick
+ * your partner" is bit 5 of $7F1F74 (bit 11 is set there all day), and a
+ * girl chosen (the second time she is talked to) does not change the map:
+ * she sets the scene flag 2 ($7F1F7A), which the festival's own script
+ * waits for, and the couples dance where they stand, her in slot 7.
+ *
  * Before that, each of the men has his festival line (kFestival). The men
  * the game does not bring are put among the people. After "pick your
  * partner", A in front of one of them is the same choice: he turns, says a
- * word, and the same dance starts (the same change of map the girls'
- * scripts make); in it, the partner in slot 7 is him: the game's steps
- * with his pictures, as at the wedding (dressed). What the dance gives the
- * girls' hearts is given back; he gets his. */
-enum { FLOWER_FESTIVAL = 0x08, HARVEST_FESTIVAL = 0x09, PARTNER_TIME = 0x0800, DANCING = 2, PARTNER_SLOT = 7 };
+ * word, and the same dance starts (as the girls' scripts start it); in it,
+ * the partner in slot 7 is him: the game's steps with his pictures, as at
+ * the wedding (dressed). What the dance gives the girls' hearts is given
+ * back; he gets his. */
+enum { FLOWER_FESTIVAL = 0x08, HARVEST_FESTIVAL = 0x09, DANCING = 2, PARTNER_SLOT = 7,
+       FLOWER_PARTNER_TIME = 0x0800, HARVEST_PARTNER_TIME = 0x0020, HARVEST_PARTNER_CHOSEN = 0x0004 /* scene flag 2 */ };
 /* where the men the game does not bring stand: away from the mayor and his
  * wife (left, (88, 232) and (120, 248)) and the ways to them: the open
  * right side and the front of the square, 64 pixels apart */
 static const int kGuestSpots[HM_SUITORS][2] = { { 200, 376 }, { 376, 280 }, { 328, 376 }, { 376, 328 }, { 264, 376 } };
 static int s_danced_day = -1;
-static struct { int who; bool asked, on; uint16_t girls[5]; } P = { -1 };   /* on: from the change of map to the end */
+static struct { int who; bool asked, on; uint16_t girls[5]; int left_out; } P = { -1 };   /* on: from the change of map to the end */
 static bool festival_map(void) { int m = g_ram[HM_MAP_ID]; return m == FLOWER_FESTIVAL || m == HARVEST_FESTIVAL; }
-static bool partner_time(void) { return festival_map() && (hm_rd16(g_ram, 0x11F74) & PARTNER_TIME) && g_ram[0x11F7B] != DANCING; }
+static bool partner_time(void)
+{
+  uint16_t mark = g_ram[HM_MAP_ID] == HARVEST_FESTIVAL ? HARVEST_PARTNER_TIME : FLOWER_PARTNER_TIME;
+  return festival_map() && (hm_rd16(g_ram, HM_FLAGS_74) & mark) && g_ram[0x11F7B] != DANCING;
+}
 static bool dancing(void) { return festival_map() && g_ram[0x11F7B] == DANCING; }
 static bool present(int who)
 {
@@ -780,7 +792,7 @@ static void choose_partner(int who, int slot)
 {
   show(slot, kSuitors[who].front, false);           /* he turns to the player */
   say(who == husband() ? "Of course, dear. Like the day we met." : "Me? ...I was hoping you'd ask.");
-  P.who = who; P.asked = true;
+  P.who = who; P.asked = true; P.left_out = 0;
   for (int i = 0; i < 5; i++) P.girls[i] = hm_rd16(g_ram, HM_HEARTS_BASE + 2 * i);
   s_danced_day = today();
   add_love(who, DANCE_LOVE);
@@ -794,10 +806,33 @@ static void partner_tick(void)
    * chosen keeps hers): the first one marked dances, in her own script
    * (B3:FBD7 for the first). So the first is marked alone, and she is him
    * (partner_picture). */
-  hm_wr16(g_ram, 0x11F74, (uint16_t)((hm_rd16(g_ram, 0x11F74) & ~0x001F) | 0x0001));
-  g_ram[HM_TRANSITION_MAP] = g_ram[HM_MAP_ID];      /* the square again: the dance */
+  hm_wr16(g_ram, HM_FLAGS_74, (uint16_t)((hm_rd16(g_ram, HM_FLAGS_74) & ~0x001F) | 0x0001));
   P.on = true;                                       /* dressed from the partner's first frame */
+  if (g_ram[HM_MAP_ID] == HARVEST_FESTIVAL) {       /* the couples dance where they stand */
+    hm_wr16(g_ram, HM_FLAGS_7A, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_7A) | HARVEST_PARTNER_CHOSEN));
+    return;
+  }
+  g_ram[HM_TRANSITION_MAP] = g_ram[HM_MAP_ID];      /* the square again: the dance */
   hm_wr16(g_ram, HM_WEATHER_FLAGS, (uint16_t)(hm_rd16(g_ram, HM_WEATHER_FLAGS) | 0x4000));
+}
+/* His own figure among the game's couples: Ann's father dances in both
+ * festivals' (slot 3, with the woman of slot 4; the couples are slots 1-2,
+ * 3-4 and 5-6). With him as the partner, that couple stays out of the
+ * dance: their slots are let go before their figures are made, in the dark
+ * the dance starts in. */
+enum { FIRST_COUPLE = 1, LAST_COUPLE = 6 };
+static bool left_out(uint32_t at)
+{
+  if (P.who < 0 || !P.on || !festival_map()) return false;
+  int n = g_ram[at + SLOT_NUMBER];
+  if (n < FIRST_COUPLE || n > LAST_COUPLE || !(g_ram[at + SLOT_FLAGS] & 0x02)) return false;   /* being made */
+  if (n != P.left_out) {
+    if (!is_him(at, P.who)) return false;
+    P.left_out = n & 1 ? n + 1 : n - 1;              /* and the one dancing with him */
+  }
+  g_ram[at + SLOT_IN_USE] = 0;
+  g_ram[at + SLOT_FLAGS] = 0;                        /* nothing made */
+  return true;
 }
 /* in the dance, the partner's pictures (the girls' dancing set $21E-$225:
  * front, back, side, two each, then a back and a side) are his */
@@ -1180,11 +1215,12 @@ static void ending_tick(void)
   hm_wr16(g_ram, HM_FLAGS_66, (uint16_t)(hm_rd16(g_ram, HM_FLAGS_66) | LENT_WIFE));
 }
 /* g_hm_slot_picture while the wedding or the ending is on (Maria is him),
- * while dancing (partner_picture), and while married (the wife's slot) */
+ * while dancing (left_out, partner_picture), and while married (the wife's
+ * slot) */
 static void dressed(uint8_t *ram, uint32_t at)
 {
   if (s_prev_picture && s_prev_picture != dressed) s_prev_picture(ram, at);
-  if (partner_picture(at)) return;
+  if (left_out(at) || partner_picture(at)) return;
   if (married_to_him() && wife_slot(at)) {          /* the wife the game places is him */
     int to = wife_picture(&kSuitors[husband()], slot16(at, SLOT_SPRITE));
     if (to < 0) return;
