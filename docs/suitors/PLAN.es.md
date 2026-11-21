@@ -152,17 +152,26 @@ RodoLy/HarvestMoonSnesDecomp y pide que primero lea `docs/suitors/PLAN.es.md`.
    la puerta y alguien sube por el camino hacia ti. Ve a donde te dice y
    acércate a él: su escena, una pregunta, y el día termina. A la mañana siguiente hay algo en la granja. Para el papá de
    Ann, lleva una flor.
-4. **Baile.** En el Festival de las Flores o el de la Cosecha, presiona A
-   frente a él.
+4. **Baile.** En el Festival de las Flores (primavera 23) o en el de la
+   Cosecha (otoño 12, después del guiso), cuando el alcalde dice que elijas
+   pareja, presiona A frente a él: te contesta y baila contigo en el baile
+   de parejas, en el lugar de la chica (sube su cariño, no el de ella).
 5. **Propuesta.** Diez corazones (1000), la casa ampliada una vez y nadie
    más: usa la Pluma Azul frente a él. La boda es una semana después, la
    próxima vez que pises la granja.
-6. **Vida de casados.** Está en casa en la mañana y en la noche, en la
-   granja de 9:00 a 18:00 (en casa si llueve), caminando con sus propias
-   poses.
+6. **Vida de casados.** Lleva los mismos días que la esposa, con los
+   propios scripts del juego: en casa en la mañana, fuera de 11:00 a 15:00,
+   en la estufa a las 18:00, trabajando en la granja a las 11:00, 13:00 y
+   20:00; aparece en su lugar como ella, y solo camina cuando "La esposa
+   ayuda" lo pone a hacer una tarea. Su cariño lo mantiene en casa (la
+   esposa se va con menos de 200; el de él nunca se presta más bajo).
 7. **El bebé.** Como en el juego: su cariño (450), 20 días de casados y la
    casa ampliada dos veces. La mañana después de la noche en que el juego
-   cuenta un hijo en camino, él habla de adoptar; 60 días después los
-   Duendes de la Cosecha entran por la puerta con el bebé, y desde entonces
-   es el propio hijo del juego, en la casa.
+   cuenta un hijo en camino, él habla de adoptar; 60 días después, al
+   despertar, dos Duendes de la Cosecha tocan y entran por la puerta con el
+   bebé, platican, van saltando a la cuna (la cámara los acompaña, como en
+   las escenas del juego) y lo dejan ahí, se despiden y salen por la
+   puerta. Luego le pones nombre al bebé en la pantalla de nombres del
+   juego, como después de un nacimiento, y desde entonces es el propio hijo
+   del juego, en la cuna. Nadie llega ni se va si no es por la puerta.
 8. **El final** (verano 30 del tercer año): lo recorre contigo.
