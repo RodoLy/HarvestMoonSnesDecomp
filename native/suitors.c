@@ -55,12 +55,15 @@ extern Ppu *g_ppu;
 enum {
   SLOT_COUNT = 0x20,
   LOVE = 0x03FF, TALKED = 0x0400, GIFTED = 0x0800, DANCED = 0x1000,   /* a suitor's word (g_hm_suitor) */
+  GAME_HEARD = 0x2000, STARRED = 0x4000,                             /* (the day's marks: not in the diary) */
   MOST_LOVE = 1000,
   TALK_LOVE = 4,                       /* the first talk of the day */
   FAVOURITE_LOVE = 120,                /* a favourite, given */
   DISLIKED_LOVE = -52,
   PLAIN_LOVE = 4,                      /* a thing that sells for nothing */
   DANCE_LOVE = 80,
+  STAR_LOVE = 30,                      /* the Star Night, as the girl of the place gets */
+  STAR_HINT_LOVE = 300,                /* enough to say where he will be */
   EVENT_LOVE = 500,                    /* five hearts: his heart event */
   /* love moves in steps of 4: the diary keeps it as love / 4 (src/save.c) */
   CARRIED = 2, SHIPPED = 8,            /* a map object's state: in the hands; taken away */
@@ -253,6 +256,33 @@ static const char *const kFestival[HM_SUITORS][2] = {
     "I carried all the pumpkins up here by myself. Never give up!" },
 };
 
+/* The Star Night (winter 24): the day before, where he will be (his first
+ * talk of the day, with some love: the girls say theirs that day too);
+ * that night, at that place, once the game's own line of his was heard:
+ * a friend's word, a sweetheart's (five hearts), a husband's. */
+static const struct { const char *tomorrow; const char *tonight[3]; } kStarNight[HM_SUITORS] = {
+  { "Tomorrow is the Star Night. Eve doesn't sing, so I'll be at the church, praying with everyone. ...You could come too.",
+    { "The stars are out for everyone tonight. I'm glad you came.",
+      "I came to wish for a new song. Then you walked in, and I didn't need it anymore.",
+      "Every year I'll wish for the same thing: more nights like this one, with you." } },
+  { "The Star Night's tomorrow. My brother and I always end up at the bar. Come by, I'll buy you a juice.",
+    { "Clear sky, warm bar, good company. Not a bad night, right?",
+      "I'd rather be up on the mountain with you, looking at the real stars. Next year?",
+      "Let's walk home the long way tonight. Under the stars." } },
+  { "Tomorrow night is the Star Night. I'll be at the bar, as every year. A friendly face would be nice.",
+    { "My wife loved this night. She said the stars listen. ...Thank you for keeping me company.",
+      "I told the stars about you tonight. I think she would approve.",
+      "Ann's asleep, the farm is quiet, and you're here. I couldn't ask the stars for more." } },
+  { "Star Night tomorrow! I'll be at the church with the trainee. Come and pray with us?",
+    { "Did you make a wish? I wished for an easy week. Ha!",
+      "I wished you'd come. And here you are. The stars work fast!",
+      "Same wish as last year: you. It keeps coming true." } },
+  { "Tomorrow's the Star Night! My boss says we go to the church. You'll come, right, Rancher?",
+    { "I wished to get stronger! What did you wish for?",
+      "I wished... um, it's a secret. But it's about you. Oops!",
+      "Tonight I'm not a trainee. I'm just your husband, looking at the stars with you." } },
+};
+
 /* The next morning: who comes up the path to say it (as the day before),
  * or 0 when it is something left at the door (said as it is found). */
 static const int kNextMorningBy[HM_SUITORS] = { 0, 0, 0x226 /* Ann */, 0, 0 };
@@ -330,6 +360,18 @@ static int slot16(uint32_t at, int field) { return g_ram[at + field] | g_ram[at 
 static void set16(uint32_t at, int field, int v) { g_ram[at + field] = (uint8_t)v; g_ram[at + field + 1] = (uint8_t)(v >> 8); }
 static bool bad_weather(void) { return hm_rd16(g_ram, HM_WEATHER_FLAGS) & (0x0002 | 0x0008); }   /* rain, snow */
 static bool special_day(void) { return hm_rd16(g_ram, HM_WEATHER_FLAGS) & 0x0100; }               /* a festival */
+static bool date_is(int season, int day) { return g_ram[HM_SEASON] == season && g_ram[HM_DAY] == day; }
+enum { SPRING, SUMMER, AUTUMN, WINTER };
+static bool star_night_eve(void) { return date_is(WINTER, 23); }
+/* The town's own days, when its people gather (src/mapevents.c: the town,
+ * the player's house): the New Year, the Flower Festival, the Harvest
+ * Festival, the autumn 20 festival, Thanksgiving (winter 10), the Star
+ * Night. Their people then have that day's scripts. */
+static bool town_day(void)
+{
+  return date_is(SPRING, 1) || date_is(SPRING, 23) || date_is(AUTUMN, 12) || date_is(AUTUMN, 20) ||
+         date_is(WINTER, 10) || date_is(WINTER, 24);
+}
 static bool on_farm(void) { return g_ram[HM_MAP_ID] <= 3; }
 static bool in_house(void) { int m = g_ram[HM_MAP_ID]; return m >= 0x15 && m <= 0x17; }
 static int husband(void)               /* the suitor married (0-4), or -1 */
@@ -482,7 +524,8 @@ static void talk(int who)
 {
   const Suitor *s = &kSuitors[who];
   if (who == husband()) { say(s->home[on_farm() ? 1 : 0]); wife_talked_to(); return; }
-  say(s->talk[tier(who)][(g_hm_suitor[who] & TALKED) ? 1 : 0]);   /* the second line once talked to today */
+  if (star_night_eve() && !(g_hm_suitor[who] & TALKED) && love(who) >= STAR_HINT_LOVE) say(kStarNight[who].tomorrow);
+  else say(s->talk[tier(who)][(g_hm_suitor[who] & TALKED) ? 1 : 0]);   /* the second line once talked to today */
   if (!(g_hm_suitor[who] & TALKED)) { g_hm_suitor[who] |= TALKED; add_love(who, TALK_LOVE); }
 }
 
@@ -505,7 +548,10 @@ static void give(int who, uint8_t it)
   say(s->gift[t][like]);
 }
 
-/* the slot is suitor `who`'s, by its picture (and, for the carpenter, its script) */
+/* the slot is suitor `who`'s, by its picture (and, for the carpenter, its
+ * script: his, not his brother's; on the Star Night, the first of the two at
+ * the bar, $B4:84B2) */
+enum { STAR_CARPENTER_FROM = 0x84B2, STAR_CARPENTER_TO = 0x84C9 };
 static bool is_him(uint32_t at, int who)
 {
   const Suitor *s = &kSuitors[who];
@@ -513,6 +559,7 @@ static bool is_him(uint32_t at, int who)
   if (!g_ram[at + SLOT_IN_USE] || sprite < s->sprite_from || sprite > s->sprite_to) return false;
   if (!s->script_from || ours(at)) return true;
   int pc = slot16(at, SLOT_SCRIPT);
+  if (g_ram[at + SLOT_SCRIPT_BANK] == 0xB4 && pc >= STAR_CARPENTER_FROM && pc < STAR_CARPENTER_TO) return true;
   return g_ram[at + SLOT_SCRIPT_BANK] == 0xB3 && pc >= s->script_from && pc < s->script_to;
 }
 static int who_in_slot(uint32_t at)
@@ -849,6 +896,30 @@ static bool partner_picture(uint32_t at)
   g_ram[at + SLOT_ANIMATION] &= (uint8_t)~0x0E;      /* his own colours */
   g_ram[at + SLOT_FLAGS] |= 0x04;
   return true;
+}
+
+/* The Star Night (winter 24), as the game has it (its scripts: $B4:8000,
+ * group $0F): that morning at home the player picks where to go (the
+ * square, the church, the bar, the spa or the mountain top; $7F1F74 bits
+ * 0-4), and in the evening the town is there. Talking to everybody at the
+ * place (each sets a scene flag) ends the night, and the girl of the place
+ * gets 30 more love. The men are there too, as the game has them: Eve's
+ * fan and the two shipping workers at the church, Ann's father and the
+ * carpenter at the bar. With him: the game's own line first (the night
+ * waits for it), and then his own (kStarNight), with the same 30. */
+enum { CHURCH = 0x1B, BAR = 0x1E, CHOSE_CHURCH = 0x0002, CHOSE_BAR = 0x0004 };
+static const uint8_t kStarPlace[HM_SUITORS] = { CHURCH, BAR, BAR, CHURCH, CHURCH };
+static bool star_night_with(int who)               /* tonight, at his place, the one chosen */
+{
+  int map = g_ram[HM_MAP_ID];
+  uint16_t chosen = hm_rd16(g_ram, HM_FLAGS_74) & (map == CHURCH ? CHOSE_CHURCH : CHOSE_BAR);
+  return date_is(WINTER, 24) && map == kStarPlace[who] && chosen;
+}
+static void star_night_talk(int who)
+{
+  int k = who == husband() ? 2 : love(who) >= EVENT_LOVE ? 1 : 0;
+  say(kStarNight[who].tonight[k]);
+  if (!(g_hm_suitor[who] & STARRED)) { g_hm_suitor[who] |= STARRED; add_love(who, STAR_LOVE); }
 }
 
 /* ── 5. The proposal ────────────────────────────────────────────────────
@@ -1253,6 +1324,20 @@ static void face_player(int who, int slot)
 }
 
 /* ── The player's A ───────────────────────────────────────────────────── */
+/* The A given to the game for one of the men it brings: his line heard only
+ * if the game's own box opens within a few frames (the game finds who is
+ * in front of the player its own way); if not, the next A is the game's
+ * again. */
+enum { GAME_TURN_FRAMES = 12 };
+static struct { int who, frames; } s_game_turn = { -1, 0 };
+static void game_turn_tick(void)
+{
+  if (s_game_turn.who < 0) return;
+  if (hm_rd16(g_ram, HM_FLAGS_5A) & 0x4000) { s_game_turn.who = -1; return; }   /* the game's box: heard */
+  if (++s_game_turn.frames < GAME_TURN_FRAMES) return;
+  g_hm_suitor[s_game_turn.who] &= (uint16_t)~GAME_HEARD;
+  s_game_turn.who = -1;
+}
 uint16_t suitors_pad(uint16_t pad)
 {
   if (player_held()) return 0;                       /* someone is coming: the player waits (as the game holds him) */
@@ -1266,17 +1351,27 @@ uint16_t suitors_pad(uint16_t pad)
   int slot = -1;
   int who = suitor_in_front(&slot);
   if (who < 0) return pad;
-  /* At the festivals, one the game brings itself answers himself: the game
-   * marks each one talked to ($7F1F74), and the mayor's wife waits for them
-   * all before she moves aside for the player. Only after "pick your
-   * partner" is the choice ours. */
-  if (festival_map() && !ours(SLOT_AT(slot)) && !partner_time() && !(hm_rd16(g_ram, HM_GAME_STATE) & 0x0002)) return pad;
-  face_player(who, slot);                            /* as the town's people do: he turns to whoever talks to him */
   bool holding = hm_rd16(g_ram, HM_GAME_STATE) & 0x0002;
+  /* On the town's own days, one the game brings answers the game's way
+   * first: its scenes may wait for that talk (at the festivals the game
+   * marks each one talked to, $7F1F74, and the mayor's wife waits for them
+   * all before she moves aside; the Star Night's places end once everybody
+   * there was talked to). The next A is ours; after "pick your partner",
+   * the choice is ours at once. (Not the wife's slot: her scripts are the
+   * game's wife's, dressed as him.) */
+  uint32_t at = SLOT_AT(slot);
+  if (!ours(at) && !(married_to_him() && wife_slot(at)) && town_day() && !holding && !partner_time() &&
+      !(g_hm_suitor[who] & GAME_HEARD)) {
+    g_hm_suitor[who] |= GAME_HEARD;
+    s_game_turn.who = who; s_game_turn.frames = 0;   /* heard, if the game's box opens (game_turn_tick) */
+    return pad;
+  }
+  face_player(who, slot);                            /* as the town's people do: he turns to whoever talks to him */
   uint8_t it = g_ram[HM_ITEM_ON_HAND];
   if (holding && it) give(who, it);
   else if (holding) return pad;
   else if (partner_time() && s_danced_day != today()) choose_partner(who, slot);
+  else if (star_night_with(who)) star_night_talk(who);
   else if (festival_map() && !(g_hm_suitor[who] & TALKED)) {   /* the festival: his line for it */
     say(kFestival[who][g_ram[HM_MAP_ID] == HARVEST_FESTIVAL]);
     g_hm_suitor[who] |= TALKED; add_love(who, TALK_LOVE);
@@ -1360,7 +1455,7 @@ void suitors_frame(void)
   if (!g_cfg.male_suitors || !hm_diary_loaded(g_ram)) { wife_stand_in(-1, 0); return; }
   if (day != today()) {                              /* a new day: nobody talked to or given anything yet */
     day = today();
-    for (int i = 0; i < HM_SUITORS; i++) g_hm_suitor[i] &= (uint16_t)~(TALKED | GIFTED | DANCED);
+    for (int i = 0; i < HM_SUITORS; i++) g_hm_suitor[i] &= (uint16_t)~(TALKED | GIFTED | DANCED | GAME_HEARD | STARRED);
   }
   /* the game's hooks, shared with the Goddess (goddess.c sets hers first, every frame) */
   if (g_hm_feather_used != feather_used) { s_prev_feather = g_hm_feather_used; g_hm_feather_used = feather_used; }
@@ -1378,6 +1473,7 @@ void suitors_frame(void)
     int who = suitor_in_front(NULL);
     if (who >= 0) propose(who);
   }
+  game_turn_tick();
   event_tick();
   festival_tick();
   partner_tick();
@@ -1402,5 +1498,6 @@ void suitors_reset(void)
   s_lent_for_ending = false;
   s_adoption_due = false;
   memset(&A, 0, sizeof A);
+  s_game_turn.who = -1;
   if (g_hm_slot_picture == dressed) g_hm_slot_picture = s_prev_picture;
 }
