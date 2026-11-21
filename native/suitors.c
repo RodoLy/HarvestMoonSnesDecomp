@@ -1188,6 +1188,11 @@ uint16_t suitors_pad(uint16_t pad)
   int slot = -1;
   int who = suitor_in_front(&slot);
   if (who < 0) return pad;
+  /* At the festivals, one the game brings itself answers himself: the game
+   * marks each one talked to ($7F1F74), and the mayor's wife waits for them
+   * all before she moves aside for the player. Only after "pick your
+   * partner" is the choice ours. */
+  if (festival_map() && !ours(SLOT_AT(slot)) && !partner_time() && !(hm_rd16(g_ram, HM_GAME_STATE) & 0x0002)) return pad;
   face_player(who, slot);                            /* as the town's people do: he turns to whoever talks to him */
   bool holding = hm_rd16(g_ram, HM_GAME_STATE) & 0x0002;
   uint8_t it = g_ram[HM_ITEM_ON_HAND];
