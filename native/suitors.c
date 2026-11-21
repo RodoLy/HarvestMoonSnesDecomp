@@ -742,7 +742,10 @@ static void event_tick(void)
  * with his pictures, as at the wedding (dressed). What the dance gives the
  * girls' hearts is given back; he gets his. */
 enum { FLOWER_FESTIVAL = 0x08, HARVEST_FESTIVAL = 0x09, PARTNER_TIME = 0x0800, DANCING = 2, PARTNER_SLOT = 7 };
-static const int kGuestSpots[HM_SUITORS][2] = { { 152, 280 }, { 376, 280 }, { 152, 328 }, { 376, 328 }, { 264, 344 } };
+/* where the men the game does not bring stand: away from the mayor and his
+ * wife (left, (88, 232) and (120, 248)) and the ways to them: the open
+ * right side and the front of the square, 64 pixels apart */
+static const int kGuestSpots[HM_SUITORS][2] = { { 200, 376 }, { 376, 280 }, { 328, 376 }, { 376, 328 }, { 264, 376 } };
 static int s_danced_day = -1;
 static struct { int who; bool asked; uint16_t girls[5]; } P = { -1 };
 static bool festival_map(void) { int m = g_ram[HM_MAP_ID]; return m == FLOWER_FESTIVAL || m == HARVEST_FESTIVAL; }
