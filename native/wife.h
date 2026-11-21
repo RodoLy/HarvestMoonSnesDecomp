@@ -17,3 +17,10 @@ void wife_dialog_draw(uint32_t *dst, int w);
 void wife_reset(void);                      /* a new game, a reset, another ROM */
 void wife_frame(uint8_t *ram);              /* the end of every frame */
 uint16_t wife_pad(uint16_t pad);            /* the buttons the game is given */
+
+/* Someone the game does not know as the wife standing in for one (the male
+ * suitors' husband, native/suitors.c): `girl` is whose scripts the game runs
+ * for him (0-4, -1 none) and `hearts` his love, as hers would be. Called
+ * every frame by the one standing in; nobody when a girl is the wife. */
+void wife_stand_in(int girl, int hearts);
+void wife_talked_to(void);                  /* he was just talked to (his own box, not the game's) */

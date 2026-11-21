@@ -102,13 +102,20 @@ static struct {
 
 static int rd16(uint32_t a) { return g_ram[a] | g_ram[a + 1] << 8; }
 static void wr16(uint32_t a, int v) { g_ram[a] = (uint8_t)v; g_ram[a + 1] = (uint8_t)(v >> 8); }
+/* who stands in for the wife (wife_stand_in), when no girl is */
+static struct { int girl, hearts; } s_in = { -1, 0 };
 static int wife_of(void)
 {
   int f = g_ram[HM_FLAGS_66] & 0x1F;
   for (int i = 0; i < 5; i++) if (f & (1 << i)) return i;
-  return -1;
+  return s_in.girl;
 }
-static int hearts_of(int w) { return rd16(HM_HEARTS_BASE + 2u * (unsigned)w); }
+static int hearts_of(int w)
+{
+  if (!(g_ram[HM_FLAGS_66] & 0x1F) && s_in.girl >= 0) return s_in.hearts;
+  return rd16(HM_HEARTS_BASE + 2u * (unsigned)w);
+}
+void wife_stand_in(int girl, int hearts) { s_in.girl = girl; s_in.hearts = hearts; }
 static int today(void) { return g_ram[HM_YEAR] * 120 + (g_ram[HM_SEASON] & 3) * 30 + g_ram[HM_DAY]; }
 static bool single_day(void) { unsigned d = (unsigned)today(); d = d * 2654435761u; return (d >> 16) & 1; }
 static bool on_farm(void) { return g_ram[HM_MAP_ID] <= 3; }
@@ -563,8 +570,15 @@ uint16_t wife_pad(uint16_t pad)
   return (uint16_t)(pad & ~B_A);
 }
 
+/* he was talked to in his own box: counted as a talk with her in the game's */
+void wife_talked_to(void)
+{
+  if (today() != W.day) { memset(&W, 0, sizeof W); W.day = today(); }
+  W.talks++;
+}
+
 /* ── Every frame ───────────────────────────────────────────────────────── */
-void wife_reset(void) { memset(&W, 0, sizeof W); }
+void wife_reset(void) { memset(&W, 0, sizeof W); s_in.girl = -1; s_in.hearts = 0; }
 
 /* At the end of every frame, also while a map comes in: once she went out
  * to work, the house the game draws her in stays without her, from its
