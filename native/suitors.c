@@ -747,7 +747,7 @@ enum { FLOWER_FESTIVAL = 0x08, HARVEST_FESTIVAL = 0x09, PARTNER_TIME = 0x0800, D
  * right side and the front of the square, 64 pixels apart */
 static const int kGuestSpots[HM_SUITORS][2] = { { 200, 376 }, { 376, 280 }, { 328, 376 }, { 376, 328 }, { 264, 376 } };
 static int s_danced_day = -1;
-static struct { int who; bool asked; uint16_t girls[5]; } P = { -1 };
+static struct { int who; bool asked, on; uint16_t girls[5]; } P = { -1 };   /* on: from the change of map to the end */
 static bool festival_map(void) { int m = g_ram[HM_MAP_ID]; return m == FLOWER_FESTIVAL || m == HARVEST_FESTIVAL; }
 static bool partner_time(void) { return festival_map() && (hm_rd16(g_ram, 0x11F74) & PARTNER_TIME) && g_ram[0x11F7B] != DANCING; }
 static bool dancing(void) { return festival_map() && g_ram[0x11F7B] == DANCING; }
@@ -760,10 +760,10 @@ static void festival_tick(void)
 {
   static int map_was = -1;
   int map = g_ram[HM_MAP_ID];
-  bool fest = festival_map() && hm_diary_loaded(g_ram) && !dancing();
+  bool fest = festival_map() && hm_diary_loaded(g_ram) && !dancing() && !P.on;
   if (P.who >= 0 && !festival_map()) {             /* the festival is over: the girls' hearts as they were */
     for (int i = 0; i < 5; i++) hm_wr16(g_ram, HM_HEARTS_BASE + 2 * i, P.girls[i]);
-    P.who = -1;
+    P.who = -1; P.on = false;
   }
   if (!fest) { if (map_was >= 0) for (int i = 0; i < HM_SUITORS; i++) take_away(GUEST_SLOT + i); map_was = -1; return; }
   if (map_was != map) { map_was = map; return; }      /* a frame later: the game's people are placed */
@@ -795,13 +795,14 @@ static void partner_tick(void)
    * (partner_picture). */
   hm_wr16(g_ram, 0x11F74, (uint16_t)((hm_rd16(g_ram, 0x11F74) & ~0x001F) | 0x0001));
   g_ram[HM_TRANSITION_MAP] = g_ram[HM_MAP_ID];      /* the square again: the dance */
+  P.on = true;                                       /* dressed from the partner's first frame */
   hm_wr16(g_ram, HM_WEATHER_FLAGS, (uint16_t)(hm_rd16(g_ram, HM_WEATHER_FLAGS) | 0x4000));
 }
 /* in the dance, the partner's pictures (the girls' dancing set $21E-$225:
  * front, back, side, two each, then a back and a side) are his */
 static bool partner_picture(uint32_t at)
 {
-  if (P.who < 0 || !dancing() || at != SLOT_AT(PARTNER_SLOT)) return false;
+  if (P.who < 0 || !P.on || at != SLOT_AT(PARTNER_SLOT)) return false;
   int sprite = slot16(at, SLOT_SPRITE);
   if (sprite < 0x21E || sprite > 0x225) return false;
   const Suitor *s = &kSuitors[P.who];
@@ -1293,7 +1294,7 @@ void suitors_frame(void)
   /* the game's hooks, shared with the Goddess (goddess.c sets hers first, every frame) */
   if (g_hm_feather_used != feather_used) { s_prev_feather = g_hm_feather_used; g_hm_feather_used = feather_used; }
   if (g_hm_night_wife != suitors_night) { s_prev_night = g_hm_night_wife; g_hm_night_wife = suitors_night; }
-  bool dressing = s_wedding != NO_WEDDING || s_lent_for_ending || (P.who >= 0 && dancing());
+  bool dressing = s_wedding != NO_WEDDING || s_lent_for_ending || (P.who >= 0 && P.on);
   if (dressing && g_hm_slot_picture != dressed) { s_prev_picture = g_hm_slot_picture; g_hm_slot_picture = dressed; }
   if (!dressing && g_hm_slot_picture == dressed) { g_hm_slot_picture = s_prev_picture; s_prev_picture = NULL; }
 
@@ -1324,7 +1325,7 @@ void suitors_reset(void)
   s_want_dialog = false;
   E.state = EV_NONE; E.who = -1; E.day = -1; E.next_day_said = -1; E.end_day = false;
   s_danced_day = -1;
-  P.who = -1; P.asked = false;
+  P.who = -1; P.asked = P.on = false;
   s_wedding = NO_WEDDING;
   s_lent_for_ending = false;
   s_adoption_due = false;
