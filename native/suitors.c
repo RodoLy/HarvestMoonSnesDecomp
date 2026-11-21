@@ -1158,6 +1158,17 @@ static void dressed(uint8_t *ram, uint32_t at)
   g_ram[at + SLOT_FLAGS] |= 0x04;
 }
 
+/* he turns to the player: his back to one above him, his side (mirrored to
+ * look right) to one beside him */
+static void face_player(int who, int slot)
+{
+  const Suitor *s = &kSuitors[who];
+  uint32_t at = SLOT_AT(slot);
+  int dx = hm_rd16(g_ram, HM_PLAYER_X) - slot16(at, SLOT_X), dy = hm_rd16(g_ram, HM_PLAYER_Y) - slot16(at, SLOT_Y);
+  if (abs(dx) > abs(dy)) show(slot, s->side, dx > 0);
+  else show(slot, dy < 0 ? s->back : s->front, false);
+}
+
 /* ── The player's A ───────────────────────────────────────────────────── */
 uint16_t suitors_pad(uint16_t pad)
 {
@@ -1172,6 +1183,7 @@ uint16_t suitors_pad(uint16_t pad)
   int slot = -1;
   int who = suitor_in_front(&slot);
   if (who < 0) return pad;
+  face_player(who, slot);                            /* as the town's people do: he turns to whoever talks to him */
   bool holding = hm_rd16(g_ram, HM_GAME_STATE) & 0x0002;
   uint8_t it = g_ram[HM_ITEM_ON_HAND];
   if (holding && it) give(who, it);
