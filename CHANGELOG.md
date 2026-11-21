@@ -7,10 +7,10 @@
 - **Male suitors** (an improvement, off by default): five men can be courted as the girls are: **Eve's fan** (the Visitor), **a carpenter** (only the one by his house on the mountain), **Ann's father** and **the two shipping workers**.
   - **Hearts and gifts:** talk to one, or hold something in front of him and press A to give it; each has his favourites. He answers in the game's own text box, by how much he likes you. The pause menu's Hearts page shows theirs, with their faces, on Up / Down.
   - **Heart event** at five hearts, in the game's way: someone comes to your farm to ask for help (Eve, his brother, Ann, the other shipper), you find him (the mountain lake, the woods, the graves by the church, the town, the mountain path), a choice, and the day ends. The next morning something is left on the farm.
-  - **Festivals:** at the Flower and Harvest festivals, ask him to dance.
+  - **Festivals:** at the Flower and Harvest festivals, once the mayor says to pick a partner, ask him to dance: he dances with you in the couples' dance, in the girl's place.
   - **Proposal** with the Blue Feather at ten hearts, and **the wedding** a week later: the game's own scene, with him beside you.
-  - **Married life:** at home in the mornings and nights, on the farm by day, walking with his own poses.
-  - **Adoption:** when the game would have a child born, the Harvest Sprites bring a baby to the house.
+  - **Married life:** he keeps the wife's own days, placed by the game's own scripts where and when it places her (he appears in his place, as she does; he only walks when "Your wife helps" has him doing a chore).
+  - **Adoption:** when the game would have a child born, two Harvest Sprites knock and come in by the door with the baby, hop to the crib and lay it there, and leave by the door; then you name the baby on the game's names screen, and it is the game's own child.
   - **The ending** with him in the wife's place.
   - Their love, heart events and the wedding are kept in the diary ([the plan](docs/suitors/PLAN.md)).
 
@@ -52,10 +52,10 @@ cheats. Built on your own computer with `build.bat`.
 - **Pretendientes hombres** (una mejora, apagada de fábrica): cinco hombres se pueden cortejar como a las chicas: **el fan de Eve** (el Visitor), **un carpintero** (solo el que está junto a su casa en la montaña), **el papá de Ann** y **los dos repartidores**.
   - **Corazones y regalos:** háblale a uno, o ponte frente a él con algo en las manos y presiona A para regalárselo; cada uno tiene sus favoritos. Contesta en la caja de texto del propio juego, según cuánto le gustas. En el menú de pausa, la página de Corazones muestra los suyos, con su cara, con Arriba / Abajo.
   - **Evento de corazón** con cinco corazones, como en el juego: alguien llega a tu granja a pedir ayuda (Eve, su hermano, Ann, el otro repartidor), lo encuentras (el lago de la montaña, el bosque, las tumbas junto a la iglesia, el pueblo, el camino de la montaña), una pregunta, y el día termina. A la mañana siguiente hay algo en la granja.
-  - **Festivales:** en el de las Flores y el de la Cosecha, invítalo a bailar.
+  - **Festivales:** en el de las Flores y el de la Cosecha, cuando el alcalde dice que elijas pareja, invítalo a bailar: baila contigo en el baile de parejas, en el lugar de la chica.
   - **Propuesta** con la Pluma Azul a los diez corazones, y **la boda** una semana después: la escena del propio juego, con él a tu lado.
-  - **Vida de casados:** en casa en las mañanas y las noches, en la granja de día, caminando con sus propias poses.
-  - **Adopción:** cuando en el juego nacería un hijo, los Duendes de la Cosecha traen un bebé a la casa.
+  - **Vida de casados:** lleva los mismos días que la esposa, puesto por los propios scripts del juego donde y cuando la pone a ella (aparece en su lugar, como ella; solo camina cuando "Tu esposa ayuda" lo pone a hacer una tarea).
+  - **Adopción:** cuando en el juego nacería un hijo, dos Duendes de la Cosecha tocan y entran por la puerta con el bebé, van saltando a la cuna y lo dejan ahí, y salen por la puerta; luego le pones nombre al bebé en la pantalla de nombres del juego, y es el propio hijo del juego.
   - **El final** con él en el lugar de la esposa.
   - Su cariño, sus eventos y la boda se guardan en el diario ([el plan](docs/suitors/PLAN.es.md)).
 
