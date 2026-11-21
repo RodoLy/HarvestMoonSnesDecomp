@@ -924,7 +924,20 @@ static void state_save_file(int slot)
 }
 
 /* the restarts: longjmp back to main's loop, from anywhere in a frame */
+/* On Windows (mingw-w64) setjmp/longjmp unwind through Windows' own
+ * exception handling, which can close the program when the jump crosses
+ * the game's frames; the compiler's own pair does not: it only puts back
+ * the stack and the registers. It can carry only 1, so where to go is
+ * kept beside it (s_jump). */
+#if defined(__MINGW32__)
+static void *s_jmp[5];
+#define SET_JUMP() (__builtin_setjmp(s_jmp) ? s_jump : J_START)
+#define JUMP(to) do { s_jump = (to); __builtin_longjmp(s_jmp, 1); } while (0)
+#else
 static jmp_buf s_jmp;
+#define SET_JUMP() setjmp(s_jmp)
+#define JUMP(to) longjmp(s_jmp, (to))
+#endif
 static int s_jump;
 enum { J_START, J_RESET, J_SWITCH, J_STATE, J_ENDLESS };
 static uint8_t *s_load_buf; static size_t s_load_len; static HmRegs s_load_regs;
@@ -1153,8 +1166,8 @@ static void launcher_in_game(void)
   int r = run_menu(MENU_LAUNCHER, true);
   switch (r) {
   case LA_QUIT: quit_now(); break;
-  case LA_RESET: longjmp(s_jmp, J_RESET);
-  case LA_SWITCH_ROM: longjmp(s_jmp, J_SWITCH);
+  case LA_RESET: JUMP(J_RESET);
+  case LA_SWITCH_ROM: JUMP(J_SWITCH);
   case LA_SAVE_STATE: s_save_slot = launcher_slot(); break;
   case LA_LOAD_STATE: s_load_slot = launcher_slot(); break;
   default: break;
@@ -1215,7 +1228,7 @@ static void end_of_frame(uint8_t *ram)
     if (s_load_buf) {
       memcpy(s_load_buf, s_keep_buf, s_keep_cap);
       s_load_len = s_keep_cap; s_load_regs = s_keep_regs;
-      longjmp(s_jmp, J_ENDLESS);
+      JUMP(J_ENDLESS);
     }
   }
   if (s_headless) return;
@@ -1254,7 +1267,7 @@ static void end_of_frame(uint8_t *ram)
     if (state_read_file(slot)) {
       char t[96]; snprintf(t, sizeof t, T("State %d loaded."), slot);
       host_toast(t);
-      longjmp(s_jmp, J_STATE);
+      JUMP(J_STATE);
     }
   }
   pace(true);
@@ -1598,7 +1611,7 @@ int main(int argc, char **argv)
   g_hm_frame_hook = end_of_frame;
   g_native_lag_frame = lag_frame;
   s_booted = true;
-  switch ((s_jump = setjmp(s_jmp))) {
+  switch ((s_jump = SET_JUMP())) {
   case J_START: boot(); break;
   case J_SWITCH:
     if (!use_rom(g_cfg.rom)) host_toast(T("That ROM could not be opened."));
